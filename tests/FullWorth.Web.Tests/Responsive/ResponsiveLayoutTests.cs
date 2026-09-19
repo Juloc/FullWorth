@@ -48,8 +48,10 @@ public sealed class ResponsiveLayoutTests
         var start = css.IndexOf("@media(max-width:1023px)", StringComparison.Ordinal);
         Assert.True(start >= 0);
         var tabletDown = css[start..];
-        // Desktop sidebar is hidden; the fixed, safe-area-aware bottom nav takes over.
-        Assert.Contains(".sidebar{display:none", tabletDown);
+        // The desktop sidebar's full multi-group menu is hidden; the fixed, safe-area-aware bottom nav
+        // takes over primary navigation. (#171: the sidebar element itself stays, shrunk to a compact
+        // brand strip above the topbar - only its menu/nav-list and user-footer are gone below desktop.)
+        Assert.Contains(".sidebar #nav,.sidebar .sidebar-foot", tabletDown);
         Assert.Matches(@"#bottom-nav\{display:grid[^}]*position:fixed", tabletDown);
         // The fallback is not cosmetic: without it, a browser that does not support safe-area insets
         // treats the whole declaration as invalid and drops it, so the bottom nav ends up with no inset
@@ -83,6 +85,27 @@ public sealed class ResponsiveLayoutTests
         Assert.Contains(".dialog-card>*{min-width:0}", css);
         Assert.Contains(".dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}", css);
         Assert.Contains(".dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}", css);
+    }
+
+    /// <summary>
+    /// #171: the FullWorth logo and the "Alpha" badge live only inside `.brand`, itself only inside
+    /// `.sidebar` - and `.sidebar` used to be `display:none` below 768px, taking the brand with it with
+    /// no mobile equivalent anywhere. Fixed by keeping `.sidebar` as a compact, brand-only strip instead
+    /// of introducing a second, mobile-only copy of the logo markup.
+    /// </summary>
+    [Fact]
+    public void MobileHeaderStillShowsTheBrandLogoAndAlphaBadge()
+    {
+        var css = ReadCss();
+        var start = css.IndexOf("@media(max-width:767px)", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var mobile = css[start..];
+
+        // The sidebar must stay a visible, laid-out element (not display:none) so `.brand` inside it
+        // can render - only its menu list and user footer are hidden, not the sidebar itself.
+        Assert.DoesNotMatch(@"\.sidebar\{[^}]*display:none", mobile);
+        Assert.Contains(".sidebar{", mobile);
+        Assert.DoesNotContain(".brand{display:none", mobile);
     }
 
     [Fact]

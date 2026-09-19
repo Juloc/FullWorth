@@ -55,7 +55,13 @@
 }
 @media(max-width:767px){
   .shell{display:block;width:100%;min-width:0}
-  .sidebar{display:none}
+  /* #171: die Sidebar verschwindet nicht mehr komplett - sie bleibt dieselbe Komponente, zeigt am
+     Telefon aber nur noch die Marke als schmalen Streifen ueber der Kopfleiste. Menue und Nutzerfuss
+     sind hier ueberzaehlig (dafuer gibt es #bottom-nav und die "Mehr"-Ansicht), deshalb ausgeblendet
+     statt eine zweite Marken-Kopie eigens fuer mobil einzufuehren. */
+  .sidebar{position:static;height:auto;display:flex;flex-direction:row;align-items:center;padding:var(--s2) var(--s4);border-right:0;border-bottom:1px solid var(--line)}
+  .sidebar #nav,.sidebar .sidebar-foot,.sidebar .sidebar-resizer,#nav-collapse{display:none}
+  .brand{padding:0}
   main{width:100%;min-width:0;padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom,0px));max-width:none}
   /* Installed, there is no browser chrome above the page, so the sticky topbar sat under the status
      bar and the notch ate the page title. In a tab the inset is 0 and nothing moves. The horizontal
