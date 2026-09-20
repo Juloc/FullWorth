@@ -437,6 +437,40 @@
       customerNumber: 'KD-4711-2019', providerContact: 'kundenservice@stadtwerke.example\nTel. 0800 1234567',
       cancellationSentAt: null, cancellationConfirmedAt: null, updatedAt: '2026-09-05T09:12:00Z'
     },
+    // Fuenf Zahlungen, damit das Detail den "Alle N Buchungen anzeigen"-Knopf ueberhaupt zeigt (er
+    // erscheint erst ab mehr als vier) - genau der Weg in den Zahlungsdialog, in dem die
+    // Verknuepfungen unten sichtbar werden. `id` ist die Transaktions-Id, so wie ContractPayment sie
+    // wirklich traegt.
+    'contracts/k1/activity': {
+      contractId: 'k1', valueMode: 'automatic', amount: 78.5, currency: 'EUR', annualizedAmount: 942,
+      nextExpected: iso('2026-10-01'), lastPayment: iso('2026-09-01'), paymentCount: 5, averageAmount: 78.5,
+      payments: [
+        { id: 'tk1', date: iso('2026-09-01'), amount: 78.5, currency: 'EUR' },
+        { id: 'tk2', date: iso('2026-08-01'), amount: 78.5, currency: 'EUR' },
+        { id: 'tk3', date: iso('2026-07-01'), amount: 74.9, currency: 'EUR' },
+        { id: 'tk4', date: iso('2026-06-01'), amount: 74.9, currency: 'EUR' },
+        { id: 'tk5', date: iso('2026-05-01'), amount: 74.9, currency: 'EUR' }
+      ]
+    },
+    // #135: die Zahlungsverknuepfungen eines Vertrags. transactionId zeigt auf die ids aus
+    // 'contracts/k1/activity' - nur zwei der Zahlungen sind verknuepft, die dritte nicht, damit im
+    // Dialog beide Zustaende nebeneinander stehen (mit Herkunft + "Loesen" bzw. ohne).
+    'contracts/k1/links': [
+      { id: 'lnk1', transactionId: 'tk1', amount: 78.5, linkSource: 'detection', confidence: 0.94,
+        date: iso('2026-09-01'), counterparty: 'Stadtwerke', transactionAmount: -78.5, currency: 'EUR' },
+      { id: 'lnk2', transactionId: 'tk2', amount: 78.5, linkSource: 'manual', confidence: null,
+        date: iso('2026-08-01'), counterparty: 'Stadtwerke', transactionAmount: -78.5, currency: 'EUR' }
+    ],
+    'contracts/k2/links': [],
+    // Ein STRING als Fixture, kein Objekt: der Endpunkt liefert echtes text/plain (ein Brief ist kein
+    // JSON-Dokument), und der Stub unten antwortet fuer Strings entsprechend. Waere das hier ein
+    // Objekt, kaeme im Dialog JSON statt eines Briefs an - und der Fehler saehe nach einem
+    // Frontend-Fehler aus, obwohl nur die Fixture die falsche Form haette.
+    'contracts/k1/cancellation-letter':
+      'Kündigung meines Vertrags\n\nAnbieter: Stadtwerke\nKunden-/Vertragsnummer: KD-4711-2019\n\n'
+      + 'Hiermit kündige ich den oben genannten Vertrag fristgerecht zum nächstmöglichen Zeitpunkt '
+      + 'unter Berücksichtigung der Kündigungsfrist (aktuelle Frist: 30.09.2026).\n'
+      + 'Bitte bestätigen Sie mir die Kündigung sowie das Vertragsende schriftlich.\n',
     'contracts/k2/cancellation': {
       minimumTermEnd: null, noticePeriodValue: null, noticePeriodUnit: null,
       renewalPeriodValue: null, renewalPeriodUnit: null, autoRenews: false,
@@ -1287,6 +1321,12 @@
     // dauert echt 20 bis 60 Sekunden, und genau ihr Zwischenschritt (Titel, Hinweis, Skelettzeilen)
     // laesst sich sonst nicht ansehen - eine Dreiviertelsekunde reicht, um ihn zu pruefen.
     if (url.pathname.endsWith('/import')) await new Promise(done => setTimeout(done, 750));
+    // Ein Endpunkt, der ein Dokument liefert, liefert kein JSON. Das Kuendigungsschreiben (#135) ist
+    // serverseitig Results.Text(..., "text/plain") - als JSON verpackt kaeme im Dialog ein in
+    // Anfuehrungszeichen gesetzter Text mit \n-Literalen an. Eine String-Fixture bedeutet hier also
+    // genau das, was sie beim echten Server bedeutet: roher Text.
+    if (typeof body === 'string')
+      return new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   };
 

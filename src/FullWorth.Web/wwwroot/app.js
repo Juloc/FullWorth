@@ -425,6 +425,10 @@ onAppEvent('surface:reload',()=>loadCurrent());
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
 const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,empty,skeleton,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
+  // api() parst jede Antwort als JSON. Ein Endpunkt, der bewusst ein Dokument liefert (das
+  // Kuendigungsschreiben ist text/plain), wuerde daran scheitern - deshalb dieselbe Anfrage ueber
+  // denselben Client, nur ohne JSON.parse. Kein zweiter Abrufweg, nur die vorhandene Antwort roh.
+  apiText:path=>apiClient.backendResponse(path).then(response=>response.text()),
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
   navScope:(view,query)=>navigate(view,{query:query||''}),showView:(view,opts)=>navigate(view,opts||{})};
 const accessSetup=createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,status,options));

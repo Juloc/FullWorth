@@ -10,6 +10,7 @@ import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { onAppEvent } from '../../core/event-bus.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -1084,28 +1085,68 @@ async function openQuickEdit(contract, field) {
   dlg.showModal();
 }
 
-function openPaymentsDialog(contract, payments) {
-  const rows = (payments || []).map(payment => `<div class="contract-payment-row">
-    <div><strong>${ctx.esc(ctx.date(payment.date))}</strong><span>${ctx.esc(contract.providerName || contract.name)}</span></div>
-    <strong>${ctx.money(payment.amount, payment.currency)}</strong>
-  </div>`).join('');
+/** Woher eine Verknuepfung stammt. Der Unterschied ist fuer den Nutzer der wichtige: eine erkannte
+ *  Zuordnung darf falsch sein, eine selbst gesetzte nicht. */
+function linkSourceLabel(source) {
+  if (source === 'detection') return t('Automatisch erkannt', 'Detected automatically');
+  if (source === 'import') return t('Aus Import', 'From an import');
+  return t('Von Hand zugeordnet', 'Linked manually');
+}
+
+function openPaymentsDialog(contract, payments, links) {
+  // Verknuepfung je Buchung: ContractPayment traegt die Transaktions-Id als `id`, die Verknuepfung
+  // dieselbe Id als `transactionId`.
+  const linkByTransaction = new Map((links || []).map(link => [link.transactionId, link]));
+  const rowFor = payment => {
+    const link = linkByTransaction.get(payment.id);
+    const origin = link
+      ? `<span class="contract-link-origin">${ctx.esc(linkSourceLabel(link.linkSource))}</span>`
+      : '';
+    const unlink = link
+      ? `<button type="button" class="${buttonClass(ButtonRole.Secondary, 'contract-unlink')}" data-unlink="${ctx.esc(link.id)}">${ctx.esc(t('Verknüpfung lösen', 'Unlink'))}</button>`
+      : '';
+    return `<div class="contract-payment-row" data-payment="${ctx.esc(payment.id)}">
+      <div><strong>${ctx.esc(ctx.date(payment.date))}</strong><span>${ctx.esc(contract.providerName || contract.name)}</span>${origin}</div>
+      <strong>${ctx.money(payment.amount, payment.currency)}</strong>${unlink}
+    </div>`;
+  };
+  const rows = (payments || []).map(rowFor).join('');
   const dlg = ctx.dialog(`<div class="dialog-card contract-payments-dialog">
     <div class="panel-head"><div><h2>${ctx.esc(t('Buchungen', 'Payments'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <div class="contract-payment-list">${rows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.noPayments'))}</div>`}</div>
   </div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-unlink]').forEach(button => button.addEventListener('click', async () => {
+    // Loesen heisst: die Buchung zaehlt nicht mehr zu diesem Vertrag. Die Buchung selbst bleibt
+    // unberuehrt - deshalb keine Zerstoerungs-Warnung, aber eine Rueckfrage, weil eine erkannte
+    // Zuordnung nach dem Loesen nicht von selbst zurueckkommt.
+    if (!await ctx.confirm(t('Diese Buchung nicht mehr zu diesem Vertrag zählen?',
+      'Stop counting this payment towards this contract?'), { confirmLabel: t('Lösen', 'Unlink') })) return;
+    button.disabled = true;
+    try {
+      await ctx.api(`api/contracts/${contract.id}/links/${button.dataset.unlink}`, { method: 'DELETE' });
+      const row = button.closest('.contract-payment-row');
+      row.querySelector('.contract-link-origin')?.remove();
+      button.remove();
+      ctx.toast(ctx.get('common.saved'));
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); button.disabled = false; }
+  }));
   dlg.showModal();
 }
 
 async function openDetail(id) {
-  let contract, activity, cancellation, cloudBenchmark, mergedSources;
+  let contract, activity, cancellation, cloudBenchmark, mergedSources, links;
   try {
-    [contract, activity, cancellation, cloudBenchmark, mergedSources] = await Promise.all([
+    [contract, activity, cancellation, cloudBenchmark, mergedSources, links] = await Promise.all([
       ctx.api(`api/contracts/${id}`),
       ctx.api(`api/contracts/${id}/activity`),
       ctx.api(`api/contracts/${id}/cancellation`).catch(() => null),
       ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null),
-      ctx.api(`api/contracts/${id}/merged-sources`).catch(() => [])
+      ctx.api(`api/contracts/${id}/merged-sources`).catch(() => []),
+      // Die Verknuepfungen sagen, WARUM eine Buchung in dieser Liste steht - erkannt, importiert oder
+      // von Hand zugeordnet - und sind das Einzige, worueber sich eine falsche Zuordnung wieder loesen
+      // laesst. Ohne sie ist die Zahlungshistorie eine Liste ohne Herkunft (#135).
+      ctx.api(`api/contracts/${id}/links`).catch(() => [])
     ]);
   } catch (err) {
     ctx.toast(err.message || ctx.get('common.error'));
@@ -1246,7 +1287,7 @@ async function openDetail(id) {
     dlg.close();
     openContractDialog(contract);
   }));
-  dlg.querySelector('[data-all-payments]')?.addEventListener('click', () => openPaymentsDialog(contract, payments));
+  dlg.querySelector('[data-all-payments]')?.addEventListener('click', () => openPaymentsDialog(contract, payments, links));
   dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => {
     dlg.close();
     openCancellationDialog(contract, cancellation);
@@ -1448,6 +1489,38 @@ async function openMergeDialog(contract, preselectedIds = []) {
   dlg.showModal();
 }
 
+/**
+ * Das fertige Kuendigungsschreiben (#135). Der Server baut den Text aus Anbieter, Kundennummer und
+ * Frist - hier wird er nur gezeigt, nicht noch einmal zusammengesetzt; eine zweite Textfassung im
+ * Frontend waere genau die Art Dopplung, die spaeter auseinanderlaeuft.
+ *
+ * Der Endpunkt liefert text/plain, nicht JSON, weil ein Dokument keins ist - deshalb ctx.apiText.
+ */
+async function openCancellationLetter(contract) {
+  let letter;
+  try { letter = await ctx.apiText(`api/contracts/${contract.id}/cancellation-letter`); }
+  catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+
+  // readonly textarea statt <pre>: so ist der Text markierbar, und wenn die Zwischenablage verwehrt
+  // ist, tut Strg+C den Rest - dasselbe Muster wie der Fehlerbericht der Bankverbindungen.
+  const dlg = ctx.dialog(`<div class="dialog-card">
+    <div class="panel-head"><div><h2>${ctx.esc(ctx.get('contracts.cancellationLetter'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <textarea class="contract-letter-text" data-letter rows="14" readonly></textarea>
+    <div class="dialog-actions">
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-copy>${ctx.esc(t('Text kopieren', 'Copy text'))}</button>
+    </div>
+  </div>`);
+  // Der Brieftext wird gesetzt, nicht ins Markup geschrieben: er enthaelt Nutzereingaben
+  // (Kundennummer) und hat in einer Vorlagenzeichenkette nichts verloren.
+  dlg.querySelector('[data-letter]').value = letter;
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-copy]').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(letter); ctx.toast(t('Text kopiert', 'Text copied')); }
+    catch { const box = dlg.querySelector('[data-letter]'); box.select(); }
+  });
+  dlg.showModal();
+}
+
 async function openCancellationDialog(contract, existing) {
   let details = existing;
   if (!details) {
@@ -1515,6 +1588,11 @@ async function openCancellationDialog(contract, existing) {
         : ''),
     actions: [
       { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      // Der Brief gehoert hierher und nicht auf die Vertragsseite: Anbieter, Kundennummer und Frist -
+      // alles, was darin steht - stehen in genau diesem Dialog. Er speichert nichts, deshalb
+      // secondary neben "Uebernehmen" und kein eigener Schritt davor.
+      { name: 'letter', label: ctx.get('contracts.cancellationLetter'), role: 'secondary',
+        onClick: () => openCancellationLetter(contract) },
       { name: 'save', label: ctx.get('common.apply'), role: 'primary', submit: true }
     ],
     onSubmit: async ({ values, setFormError, close }) => {

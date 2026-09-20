@@ -355,6 +355,7 @@
     "status_planned": "Kündigung geplant",
     "status_cancelled": "Gekündigt",
     "manageCancellation": "Kündigung verwalten",
+    "cancellationLetter": "Kündigungsschreiben",
     "archive": "Archivieren",
     "archiveConfirm": "Vertrag „{name}\" archivieren? Er bleibt in der Historie.",
     "archivedToast": "Vertrag archiviert.",

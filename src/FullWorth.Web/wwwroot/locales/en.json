@@ -355,6 +355,7 @@
     "status_planned": "Cancellation planned",
     "status_cancelled": "Cancelled",
     "manageCancellation": "Manage cancellation",
+    "cancellationLetter": "Cancellation letter",
     "archive": "Archive",
     "archiveConfirm": "Archive contract “{name}”? It will remain in history.",
     "archivedToast": "Contract archived.",
