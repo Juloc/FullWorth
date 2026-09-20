@@ -285,6 +285,14 @@
         { kind: 'income', sourceId: 'is1', date: iso('2026-10-27'), label: 'Gehalt', subLabel: null, amount: null, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: null, categoryIconKey: null }
       ]
     },
+    // #124: die Sammlungen EINER Buchung - die Gegenrichtung zu 'collections'. Eigene Schluessel aus
+    // demselben Grund wie bei 'transactions/forecast': 'transactions' ist ein Objekt, ein kuerzerer
+    // Treffer wuerde also die ganze Buchungsliste zurueckgeben statt einer Id-Liste. t1 haengt an einer
+    // Sammlung, t2 an zweien und t3 an keiner - damit sind im Buchungsdetail alle drei Zustaende der
+    // Zusammenfassungszeile erreichbar, ohne etwas umzustellen.
+    'transactions/t1/collections': ['col1'],
+    'transactions/t2/collections': ['col1', 'col2'],
+    'transactions/t3/collections': [],
     // The real /api/contracts shape (amount + billingCycle + server-computed monthlyEquivalent /
     // annualizedAmount), not a hand-made "monthlyAmount". The last three rows are the reported merge
     // case: ONE utility contract that changed its paying account twice, so three rows exist - and the

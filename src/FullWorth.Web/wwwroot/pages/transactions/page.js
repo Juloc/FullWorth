@@ -1060,12 +1060,32 @@ async function openTransferPicker(t) {
   dlg.showModal();
 }
 
+/** Reihenfolgeunabhaengiger Vergleich zweier Id-Listen - die Auswahlliste gibt in Zeilenreihenfolge
+ *  zurueck, der Server in seiner eigenen. Ohne das waere jedes Speichern ein Schreibvorgang. */
+function sameIdSet(a, b) {
+  if (a.length !== b.length) return false;
+  const known = new Set(a);
+  return b.every(id => known.has(id));
+}
+
 async function openDetail(listItem) {
-  let detail, options;
+  let detail, options, collectionData;
   try {
+    // Sammlungen (#124) werden im selben Block geladen wie alles andere, nicht nachtraeglich: eine
+    // Zeile, die erst nach dem ersten Zeichnen erscheint, verschiebt das bereits gezeichnete Formular
+    // (Frontend-Regel 1). Faellt der Abruf aus - fehlende Berechtigung, Sammlungen abgeschaltet -,
+    // bleibt nur diese eine Zeile weg, statt das ganze Detail zu blockieren; deshalb ein eigenes
+    // catch statt des gemeinsamen unten.
+    const collectionsRequest = Promise.all([
+      ctx.api('api/collections'),
+      ctx.api(`api/transactions/${listItem.id}/collections`)
+    ]).catch(() => null);
     detail = await ctx.api(`api/transactions/${listItem.id}`);
     options = await ctx.categoryOptions(detail.transaction?.categoryId);
+    collectionData = await collectionsRequest;
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  const collectionRows = Array.isArray(collectionData?.[0]) ? collectionData[0] : null;
+  const assignedCollections = Array.isArray(collectionData?.[1]) ? collectionData[1] : [];
   const t = detail.transaction || listItem;
   const counterpart = detail.transferCounterpart || null;
   const purchases = detail.purchases || [];
@@ -1088,6 +1108,19 @@ async function openDetail(listItem) {
     : status === 'BOOK'
       ? ctx.get('transactions.statusBooked')
       : status;
+  // Die zweite Zuordnungsachse neben der Kategorie (#124): die Kategorie beantwortet "was wurde
+  // gekauft", die Sammlung "wofuer gehoerte das zusammen". Sie steht deshalb direkt neben der
+  // Kategorie und nicht bei den Sprungzeilen. Der Backend-Endpunkt dafuer existierte seit der
+  // Einfuehrung der Sammlungen samt Kommentar "das Multi-Select im Buchungsdetail" - nur hatte er nie
+  // einen Aufrufer.
+  const collectionNamesOf = ids => (collectionRows || [])
+    .filter(row => ids.includes(row.id)).map(row => row.name);
+  const collectionSummary = names => names.length
+    ? names.join(' · ')
+    : ctx.get('collections.assignNone');
+  const collectionsRow = collectionRows
+    ? `<button type="button" class="row settings-link tx-detail-jump" data-collections><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('collections.title'))}</div><div class="row-sub" data-collections-summary>${ctx.esc(collectionSummary(collectionNamesOf(assignedCollections)))}</div></div><span aria-hidden="true">›</span></button>`
+    : '';
   const statusHistory = Array.isArray(detail.statusHistory) ? detail.statusHistory : [];
   const statusHistoryHtml = statusHistory.length
     ? `<div class="tx-provider-details"><div class="row-title">${ctx.esc(ctx.get('transactions.statusHistory'))}</div>${statusHistory.map(item => {
@@ -1103,6 +1136,7 @@ async function openDetail(listItem) {
     ${statusHistoryHtml}
     ${t.hasProviderDetails ? `<div class="tx-provider-details"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
+    ${collectionsRow}
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</span><span class="fw-toggle"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <div class="tx-transfer"${t.isTransfer ? '' : ' hidden'}><label class="tx-purpose">${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${purposeOpts}</select></label>${transferInner}</div>
@@ -1160,6 +1194,39 @@ async function openDetail(listItem) {
       await refreshList(t.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
+  // Die Auswahl bleibt bis zum Uebernehmen im Speicher, damit "Abbrechen" im Detail auch die
+  // Sammlungen unangetastet laesst - dieselbe Zusage wie fuer Kategorie, Notiz und die Schalter.
+  let chosenCollections = [...assignedCollections];
+  dlg.querySelector('[data-collections]')?.addEventListener('click', () => {
+    if (!collectionRows.length) { ctx.toast(ctx.get('collections.assignEmpty')); return; }
+    const items = collectionRows.map(row => ({
+      id: ctx.esc(row.id),
+      selected: chosenCollections.includes(row.id),
+      // Eine abgeschlossene oder archivierte Sammlung bleibt waehlbar - eine Buchung kann nachtraeglich
+      // zu einer beendeten Reise gehoeren -, sagt ihren Zustand aber dazu.
+      html: `<div class="row-main"><div class="row-title">${ctx.esc(row.name)}</div>${row.status && row.status !== 'active' ? `<div class="row-sub">${ctx.esc(ctx.get('collections.status_' + row.status))}</div>` : ''}</div>`
+    }));
+    const list = createSelectionList();
+    const picker = ctx.dialog(`<div class="dialog-card">
+      <div class="panel-head"><h2>${ctx.esc(ctx.get('collections.title'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+      ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(ctx.get('collections.candidateSelectAll')) })}
+      <div class="dialog-actions">
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
+      </div>
+    </div>`);
+    list.mount(picker, { counterFormat: (n, total) => ctx.get('collections.candidateSelectedCount').replace('{n}', String(n)).replace('{total}', String(total)) });
+    const close = () => picker.close();
+    picker.querySelector('[data-close]').onclick = close;
+    picker.querySelector('[data-cancel]').onclick = close;
+    picker.querySelector('[data-apply]').onclick = () => {
+      chosenCollections = list.getSelectedIds();
+      dlg.querySelector('[data-collections-summary]').textContent =
+        collectionSummary(collectionNamesOf(chosenCollections));
+      close();
+    };
+    picker.showModal();
+  });
   dlg.querySelector('[data-refund-link]')?.addEventListener('click', () => { dlg.close(); openRefundPicker(t); });
   dlg.querySelector('[data-refund-clear]')?.addEventListener('click', async () => {
     try { await setRefund(t.id, null); dlg.close(); ctx.toast(ctx.get('common.saved')); await refreshList(t.id); }
@@ -1194,6 +1261,11 @@ async function openDetail(listItem) {
     };
     try {
       await ctx.api(`api/transactions/${t.id}/classification`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      // Sammlungen sind eine eigene Ressource, also ein eigener Aufruf - aber nur, wenn sich an der
+      // Zuordnung wirklich etwas geaendert hat. Sonst wuerde jedes blosse Kategorie-Speichern die
+      // Zuordnungen neu schreiben, obwohl der Nutzer den Auswahldialog nie geoeffnet hat.
+      if (collectionRows && !sameIdSet(chosenCollections, assignedCollections))
+        await ctx.api(`api/transactions/${t.id}/collections`, ctx.jsonBody({ transactionIds: chosenCollections }, 'PUT'));
       dlg.close();
       ctx.toast(ctx.get('common.saved'));
       await refreshList(t.id);

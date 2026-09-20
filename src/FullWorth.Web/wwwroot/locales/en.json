@@ -1488,6 +1488,8 @@
     "candidateSelectAll": "Select all",
     "candidateSelectedCount": "{n} of {total} selected",
     "noCandidates": "No matching transactions found.",
+    "assignNone": "Not in any collection",
+    "assignEmpty": "No collection has been created yet.",
     "reason_merchant": "Merchant matches",
     "reason_category": "Category matches",
     "reason_period": "Within the period",

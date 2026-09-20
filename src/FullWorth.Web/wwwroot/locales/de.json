@@ -1488,6 +1488,8 @@
     "candidateSelectAll": "Alle auswählen",
     "candidateSelectedCount": "{n} von {total} ausgewählt",
     "noCandidates": "Keine passenden Buchungen gefunden.",
+    "assignNone": "Keiner Sammlung zugeordnet",
+    "assignEmpty": "Noch keine Sammlung angelegt.",
     "reason_merchant": "Händler passt",
     "reason_category": "Kategorie passt",
     "reason_period": "Im Zeitraum",
