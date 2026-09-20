@@ -13,7 +13,16 @@ function t(de, en) {
   return lang() === 'en' ? en : de;
 }
 
-export async function downloadWealthBackup(ctx, button) {
+/**
+ * Eine Datei vom Server holen und im Browser speichern. Das war bis #135 die Sicherung und sonst
+ * nichts; mit dem CSV- und dem Excel-Export sind es drei Ziele, die sich nur in Pfad, Dateityp und
+ * Meldung unterscheiden - alles andere (Sperre gegen Doppelklick, Dateiname aus content-disposition,
+ * Blob-Link, Aufraeumen) ist bei allen dasselbe und steht deshalb genau einmal hier.
+ *
+ * `exporting` ist bewusst eine Sperre ueber ALLE Ziele: die drei Knoepfe stehen nebeneinander, und
+ * zwei gleichzeitig laufende Exporte desselben Bestands waeren nur doppelte Serverarbeit.
+ */
+async function downloadExport(ctx, button, { path, accept, fallbackName, done, failed }) {
   const space = state.space?.id || localStorage.getItem('finance.space') || '';
   if (!space || exporting) return;
 
@@ -23,15 +32,16 @@ export async function downloadWealthBackup(ctx, button) {
 
   try {
     const response = await apiClient.backendResponse(
-      `api/export/wealth-backup?fullWorthSpaceId=${encodeURIComponent(space)}`,
-      { headers: { Accept: 'application/zip' }, cache: 'no-store' });
+      `${path}?fullWorthSpaceId=${encodeURIComponent(space)}`,
+      { headers: { Accept: accept }, cache: 'no-store' });
 
     const blob = await response.blob();
+    // Der Server benennt die Datei selbst; der Rueckfall greift nur, wenn er es einmal nicht tut.
     const disposition = response.headers.get('content-disposition') || '';
     const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
     const filename = match
       ? decodeURIComponent(match[1].replace(/^"|"$/g, ''))
-      : `fullworth-backup-${space}-${new Date().toISOString().slice(0,10)}.zip`;
+      : fallbackName(space, new Date().toISOString().slice(0, 10));
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -43,11 +53,46 @@ export async function downloadWealthBackup(ctx, button) {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-    ctx.toast(t('Vollständiges FullWorth-Backup erstellt.', 'Complete FullWorth backup created.'));
+    ctx.toast(done());
   } catch (error) {
-    ctx.toast(`${t('Backup fehlgeschlagen', 'Backup failed')}: ${error.message || error}`);
+    ctx.toast(`${failed()}: ${error.message || error}`);
   } finally {
     exporting = false;
     if (button) button.disabled = Boolean(oldDisabled);
   }
+}
+
+export function downloadWealthBackup(ctx, button) {
+  return downloadExport(ctx, button, {
+    path: 'api/export/wealth-backup',
+    accept: 'application/zip',
+    fallbackName: (space, today) => `fullworth-backup-${space}-${today}.zip`,
+    done: () => t('Vollständiges FullWorth-Backup erstellt.', 'Complete FullWorth backup created.'),
+    failed: () => t('Backup fehlgeschlagen', 'Backup failed')
+  });
+}
+
+/**
+ * #135: der CSV-Export war fertig - am 2026-09-15 sogar noch von zwei N+1-Schleifen befreit - und
+ * hatte keinen Knopf. Eine ZIP mit einer Tabelle je Bereich.
+ */
+export function downloadCsvExport(ctx, button) {
+  return downloadExport(ctx, button, {
+    path: 'api/export/csv-zip',
+    accept: 'application/zip',
+    fallbackName: (space, today) => `fullworth-export-${space}-${today}.zip`,
+    done: () => t('CSV-Export erstellt.', 'CSV export created.'),
+    failed: () => t('CSV-Export fehlgeschlagen', 'CSV export failed')
+  });
+}
+
+/** #135: dieselben Daten wie der CSV-Export, als eine Arbeitsmappe mit einem Blatt je Bereich. */
+export function downloadXlsxExport(ctx, button) {
+  return downloadExport(ctx, button, {
+    path: 'api/export/xlsx',
+    accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    fallbackName: (space, today) => `fullworth-export-${space}-${today}.xlsx`,
+    done: () => t('Excel-Export erstellt.', 'Excel export created.'),
+    failed: () => t('Excel-Export fehlgeschlagen', 'Excel export failed')
+  });
 }

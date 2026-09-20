@@ -1037,9 +1037,13 @@
     "user": "User"
   },
   "export": {
-    "title": "Export data",
-    "hint": "Download all data in this space as JSON",
-    "done": "Export downloaded."
+    "title": "Full backup",
+    "hint": "ZIP with all data in this space, restorable",
+    "done": "Export downloaded.",
+    "csvTitle": "Tables as CSV",
+    "csvHint": "ZIP with one table per area, for Excel or Numbers",
+    "xlsxTitle": "Excel workbook",
+    "xlsxHint": "The same data as xlsx, one sheet per area"
   },
   "sharing": {
     "title": "Sharing & members",

@@ -5,7 +5,7 @@ import { createDialog } from '../../components/dialog.js';
 import { openPinDialog } from '../../app/lock.js';
 import { privacyDefault, setPrivacyDefault } from '../../components/privacy.js';
 import { renderSharing, bindSharing } from './sharing.js';
-import { downloadWealthBackup } from '../../features/wealth-portability.js';
+import { downloadWealthBackup, downloadCsvExport, downloadXlsxExport } from '../../features/wealth-portability.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 const COACH_BUBBLE = 'finance.coach.quickAccess';
@@ -152,7 +152,11 @@ export function bindSettings(ctx) {
   // die ganze Anwendung neu geladen, nur um eine Seite weiterzugehen.
   ctx.$('#admin-settings-link')?.addEventListener('click', () => ctx.showView('admin'));
   ctx.$('#two-factor-settings')?.addEventListener('click', () => openTwoFactorDialog(ctx));
+  // #135: die Sicherung war verlinkt, der CSV- und der Excel-Export nicht - obwohl beide fertig sind.
+  // Drei Formate, ein Helfer: der Unterschied ist nur Pfad, Dateityp und Meldung.
   ctx.$('#export-data')?.addEventListener('click', event => downloadWealthBackup(ctx, event.currentTarget));
+  ctx.$('#export-csv')?.addEventListener('click', event => downloadCsvExport(ctx, event.currentTarget));
+  ctx.$('#export-xlsx')?.addEventListener('click', event => downloadXlsxExport(ctx, event.currentTarget));
   ctx.$('#lock-settings')?.addEventListener('click', () => openPinDialog(ctx));
   ctx.$('#privacy-default')?.addEventListener('change', event => setPrivacyDefault(event.target.checked));
   // Der Schalter gehört den Einstellungen, die Sprechblase dem Coach. Deshalb schreibt hier nur der

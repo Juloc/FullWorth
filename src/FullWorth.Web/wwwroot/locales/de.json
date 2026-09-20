@@ -1037,9 +1037,13 @@
     "user": "Nutzer"
   },
   "export": {
-    "title": "Daten exportieren",
-    "hint": "Alle Daten dieses Bereichs als JSON herunterladen",
-    "done": "Export heruntergeladen."
+    "title": "Vollständige Sicherung",
+    "hint": "ZIP mit allen Daten dieses Bereichs, wiederherstellbar",
+    "done": "Export heruntergeladen.",
+    "csvTitle": "Tabellen als CSV",
+    "csvHint": "ZIP mit einer Tabelle je Bereich, für Excel oder Numbers",
+    "xlsxTitle": "Excel-Arbeitsmappe",
+    "xlsxHint": "Dieselben Daten als xlsx, ein Blatt je Bereich"
   },
   "sharing": {
     "title": "Freigabe & Mitglieder",
