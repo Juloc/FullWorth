@@ -159,4 +159,77 @@ public sealed class ContractPaymentLinkUiTests
         foreach (var locale in new[] { "de", "en" })
             Assert.Contains("\"cancellationLetter\"", Asset("locales", $"{locale}.json"));
     }
+
+    /// <summary>
+    /// #135: "Vertrag aufteilen". <c>POST /api/contracts/{id}/split</c> war fertig und ohne Aufrufer.
+    /// </summary>
+    [Fact]
+    public void Splitting_a_contract_is_reachable_from_its_detail()
+    {
+        var js = PageJs();
+
+        Assert.Contains("data-split", js);
+        Assert.Contains("openSplitDialog(contract)", js);
+        Assert.Contains("api/contracts/${contract.id}/split", BodyOf(js,
+            @"async function openSplitDialog\([^)]*\)\s*\{", "openSplitDialog(...)"));
+    }
+
+    /// <summary>
+    /// Der Server verlangt mindestens zwei Teile, deren Summe dem Vertragsbetrag entspricht, und
+    /// lehnt alles andere ab. Der Dialog rechnet deshalb mit und sperrt das Absenden, bis es passt -
+    /// eine Ablehnung nach dem Absenden waere die schlechtere Haelfte derselben Regel.
+    /// </summary>
+    [Fact]
+    public void The_split_dialog_refuses_a_sum_the_server_would_reject()
+    {
+        var body = BodyOf(PageJs(), @"async function openSplitDialog\([^)]*\)\s*\{", "openSplitDialog(...)");
+
+        // Dieselbe Toleranz wie der Server (0.01).
+        Assert.Contains("Math.abs(difference) <= 0.01", body);
+        Assert.Contains("submit.disabled = !(enough && matches)", body);
+        // Mindestens zwei gefuellte Zeilen.
+        Assert.Contains("row.amount > 0).length >= 2", body);
+        // Und die letzten zwei Zeilen lassen sich nicht wegloeschen.
+        Assert.Contains("length <= 2) return;", body);
+    }
+
+    /// <summary>
+    /// #135: die Fristen-Uebersicht. Die Frist eines einzelnen Vertrags stand schon in seiner Zeile;
+    /// <c>GET /api/contracts/cancellation-deadlines</c> - die Frage "muss ich diese Woche etwas tun" -
+    /// hatte keinen Aufrufer.
+    /// </summary>
+    [Fact]
+    public void The_upcoming_deadlines_overview_is_wired()
+    {
+        var js = PageJs();
+
+        Assert.Contains("api/contracts/cancellation-deadlines", js);
+        var body = BodyOf(js, @"async function loadDeadlines\([^)]*\)\s*\{", "loadDeadlines(...)");
+        // Ueberfaelliges gehoert nicht in eine Vorschau, und alles zu zeigen beantwortet die Frage nicht.
+        Assert.Contains("Number(row.days) >= 0", body);
+        Assert.Contains("<= 92", body);
+        // Die Tage rechnet der Server; hier wird nichts nachgerechnet.
+        Assert.DoesNotContain("Date.now()", body);
+    }
+
+    /// <summary>
+    /// Das Feld steht UEBER der Liste. Es nachtraeglich einzublenden hat dieselbe Liste schon einmal
+    /// um 355 Pixel geschoben (der Kommentar in renderContracts haelt das fest), deshalb muss es im
+    /// gemeinsamen Warteblock laden - nicht danach.
+    /// </summary>
+    [Fact]
+    public void The_deadlines_panel_loads_with_the_other_hint_panels_not_after_them()
+    {
+        var js = PageJs();
+        // Am Hinweisfeld-Block verankert, nicht am ersten Promise.all der Datei - das laedt
+        // Kategorien und Konten und hat mit dieser Zusage nichts zu tun.
+        var index = js.IndexOf("loadDetected(false, staged)", StringComparison.Ordinal);
+        Assert.True(index >= 0, "Der gemeinsame Warteblock der Hinweisfelder wurde nicht gefunden.");
+        var start = js.LastIndexOf("await Promise.all([", index, StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var block = js[start..js.IndexOf("]);", index, StringComparison.Ordinal)];
+
+        Assert.Contains("loadDeadlines(staged)", block);
+        Assert.Contains("loadIncome(false, staged)", block);
+    }
 }

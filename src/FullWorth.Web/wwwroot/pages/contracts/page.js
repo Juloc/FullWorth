@@ -300,7 +300,14 @@ export async function renderContracts(context) {
   const staged = document.createElement('div');
   staged.innerHTML = viewHtml();
   renderList(staged);
-  await Promise.all([loadDetected(false, staged), loadIncome(false, staged), loadPriceChanges(false, staged)]);
+  // Alle Hinweisfelder warten zusammen. Der Kommentar darueber sagt, warum: sie stehen UEBER der
+  // Liste, und eines nachtraeglich einzublenden schob sie schon einmal um 355 Pixel.
+  await Promise.all([
+    loadDetected(false, staged),
+    loadIncome(false, staged),
+    loadPriceChanges(false, staged),
+    loadDeadlines(staged)
+  ]);
 
   host.replaceChildren(...staged.childNodes);
   wireControls(host);
@@ -443,6 +450,7 @@ function viewHtml() {
     <div id="contracts-price-changes" class="detected-panel" hidden></div>
     <div id="contracts-detected" class="detected-panel" hidden></div>
     <div id="contracts-income" class="detected-panel" hidden></div>
+    <div id="contracts-deadlines" class="detected-panel" hidden></div>
     <div class="contracts-listcard">
       ${toolbar}
       ${selectionBar}
@@ -1393,6 +1401,7 @@ async function openDetail(id) {
         : `<button type="button" data-edit-all><span>${ctx.esc(t('Notiz hinzufügen', 'Add note'))}</span><span>›</span></button>`}
       ${sources ? `<details class="contract-sources"><summary>${ctx.esc(t('Zahlungskonten & Historie', 'Payment accounts & history'))} <small>${mergedSources.length}</small></summary>${sources}</details>` : ''}
       <button type="button" data-merge><span>${ctx.esc(t('Ähnliche Verträge zusammenführen', 'Merge similar contracts'))}</span><span>›</span></button>
+      <button type="button" data-split><span>${ctx.esc(t('Vertrag aufteilen', 'Split contract'))}</span><span>›</span></button>
     </section>
 
     <details class="contract-detail-card contract-more-data">
@@ -1424,6 +1433,10 @@ async function openDetail(id) {
   dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => {
     dlg.close();
     openCancellationDialog(contract, cancellation);
+  });
+  dlg.querySelector('[data-split]')?.addEventListener('click', () => {
+    dlg.close();
+    openSplitDialog(contract);
   });
   dlg.querySelector('[data-merge]')?.addEventListener('click', () => {
     dlg.close();
@@ -1617,6 +1630,174 @@ async function openMergeDialog(contract, preselectedIds = []) {
     } catch (err) {
       submit.disabled = false;
       ctx.toast(err.message || ctx.get('common.error'));
+    }
+  };
+  dlg.showModal();
+}
+
+/**
+ * "Was laeuft demnaechst ab" (#135).
+ *
+ * <c>GET /api/contracts/cancellation-deadlines</c> war fertig und ohne Aufrufer. Die Frist eines
+ * einzelnen Vertrags stand schon in seiner Zeile - die Uebersicht fehlte, und genau die ist der
+ * Grund, warum man diese Seite aufmacht: nicht "welche Frist hat dieser Vertrag", sondern "muss ich
+ * diese Woche etwas tun".
+ *
+ * Nur das naechste Vierteljahr, und nichts, dessen Frist schon vorbei ist: eine Liste, die alles
+ * zeigt, beantwortet die Frage nicht mehr. Der Server rechnet die Tage selbst, hier wird nichts
+ * nachgerechnet.
+ */
+async function loadDeadlines(root = null) {
+  const box = (root || document).querySelector('#contracts-deadlines');
+  if (!box) return;
+
+  let rows = [];
+  try { rows = (await ctx.api('api/contracts/cancellation-deadlines')) || []; }
+  catch { box.hidden = true; return; }
+
+  const soon = rows
+    .filter(row => Number.isFinite(Number(row.days)) && Number(row.days) >= 0 && Number(row.days) <= 92)
+    .sort((a, b) => Number(a.days) - Number(b.days));
+  if (!soon.length) { box.hidden = true; return; }
+
+  box.hidden = false;
+  box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(t('Fristen in den nächsten Wochen', 'Deadlines in the coming weeks'))}</h3></div>`
+    + soon.map(row => {
+      const days = Number(row.days);
+      // Zwei Signale, nicht nur Farbe: der Text sagt die Dringlichkeit selbst.
+      const urgency = days <= 14 ? 'contract-deadline-urgent' : '';
+      const label = days === 0
+        ? t('Heute', 'Today')
+        : days === 1
+          ? t('Morgen', 'Tomorrow')
+          : t(`In ${days} Tagen`, `In ${days} days`);
+      return `<button type="button" class="detected-row contract-deadline-row ${urgency}" data-deadline="${ctx.esc(row.id)}">
+        <div class="row-main detected-main"><div class="detected-copy">
+          <div class="row-title">${ctx.esc(row.name || '')}</div>
+          <div class="row-sub">${ctx.esc(ctx.get('contracts.cancellationDeadline'))}: ${ctx.esc(ctx.date(row.deadline))}</div>
+        </div></div>
+        <div class="row-side detected-side"><strong>${ctx.esc(label)}</strong><span aria-hidden="true">›</span></div>
+      </button>`;
+    }).join('');
+
+  box.querySelectorAll('[data-deadline]').forEach(row =>
+    row.addEventListener('click', () => openDetail(row.dataset.deadline)));
+}
+
+/**
+ * Einen Sammelvertrag in mehrere zerlegen (#135).
+ *
+ * <c>POST /api/contracts/{id}/split</c> gab es fertig und ohne Aufrufer. Der typische Fall ist eine
+ * Rechnung, die mehrere Dinge enthaelt - Strom und Gas beim Stadtwerk, Mobilfunk und Internet beim
+ * Anbieter -, und die man getrennt sehen will, ohne die Zahlungshistorie zu verlieren.
+ *
+ * Die Summe muss dem Vertragsbetrag entsprechen, und der Server lehnt alles andere ab. Deshalb
+ * rechnet der Dialog sie mit und sagt vorher, was fehlt: eine Ablehnung nach dem Absenden waere hier
+ * die schlechtere Haelfte derselben Regel.
+ */
+async function openSplitDialog(contract) {
+  let categories = '';
+  try { categories = await ctx.categoryOptions(contract.categoryId); }
+  catch { categories = ''; }
+
+  const total = Number(contract.amount) || 0;
+  const money = value => ctx.money(value, contract.currency);
+  // Zwei Zeilen zum Start, weil weniger als zwei keine Aufteilung ist - der Server verlangt sie
+  // ohnehin, und ein Formular, das mit einer unzulaessigen Form beginnt, laedt zum Fehler ein.
+  const rowHtml = () => `<div class="contract-split-row">
+    <label>${ctx.esc(ctx.get('common.name'))}<input name="part-name" maxlength="200" required></label>
+    <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="part-amount" type="number" step="0.01" min="0.01" required></label>
+    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="part-category"><option value="">—</option>${categories}</select></label>
+    <button type="button" class="${buttonClass(ButtonRole.Secondary, 'contract-split-remove')}" data-remove-part aria-label="${ctx.esc(ctx.get('common.delete'))}">×</button>
+  </div>`;
+
+  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog" method="dialog">
+    <div class="panel-head"><div><h2>${ctx.esc(t('Vertrag aufteilen', 'Split contract'))}</h2><div class="row-sub">${ctx.esc(contract.name)} · ${ctx.esc(money(total))}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <p class="row-sub">${ctx.esc(t('Der Sammelvertrag wird zu einem Bündel. Die Summe der Teile muss dem Vertragsbetrag entsprechen.',
+      'The combined contract becomes a bundle. The parts must add up to the contract amount.'))}</p>
+    <label>${ctx.esc(t('Name des Bündels', 'Bundle name'))}<input name="bundle" maxlength="200" required value="${ctx.esc(contract.name)}"></label>
+    <div data-parts>${rowHtml()}${rowHtml()}</div>
+    <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-add-part>${ctx.esc(t('Teil hinzufügen', 'Add part'))}</button>
+    <div class="row-sub" data-sum aria-live="polite"></div>
+    <label>${ctx.esc(t('Zahlungshistorie', 'Payment history'))}<select name="history">
+      <option value="from_now">${ctx.esc(t('Ab jetzt getrennt zählen', 'Count separately from now on'))}</option>
+      <option value="same_split">${ctx.esc(t('Vergangene Zahlungen anteilig übernehmen', 'Apportion past payments'))}</option>
+    </select></label>
+    <p class="row-sub" data-error hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="submit" class="${buttonClass(ButtonRole.Primary)}" data-submit>${ctx.esc(t('Aufteilen', 'Split'))}</button>
+    </div>
+  </form>`);
+
+  const form = dlg.querySelector('form');
+  const parts = dlg.querySelector('[data-parts]');
+  const sumLine = dlg.querySelector('[data-sum]');
+  const errorLine = dlg.querySelector('[data-error]');
+  const submit = dlg.querySelector('[data-submit]');
+
+  const readParts = () => [...parts.querySelectorAll('.contract-split-row')].map(row => ({
+    name: row.querySelector('[name="part-name"]').value.trim(),
+    amount: Number(row.querySelector('[name="part-amount"]').value),
+    categoryId: row.querySelector('[name="part-category"]').value || null
+  }));
+
+  /** Sagt vor dem Absenden, was der Server sonst ablehnen wuerde - und warum. */
+  function paintSum() {
+    const rows = readParts();
+    const sum = rows.reduce((value, row) => value + (Number.isFinite(row.amount) ? row.amount : 0), 0);
+    const difference = Math.round((total - sum) * 100) / 100;
+    const enough = rows.filter(row => row.name && row.amount > 0).length >= 2;
+    const matches = Math.abs(difference) <= 0.01;
+    sumLine.textContent = matches
+      ? `${t('Summe', 'Total')}: ${money(sum)}`
+      : difference > 0
+        ? `${t('Es fehlen noch', 'Still missing')} ${money(difference)}`
+        : `${t('Zu viel verteilt', 'Over-allocated by')} ${money(Math.abs(difference))}`;
+    sumLine.classList.toggle('contract-split-mismatch', !matches);
+    submit.disabled = !(enough && matches);
+  }
+
+  const addRow = () => {
+    parts.insertAdjacentHTML('beforeend', rowHtml());
+    bindRows();
+    paintSum();
+  };
+  function bindRows() {
+    parts.querySelectorAll('.contract-split-row').forEach(row => {
+      row.querySelector('[data-remove-part]').onclick = () => {
+        // Nie unter zwei Zeilen: darunter ist es keine Aufteilung mehr, und der Server lehnt es ab.
+        if (parts.querySelectorAll('.contract-split-row').length <= 2) return;
+        row.remove();
+        paintSum();
+      };
+    });
+  }
+  bindRows();
+  parts.addEventListener('input', paintSum);
+  dlg.querySelector('[data-add-part]').onclick = addRow;
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  paintSum();
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const components = readParts().filter(row => row.name && row.amount > 0);
+    submit.disabled = true;
+    errorLine.hidden = true;
+    try {
+      await ctx.api(`api/contracts/${contract.id}/split`, ctx.jsonBody({
+        bundleName: form.elements.namedItem('bundle').value.trim(),
+        components,
+        historyMode: form.elements.namedItem('history').value
+      }));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+    } catch (error) {
+      errorLine.textContent = error.message || ctx.get('common.error');
+      errorLine.hidden = false;
+      submit.disabled = false;
     }
   };
   dlg.showModal();

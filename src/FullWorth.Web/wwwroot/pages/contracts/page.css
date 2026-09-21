@@ -527,3 +527,18 @@
 /* #173: eine Einnahmen-Zeile ist anklickbar wie eine Vertragszeile - der Zeiger sagt das, bevor man
    es ausprobiert. Die Kandidatenzeilen daneben bleiben unangetastet: sie tragen eigene Knoepfe. */
 .detected-row-open{cursor:pointer}
+
+/* #135: Vertrag aufteilen. Eine Zeile je Teil, der Loesch-Knopf rechts daneben. */
+.contract-split-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:var(--s2);align-items:end}
+
+.contract-split-remove{align-self:end}
+
+/* Die Summe ist der Punkt des Formulars: stimmt sie nicht, sagt die Zeile das, bevor der Server
+   ablehnt - und sie faellt auf, ohne die Farbe als einziges Signal zu benutzen. */
+.contract-split-mismatch{color:var(--danger);font-weight:600}
+
+/* #135: "Was laeuft demnaechst ab". Dieselbe Zeilenform wie die anderen Hinweisfelder darueber -
+   sie ist eine Schaltflaeche, weil sie ins Vertragsdetail fuehrt. */
+.contract-deadline-row{width:100%;text-align:left;cursor:pointer;background:none;border:0}
+
+.contract-deadline-urgent strong{color:var(--danger)}

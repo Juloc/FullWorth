@@ -465,8 +465,13 @@
       { contractId: 'k2', minimumTermEnd: null, cancellationDeadline: null,
         cancellationStatus: 'none', autoRenews: false, cancellationSentAt: null, cancellationConfirmedAt: null }
     ],
+    // #135: drei Faelle fuer die Fristen-Uebersicht. k2 ist dringend (unter 14 Tagen und damit
+    // hervorgehoben), k1 liegt weiter weg, und der letzte Eintrag ist ueberfaellig - den muss die
+    // Uebersicht weglassen, weil er die Frage "muss ich diese Woche etwas tun" nicht beantwortet.
     'contracts/cancellation-deadlines': [
-      { id: 'k1', name: 'Stadtwerke Strom', deadline: '2026-09-30', days: 15, status: 'planned' }
+      { id: 'k1', name: 'Stadtwerke Strom', deadline: '2026-09-30', days: 15, status: 'planned' },
+      { id: 'k2', name: 'Mobilfunk Telekom', deadline: '2026-09-25', days: 4, status: 'none' },
+      { id: 'k3', name: 'Alter Zeitungsabo', deadline: '2026-08-01', days: -51, status: 'none' }
     ],
     'contracts/k1/cancellation': {
       minimumTermEnd: '2026-12-31', noticePeriodValue: 3, noticePeriodUnit: 'months',
