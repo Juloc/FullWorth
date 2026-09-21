@@ -1506,7 +1506,9 @@
     "reason_period": "Within the period",
     "incomplete": "incomplete",
     "incompleteHint": "Incomplete: a historical exchange rate is missing for {currencies}.",
-    "addToCollection": "Add to collection",
-    "addToCollectionHint": "Add {count} selected transactions"
+    "addToCollection": "Collections",
+    "addToCollectionHint": "Add or remove {count} selected transactions",
+    "addAction": "Add",
+    "removeFromCollection": "Remove"
   }
 }

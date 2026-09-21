@@ -174,9 +174,26 @@ public sealed class CollectionAssignmentUiTests
         var body = BodyOf(js, @"async function openBulkCollectionPicker\([^)]*\)\s*\{",
             "openBulkCollectionPicker(...)");
         // Eine Anweisung je Sammlung mit der ganzen Liste - nicht eine Runde je Buchung.
-        Assert.Contains("api/collections/${collectionId}/transactions", body);
+        Assert.Contains("api/collections/${collectionId}/transactions${suffix}", body);
         Assert.Contains("ctx.jsonBody({ transactionIds })", body);
         Assert.Contains("for (const collectionId of chosen)", body);
+    }
+
+    /// <summary>
+    /// #124 verlangt beide Richtungen. Sie stehen im selben Dialog, statt die Auswahlleiste auf vier
+    /// Knoepfe zu bringen: gewaehlt wird dieselbe Menge Sammlungen, nur die Richtung unterscheidet
+    /// sich - und ein Dialog, der beides kann, braucht den Weg nicht doppelt.
+    /// </summary>
+    [Fact]
+    public void Both_directions_share_one_dialog_and_one_write_path()
+    {
+        var body = BodyOf(PageJs(), @"async function openBulkCollectionPicker\([^)]*\)\s*\{",
+            "openBulkCollectionPicker(...)");
+
+        Assert.Contains("apply('', addButton)", body);
+        Assert.Contains("apply('/remove', removeButton)", body);
+        // Ein gemeinsamer Schreibweg, nicht zwei kopierte Schleifen.
+        Assert.Single(Regex.Matches(body, @"for \(const collectionId of chosen\)"));
     }
 
     /// <summary>
@@ -204,7 +221,7 @@ public sealed class CollectionAssignmentUiTests
         {
             var json = File.ReadAllText(Path.Combine(
                 Root(), "src", "FullWorth.Web", "wwwroot", "locales", $"{locale}.json"));
-            foreach (var key in new[] { "assignNone", "assignEmpty", "addToCollection", "addToCollectionHint" })
+            foreach (var key in new[] { "assignNone", "assignEmpty", "addToCollection", "addToCollectionHint", "addAction", "removeFromCollection" })
                 Assert.Contains($"\"{key}\"", json);
         }
     }

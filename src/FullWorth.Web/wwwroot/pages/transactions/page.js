@@ -125,31 +125,42 @@ async function openBulkCollectionPicker(transactionIds) {
     ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(ctx.get('collections.candidateSelectAll')) })}
     <div class="dialog-actions">
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
-      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
+      <span class="fw-actions-spacer"></span>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-remove>${ctx.esc(ctx.get('collections.removeFromCollection'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-add>${ctx.esc(ctx.get('collections.addAction'))}</button>
     </div>
   </div>`);
   list.mount(dlg);
   const close = () => dlg.close();
   dlg.querySelector('[data-close]').onclick = close;
   dlg.querySelector('[data-cancel]').onclick = close;
-  dlg.querySelector('[data-apply]').onclick = async event => {
+
+  // Hinzufuegen und Entfernen stehen im selben Dialog, statt die Auswahlleiste auf vier Knoepfe zu
+  // bringen: gewaehlt wird dieselbe Menge Sammlungen, nur die Richtung unterscheidet sich. Beide
+  // Endpunkte sind POST mit derselben Nutzlast - auch das Entfernen, weil minimal APIs fuer DELETE
+  // keinen Rumpf ableiten und eine Liste von Buchungen in den Rumpf gehoert.
+  const apply = (suffix, button) => async () => {
     const chosen = list.getSelectedIds();
     if (!chosen.length) { close(); return; }
-    event.currentTarget.disabled = true;
+    button.disabled = true;
     try {
       // Der Reihe nach, nicht parallel: jede dieser Anweisungen schreibt, und eine halb
       // durchgelaufene Runde ist leichter zu verstehen, wenn klar ist, welche Sammlung sie erreichte.
       for (const collectionId of chosen)
-        await ctx.api(`api/collections/${collectionId}/transactions`,
+        await ctx.api(`api/collections/${collectionId}/transactions${suffix}`,
           ctx.jsonBody({ transactionIds }));
       close();
       ctx.toast(ctx.get('common.saved'));
       await refreshList();
     } catch (err) {
       ctx.toast(err.message || ctx.get('common.error'));
-      event.currentTarget.disabled = false;
+      button.disabled = false;
     }
   };
+  const addButton = dlg.querySelector('[data-add]');
+  const removeButton = dlg.querySelector('[data-remove]');
+  addButton.onclick = apply('', addButton);
+  removeButton.onclick = apply('/remove', removeButton);
   dlg.showModal();
 }
 

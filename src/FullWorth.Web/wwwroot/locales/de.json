@@ -1506,7 +1506,9 @@
     "reason_period": "Im Zeitraum",
     "incomplete": "unvollständig",
     "incompleteHint": "Unvollständig: für {currencies} fehlt ein historischer Wechselkurs.",
-    "addToCollection": "Zu Sammlung",
-    "addToCollectionHint": "{count} ausgewählte Buchungen hinzufügen"
+    "addToCollection": "Sammlungen",
+    "addToCollectionHint": "{count} ausgewählte Buchungen zuordnen oder entfernen",
+    "addAction": "Hinzufügen",
+    "removeFromCollection": "Entfernen"
   }
 }
