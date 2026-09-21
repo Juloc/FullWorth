@@ -56,3 +56,5 @@
 /* Schon zugeordnete werden gekennzeichnet, nicht versteckt: weggelassen liesse der Benutzer raten,
    ob die Suche sie nicht gefunden hat oder sie laengst drin sind. */
 .col-search-assigned{opacity:.6}
+
+.col-search-more>summary{cursor:pointer;color:var(--cta)}

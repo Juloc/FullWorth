@@ -1531,6 +1531,7 @@
     "alreadyAssigned": "bereits zugeordnet",
     "minAmount": "Betrag ab",
     "maxAmount": "Betrag bis",
-    "searchAction": "Suchen"
+    "searchAction": "Suchen",
+    "moreFilters": "Mehr Filter"
   }
 }

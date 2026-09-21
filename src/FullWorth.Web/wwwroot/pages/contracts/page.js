@@ -1255,8 +1255,13 @@ function openPaymentsDialog(contract, payments, links) {
   const dlg = ctx.dialog(`<div class="dialog-card contract-payments-dialog">
     <div class="panel-head"><div><h2>${ctx.esc(t('Buchungen', 'Payments'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <div class="contract-payment-list">${rows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.noPayments'))}</div>`}</div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-link-payment>${ctx.esc(t('Zahlung zuordnen', 'Link a payment'))}</button></div>
   </div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  // #135: die Gegenrichtung zum Loesen. Die Erkennung findet das Meiste, aber nicht alles - eine
+  // Zahlung ueber ein anderes Konto oder mit abweichendem Verwendungszweck bleibt liegen, und ohne
+  // diesen Weg liess sie sich ueberhaupt nicht zuordnen.
+  dlg.querySelector('[data-link-payment]').onclick = () => { dlg.close(); openPaymentLinkPicker(contract); };
   dlg.querySelectorAll('[data-unlink]').forEach(button => button.addEventListener('click', async () => {
     // Loesen heisst: die Buchung zaehlt nicht mehr zu diesem Vertrag. Die Buchung selbst bleibt
     // unberuehrt - deshalb keine Zerstoerungs-Warnung, aber eine Rueckfrage, weil eine erkannte
@@ -1682,6 +1687,87 @@ async function loadDeadlines(root = null) {
 
   box.querySelectorAll('[data-deadline]').forEach(row =>
     row.addEventListener('click', () => openDetail(row.dataset.deadline)));
+}
+
+/**
+ * Eine Zahlung von Hand einem Vertrag zuordnen (#135).
+ *
+ * <c>POST /api/contracts/{id}/links</c> war fertig und ohne Aufrufer - lesen und loesen gab es
+ * inzwischen, nur das Zuordnen selbst nicht. Die Erkennung findet das Meiste, aber nicht alles: eine
+ * Zahlung ueber ein anderes Konto oder mit abweichendem Verwendungszweck bleibt liegen, und ohne
+ * diesen Weg liess sie sich gar nicht nachtragen.
+ *
+ * Nur Ausgaben: der Server lehnt alles andere ab (<c>transaction.Amount >= 0</c>). Die Liste zeigt
+ * deshalb von vornherein nur welche - eine Auswahl anzubieten, die der Server zurueckweist, ist die
+ * schlechtere Haelfte derselben Regel.
+ */
+async function openPaymentLinkPicker(contract) {
+  const dlg = ctx.dialog(`<form class="dialog-card" method="dialog">
+    <div class="panel-head"><div><h2>${ctx.esc(t('Zahlung zuordnen', 'Link a payment'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <label>${ctx.esc(t('Suchen', 'Search'))}<input name="query" type="search" maxlength="120" value="${ctx.esc(contract.providerName || contract.name || '')}"></label>
+    <div class="dialog-actions">
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(t('Suchen', 'Search'))}</button>
+    </div>
+    <div data-results></div>
+  </form>`);
+
+  const form = dlg.querySelector('form');
+  const results = dlg.querySelector('[data-results]');
+  const close = () => dlg.close();
+  dlg.querySelector('[data-close]').onclick = close;
+  dlg.querySelector('[data-cancel]').onclick = close;
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const text = String(new FormData(form).get('query') || '').trim();
+    // 'expense', nicht 'out': so heisst der Wert, den TransactionStore auswertet.
+    const query = new URLSearchParams({ pageSize: '50', direction: 'expense' });
+    if (text) query.set('query', text);
+
+    let found;
+    try { found = await ctx.api(`api/transactions?${query}`); }
+    catch (error) { ctx.toast(error.message || ctx.get('common.error')); return; }
+
+    // Doppelt gesichert: der Filter oben fragt schon nach Ausgaben, aber was hier steht, geht an
+    // einen Endpunkt, der Einnahmen ablehnt - und eine Zeile, die beim Klick scheitert, ist schlimmer
+    // als eine, die gar nicht erst dasteht.
+    const items = (found?.items || []).filter(item => Number(item.amount) < 0);
+    if (!items.length) {
+      results.innerHTML = `<div class="row-sub">${ctx.esc(t('Keine passende Ausgabe gefunden.', 'No matching expense found.'))}</div>`;
+      return;
+    }
+
+    results.innerHTML = `<div class="rows">${items.map(item => `
+      <button type="button" class="row" data-pick="${ctx.esc(item.id)}" data-amount="${ctx.esc(String(Math.abs(Number(item.amount))))}">
+        <div class="row-main">
+          <div class="row-title">${ctx.esc(item.merchantDisplayName || item.counterparty || ctx.get('common.empty'))}</div>
+          <div class="row-sub">${item.bookingDate ? ctx.esc(ctx.date(item.bookingDate)) : ''}</div>
+        </div>
+        <span class="amount">${ctx.money(item.amount, item.currency)}</span>
+      </button>`).join('')}</div>`;
+
+    results.querySelectorAll('[data-pick]').forEach(button => button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await ctx.api(`api/contracts/${contract.id}/links`, ctx.jsonBody({
+          transactionId: button.dataset.pick,
+          // Der volle Betrag der Buchung. Eine Aufteilung auf mehrere Vertraege kann der Server
+          // (AllocatedAmountAsync prueft sie), aber sie ist ein eigener Fall und gehoert nicht in
+          // den Weg, der die haeufige Zuordnung erledigt.
+          amount: Number(button.dataset.amount),
+          linkSource: 'manual'
+        }));
+        close();
+        ctx.toast(ctx.get('common.saved'));
+        await renderContracts(ctx);
+      } catch (error) {
+        ctx.toast(error.message || ctx.get('common.error'));
+        button.disabled = false;
+      }
+    }));
+  };
+  dlg.showModal();
 }
 
 /**

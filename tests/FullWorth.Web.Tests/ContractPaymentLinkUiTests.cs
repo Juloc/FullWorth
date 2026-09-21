@@ -161,6 +161,38 @@ public sealed class ContractPaymentLinkUiTests
     }
 
     /// <summary>
+    /// #135, die Gegenrichtung zum Loesen: eine Zahlung von Hand zuordnen. Die Erkennung findet das
+    /// Meiste, aber nicht alles - eine Zahlung ueber ein anderes Konto oder mit abweichendem
+    /// Verwendungszweck bleibt liegen, und ohne diesen Weg liess sie sich gar nicht nachtragen.
+    /// </summary>
+    [Fact]
+    public void A_payment_can_be_linked_by_hand()
+    {
+        var js = PageJs();
+
+        Assert.Contains("data-link-payment", js);
+        var body = BodyOf(js, @"async function openPaymentLinkPicker\([^)]*\)\s*\{", "openPaymentLinkPicker(...)");
+        Assert.Contains("api/contracts/${contract.id}/links", body);
+        Assert.Contains("linkSource: 'manual'", body);
+    }
+
+    /// <summary>
+    /// Der Server lehnt alles ab, was keine Ausgabe ist. Die Auswahl zeigt deshalb von vornherein nur
+    /// welche - eine Zeile, die beim Klick scheitert, ist schlimmer als eine, die gar nicht dasteht.
+    /// Doppelt gesichert, weil der Filtername schon einmal falsch war ("out" statt "expense").
+    /// </summary>
+    [Fact]
+    public void Only_expenses_are_offered_because_the_server_rejects_the_rest()
+    {
+        var body = BodyOf(PageJs(), @"async function openPaymentLinkPicker\([^)]*\)\s*\{", "openPaymentLinkPicker(...)");
+
+        Assert.Contains("direction: 'expense'", body);
+        Assert.Contains("Number(item.amount) < 0", body);
+        // Der Betrag geht positiv hin - der Endpunkt verlangt Amount > 0.
+        Assert.Contains("Math.abs(Number(item.amount))", body);
+    }
+
+    /// <summary>
     /// #135: "Vertrag aufteilen". <c>POST /api/contracts/{id}/split</c> war fertig und ohne Aufrufer.
     /// </summary>
     [Fact]

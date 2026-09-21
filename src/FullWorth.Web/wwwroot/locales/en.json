@@ -1531,6 +1531,7 @@
     "alreadyAssigned": "already assigned",
     "minAmount": "Amount from",
     "maxAmount": "Amount to",
-    "searchAction": "Search"
+    "searchAction": "Search",
+    "moreFilters": "More filters"
   }
 }

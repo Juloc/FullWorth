@@ -246,16 +246,22 @@ async function openTransactionSearch(row, assignedIds) {
 
   const dlg = ctx.dialog(`<form class="dialog-card col-search-dialog" method="dialog">
     <div class="panel-head"><div><h2>${ctx.esc(t('searchTransactions'))}</h2><div class="row-sub">${ctx.esc(row.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <div class="col-search-filters">
-      <label>${ctx.esc(t('searchAction'))}<input name="query" type="search" maxlength="120"></label>
-      <label>${ctx.esc(t('start'))}<input name="from" type="date" value="${ctx.esc(row.startDate || '')}"></label>
-      <label>${ctx.esc(t('end'))}<input name="to" type="date" value="${ctx.esc(row.endDate || '')}"></label>
-      <label>${ctx.esc(ctx.get('transactions.account'))}<select name="accountId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options(accounts, a => a.displayName || a.institutionName || '')}</select></label>
-      <label>${ctx.esc(ctx.get('transactions.category'))}<select name="categoryId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options(categories, c => c.name || '')}</select></label>
-      <label>${ctx.esc(t('minAmount'))}<input name="minAmount" type="number" step="0.01"></label>
-      <label>${ctx.esc(t('maxAmount'))}<input name="maxAmount" type="number" step="0.01"></label>
-    </div>
+    <label>${ctx.esc(t('searchAction'))}<input name="query" type="search" maxlength="120"></label>
     <label class="check"><input type="checkbox" name="unassignedOnly" checked><span>${ctx.esc(t('onlyUnassigned'))}</span></label>
+    <!-- Die meisten Suchen sind ein Wort. Die uebrigen sechs Felder stehen deshalb hinter einer
+         Aufklappflaeche: acht Felder nebeneinander sind ein Formular, durch das man erst muss, bevor
+         man suchen kann - und genau das faengt DialogComplexityGuardTests ab. -->
+    <details class="col-search-more">
+      <summary>${ctx.esc(t('moreFilters'))}</summary>
+      <div class="col-search-filters">
+        <label>${ctx.esc(t('start'))}<input name="from" type="date" value="${ctx.esc(row.startDate || '')}"></label>
+        <label>${ctx.esc(t('end'))}<input name="to" type="date" value="${ctx.esc(row.endDate || '')}"></label>
+        <label>${ctx.esc(ctx.get('transactions.account'))}<select name="accountId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options(accounts, a => a.displayName || a.institutionName || '')}</select></label>
+        <label>${ctx.esc(ctx.get('transactions.category'))}<select name="categoryId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options(categories, c => c.name || '')}</select></label>
+        <label>${ctx.esc(t('minAmount'))}<input name="minAmount" type="number" step="0.01"></label>
+        <label>${ctx.esc(t('maxAmount'))}<input name="maxAmount" type="number" step="0.01"></label>
+      </div>
+    </details>
     <div class="dialog-actions">
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
       <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(t('searchAction'))}</button>
