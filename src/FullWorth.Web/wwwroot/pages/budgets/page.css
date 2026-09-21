@@ -73,3 +73,10 @@
 /* Die Zeile, die sagt, woraus der Vorschlag entstanden ist (#115). Sie steht ueber den Feldern,
    weil sie sie erklaert - und sie ist Text, kein Knopf: geaendert wird unten. */
 .budget-suggestion{padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
+
+/* #115: Ist ein Geltungsbereich gesetzt, zaehlt er statt der einzelnen Kategorie darueber - so will
+   es der Server (ein nicht leerer Scope ueberschreibt Budgets.CategoryId). Das Feld bleibt sichtbar,
+   damit der Wert nachvollziehbar ist, sieht aber nicht mehr nach Eingabe aus. */
+.fw-field.is-overridden{opacity:.6}
+
+.budget-scope-note{color:var(--muted)}

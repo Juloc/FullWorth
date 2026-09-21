@@ -442,7 +442,13 @@
     "carryStart_as-far-back-as-possible": "So weit zurück wie möglich",
     "carryStart_this-period": "Diese Periode",
     "carryStart_from-date": "Ab einem Datum",
-    "carryFrom": "Übertrag ab"
+    "carryFrom": "Übertrag ab",
+    "scopeTitle": "Geltungsbereich",
+    "scopeNone": "Kategorie oben zählt",
+    "scopeHint": "Mehrere Kategorien und Unterkategorien zusammenfassen",
+    "scopeIncludeChildren": "Unterkategorien mitzählen",
+    "scopeOverrides": "Der Geltungsbereich unten zählt statt dieser Kategorie.",
+    "scopePartial": "Enthält Konten, die du nicht sehen darfst – hier nicht änderbar"
   },
   "loans": {
     "moreDetails": "Mehr Angaben",

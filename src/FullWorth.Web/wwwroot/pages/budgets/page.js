@@ -4,6 +4,7 @@ import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { emptyRow } from '../../components/empty.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
+import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 
 // The disclosure label is new with the form-dialog conversion and has no i18n key yet.
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
@@ -238,16 +239,39 @@ export async function newBudget(context) {
 
 async function openBudgetDialog(existing) {
   const currency = existing?.currency || state.space?.baseCurrency || 'EUR';
-  let options, categories;
+  let options, categories, scope;
   try {
-    [options, categories] = await Promise.all([
+    [options, categories, scope] = await Promise.all([
       ctx.categoryOptions(existing?.categoryId || undefined),
-      ctx.api('api/categories')
+      ctx.api('api/categories'),
+      // #115: der Geltungsbereich eines Budgets. Ein neues hat noch keinen, und ein bestehendes darf
+      // daran nicht scheitern - deshalb beides auf die leere Auswahl.
+      existing ? ctx.api(`api/budget-scopes/${existing.id}`).catch(() => null) : null
     ]);
   } catch (error) {
     ctx.toast(error.message || ctx.get('common.error'));
     return;
   }
+
+  // Die Auswahl, die der Dialog bearbeitet. Geschrieben wird sie erst beim Speichern.
+  const initialScope = (scope?.categories || []).map(entry => ({
+    categoryId: entry.categoryId, includeDescendants: Boolean(entry.includeDescendants)
+  }));
+  let scopeCategories = initialScope.map(entry => ({ ...entry }));
+  const categoryName = id => categories.find(category => category.id === id)?.name || id;
+
+  // partialAccess heisst: der Server hat aus dem gelesenen Geltungsbereich Konten entfernt, die
+  // dieser Nutzer nicht sehen darf. Ein Zurueckschreiben wuerde sie damit endgueltig loeschen - das
+  // Gelesene ist hier NICHT das Gespeicherte. Also bleibt der Bereich sichtbar, aber unveraenderbar.
+  const scopeEditable = !scope?.partialAccess;
+
+  /** Reihenfolgeunabhaengig: die Auswahlliste liefert in Zeilenreihenfolge, der Server in seiner. */
+  const scopeChanged = () => {
+    if (scopeCategories.length !== initialScope.length) return true;
+    const before = new Map(initialScope.map(entry => [entry.categoryId, entry.includeDescendants]));
+    return scopeCategories.some(entry =>
+      !before.has(entry.categoryId) || before.get(entry.categoryId) !== entry.includeDescendants);
+  };
 
   const selectedPeriod = existing?.period || 'monthly';
   const periods = ['daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom']
@@ -309,6 +333,12 @@ async function openBudgetDialog(existing) {
         rawOptions: carryStartOptions, hint: ctx.get('budgets.carryStartHint') },
       { name: 'carryFrom', kind: FieldKind.Date, label: ctx.get('budgets.carryFrom'), advanced: true, group: 'carry' }
     ],
+    // #115 verlangt "eine ganze Kategorie, mehrere, einzelne Unterkategorien oder Kombinationen
+    // daraus". Das Backend kann das seit jeher (BudgetCategories + IncludeDescendants), nur gab es
+    // keinen Aufrufer. Die Zeile steht hier statt als Feld, weil form-dialog keine Feldart fuer eine
+    // Mehrfachauswahl hat - und sie spiegelt genau die Regel des Servers: ein gesetzter
+    // Geltungsbereich ueberschreibt die einzelne Kategorie darueber, ein leerer laesst sie gelten.
+    extraHtml: `<button type="button" class="row settings-link" data-scope><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('budgets.scopeTitle'))}</div><div class="row-sub" data-scope-summary></div></div><span aria-hidden="true">›</span></button>`,
     values: {
       name: existing?.name || '',
       amount: existing ? String(existing.amount) : '',
@@ -330,6 +360,74 @@ async function openBudgetDialog(existing) {
   });
 
   const form = handles.form;
+  const scopeRow = form.querySelector('[data-scope]');
+  const scopeSummary = form.querySelector('[data-scope-summary]');
+  const categoryField = handles.field('category');
+
+  /**
+   * Die Zusammenfassung sagt immer, was tatsaechlich zaehlt - und wenn das nicht die Kategorie
+   * darueber ist, wird die auch sichtbar ausgegraut. Ein Auswahlfeld, das noch bedienbar aussieht,
+   * aber nichts mehr bewirkt, ist die schlechtere Haelfte dieser Regel.
+   */
+  function paintScope() {
+    const names = scopeCategories.map(entry =>
+      entry.includeDescendants ? `${categoryName(entry.categoryId)} +` : categoryName(entry.categoryId));
+    scopeSummary.textContent = names.length ? names.join(' · ') : ctx.get('budgets.scopeNone');
+    const overridden = scopeCategories.length > 0;
+    categoryField?.classList.toggle('is-overridden', overridden);
+    const select = form.elements.namedItem('category');
+    if (select) select.disabled = overridden;
+    let note = categoryField?.querySelector('.budget-scope-note');
+    if (overridden && !note) {
+      note = document.createElement('div');
+      note.className = 'row-sub budget-scope-note';
+      note.textContent = ctx.get('budgets.scopeOverrides');
+      categoryField?.appendChild(note);
+    } else if (!overridden) note?.remove();
+  }
+  paintScope();
+  if (scopeEditable) scopeRow?.addEventListener('click', () => openScopePicker());
+  else if (scopeRow) {
+    scopeRow.disabled = true;
+    scopeSummary.textContent = ctx.get('budgets.scopePartial');
+  }
+
+  /** Mehrfachauswahl ueber die gemeinsame Auswahlliste (#160), nicht als achte eigene Checkbox-Liste. */
+  function openScopePicker() {
+    const chosen = new Map(scopeCategories.map(entry => [entry.categoryId, entry]));
+    const items = categories.map(category => ({
+      id: ctx.esc(category.id),
+      selected: chosen.has(category.id),
+      html: `<div class="row-main"><div class="row-title">${ctx.esc(category.name)}</div>${
+        category.parentId ? `<div class="row-sub">${ctx.esc(categoryName(category.parentId))}</div>` : ''}</div>`
+    }));
+    const list = createSelectionList();
+    // EIN Schalter statt einer Marke je Zeile: die Kategorien dieses Produkts sind hoechstens
+    // zweistufig, und wer nur eine bestimmte Unterkategorie zaehlen will, waehlt genau sie - deren
+    // Nachfahrenmenge ist ohnehin leer. Eine Marke je Zeile waere Bedienaufwand ohne zweiten Fall.
+    const withChildren = scopeCategories.length === 0 || scopeCategories.some(entry => entry.includeDescendants);
+    const picker = ctx.dialog(`<div class="dialog-card">
+      <div class="panel-head"><div><h2>${ctx.esc(ctx.get('budgets.scopeTitle'))}</h2><div class="row-sub">${ctx.esc(ctx.get('budgets.scopeHint'))}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+      <label class="check"><input type="checkbox" data-descendants${withChildren ? ' checked' : ''}><span>${ctx.esc(ctx.get('budgets.scopeIncludeChildren'))}</span></label>
+      ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(ctx.get('common.all')) })}
+      <div class="dialog-actions">
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
+      </div>
+    </div>`);
+    list.mount(picker);
+    const close = () => picker.close();
+    picker.querySelector('[data-close]').onclick = close;
+    picker.querySelector('[data-cancel]').onclick = close;
+    picker.querySelector('[data-apply]').onclick = () => {
+      const includeDescendants = picker.querySelector('[data-descendants]').checked;
+      scopeCategories = list.getSelectedIds().map(categoryId => ({ categoryId, includeDescendants }));
+      paintScope();
+      close();
+    };
+    picker.showModal();
+  }
+
   const periodSelect = form.elements.namedItem('period');
   const rolloverSelect = form.elements.namedItem('rollover');
   const startInput = form.elements.namedItem('startDate');
@@ -487,9 +585,28 @@ async function openBudgetDialog(existing) {
     });
 
     try {
-      await ctx.api(
+      const saved = await ctx.api(
         existing ? `api/budgets/${existing.id}` : 'api/budgets',
         existing ? { ...body, method: 'PUT' } : body);
+      // Der Geltungsbereich ist eine eigene Ressource und braucht die Id, die ein neues Budget erst
+      // beim Anlegen bekommt - deshalb danach, nicht parallel. Geschrieben wird er nur, wenn er sich
+      // geaendert hat: sonst wuerde jedes Umbenennen eines Budgets seine Kategorien neu setzen.
+      //
+      // PUT ersetzt den GANZEN Geltungsbereich, nicht nur die Kategorien: was hier fehlt, ist danach
+      // geloescht. Konten, Tags, Haendler, Schwellen und Gruppe werden deshalb unveraendert
+      // mitgeschickt, obwohl dieser Dialog sie nicht bearbeitet.
+      const budgetId = existing?.id || saved?.id;
+      if (budgetId && scopeEditable && scopeChanged())
+        await ctx.api(`api/budget-scopes/${budgetId}`, ctx.jsonBody({
+          categories: scopeCategories,
+          accountIds: scope?.accountIds || [],
+          tagIds: scope?.tagIds || [],
+          merchants: scope?.merchants || [],
+          incomeScheduleId: scope?.incomeScheduleId ?? null,
+          alertNearPercent: scope?.alertNearPercent ?? 80,
+          alertCriticalPercent: scope?.alertCriticalPercent ?? 100,
+          groupId: scope?.groupId ?? null
+        }, 'PUT'));
       close('saved');
       ctx.toast(ctx.get('common.saved'));
       await renderBudgets(ctx);

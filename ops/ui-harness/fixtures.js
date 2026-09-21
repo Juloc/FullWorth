@@ -377,6 +377,27 @@
           baseAmount: 1200, carryIn: 0, carryOver: true, carryOverOverspend: true }
       ]
     },
+    // #115: der Geltungsbereich eines Budgets. b1 hat einen gesetzten (zwei Kategorien, Unterkategorien
+    // mitgezaehlt) - damit ist im Dialog der Zustand "Geltungsbereich ueberschreibt die Einzelkategorie"
+    // erreichbar. b2 hat einen leeren, also den Normalfall. Eigene Schluessel, weil 'budgets' ein
+    // anderer Pfad ist und match() hier nichts zurueckfallen laesst.
+    //
+    // b3 zeigt partialAccess: der Server hat beim Lesen Konten entfernt, die dieser Nutzer nicht sehen
+    // darf. Das Gelesene ist dann NICHT das Gespeicherte, und ein Zurueckschreiben wuerde sie loeschen -
+    // der Dialog muss den Bereich hier als unveraenderbar anzeigen.
+    'budget-scopes/b1': {
+      categories: [{ categoryId: 'c1', includeDescendants: true }, { categoryId: 'c2', includeDescendants: true }],
+      accountIds: ['a1'], tagIds: [], merchants: [], incomeScheduleId: null,
+      alertNearPercent: 80, alertCriticalPercent: 100, groupId: null, partialAccess: false
+    },
+    'budget-scopes/b2': {
+      categories: [], accountIds: [], tagIds: [], merchants: [], incomeScheduleId: null,
+      alertNearPercent: 80, alertCriticalPercent: 100, groupId: null, partialAccess: false
+    },
+    'budget-scopes/b3': {
+      categories: [{ categoryId: 'c1', includeDescendants: false }], accountIds: [], tagIds: [], merchants: [],
+      incomeScheduleId: null, alertNearPercent: 80, alertCriticalPercent: 100, groupId: null, partialAccess: true
+    },
     'budgets': [
       { id: 'b1', name: 'Lebensmittel', categoryId: 'c1', amount: 450, currency: 'EUR', period: 'monthly',
         startDate: null, endDate: null, carryOver: false, carryOverOverspend: false, isActive: true },
@@ -402,6 +423,20 @@
       contributing: [
         { id: 't-b1-1', bookingDate: '2026-09-08', counterparty: 'Rewe', amount: -64.2, currency: 'EUR', category: 'Lebensmittel' },
         { id: 't-b1-2', bookingDate: '2026-09-03', counterparty: 'Edeka', amount: -41.9, currency: 'EUR', category: 'Lebensmittel' }
+      ]
+    },
+    // b2 hatte als einziges Budget keine Status-Fixture. Das sah nicht nach einer Luecke aus, sondern
+    // nach einem kaputten Bearbeiten-Knopf: ohne eigenen Schluessel beantwortet match() den Pfad mit
+    // der ganzen 'budgets'-LISTE, budgetStatus.budgetId ist dann undefined, und das Detail schickt
+    // anschliessend GET /api/budgets/undefined - ein leeres Formular ohne erkennbare Ursache.
+    'budgets/b2/status': {
+      budgetId: 'b2', name: 'Wocheneinkauf', categoryId: 'c1', currency: 'EUR', period: 'weekly',
+      periodStart: '2026-09-14', periodEnd: '2026-09-20',
+      budgetAmount: 90, spent: 52.3, remaining: 37.7, percentUsed: 58.1,
+      projectedEndSpend: 84.6, projectedOverUnder: -5.4, trend: 'Flat', partialAccess: false,
+      baseBudgetAmount: 90, carryIn: 0, carryOver: true, carryOverOverspend: false,
+      contributing: [
+        { id: 't-b2-1', bookingDate: '2026-09-16', counterparty: 'Aldi', amount: -52.3, currency: 'EUR', category: 'Lebensmittel' }
       ]
     },
     'budgets/b3/status': {

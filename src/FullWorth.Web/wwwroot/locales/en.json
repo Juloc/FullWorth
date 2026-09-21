@@ -442,7 +442,13 @@
     "carryStart_as-far-back-as-possible": "As far back as possible",
     "carryStart_this-period": "This period",
     "carryStart_from-date": "From a date",
-    "carryFrom": "Carry-over from"
+    "carryFrom": "Carry-over from",
+    "scopeTitle": "Scope",
+    "scopeNone": "The category above counts",
+    "scopeHint": "Combine several categories and subcategories",
+    "scopeIncludeChildren": "Count subcategories too",
+    "scopeOverrides": "The scope below counts instead of this category.",
+    "scopePartial": "Contains accounts you cannot see – not editable here"
   },
   "loans": {
     "moreDetails": "More details",
