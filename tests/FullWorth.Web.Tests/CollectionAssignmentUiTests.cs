@@ -261,6 +261,43 @@ public sealed class CollectionAssignmentUiTests
         Assert.Contains("collectionRows = (await ctx.api('api/collections'))", body);
     }
 
+    /// <summary>
+    /// #124 verlangt Chips fuer die zugeordneten Sammlungen. Bei dreien ist eine Aufzaehlung eine
+    /// Zeile, in der man die Grenzen suchen muss.
+    ///
+    /// Wichtig dabei: der Helfer baut jetzt Markup, also escaped er die Namen selbst - sie kommen aus
+    /// einem Eingabefeld. Genau hier entsteht sonst die Luecke, wenn jemand spaeter eine Zeile
+    /// ergaenzt und das vergisst.
+    /// </summary>
+    [Fact]
+    public void Assigned_collections_are_chips_and_their_names_are_escaped()
+    {
+        var body = OpenDetailBody();
+
+        Assert.Contains("class=\"fw-chip\"", body);
+        Assert.Contains("ctx.esc(name)", body);
+        // Markup gehoert nicht durch textContent - und escaped auch nicht doppelt.
+        Assert.DoesNotContain("[data-collections-summary]').textContent", body);
+        Assert.DoesNotContain("ctx.esc(collectionSummary(", body);
+    }
+
+    /// <summary>
+    /// Die Chips nutzen die gemeinsamen Primitive aus <c>styles/app.css</c>, keine eigenen: eine
+    /// zweite Chip-Sprache nur fuer diese Zeile waere genau das, was #157 abgestellt hat.
+    /// </summary>
+    [Fact]
+    public void The_chips_reuse_the_shared_primitives()
+    {
+        var body = OpenDetailBody();
+
+        Assert.Contains("fw-chips", body);
+        var css = File.ReadAllText(Path.Combine(
+            Root(), "src", "FullWorth.Web", "wwwroot", "pages", "transactions", "page.css"));
+        // Seitenlokal darf nur der Abstand abweichen, nicht das Aussehen.
+        Assert.DoesNotContain(".fw-chip{", css);
+        Assert.Contains(".tx-collection-chips{margin-bottom:0}", css);
+    }
+
     /// <summary>Die beiden neuen Texte stehen in beiden Sprachdateien - eine fehlende Uebersetzung zeigt
     /// sonst den rohen Schluessel im Dialog.</summary>
     [Fact]

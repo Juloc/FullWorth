@@ -1241,11 +1241,15 @@ async function openDetail(listItem) {
   // einen Aufrufer.
   const collectionNamesOf = ids => (collectionRows || [])
     .filter(row => ids.includes(row.id)).map(row => row.name);
+  // Chips statt einer Aufzaehlung (#124): bei drei Sammlungen ist "Wohnung · Gardasee 2026 ·
+  // Badrenovierung" eine Zeile, in der man die Grenzen suchen muss. Die gemeinsamen Primitive aus
+  // styles/app.css, keine eigenen - der Zeiger-Cursor stimmt hier, weil die ganze Zeile ein Knopf
+  // ist und ein Klick auf einen Chip den Auswahldialog oeffnet.
   const collectionSummary = names => names.length
-    ? names.join(' · ')
-    : ctx.get('collections.assignNone');
+    ? `<span class="fw-chips tx-collection-chips">${names.map(name => `<span class="fw-chip">${ctx.esc(name)}</span>`).join('')}</span>`
+    : ctx.esc(ctx.get('collections.assignNone'));
   const collectionsRow = collectionRows
-    ? `<button type="button" class="row settings-link tx-detail-jump" data-collections><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('collections.title'))}</div><div class="row-sub" data-collections-summary>${ctx.esc(collectionSummary(collectionNamesOf(assignedCollections)))}</div></div><span aria-hidden="true">›</span></button>`
+    ? `<button type="button" class="row settings-link tx-detail-jump" data-collections><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('collections.title'))}</div><div class="row-sub" data-collections-summary>${collectionSummary(collectionNamesOf(assignedCollections))}</div></div><span aria-hidden="true">›</span></button>`
     : '';
   const statusHistory = Array.isArray(detail.statusHistory) ? detail.statusHistory : [];
   const statusHistoryHtml = statusHistory.length
@@ -1364,13 +1368,13 @@ async function openDetail(listItem) {
       catch { collectionRows = [...collectionRows, { id: created, name: '', status: 'active' }]; }
       // Neu angelegt heisst auch gleich zugeordnet: wer sie hier anlegt, will sie fuer DIESE Buchung.
       chosenCollections = [...keep, created];
-      dlg.querySelector('[data-collections-summary]').textContent =
+      dlg.querySelector('[data-collections-summary]').innerHTML =
         collectionSummary(collectionNamesOf(chosenCollections));
       openCollectionPicker();
     };
     picker.querySelector('[data-apply]').onclick = () => {
       chosenCollections = list.getSelectedIds();
-      dlg.querySelector('[data-collections-summary]').textContent =
+      dlg.querySelector('[data-collections-summary]').innerHTML =
         collectionSummary(collectionNamesOf(chosenCollections));
       close();
     };

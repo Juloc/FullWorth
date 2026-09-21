@@ -294,3 +294,8 @@
 .tx-row-forecast{opacity:.72;border-top:1px dashed var(--line)}
 .tx-row-forecast .tx-amt{font-style:italic}
 .tx-row-forecast .tx-cp-main strong{color:var(--muted)}
+
+/* #124: die Sammlungen einer Buchung als Chips. Die gemeinsamen Primitive aus styles/app.css tragen
+   das Aussehen; hier faellt nur der Aussenabstand weg, den die Filterleiste dort braucht und eine
+   Zeile im Detail nicht. */
+.tx-collection-chips{margin-bottom:0}
