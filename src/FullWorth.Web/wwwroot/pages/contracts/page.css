@@ -523,3 +523,7 @@
 /* Der Brieftext steht in einer readonly textarea, damit er markierbar bleibt, wenn die
    Zwischenablage verwehrt ist. pre-wrap, weil der Server echte Zeilenumbrueche liefert. */
 .contract-letter-text{width:100%;white-space:pre-wrap;resize:vertical;margin-top:var(--s3)}
+
+/* #173: eine Einnahmen-Zeile ist anklickbar wie eine Vertragszeile - der Zeiger sagt das, bevor man
+   es ausprobiert. Die Kandidatenzeilen daneben bleiben unangetastet: sie tragen eigene Knoepfe. */
+.detected-row-open{cursor:pointer}

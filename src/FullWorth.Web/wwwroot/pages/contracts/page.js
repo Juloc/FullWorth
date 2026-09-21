@@ -883,7 +883,7 @@ async function loadIncome(interactive, root = null) {
     return;
   }
 
-  const known = schedules.map(schedule => {
+  const known = schedules.map((schedule, index) => {
     const next = schedule.nextExpectedDate
       ? ` · ${ctx.esc(t('nächste', 'next'))}: ${ctx.esc(ctx.date(schedule.nextExpectedDate))}`
       : '';
@@ -892,8 +892,11 @@ async function loadIncome(interactive, root = null) {
     const amount = schedule.expectedAmount == null
       ? `<span class="row-sub">${ctx.esc(t('Betrag schwankt', 'amount varies'))}</span>`
       : `<span class="${moneyClass(MoneyVariant.Income)}">${ctx.money(schedule.expectedAmount, schedule.currency)}</span>`;
+    // #173: anklickbar, wie eine Vertragszeile. Vorher war das eine reine Anzeige - die Routen zum
+    // Anlegen, Aendern und Stilllegen (POST/PUT/DELETE /api/income-schedules) gab es seit immer, und
+    // niemand rief sie auf. Ein erkanntes Gehalt liess sich deshalb nicht korrigieren.
     return `
-    <div class="detected-row">
+    <div class="detected-row detected-row-open" role="button" tabindex="0" data-income-edit="${index}">
       <div class="row-main detected-main">
         ${identityIcon(schedule.name)}
         <div class="detected-copy">
@@ -901,7 +904,7 @@ async function loadIncome(interactive, root = null) {
           <div class="row-sub">${ctx.esc(cycleLabel(schedule.cycle))}${next}</div>
         </div>
       </div>
-      <div class="row-side detected-side">${amount}</div>
+      <div class="row-side detected-side">${amount}<span aria-hidden="true">›</span></div>
     </div>`;
   }).join('');
 
@@ -940,6 +943,136 @@ async function loadIncome(interactive, root = null) {
     row.querySelector('[data-income-accept]').addEventListener('click', () => acceptIncome(candidate, row));
     row.querySelector('[data-income-dismiss]').addEventListener('click', () => dismissIncome(candidate, row));
   });
+  box.querySelectorAll('[data-income-edit]').forEach(row => {
+    const schedule = schedules[Number(row.dataset.incomeEdit)];
+    const open = () => openIncomeDialog(schedule);
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+    });
+  });
+}
+
+/**
+ * Detailansicht und Bearbeitung eines Einnahmen-Vertrags (#173).
+ *
+ * Bewusst KEINE eigene Sonderseite: ein Einnahmen-Vertrag ist fachlich ein Vertrag mit umgekehrtem
+ * Vorzeichen, also bekommt er denselben Formulardialog wie alles andere auf dieser Seite. Was er
+ * nicht teilt, ist die Vertragsliste - dort zieht jeder Verbraucher den Betrag ab, und ein Gehalt
+ * darin waere ein als Fixkosten gezaehlter Lohn (siehe die Begruendung an loadIncome).
+ *
+ * Ein leerer Betrag ist ein echter Fall, keine fehlende Eingabe: eine schwankende Einnahme hat keinen
+ * festen Wert, und 0,00 € zu speichern waere eine erfundene Zahl. Deshalb ist das Feld optional und
+ * "Betrag schwankt" die Betriebsart, die der Server als Schaetzung liest (ValueMode 'average').
+ */
+async function openIncomeDialog(schedule) {
+  let accounts = [];
+  try { accounts = (await ctx.api('api/accounts')) || []; }
+  catch { accounts = []; }
+
+  const cycles = ['weekly', 'monthly', 'quarterly', 'yearly', 'custom']
+    .map(cycle => `<option value="${cycle}"${(schedule.cycle || 'monthly') === cycle ? ' selected' : ''}>${ctx.esc(cycleLabel(cycle))}</option>`)
+    .join('');
+  const accountOptions = `<option value="">${ctx.esc(t('Kein Konto', 'No account'))}</option>`
+    + accounts.map(account => `<option value="${ctx.esc(account.id)}"${schedule.accountId === account.id ? ' selected' : ''}>${ctx.esc(account.displayName || account.name || '')}</option>`).join('');
+  // Dieselbe Regel wie der Server (AnalyticsService: ValueMode == "average" ODER kein Betrag). Nur auf
+  // die Zeichenkette zu pruefen waere zu eng: ein Plan ohne Betrag schwankt, egal was im Feld steht -
+  // und er wuerde sonst als "fester Betrag" aufgehen und beim Speichern auch so festgeschrieben.
+  const varies = schedule.valueMode === 'average' || schedule.expectedAmount == null;
+  const modes = [['fixed', t('Fester Betrag', 'Fixed amount')], ['average', t('Betrag schwankt', 'Amount varies')]]
+    .map(([value, label]) => `<option value="${value}"${(varies ? 'average' : 'fixed') === value ? ' selected' : ''}>${ctx.esc(label)}</option>`)
+    .join('');
+  const dv = value => value ? String(value).slice(0, 10) : '';
+
+  const handles = openFormDialog({
+    title: t('Einnahme', 'Income'),
+    subtitle: schedule.name,
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: t('Weitere Angaben', 'More details'),
+    fallbackError: ctx.get('common.error'),
+    className: 'contract-dialog',
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 200 },
+      { name: 'valueMode', kind: FieldKind.Select, label: t('Betrag', 'Amount'), rawOptions: modes, emptyValue: 'fixed' },
+      { name: 'amount', kind: FieldKind.Money, label: t('Erwarteter Betrag', 'Expected amount'), min: '0', group: 'sum' },
+      { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, minLength: 3, maxLength: 3, group: 'sum' },
+      { name: 'cycle', kind: FieldKind.Select, label: t('Rhythmus', 'Cycle'), rawOptions: cycles, emptyValue: 'monthly', group: 'cadence' },
+      { name: 'interval', kind: FieldKind.Number, label: t('Intervall', 'Interval'), min: 1, group: 'cadence' },
+      { name: 'nextExpectedDate', kind: FieldKind.Date, label: t('Nächster Termin', 'Next expected') },
+      { name: 'account', kind: FieldKind.Select, label: ctx.get('transactions.account'), rawOptions: accountOptions, advanced: true },
+      { name: 'anchorDate', kind: FieldKind.Date, label: t('Startdatum', 'Start date'), advanced: true },
+      { name: 'active', kind: FieldKind.Check, label: t('Aktiv', 'Active'), advanced: true }
+    ],
+    values: {
+      name: schedule.name || '',
+      valueMode: varies ? 'average' : 'fixed',
+      amount: schedule.expectedAmount == null ? '' : String(schedule.expectedAmount),
+      // Dieser Dialog bearbeitet immer einen bestehenden Plan, und der traegt seine Waehrung aus der
+      // Datenbank - der Rueckfall ist nur da, damit das Feld nie leer und damit ungueltig startet.
+      currency: schedule.currency || 'EUR',
+      cycle: schedule.cycle || 'monthly',
+      interval: String(schedule.interval ?? 1),
+      nextExpectedDate: dv(schedule.nextExpectedDate),
+      account: schedule.accountId || '',
+      anchorDate: dv(schedule.anchorDate),
+      active: schedule.isActive !== false
+    },
+    // Woher der Eintrag kommt, ist keine Eingabe - aber es erklaert, warum Werte schon gefuellt sind.
+    extraHtml: schedule.autoDetected
+      ? `<div class="row-sub">${ctx.esc(t('Automatisch aus wiederkehrenden Eingängen erkannt. Alle Werte sind korrigierbar.',
+          'Detected automatically from recurring credits. Every value can be corrected.'))}</div>`
+      : '',
+    actions: [
+      { name: 'delete', label: t('Stilllegen', 'Deactivate'), role: 'danger', onClick: () => removeIncome(schedule, handles) },
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get('common.save'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, setFormError, close }) => {
+      // Was der Benutzer im Formular gewaehlt hat - nicht der Zustand beim Oeffnen (varies oben).
+      const chosenVaries = String(values.valueMode || 'fixed') === 'average';
+      try {
+        await ctx.api(`api/income-schedules/${schedule.id}`, ctx.jsonBody({
+          name: values.name,
+          accountId: values.account || null,
+          // Der erkannte Gegenpartei-Schluessel bleibt, wie er ist: daran haengt die Zuordnung
+          // kuenftiger Eingaenge, und er ist nichts, was man in einem Formular tippt.
+          normalizedCounterparty: schedule.normalizedCounterparty ?? null,
+          // Bei "schwankt" wird der Betrag absichtlich geleert statt beibehalten - ein stehen
+          // gebliebener Wert wuerde als fester Betrag weiterwirken.
+          expectedAmount: chosenVaries || values.amount === '' ? null : Number(values.amount),
+          currency: String(values.currency || 'EUR').toUpperCase(),
+          cycle: String(values.cycle || 'monthly'),
+          interval: Math.max(1, Number(values.interval) || 1),
+          anchorDate: values.anchorDate || null,
+          nextExpectedDate: values.nextExpectedDate || null,
+          valueMode: chosenVaries ? 'average' : 'fixed',
+          isActive: Boolean(values.active)
+        }, 'PUT'));
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await loadIncome(true);
+      } catch (error) {
+        setFormError(error.message || ctx.get('common.error'));
+      }
+    }
+  });
+}
+
+/** Stilllegen, nicht loeschen: der Server archiviert (DELETE setzt IsActive), damit ausgewertete
+ *  Vergangenheit erhalten bleibt - deshalb heisst der Knopf auch so. */
+async function removeIncome(schedule, handles) {
+  if (!await ctx.confirm(t('Diese Einnahme stilllegen? Vergangene Auswertungen bleiben erhalten.',
+    'Deactivate this income? Past evaluations stay intact.'),
+    { destructive: true, confirmLabel: t('Stilllegen', 'Deactivate') })) return;
+  try {
+    await ctx.api(`api/income-schedules/${schedule.id}`, { method: 'DELETE' });
+    handles.close('deleted');
+    ctx.toast(ctx.get('common.saved'));
+    await loadIncome(true);
+  } catch (error) {
+    handles.setFormError(error.message || ctx.get('common.error'));
+  }
 }
 
 function cycleLabel(cycle) {

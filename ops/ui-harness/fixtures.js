@@ -562,7 +562,7 @@
         autoDetected: true, isActive: true },
       { id: 'is2', name: 'Nebentätigkeit', accountId: 'a1', normalizedCounterparty: null,
         expectedAmount: null, currency: 'EUR', cycle: 'monthly', interval: 1,
-        anchorDate: null, nextExpectedDate: null, valueMode: 'variable',
+        anchorDate: null, nextExpectedDate: null, valueMode: 'average',
         autoDetected: false, isActive: true }
     ],
     'income-schedules/detection': [
