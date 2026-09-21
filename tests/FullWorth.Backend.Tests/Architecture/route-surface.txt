@@ -322,7 +322,10 @@ GET              /health
 GET              /internal/banking/connections/
 GET              /internal/banking/connections/{connectionId:guid}/accounts
 GET              /internal/banking/connections/{connectionId:guid}/accounts/sync-state
+GET              /internal/banking/institutions/countries
+GET              /internal/banking/institutions/{country}
 GET              /internal/banking/profiles/control-panel-principal
+GET              /internal/banking/profiles/provider-principal
 GET              /internal/banking/profiles/users/{userId:guid}
 GET              /internal/banking/profiles/{id:guid}
 GET              /internal/banking/provider-status/
@@ -552,6 +555,7 @@ POST             /internal/banking/connections/{id:guid}/raw-responses
 POST             /internal/banking/connections/{id:guid}/sync-history
 POST             /internal/banking/fints/investment-snapshot
 POST             /internal/banking/ingest
+POST             /internal/banking/institutions/{country}/failures
 POST             /internal/banking/profiles/
 POST             /internal/banking/provider-status/failures
 PUT              /api/access/members/{memberUserId:guid}
@@ -631,4 +635,5 @@ PUT              /api/tax/profile/settings
 PUT              /api/tax/settings
 PUT              /api/transactions/{id:guid}/allocations
 PUT              /api/transactions/{transactionId:guid}/collections
+PUT              /internal/banking/institutions/{country}
 PUT              /internal/banking/provider-status/

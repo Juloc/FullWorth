@@ -7,8 +7,18 @@ public static class EnableBankingProfileEndpoints
     {
         var group = app.MapGroup("/internal/banking/profiles").WithTags("Internal banking");
 
-        // #165: wessen Control-Panel-Zugang der Statusdienst benutzen darf. Antwortet mit einer Id
-        // oder 404 - nie mit einem Token und nie mit einer Liste.
+        // Beide Routen nennen eine Nutzer-Id und sonst nichts - nie ein Token und nie eine Liste,
+        // wer Zugang hat.
+
+        // #169: wessen Anwendungs-Zugangsdaten der Katalogdienst benutzen darf (/aspsps).
+        group.MapGet("/provider-principal", async (EnableBankingProfileStore store, CancellationToken ct) =>
+        {
+            var userId = await store.FindEnableBankingPrincipalAsync(ct);
+            return userId is null ? Results.NotFound() : Results.Ok(new { userId });
+        });
+
+        // #165: wessen Control-Panel-Zugang der Statusdienst benutzen darf. Anderer Zugang als oben -
+        // ein Haus kann das eine haben und das andere nicht.
         group.MapGet("/control-panel-principal", async (EnableBankingProfileStore store, CancellationToken ct) =>
         {
             var userId = await store.FindControlPanelPrincipalAsync(ct);

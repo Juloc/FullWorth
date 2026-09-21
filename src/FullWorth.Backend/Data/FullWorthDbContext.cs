@@ -36,6 +36,8 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<BankingInstanceSettings> BankingInstanceSettings => Set<BankingInstanceSettings>();
     public DbSet<BankingProviderStatus> BankingProviderStatuses => Set<BankingProviderStatus>();
     public DbSet<BankingProviderStatusRefresh> BankingProviderStatusRefreshes => Set<BankingProviderStatusRefresh>();
+    public DbSet<BankingInstitution> BankingInstitutions => Set<BankingInstitution>();
+    public DbSet<BankingInstitutionRefresh> BankingInstitutionRefreshes => Set<BankingInstitutionRefresh>();
     public DbSet<FinanceAccount> Accounts => Set<FinanceAccount>();
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
     public DbSet<BalanceSnapshot> BalanceSnapshots => Set<BalanceSnapshot>();
@@ -144,6 +146,29 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
         {
             e.HasIndex(x => x.ScopeKey).IsUnique();
             e.Property(x => x.ScopeKey).HasMaxLength(40);
+            e.Property(x => x.LastError).HasMaxLength(200);
+        });
+
+        b.Entity<BankingInstitution>(e =>
+        {
+            // Die Identitaet eines Eintrags beim Anbieter. Dieselbe Bank kommt als getrennter
+            // Privat- und Geschaeftseintrag; ohne diesen Index legt ein zweiter Durchlauf sie noch
+            // einmal an, statt sie zu aktualisieren.
+            e.HasIndex(x => new { x.Country, x.Name, x.PsuTypesKey }).IsUnique();
+            e.HasIndex(x => new { x.Country, x.IsActive });
+            e.Property(x => x.Country).HasMaxLength(2);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.PsuTypesKey).HasMaxLength(120);
+            e.Property(x => x.LogoUrl).HasMaxLength(500);
+            e.Property(x => x.PsuTypesJson).HasColumnType("jsonb");
+            e.Property(x => x.GroupJson).HasColumnType("jsonb");
+            e.Property(x => x.AuthMethodsJson).HasColumnType("jsonb");
+        });
+
+        b.Entity<BankingInstitutionRefresh>(e =>
+        {
+            e.HasIndex(x => x.Country).IsUnique();
+            e.Property(x => x.Country).HasMaxLength(2);
             e.Property(x => x.LastError).HasMaxLength(200);
         });
 

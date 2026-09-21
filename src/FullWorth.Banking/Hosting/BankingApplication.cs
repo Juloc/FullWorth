@@ -28,6 +28,7 @@ public static class BankingApplication
             options.BaseUrl = FullWorth.Shared.UnifiedHost.BackendBaseUrlForBanking(builder.Configuration));
         builder.Services.Configure<BankingSyncOptions>(builder.Configuration.GetSection(BankingSyncOptions.SectionName));
         builder.Services.Configure<BankingProviderStatusOptions>(builder.Configuration.GetSection(BankingProviderStatusOptions.SectionName));
+        builder.Services.Configure<BankingInstitutionCatalogOptions>(builder.Configuration.GetSection(BankingInstitutionCatalogOptions.SectionName));
         builder.Services.Configure<FinTsOptions>(builder.Configuration.GetSection(FinTsOptions.SectionName));
         builder.Services.AddSingleton<EnableBankingRequestPolicy>();
         builder.Services.AddSingleton<BankSyncConcurrencyGate>();
@@ -72,6 +73,7 @@ public static class BankingApplication
         builder.Services.AddScoped<BankSyncService>();
         builder.Services.AddHostedService<BankSyncWorker>();
         builder.Services.AddHostedService<BankingProviderStatusWorker>();
+        builder.Services.AddHostedService<BankingInstitutionCatalogWorker>();
     }
 
     public static void InitializeFullWorthBanking(this WebApplication app)
@@ -247,30 +249,86 @@ public static class BankingApplication
             return registration.Cancel(userId, id) ? Results.NoContent() : Results.NotFound();
         });
         
+        // #169: liest den lokal gehaltenen Katalog. Vorher rief dieser Endpunkt bei jedem Oeffnen des
+        // Bankdialogs /aspsps beim Anbieter - die Bankauswahl hing damit an dessen Erreichbarkeit und
+        // Latenz, und zwar an dem Teil, ohne den man gar keine Bank auswaehlen kann. Aktuell gehalten
+        // wird der Katalog von BankingInstitutionCatalogWorker.
+        //
+        // Die Antwortform bleibt {aspsps:[...]} mit den Feldern des Anbieters, damit die Oberflaeche
+        // unveraendert weiterliest - geaendert hat sich nur, woher sie kommt.
         endpoints.MapGet("/api/banking/institutions", async (
             HttpContext http,
             string? country,
             string? psuType,
+            FullWorthBackendClient backend,
             BankSyncService service,
+            IOptionsMonitor<EnableBankingOptions> providerOptions,
             CancellationToken ct) =>
         {
             if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
-            try
+
+            var normalized = (country ?? providerOptions.CurrentValue.DefaultCountry ?? "DE").Trim().ToUpperInvariant();
+            if (normalized.Length != 2)
+                return Results.BadRequest(new { error = "invalid_institution_query", message = "Country must be a two-letter code." });
+
+            var catalog = await backend.GetInstitutionCatalogAsync(normalized, ct);
+
+            // Einmaliges Fuellen bei kaltem Katalog, und nur dann.
+            //
+            // Ohne das waere der erste Eindruck schlechter als der Zustand vor #169: wer Enable Banking
+            // gerade eingerichtet hat, saehe eine leere Bankauswahl, bis der Hintergrunddienst das
+            // naechste Mal laeuft - das kann ein Tag sein. Die Forderung des Issues, dass NORMALE
+            // UI-Reads keinen externen Abruf ausloesen, bleibt erfuellt: der Normalfall ist der warme
+            // Katalog, und der geht nie nach draussen. Dieser Zweig ist das erste Mal, nicht der
+            // Regelfall - danach haelt der Dienst ihn aktuell.
+            if (catalog is null || !catalog.Known)
             {
-                return Results.Json(await service.GetInstitutionsAsync(country, psuType, caller, ct));
+                try
+                {
+                    var fresh = await service.GetInstitutionsAsync(normalized, psuType: null, caller, ct);
+                    if (BankingInstitutionPayload.TryRead(fresh, normalized, out var rows))
+                    {
+                        await backend.ReplaceInstitutionCatalogAsync(normalized, rows, ct);
+                        catalog = await backend.GetInstitutionCatalogAsync(normalized, ct);
+                    }
+                }
+                catch (EnableBankingProfileNotConfiguredException ex)
+                {
+                    return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
+                }
+                catch (EnableBankingApiException ex)
+                {
+                    return ProviderApiError(ex, consentAware: false);
+                }
             }
-            catch (ArgumentException ex)
-            {
-                return Results.BadRequest(new { error = "invalid_institution_query", message = ex.Message });
-            }
-            catch (EnableBankingProfileNotConfiguredException ex)
-            {
-                return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
-            }
-            catch (EnableBankingApiException ex)
-            {
-                return ProviderApiError(ex, consentAware: false);
-            }
+
+            // Auch nach dem Versuch nichts: dann ist der Zugang nicht bereit. Ein leeres Verzeichnis
+            // auszugeben saehe aus, als gaebe es in diesem Land keine Bank.
+            if (catalog is null || !catalog.Known)
+                return Results.Conflict(new
+                {
+                    error = "banking_profile_not_ready",
+                    message = "The institution catalogue has not been fetched yet."
+                });
+
+            var rows2 = catalog.Institutions
+                // Der PSU-Typ-Filter bleibt erhalten, nur wird er jetzt hier angewandt statt vom
+                // Anbieter: gespeichert ist bewusst der ungefilterte Katalog, damit ein Wechsel des
+                // Filters keinen neuen Abruf braucht.
+                .Where(row => psuType is null || MatchesPsuType(row, psuType))
+                .Select(row => new Dictionary<string, object?>
+                {
+                    ["name"] = row.Name,
+                    ["country"] = row.Country,
+                    ["psu_types"] = row.PsuTypes,
+                    ["group"] = row.Group,
+                    ["logo"] = row.Logo,
+                    ["beta"] = row.Beta,
+                    ["auth_methods"] = row.AuthMethods
+                })
+                .ToList();
+
+            return Results.Ok(new { aspsps = rows2 });
         });
         
         // #165: liest ausschliesslich den lokal gespeicherten Stand. Vorher holte dieser Endpunkt den
@@ -818,5 +876,24 @@ public static class BankingApplication
         var cleaned = new string(value.Trim().Where(character => !char.IsControl(character)).ToArray());
         if (cleaned.Length == 0) return null;
         return cleaned.Length <= maxLength ? cleaned : cleaned[..maxLength];
+    }
+
+    /// <summary>
+    /// Ob ein Katalogeintrag zum gewuenschten PSU-Typ passt (#169). Ein Eintrag ohne Angabe passt
+    /// immer: der Anbieter laesst das Feld weg, wenn die Bank keine Unterscheidung macht, und ihn
+    /// wegzufiltern liesse genau diese Banken verschwinden.
+    /// </summary>
+    private static bool MatchesPsuType(BankingInstitutionRowDto row, string psuType)
+    {
+        if (row.PsuTypes is not { ValueKind: System.Text.Json.JsonValueKind.Array } types) return true;
+        var wanted = psuType.Trim();
+        var any = false;
+        foreach (var item in types.EnumerateArray())
+        {
+            if (item.ValueKind != System.Text.Json.JsonValueKind.String) continue;
+            any = true;
+            if (string.Equals(item.GetString(), wanted, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return !any;
     }
 }

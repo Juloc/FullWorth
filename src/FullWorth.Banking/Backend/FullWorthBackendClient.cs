@@ -87,6 +87,30 @@ public sealed record BankingProviderStatusRowDto(string Country, string Brand, s
 
 public sealed record ControlPanelPrincipalDto(Guid UserId);
 
+/// <summary>
+/// Ein Institut aus dem lokalen Katalog (#169). Die drei <see cref="JsonElement"/>-Felder tragen die
+/// Form des Anbieters: PSU-Typen sind eine Liste, die Gruppe kann Text oder Objekt sein, die
+/// Anmeldeverfahren sind verschachtelte Protokollangaben. Sie werden unveraendert durchgereicht - die
+/// Oberflaeche liest sie genauso, wie sie sie vom Anbieter gelesen hat.
+/// </summary>
+public sealed record BankingInstitutionRowDto(
+    string Country,
+    string Name,
+    System.Text.Json.JsonElement? PsuTypes,
+    System.Text.Json.JsonElement? Group,
+    string? Logo,
+    bool Beta,
+    System.Text.Json.JsonElement? AuthMethods);
+
+public sealed record BankingInstitutionCatalogDto(
+    bool Known,
+    DateTimeOffset? LastSuccessfulAt,
+    DateTimeOffset? LastAttemptAt,
+    string? LastError,
+    IReadOnlyList<BankingInstitutionRowDto> Institutions);
+
+public sealed record BankingInstitutionCountriesDto(IReadOnlyList<string> Countries);
+
 /// <param name="Known">Falsch, solange nie erfolgreich geprueft wurde. Eine leere Liste allein waere
 /// zweideutig: der Bankdialog wuerde nach einer frischen Installation jede Bank als gesund ausgeben,
 /// obwohl niemand nachgesehen hat.</param>
@@ -241,6 +265,62 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         using var response = await http.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<BankingProviderStatusSnapshotDto>(cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// Wessen Anwendungs-Zugangsdaten der Katalogdienst benutzen darf (#169). Anderer Zugang als beim
+    /// Statusdienst: der Katalog kommt ueber das Profil, der Gesundheitsfeed ueber das Control Panel.
+    /// </summary>
+    public async Task<Guid?> GetProviderPrincipalAsync(CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, "/internal/banking/profiles/provider-principal");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        var body = await response.Content.ReadFromJsonAsync<ControlPanelPrincipalDto>(cancellationToken: ct);
+        return body?.UserId;
+    }
+
+    /// <summary>Der lokale Institutionenkatalog eines Landes (#169).</summary>
+    public async Task<BankingInstitutionCatalogDto?> GetInstitutionCatalogAsync(string country, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, $"/internal/banking/institutions/{Uri.EscapeDataString(country)}");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<BankingInstitutionCatalogDto>(cancellationToken: ct);
+    }
+
+    /// <summary>Welche Laender gepflegt werden muessen - die abgefragten plus die mit Verbindungen.</summary>
+    public async Task<IReadOnlyList<string>> GetInstitutionCountriesAsync(CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, "/internal/banking/institutions/countries");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return [];
+        var body = await response.Content.ReadFromJsonAsync<BankingInstitutionCountriesDto>(cancellationToken: ct);
+        return body?.Countries ?? [];
+    }
+
+    /// <summary>Nach einem erfolgreichen Katalogabruf: das Land uebernehmen.</summary>
+    public async Task ReplaceInstitutionCatalogAsync(
+        string country, IReadOnlyList<BankingInstitutionRowDto> institutions, CancellationToken ct)
+    {
+        using var request = Create(
+            HttpMethod.Put, $"/internal/banking/institutions/{Uri.EscapeDataString(country)}", new { institutions });
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Nach einem gescheiterten Katalogabruf: nur den Versuch vermerken. Der gespeicherte Katalog
+    /// bleibt - eine Bankauswahl, die bei jedem Anbieterausfall leer waere, haette genau den Fehler,
+    /// den #169 abstellt.
+    /// </summary>
+    public async Task RecordInstitutionFailureAsync(string country, string reason, CancellationToken ct)
+    {
+        using var request = Create(
+            HttpMethod.Post, $"/internal/banking/institutions/{Uri.EscapeDataString(country)}/failures",
+            new { reason });
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
     }
 
     /// <summary>Nach einem erfolgreichen Abruf: den ganzen Feed ersetzen.</summary>

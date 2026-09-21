@@ -42,6 +42,23 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
     /// anderen Zugang nimmt, verteilt seine Fehler ueber alle Nutzer statt sie an einem sichtbar zu
     /// machen.
     /// </summary>
+    /// <summary>
+    /// Wessen Enable-Banking-Profil der Katalogdienst benutzen darf (#169).
+    ///
+    /// Anderer Zugang als bei <see cref="FindControlPanelPrincipalAsync"/> und deshalb eine eigene
+    /// Abfrage: der Institutionenkatalog kommt ueber die Anwendungs-Zugangsdaten des Profils
+    /// (<c>/aspsps</c>), der Gesundheitsfeed ueber das Control-Panel-Token. Ein Haus kann das eine
+    /// haben und das andere nicht - beides in eine Abfrage mit Schalter zu legen hiesse, dass ein
+    /// fehlendes Control-Panel-Token auch den Katalog verhindert.
+    /// </summary>
+    public async Task<Guid?> FindEnableBankingPrincipalAsync(CancellationToken ct) =>
+        await db.EnableBankingProfiles.AsNoTracking()
+            .Where(profile => profile.Active
+                && db.Users.Any(user => user.Id == profile.UserId && user.IsActive))
+            .OrderBy(profile => profile.Id)
+            .Select(profile => (Guid?)profile.UserId)
+            .FirstOrDefaultAsync(ct);
+
     public async Task<Guid?> FindControlPanelPrincipalAsync(CancellationToken ct) =>
         await db.EnableBankingProfiles.AsNoTracking()
             .Where(profile => profile.Active
