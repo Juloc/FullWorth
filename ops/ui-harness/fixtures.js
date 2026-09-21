@@ -32,15 +32,18 @@
       { transactionId: 't2', date: '2026-08-13', amount: -680, currency: 'EUR', counterparty: 'Hotel Garda', categoryName: 'Hotel', accountName: 'Girokonto', reasons: ['merchant', 'period'], score: 5 },
       { transactionId: 't3', date: '2026-08-15', amount: -900, currency: 'EUR', counterparty: 'Vermieter', categoryName: null, accountName: 'Girokonto', reasons: ['period'], score: 2 }
     ],
+    // #124: transactionIds sind bewusst gefuellt (t1/t2 stehen auch in der Buchungsliste). Die
+    // Such-/Filteransicht kennzeichnet damit die bereits zugeordneten Treffer und kann sie
+    // ausblenden - mit einer leeren Liste waere genau dieser Unterschied nicht nachsehbar.
     'collections/col1': { collection: { id: 'col1', name: 'Wohnung', description: 'Alles rund um die Wohnung', icon: 'home', color: null, startDate: null, endDate: null, status: 'active', transactionCount: 14, expenses: 14820, income: 0, net: -14820, currency: 'EUR', isComplete: true, missingCurrencies: [] }, categories: [
       { categoryId: 'c-mob', categoryName: 'Möbel', expenses: 4200, count: 3 },
       { categoryId: 'c-bau', categoryName: 'Baumarkt', expenses: 3100, count: 6 },
       { categoryId: 'c-ele', categoryName: 'Elektrogeräte', expenses: 2600, count: 2 }
-    ], transactionIds: [] },
+    ], transactionIds: ['t1', 't2'] },
     'collections/col2': { collection: { id: 'col2', name: 'Gardasee 2026', description: null, icon: 'travel', color: null, startDate: '2026-08-12', endDate: '2026-08-17', status: 'completed', transactionCount: 9, expenses: 1436, income: 0, net: -1436, currency: 'EUR', isComplete: false, missingCurrencies: ['CHF'] }, categories: [
       { categoryId: 'c-hot', categoryName: 'Hotel', expenses: 680, count: 1 },
       { categoryId: 'c-res', categoryName: 'Restaurant', expenses: 286, count: 4 }
-    ], transactionIds: [] },
+    ], transactionIds: ['t1', 't2'] },
     'collections': [{ id: 'col1', name: 'Wohnung', description: 'Alles rund um die Wohnung', icon: 'home', color: null, startDate: null, endDate: null, status: 'active', transactionCount: 14, expenses: 14820, income: 0, net: -14820, currency: 'EUR', isComplete: true, missingCurrencies: [] }, { id: 'col2', name: 'Gardasee 2026', description: null, icon: 'travel', color: null, startDate: '2026-08-12', endDate: '2026-08-17', status: 'completed', transactionCount: 9, expenses: 1436, income: 0, net: -1436, currency: 'EUR', isComplete: false, missingCurrencies: ['CHF'] }],
     'categories/language': { language: 'en', canChange: true, systemCategories: 80, renamedByUser: 0 },
     'categories': [

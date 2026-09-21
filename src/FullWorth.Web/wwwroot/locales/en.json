@@ -1525,6 +1525,12 @@
     "addToCollection": "Collections",
     "addToCollectionHint": "Add or remove {count} selected transactions",
     "addAction": "Add",
-    "removeFromCollection": "Remove"
+    "removeFromCollection": "Remove",
+    "searchTransactions": "Find transactions",
+    "onlyUnassigned": "Only not yet assigned",
+    "alreadyAssigned": "already assigned",
+    "minAmount": "Amount from",
+    "maxAmount": "Amount to",
+    "searchAction": "Search"
   }
 }

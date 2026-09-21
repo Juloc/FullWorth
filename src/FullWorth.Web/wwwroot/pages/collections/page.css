@@ -48,3 +48,11 @@
 @media(max-width:620px){
   .col-metrics{gap:.9rem}
 }
+
+/* #124: die Such-/Filteransicht. Die Felder stehen nebeneinander, solange Platz ist - sieben
+   untereinander waeren ein Formular, durch das man scrollt, bevor man suchen kann. */
+.col-search-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:var(--s2)}
+
+/* Schon zugeordnete werden gekennzeichnet, nicht versteckt: weggelassen liesse der Benutzer raten,
+   ob die Suche sie nicht gefunden hat oder sie laengst drin sind. */
+.col-search-assigned{opacity:.6}

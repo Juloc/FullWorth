@@ -1525,6 +1525,12 @@
     "addToCollection": "Sammlungen",
     "addToCollectionHint": "{count} ausgewählte Buchungen zuordnen oder entfernen",
     "addAction": "Hinzufügen",
-    "removeFromCollection": "Entfernen"
+    "removeFromCollection": "Entfernen",
+    "searchTransactions": "Buchungen suchen",
+    "onlyUnassigned": "Nur noch nicht zugeordnete",
+    "alreadyAssigned": "bereits zugeordnet",
+    "minAmount": "Betrag ab",
+    "maxAmount": "Betrag bis",
+    "searchAction": "Suchen"
   }
 }

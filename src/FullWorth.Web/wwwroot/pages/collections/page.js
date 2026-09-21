@@ -210,10 +210,120 @@ async function renderDetail() {
   ctx.$('#col-edit').onclick = () => openEditor(row);
   ctx.$('#col-delete').onclick = () => remove(row);
   ctx.$('#col-add-transactions').onclick = () => openCandidates(row);
+  // Zwei Wege, weil es zwei verschiedene Fragen sind: "was schlaegst du vor" und "ich weiss, was ich
+  // suche". Ein Dialog mit Umschalter haette beide schlechter beantwortet.
+  ctx.$('#col-search-transactions').onclick = () => openTransactionSearch(row, detail.transactionIds || []);
 }
 
 function metric(label, value) {
   return `<div class="col-metric"><span class="col-metric-label">${ctx.esc(label)}</span><span class="col-metric-value">${value}</span></div>`;
+}
+
+/**
+ * Buchungen suchen und zuordnen (#124).
+ *
+ * Die Vorschlagsliste daneben beantwortet "was koennte dazugehoeren". Diese hier beantwortet die
+ * andere Frage: jemand WEISS, was er sucht - die Tankstelle auf der Rueckfahrt, alle Baumarktkaeufe
+ * im Maerz - und der Vorschlag findet sie nicht, weil kein Haendler und keine Kategorie passt.
+ *
+ * Kein neuer Endpunkt: gesucht wird ueber /api/transactions mit seinen vorhandenen Filtern, und
+ * welche Buchungen schon in dieser Sammlung stecken, steht im Sammlungsdetail (transactionIds).
+ * Eine zweite Suchimplementierung neben der Buchungsseite waere eine zweite Stelle, an der ein
+ * Filter anders bedeutet.
+ */
+async function openTransactionSearch(row, assignedIds) {
+  const assigned = new Set(assignedIds);
+  let accounts = [], categories = [];
+  try {
+    [accounts, categories] = await Promise.all([
+      ctx.api('api/accounts').catch(() => []),
+      ctx.api('api/categories').catch(() => [])
+    ]);
+  } catch { /* Die Suche geht auch ohne die beiden Auswahlfelder. */ }
+
+  const options = (rows, label) => (rows || [])
+    .map(item => `<option value="${ctx.esc(item.id)}">${ctx.esc(label(item))}</option>`).join('');
+
+  const dlg = ctx.dialog(`<form class="dialog-card col-search-dialog" method="dialog">
+    <div class="panel-head"><div><h2>${ctx.esc(t('searchTransactions'))}</h2><div class="row-sub">${ctx.esc(row.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="col-search-filters">
+      <label>${ctx.esc(t('searchAction'))}<input name="query" type="search" maxlength="120"></label>
+      <label>${ctx.esc(t('start'))}<input name="from" type="date" value="${ctx.esc(row.startDate || '')}"></label>
+      <label>${ctx.esc(t('end'))}<input name="to" type="date" value="${ctx.esc(row.endDate || '')}"></label>
+      <label>${ctx.esc(ctx.get('transactions.account'))}<select name="accountId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options(accounts, a => a.displayName || a.institutionName || '')}</select></label>
+      <label>${ctx.esc(ctx.get('transactions.category'))}<select name="categoryId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options(categories, c => c.name || '')}</select></label>
+      <label>${ctx.esc(t('minAmount'))}<input name="minAmount" type="number" step="0.01"></label>
+      <label>${ctx.esc(t('maxAmount'))}<input name="maxAmount" type="number" step="0.01"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="unassignedOnly" checked><span>${ctx.esc(t('onlyUnassigned'))}</span></label>
+    <div class="dialog-actions">
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(t('searchAction'))}</button>
+    </div>
+    <div data-results></div>
+  </form>`);
+
+  const form = dlg.querySelector('form');
+  const results = dlg.querySelector('[data-results]');
+  const close = () => dlg.close();
+  dlg.querySelector('[data-close]').onclick = close;
+  dlg.querySelector('[data-cancel]').onclick = close;
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const values = new FormData(form);
+    const query = new URLSearchParams({ pageSize: '100' });
+    for (const [key, param] of [['query', 'query'], ['from', 'from'], ['to', 'to'],
+                                ['accountId', 'accountId'], ['categoryId', 'categoryId'],
+                                ['minAmount', 'minAmount'], ['maxAmount', 'maxAmount']]) {
+      const value = String(values.get(key) || '').trim();
+      if (value) query.set(param, value);
+    }
+
+    let found;
+    try { found = await ctx.api(`api/transactions?${query}`); }
+    catch (error) { ctx.toast(error.message || ctx.get('common.error')); return; }
+
+    const unassignedOnly = values.get('unassignedOnly') === 'on';
+    const items = (found?.items || [])
+      .filter(item => !unassignedOnly || !assigned.has(item.id))
+      .map(item => ({
+        id: ctx.esc(item.id),
+        // Schon zugeordnete werden nicht versteckt, sondern gekennzeichnet: sie wegzulassen liesse
+        // den Benutzer raten, ob die Suche sie nicht gefunden hat oder sie schon drin sind.
+        rowClass: assigned.has(item.id) ? 'col-search-assigned' : '',
+        html: `<div class="row-main">
+            <div class="row-title">${ctx.esc(item.merchantDisplayName || item.counterparty || ctx.get('common.empty'))}</div>
+            <div class="row-sub">${item.bookingDate ? ctx.date(item.bookingDate) : ''}${assigned.has(item.id) ? ` · ${ctx.esc(t('alreadyAssigned'))}` : ''}</div>
+          </div>
+          <span class="amount">${ctx.money(item.amount, item.currency)}</span>`
+      }));
+
+    if (!items.length) {
+      results.innerHTML = `<div class="row-sub">${ctx.esc(t('noCandidates'))}</div>`;
+      return;
+    }
+
+    const list = createSelectionList();
+    results.innerHTML = selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(t('candidateSelectAll')) })
+      + `<div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-assign>${ctx.esc(t('addTransactions'))}</button></div>`;
+    list.mount(results, { counterFormat: (n, total) => t('candidateSelectedCount').replace('{n}', String(n)).replace('{total}', String(total)) });
+
+    results.querySelector('[data-assign]').onclick = async event2 => {
+      const chosen = list.getSelectedIds();
+      if (!chosen.length) return;
+      event2.currentTarget.disabled = true;
+      try {
+        await ctx.api(`api/collections/${row.id}/transactions`, ctx.jsonBody({ transactionIds: chosen }));
+        close();
+        await keepListPosition(() => refresh());
+      } catch (error) {
+        ctx.toast(error.message || ctx.get('common.error'));
+        event2.currentTarget.disabled = false;
+      }
+    };
+  };
+  dlg.showModal();
 }
 
 /**
