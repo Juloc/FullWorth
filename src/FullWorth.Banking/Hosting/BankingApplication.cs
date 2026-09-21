@@ -27,6 +27,7 @@ public static class BankingApplication
         builder.Services.PostConfigure<BackendOptions>(options =>
             options.BaseUrl = FullWorth.Shared.UnifiedHost.BackendBaseUrlForBanking(builder.Configuration));
         builder.Services.Configure<BankingSyncOptions>(builder.Configuration.GetSection(BankingSyncOptions.SectionName));
+        builder.Services.Configure<BankingProviderStatusOptions>(builder.Configuration.GetSection(BankingProviderStatusOptions.SectionName));
         builder.Services.Configure<FinTsOptions>(builder.Configuration.GetSection(FinTsOptions.SectionName));
         builder.Services.AddSingleton<EnableBankingRequestPolicy>();
         builder.Services.AddSingleton<BankSyncConcurrencyGate>();
@@ -70,6 +71,7 @@ public static class BankingApplication
         builder.Services.AddSingleton<EnableBankingControlPanelStatusService>();
         builder.Services.AddScoped<BankSyncService>();
         builder.Services.AddHostedService<BankSyncWorker>();
+        builder.Services.AddHostedService<BankingProviderStatusWorker>();
     }
 
     public static void InitializeFullWorthBanking(this WebApplication app)
@@ -271,21 +273,41 @@ public static class BankingApplication
             }
         });
         
+        // #165: liest ausschliesslich den lokal gespeicherten Stand. Vorher holte dieser Endpunkt den
+        // Zustand bei JEDEM Aufruf live aus dem Control Panel - Token holen, notfalls erneuern,
+        // /api/get_today_stats lesen, bei 401 alles noch einmal - und der Bankdialog wartete darauf.
+        // Aktuell gehalten wird der Stand jetzt von BankingProviderStatusWorker, unabhaengig davon,
+        // ob gerade jemand hinsieht.
         endpoints.MapGet("/api/banking/provider-status", async (
             HttpContext http,
             string? country,
-            EnableBankingControlPanelStatusService statusService,
+            FullWorthBackendClient backend,
             CancellationToken ct) =>
         {
-            if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
-            try
-            {
-                return Results.Ok(await statusService.GetTodayAsync(userId, country, ct));
-            }
-            catch (ArgumentException ex)
-            {
-                return Results.BadRequest(new { error = "invalid_status_query", message = ex.Message });
-            }
+            if (!TryGetUser(http, out _)) return Results.BadRequest(new { error = "missing_user_context" });
+
+            var snapshot = await backend.GetProviderStatusAsync(country, ct);
+            // Noch nie erfolgreich geprueft heisst "unbekannt", nicht "alles in Ordnung": eine leere
+            // Liste als gesund zu lesen wuerde nach einer frischen Installation jede Bank als erreichbar
+            // ausgeben, obwohl niemand nachgesehen hat. Die Oberflaeche bleibt in beiden Faellen voll
+            // benutzbar - die Bankenliste haengt nicht mehr an dieser Antwort.
+            if (snapshot is null || !snapshot.Known)
+                return Results.Ok(new EnableBankingProviderStatusView(
+                    Available: false,
+                    Reason: snapshot?.LastError ?? "provider_status_unknown",
+                    CheckedAt: snapshot?.LastAttemptAt ?? DateTimeOffset.UtcNow,
+                    Statuses: []));
+
+            return Results.Ok(new EnableBankingProviderStatusView(
+                Available: true,
+                // Der letzte Versuch ist gescheitert, der gespeicherte Stand gilt aber weiter: der Grund
+                // steht dabei, damit die Oberflaeche ihn als veraltet kennzeichnen kann, statt ihn zu
+                // verlieren oder als frisch auszugeben.
+                Reason: snapshot.LastError,
+                CheckedAt: snapshot.LastSuccessfulAt ?? DateTimeOffset.UtcNow,
+                Statuses: snapshot.Statuses
+                    .Select(row => new EnableBankingAspspStatusView(row.Country, row.Brand, row.PsuType, row.Status))
+                    .ToList()));
         });
         
         endpoints.MapPost("/api/banking/provider-status/connect/start", async (

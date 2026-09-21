@@ -322,8 +322,10 @@ GET              /health
 GET              /internal/banking/connections/
 GET              /internal/banking/connections/{connectionId:guid}/accounts
 GET              /internal/banking/connections/{connectionId:guid}/accounts/sync-state
+GET              /internal/banking/profiles/control-panel-principal
 GET              /internal/banking/profiles/users/{userId:guid}
 GET              /internal/banking/profiles/{id:guid}
+GET              /internal/banking/provider-status/
 GET              /internal/banking/transactions/{transactionId:guid}/provider-pointer
 PATCH            /api/accounts/{id:guid}
 PATCH            /api/products/{id:guid}
@@ -551,6 +553,7 @@ POST             /internal/banking/connections/{id:guid}/sync-history
 POST             /internal/banking/fints/investment-snapshot
 POST             /internal/banking/ingest
 POST             /internal/banking/profiles/
+POST             /internal/banking/provider-status/failures
 PUT              /api/access/members/{memberUserId:guid}
 PUT              /api/account-experience/groups/{groupId:guid}/appearance
 PUT              /api/account-experience/{accountId:guid}/appearance
@@ -628,3 +631,4 @@ PUT              /api/tax/profile/settings
 PUT              /api/tax/settings
 PUT              /api/transactions/{id:guid}/allocations
 PUT              /api/transactions/{transactionId:guid}/collections
+PUT              /internal/banking/provider-status/

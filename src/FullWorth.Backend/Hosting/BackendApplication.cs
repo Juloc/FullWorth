@@ -164,6 +164,7 @@ public static class BackendApplication
         builder.Services.AddScoped<IAccountFullWorthSpaceMembership, AccountFullWorthSpaceMembership>();
         builder.Services.AddScoped<AccountService>();
         builder.Services.AddScoped<BankConnectionStore>();
+        builder.Services.AddScoped<BankingProviderStatusStore>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.BankConnections.FinTsRawResponseStore>();
         builder.Services.AddScoped<EnableBankingProfileStore>();
         builder.Services.AddScoped<AccountStore>();
@@ -479,6 +480,7 @@ public static class BackendApplication
         endpoints.MapUserOnboardingEndpoints();
         endpoints.MapFullWorthSpaceEndpoints();
         endpoints.MapBankConnectionEndpoints();
+        endpoints.MapBankingProviderStatusEndpoints();
         endpoints.MapEnableBankingProfileEndpoints();
         endpoints.MapAdminSecretsEndpoints();
         endpoints.MapAccountEndpoints();

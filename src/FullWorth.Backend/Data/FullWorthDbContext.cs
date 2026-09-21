@@ -34,6 +34,8 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<BankConnection> BankConnections => Set<BankConnection>();
     public DbSet<EnableBankingProfile> EnableBankingProfiles => Set<EnableBankingProfile>();
     public DbSet<BankingInstanceSettings> BankingInstanceSettings => Set<BankingInstanceSettings>();
+    public DbSet<BankingProviderStatus> BankingProviderStatuses => Set<BankingProviderStatus>();
+    public DbSet<BankingProviderStatusRefresh> BankingProviderStatusRefreshes => Set<BankingProviderStatusRefresh>();
     public DbSet<FinanceAccount> Accounts => Set<FinanceAccount>();
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
     public DbSet<BalanceSnapshot> BalanceSnapshots => Set<BalanceSnapshot>();
@@ -124,6 +126,25 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasIndex(x => x.ScopeKey).IsUnique();
             e.Property(x => x.ScopeKey).HasMaxLength(40);
             e.Property(x => x.FinTsProductId).HasMaxLength(64);
+        });
+
+        b.Entity<BankingProviderStatus>(e =>
+        {
+            // Ein Institut je Land und PSU-Typ genau einmal: ohne das haengt es an der
+            // Einfuegereihenfolge, welcher von zwei Zustaenden derselben Bank gilt.
+            e.HasIndex(x => new { x.Country, x.Brand, x.PsuType }).IsUnique();
+            e.HasIndex(x => x.Country);
+            e.Property(x => x.Country).HasMaxLength(2);
+            e.Property(x => x.Brand).HasMaxLength(200);
+            e.Property(x => x.PsuType).HasMaxLength(40);
+            e.Property(x => x.Status).HasMaxLength(60);
+        });
+
+        b.Entity<BankingProviderStatusRefresh>(e =>
+        {
+            e.HasIndex(x => x.ScopeKey).IsUnique();
+            e.Property(x => x.ScopeKey).HasMaxLength(40);
+            e.Property(x => x.LastError).HasMaxLength(200);
         });
 
         b.Entity<EnableBankingProfile>(e =>

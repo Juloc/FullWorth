@@ -78,6 +78,26 @@ public sealed record TransactionProviderPointer(Guid ConnectionId, string Provid
 public sealed record BankSyncHistoryWrite(DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string Result, string? ErrorCode);
 
 /// <summary>
+/// Die gespiegelte Form von <c>BankingProviderStatusRow</c> im Backend (#165).
+///
+/// Hand gespiegelt, weil zwischen diesen Projekten bewusst keine gemeinsame Vertrags-Bibliothek
+/// liegt - kein Build faengt eine Umbenennung, also grept man bei einer Aenderung die andere Seite.
+/// </summary>
+public sealed record BankingProviderStatusRowDto(string Country, string Brand, string PsuType, string Status);
+
+public sealed record ControlPanelPrincipalDto(Guid UserId);
+
+/// <param name="Known">Falsch, solange nie erfolgreich geprueft wurde. Eine leere Liste allein waere
+/// zweideutig: der Bankdialog wuerde nach einer frischen Installation jede Bank als gesund ausgeben,
+/// obwohl niemand nachgesehen hat.</param>
+public sealed record BankingProviderStatusSnapshotDto(
+    bool Known,
+    DateTimeOffset? LastSuccessfulAt,
+    DateTimeOffset? LastAttemptAt,
+    string? LastError,
+    IReadOnlyList<BankingProviderStatusRowDto> Statuses);
+
+/// <summary>
 /// Eine Antwort der Bank fuer den verschluesselten Rohspeicher. Von Hand gespiegelt aus
 /// FullWorth.Backend.Modules.BankConnections - zwischen den Projekten gibt es keine Kopplung, die
 /// eine Umbenennung auffangen wuerde.
@@ -196,6 +216,49 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
     public async Task RecordSyncHistoryAsync(Guid connectionId, BankSyncHistoryWrite body, CancellationToken ct)
     {
         using var request = Create(HttpMethod.Post, $"/internal/banking/connections/{connectionId:D}/sync-history", body);
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Wessen Control-Panel-Zugang der Statusdienst benutzen darf (#165). Der Feed gilt fuer die
+    /// ganze Installation, die Zugangsdaten dafuer gehoeren aber einem Nutzer.
+    /// </summary>
+    public async Task<Guid?> GetControlPanelPrincipalAsync(CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, "/internal/banking/profiles/control-panel-principal");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        var body = await response.Content.ReadFromJsonAsync<ControlPanelPrincipalDto>(cancellationToken: ct);
+        return body?.UserId;
+    }
+
+    /// <summary>Der zuletzt gespeicherte Anbieterzustand (#165) - der einzige Lesepfad der Oberflaeche.</summary>
+    public async Task<BankingProviderStatusSnapshotDto?> GetProviderStatusAsync(string? country, CancellationToken ct)
+    {
+        var query = string.IsNullOrWhiteSpace(country) ? string.Empty : $"?country={Uri.EscapeDataString(country)}";
+        using var request = Create(HttpMethod.Get, $"/internal/banking/provider-status/{query}");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<BankingProviderStatusSnapshotDto>(cancellationToken: ct);
+    }
+
+    /// <summary>Nach einem erfolgreichen Abruf: den ganzen Feed ersetzen.</summary>
+    public async Task ReplaceProviderStatusAsync(
+        IReadOnlyList<BankingProviderStatusRowDto> statuses, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Put, "/internal/banking/provider-status/", new { statuses });
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Nach einem gescheiterten Abruf: nur den Versuch vermerken. Die gespeicherten Zeilen bleiben -
+    /// ein Ausfall des Control Panels ist keine Aussage ueber die Banken.
+    /// </summary>
+    public async Task RecordProviderStatusFailureAsync(string reason, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Post, "/internal/banking/provider-status/failures", new { reason });
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }

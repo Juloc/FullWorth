@@ -29,6 +29,29 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
         return entity is null ? null : ToInternal(entity);
     }
 
+    /// <summary>
+    /// Wessen Control-Panel-Zugang der Hintergrunddienst fuer die Statusaktualisierung benutzen darf
+    /// (#165).
+    ///
+    /// Der Gesundheitsfeed gilt fuer die ganze Installation, die Zugangsdaten dafuer gehoeren aber
+    /// einem Nutzer - der Dienst braucht also einen. Bewusst nur DIE ID und bewusst keine Liste: wer
+    /// Control-Panel-Zugang hat, ist nichts, was ein Maschinenpfad aufzaehlen muss, und das Token
+    /// selbst verlaesst diesen Prozess ohnehin nie.
+    ///
+    /// Aeltestes Profil zuerst, damit die Wahl stabil ist: ein Dienst, der bei jedem Durchlauf einen
+    /// anderen Zugang nimmt, verteilt seine Fehler ueber alle Nutzer statt sie an einem sichtbar zu
+    /// machen.
+    /// </summary>
+    public async Task<Guid?> FindControlPanelPrincipalAsync(CancellationToken ct) =>
+        await db.EnableBankingProfiles.AsNoTracking()
+            .Where(profile => profile.Active
+                && profile.ControlPanelRefreshToken != null
+                && profile.ControlPanelRefreshToken != string.Empty
+                && db.Users.Any(user => user.Id == profile.UserId && user.IsActive))
+            .OrderBy(profile => profile.Id)
+            .Select(profile => (Guid?)profile.UserId)
+            .FirstOrDefaultAsync(ct);
+
     public async Task<EnableBankingProfileInternalDto> UpsertVerifiedAsync(EnableBankingProfileWrite request, CancellationToken ct)
     {
         if (request.UserId == Guid.Empty) throw new ArgumentException("UserId is required.");
