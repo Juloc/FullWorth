@@ -212,6 +212,55 @@ public sealed class CollectionAssignmentUiTests
         Assert.DoesNotContain("'PUT'", body);
     }
 
+    /// <summary>
+    /// #124 verlangt "direkt neue Sammlung anlegen können" im Buchungsdetail. Der Grund ist ein
+    /// Umweg: wer beim Zuordnen merkt, dass die passende Sammlung fehlt, musste die Buchung
+    /// schliessen, auf die Sammlungen-Seite gehen, anlegen und zurueckkommen - und wusste dann nicht
+    /// mehr sicher, welche Buchung es war.
+    /// </summary>
+    [Fact]
+    public void A_collection_can_be_created_without_leaving_the_transaction()
+    {
+        var js = PageJs();
+
+        Assert.Contains("function createCollectionByName()", js);
+        Assert.Contains("ctx.api('api/collections', ctx.jsonBody({ name:", js);
+        // In beiden Auswahldialogen - im Detail und in der Massenzuordnung.
+        Assert.Equal(2, Regex.Matches(js, @"\[data-new\]'\)\.onclick").Count);
+    }
+
+    /// <summary>
+    /// Der Dialog nutzt den gemeinsamen Formulardialog, nicht <c>window.prompt</c>. Ein natives
+    /// Eingabefenster ist nicht uebersetzbar, nicht gestaltbar und zeigt bei einem vergebenen Namen
+    /// keine Serverantwort - der geteilte Dialog bleibt offen und sagt, was schiefging.
+    /// </summary>
+    [Fact]
+    public void Creating_a_collection_uses_the_shared_dialog_not_a_native_prompt()
+    {
+        var js = PageJs();
+        var body = BodyOf(js, @"function createCollectionByName\(\)\s*\{", "createCollectionByName()");
+
+        Assert.Contains("openFormDialog({", body);
+        Assert.Contains("setFormError(", body);
+        Assert.DoesNotContain("window.prompt", js);
+        Assert.DoesNotContain("window.alert", js);
+    }
+
+    /// <summary>
+    /// Nach dem Anlegen darf die bisherige Auswahl nicht verloren sein: sie steckt nur in der
+    /// Auswahlliste, und der Dialog wird dafuer geschlossen und neu geoeffnet.
+    /// </summary>
+    [Fact]
+    public void Creating_a_collection_keeps_what_was_already_selected()
+    {
+        var body = OpenDetailBody();
+
+        Assert.Contains("const keep = list.getSelectedIds();", body);
+        Assert.Contains("chosenCollections = [...keep, created]", body);
+        // Und die Liste wird frisch geholt, damit die neue Sammlung mit Namen dasteht.
+        Assert.Contains("collectionRows = (await ctx.api('api/collections'))", body);
+    }
+
     /// <summary>Die beiden neuen Texte stehen in beiden Sprachdateien - eine fehlende Uebersetzung zeigt
     /// sonst den rohen Schluessel im Dialog.</summary>
     [Fact]

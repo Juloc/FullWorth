@@ -125,6 +125,7 @@ async function openBulkCollectionPicker(transactionIds) {
     ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(ctx.get('collections.candidateSelectAll')) })}
     <div class="dialog-actions">
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-new>${ctx.esc(ctx.get('collections.new'))}</button>
       <span class="fw-actions-spacer"></span>
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-remove>${ctx.esc(ctx.get('collections.removeFromCollection'))}</button>
       <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-add>${ctx.esc(ctx.get('collections.addAction'))}</button>
@@ -134,6 +135,14 @@ async function openBulkCollectionPicker(transactionIds) {
   const close = () => dlg.close();
   dlg.querySelector('[data-close]').onclick = close;
   dlg.querySelector('[data-cancel]').onclick = close;
+  // Auch hier anlegbar (#124): eine Reise als Sammlung entsteht meistens genau in dem Moment, in dem
+  // man ihre Buchungen markiert hat - nicht vorher. Danach wird derselbe Dialog neu geoeffnet, damit
+  // die Auswahl der Buchungen nicht verloren geht.
+  dlg.querySelector('[data-new]').onclick = async () => {
+    if (!await createCollectionByName()) return;
+    close();
+    openBulkCollectionPicker(transactionIds);
+  };
 
   // Hinzufuegen und Entfernen stehen im selben Dialog, statt die Auswahlleiste auf vier Knoepfe zu
   // bringen: gewaehlt wird dieselbe Menge Sammlungen, nur die Richtung unterscheidet sich. Beide
@@ -1132,6 +1141,51 @@ async function openTransferPicker(t) {
   dlg.showModal();
 }
 
+/**
+ * Eine Sammlung anlegen, ohne die Buchung zu verlassen (#124).
+ *
+ * Das Issue verlangt das ausdruecklich im Buchungsdetail, und der Grund ist ein Umweg: wer beim
+ * Zuordnen merkt, dass die passende Sammlung noch nicht existiert, musste die Buchung schliessen,
+ * auf die Sammlungen-Seite gehen, dort anlegen und zurueckkommen - und wusste dann nicht mehr
+ * sicher, welche Buchung es war.
+ *
+ * Nur ein Name: alles andere - Zeitraum, Icon, Farbe, Notiz - ist auf der Sammlungen-Seite besser
+ * aufgehoben und gehoert nicht in einen Nebensatz beim Zuordnen. Ein bereits vergebener Name gibt
+ * 409, und die Meldung des Servers ist die richtige Antwort darauf.
+ *
+ * @returns die Id der neuen Sammlung oder null, wenn abgebrochen oder fehlgeschlagen.
+ */
+function createCollectionByName() {
+  return new Promise(resolve => {
+    const handles = openFormDialog({
+      title: ctx.get('collections.new'),
+      closeLabel: ctx.get('common.close'),
+      fallbackError: ctx.get('common.error'),
+      create: html => ctx.dialog(html),
+      fields: [{ name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 100 }],
+      values: { name: '' },
+      actions: [
+        { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary',
+          onClick: ({ close }) => { resolve(null); close(); } },
+        { name: 'save', label: ctx.get('common.create'), role: 'primary', submit: true }
+      ],
+      onSubmit: async ({ values, setFormError, close }) => {
+        try {
+          const created = await ctx.api('api/collections', ctx.jsonBody({ name: values.name.trim() }));
+          close('saved');
+          resolve(created?.id || null);
+        } catch (error) {
+          // Ein vergebener Name gibt 409, und die Meldung des Servers ist die richtige Antwort
+          // darauf - der Dialog bleibt offen, damit man einen anderen Namen tippen kann.
+          setFormError(error.message || ctx.get('common.error'));
+        }
+      }
+    });
+    // Schliessen ueber das Kreuz oder Escape ist ein Abbruch wie jeder andere.
+    handles.dialog?.addEventListener('close', () => resolve(null), { once: true });
+  });
+}
+
 /** Reihenfolgeunabhaengiger Vergleich zweier Id-Listen - die Auswahlliste gibt in Zeilenreihenfolge
  *  zurueck, der Server in seiner eigenen. Ohne das waere jedes Speichern ein Schreibvorgang. */
 function sameIdSet(a, b) {
@@ -1156,7 +1210,7 @@ async function openDetail(listItem) {
     options = await ctx.categoryOptions(detail.transaction?.categoryId);
     collectionData = await collectionsRequest;
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
-  const collectionRows = Array.isArray(collectionData?.[0]) ? collectionData[0] : null;
+  let collectionRows = Array.isArray(collectionData?.[0]) ? collectionData[0] : null;
   const assignedCollections = Array.isArray(collectionData?.[1]) ? collectionData[1] : [];
   const t = detail.transaction || listItem;
   const counterpart = detail.transferCounterpart || null;
@@ -1269,7 +1323,10 @@ async function openDetail(listItem) {
   // Die Auswahl bleibt bis zum Uebernehmen im Speicher, damit "Abbrechen" im Detail auch die
   // Sammlungen unangetastet laesst - dieselbe Zusage wie fuer Kategorie, Notiz und die Schalter.
   let chosenCollections = [...assignedCollections];
-  dlg.querySelector('[data-collections]')?.addEventListener('click', () => {
+  // Benannt statt inline, damit der Dialog sich nach dem Anlegen einer Sammlung selbst neu oeffnen
+  // kann - mit der frischen Liste und der bisherigen Auswahl.
+  dlg.querySelector('[data-collections]')?.addEventListener('click', () => openCollectionPicker());
+  function openCollectionPicker() {
     if (!collectionRows.length) { ctx.toast(ctx.get('collections.assignEmpty')); return; }
     const items = collectionRows.map(row => ({
       id: ctx.esc(row.id),
@@ -1284,6 +1341,8 @@ async function openDetail(listItem) {
       ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(ctx.get('collections.candidateSelectAll')) })}
       <div class="dialog-actions">
         <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+        <span class="fw-actions-spacer"></span>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-new>${ctx.esc(ctx.get('collections.new'))}</button>
         <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
       </div>
     </div>`);
@@ -1291,6 +1350,24 @@ async function openDetail(listItem) {
     const close = () => picker.close();
     picker.querySelector('[data-close]').onclick = close;
     picker.querySelector('[data-cancel]').onclick = close;
+    // Neu angelegt heisst auch gleich zugeordnet: wer sie hier anlegt, will sie fuer DIESE Buchung.
+    // Die bisherige Auswahl wird vorher gesichert, weil der Dialog danach neu gebaut wird.
+    picker.querySelector('[data-new]').onclick = async () => {
+      // Die bisherige Auswahl sichern, bevor der Dialog zugeht: sie steckt nur in der Auswahlliste.
+      const keep = list.getSelectedIds();
+      const created = await createCollectionByName();
+      if (!created) return;
+      close();
+      // Die Liste frisch holen, damit die neue Sammlung mit ihrem Namen dasteht statt als leere
+      // Zeile - der Server kennt ihn, dieser Dialog hat ihn nur getippt.
+      try { collectionRows = (await ctx.api('api/collections')) || collectionRows; }
+      catch { collectionRows = [...collectionRows, { id: created, name: '', status: 'active' }]; }
+      // Neu angelegt heisst auch gleich zugeordnet: wer sie hier anlegt, will sie fuer DIESE Buchung.
+      chosenCollections = [...keep, created];
+      dlg.querySelector('[data-collections-summary]').textContent =
+        collectionSummary(collectionNamesOf(chosenCollections));
+      openCollectionPicker();
+    };
     picker.querySelector('[data-apply]').onclick = () => {
       chosenCollections = list.getSelectedIds();
       dlg.querySelector('[data-collections-summary]').textContent =
@@ -1298,7 +1375,7 @@ async function openDetail(listItem) {
       close();
     };
     picker.showModal();
-  });
+  }
   dlg.querySelector('[data-refund-link]')?.addEventListener('click', () => { dlg.close(); openRefundPicker(t); });
   dlg.querySelector('[data-refund-clear]')?.addEventListener('click', async () => {
     try { await setRefund(t.id, null); dlg.close(); ctx.toast(ctx.get('common.saved')); await refreshList(t.id); }
