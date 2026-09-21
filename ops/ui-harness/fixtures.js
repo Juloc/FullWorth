@@ -209,10 +209,13 @@
       id: 'r1', kind: 'mt535', label: 'Direkt-Depot', capturedAt: iso('2026-09-17'),
       payloadLength: 217, payload: ":16R:GENL\n:28E:1/ONLY\n:16S:GENL\n:16R:FIN\n:35B:ISIN IE00B4L5YC18\n/DE/A0RPWJ\nISHSIII-MSCI EM USD(ACC)\n:93B::AGGR//UNIT/0,43761\n:90B::MRKT//ACTU/EUR55,394\n:70E::HOLD//Einstandskurs EUR 48,12\n:19A::HOLD//EUR24,24\n:16S:FIN"
     },
+    // #167: trigger und connector sind neu. h3 hat sie bewusst NICHT - so wie jeder Lauf, der vor
+    // #167 aufgezeichnet wurde. Die Einzelheiten muessen die Zeilen dann weglassen, statt
+    // "unbekannt" zu behaupten, und genau das ist im Harness nachsehbar.
     'bank-connections/c4/sync-history': [
-      { id: 'h1', startedAt: iso('2026-09-16'), completedAt: iso('2026-09-16'), durationMs: 7900, result: 'error', errorCode: 'FINTS_BANK_ERROR' },
-      { id: 'h2', startedAt: iso('2026-09-15'), completedAt: iso('2026-09-15'), durationMs: 8100, result: 'error', errorCode: 'FINTS_BANK_ERROR' },
-      { id: 'h3', startedAt: iso('2026-09-14'), completedAt: iso('2026-09-14'), durationMs: 5400, result: 'success', errorCode: null }
+      { id: 'h1', startedAt: iso('2026-09-16'), completedAt: iso('2026-09-16'), durationMs: 7900, result: 'error', errorCode: 'FINTS_TAN_REQUIRED', trigger: 'automatic', connector: 'fints' },
+      { id: 'h2', startedAt: iso('2026-09-15'), completedAt: iso('2026-09-15'), durationMs: 8100, result: 'error', errorCode: 'FINTS_BANK_ERROR', trigger: 'manual', connector: 'fints' },
+      { id: 'h3', startedAt: iso('2026-09-14'), completedAt: iso('2026-09-14'), durationMs: 5400, result: 'success', errorCode: null, trigger: null, connector: null }
     ],
     'bank-connections': [
       {

@@ -914,7 +914,23 @@
     "tradeTotal": "Total cost",
     "tradeSaved": "Purchase saved",
     "depotGainUnknown": "No cost basis",
-    "depotGainPartial": "(partial)"
+    "depotGainPartial": "(partial)",
+    "syncDetails": "Details",
+    "syncTrigger": "Trigger",
+    "syncTrigger_automatic": "Automatic",
+    "syncTrigger_manual": "Started manually",
+    "syncTrigger_authorization": "After bank approval",
+    "syncConnector": "Connector",
+    "syncConnector_fints": "FinTS",
+    "syncConnector_enable-banking": "Bank Account Data",
+    "syncErrorCode": "Error code",
+    "syncError_CANCELLED": "Cancelled",
+    "syncError_SYNC_FAILED": "Sync failed",
+    "syncError_FINTS_SYNC_FAILED": "FinTS sync failed",
+    "syncError_FINTS_TAN_REQUIRED": "TAN required",
+    "syncError_FINTS_SECRET_MISSING": "Credentials missing",
+    "syncError_FINTS_NOT_CONFIGURED": "FinTS is not configured",
+    "syncError_ASPSP_RATE_LIMIT_EXCEEDED": "The bank rejected too many requests"
   },
   "a11y": {
     "skipToContent": "Skip to content"

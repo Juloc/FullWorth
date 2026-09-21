@@ -75,7 +75,15 @@ public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Gu
 public sealed record DeleteConnectionBody(Guid FullWorthSpaceId);
 public sealed record CloseConnectionBody(Guid FullWorthSpaceId);
 public sealed record TransactionProviderPointer(Guid ConnectionId, string ProviderAccountId, string? ProviderTransactionId);
-public sealed record BankSyncHistoryWrite(DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string Result, string? ErrorCode);
+public sealed record BankSyncHistoryWrite(
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt,
+    string Result,
+    string? ErrorCode,
+    // #167: Auslöser und Verbindungsweg. Hand gespiegelt wie der Rest - zwischen diesen Projekten
+    // faengt kein Build eine Abweichung, also grept man bei einer Aenderung die andere Seite.
+    string? Trigger = null,
+    string? Connector = null);
 
 /// <summary>
 /// Die gespiegelte Form von <c>BankingProviderStatusRow</c> im Backend (#165).

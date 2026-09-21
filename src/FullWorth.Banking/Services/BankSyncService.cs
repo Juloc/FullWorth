@@ -389,7 +389,7 @@ public sealed class BankSyncService(
         {
             // The user has just returned from the ASPSP. Treat the first retrieval as online when the
             // BFF supplied a complete PSU context; otherwise PsuContext itself falls back to no headers.
-            return await SyncConnectionCoreAsync(connection, bypassCadence: true, psuContext, ct);
+            return await SyncConnectionCoreAsync(connection, bypassCadence: true, psuContext, ct, "authorization");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -513,7 +513,7 @@ public sealed class BankSyncService(
 
         try
         {
-            await SyncConnectionCoreAsync(current, bypassCadence: force, psuContext, ct);
+            await SyncConnectionCoreAsync(current, bypassCadence: force, psuContext, ct, "manual");
         }
         catch (EnableBankingApiException)
         {
@@ -751,7 +751,10 @@ public sealed class BankSyncService(
         BankConnectionDto connection,
         bool bypassCadence,
         PsuContext? psuContext,
-        CancellationToken ct)
+        CancellationToken ct,
+        // #167: nur der Aufrufer weiss, ob jemand auf den Knopf gedrueckt hat - bypassCadence sagt
+        // es nicht, das bedeutet etwas anderes und ist auch bei der Rueckkehr von der Bank wahr.
+        string trigger = "automatic")
     {
         if (string.IsNullOrWhiteSpace(connection.ProviderSessionId))
             return connection;
@@ -759,7 +762,7 @@ public sealed class BankSyncService(
         if (string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase))
         {
             if (finTs is not null)
-                return await finTs.SyncConnectionAsync(connection, bypassCadence, ct);
+                return await finTs.SyncConnectionAsync(connection, bypassCadence, ct, trigger);
 
             var missingStartedAt = DateTimeOffset.UtcNow;
             var missing = await backend.UpsertConnectionAsync(ToWrite(
@@ -767,7 +770,7 @@ public sealed class BankSyncService(
                 consecutiveFailures: connection.ConsecutiveFailures + 1,
                 lastError: "FINTS_NOT_CONFIGURED"), ct);
             await RecordSyncHistorySafeAsync(
-                connection.Id, missingStartedAt, "error", "FINTS_NOT_CONFIGURED", CancellationToken.None);
+                connection.Id, missingStartedAt, "error", "FINTS_NOT_CONFIGURED", CancellationToken.None, trigger, "fints");
             return missing;
         }
 
@@ -798,7 +801,7 @@ public sealed class BankSyncService(
                     lastError: errorCode,
                     consecutiveFailures: 0), ct);
                 await RecordSyncHistorySafeAsync(
-                    connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+                    connection.Id, startedAt, "error", errorCode, CancellationToken.None, trigger, connection.Provider);
                 return updated;
             }
 
@@ -854,13 +857,15 @@ public sealed class BankSyncService(
                 startedAt,
                 error is null ? "success" : "partial",
                 error,
-                CancellationToken.None);
+                CancellationToken.None,
+                trigger,
+                connection.Provider);
             return completed;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             await RecordSyncHistorySafeAsync(
-                connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None);
+                connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None, trigger, connection.Provider);
             throw;
         }
         catch (EnableBankingApiException ex)
@@ -868,30 +873,37 @@ public sealed class BankSyncService(
             var errorCode = EnableBankingErrorClassifier.Classify(ex).Code;
             await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
             await RecordSyncHistorySafeAsync(
-                connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+                connection.Id, startedAt, "error", errorCode, CancellationToken.None, trigger, connection.Provider);
             throw;
         }
         catch
         {
             await MarkFailureAsync(connection, "SYNC_FAILED", CancellationToken.None);
             await RecordSyncHistorySafeAsync(
-                connection.Id, startedAt, "error", "SYNC_FAILED", CancellationToken.None);
+                connection.Id, startedAt, "error", "SYNC_FAILED", CancellationToken.None, trigger, connection.Provider);
             throw;
         }
     }
 
+    /// <summary>
+    /// #167: Ausloeser und Verbindungsweg gehoeren in die Historie. Ein fehlgeschlagener
+    /// Hintergrundlauf heisst etwas anderes als einer, den jemand gerade angestossen hat - und bei
+    /// einer Stoerung ist das die erste Frage.
+    /// </summary>
     private async Task RecordSyncHistorySafeAsync(
         Guid connectionId,
         DateTimeOffset startedAt,
         string result,
         string? errorCode,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? trigger = null,
+        string? connector = null)
     {
         try
         {
             await backend.RecordSyncHistoryAsync(
                 connectionId,
-                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode),
+                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode, trigger, connector),
                 ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

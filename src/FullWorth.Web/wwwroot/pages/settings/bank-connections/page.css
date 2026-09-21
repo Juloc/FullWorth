@@ -33,3 +33,9 @@
    Seite und laesst die Kontenzeile in Ruhe. */
 .connection-actions-sheet .more-list button>span{display:grid;gap:2px}
 .connection-actions-sheet .more-list button .row-sub{font-size:13px;white-space:normal}
+
+/* #167: die Einzelheiten eines Sync-Laufs. Zugeklappt ist der Normalfall - wer die Liste
+   ueberfliegt, sucht erst einmal nur die eine rote Zeile. */
+.sync-history-details>summary{cursor:pointer;color:var(--cta);font-size:var(--text-caption-size)}
+
+.sync-history-details[open]>summary{margin-bottom:var(--s1)}

@@ -914,7 +914,23 @@
     "tradeTotal": "Kaufpreis",
     "tradeSaved": "Kauf gespeichert",
     "depotGainUnknown": "Einstand fehlt",
-    "depotGainPartial": "(unvollständig)"
+    "depotGainPartial": "(unvollständig)",
+    "syncDetails": "Einzelheiten",
+    "syncTrigger": "Auslöser",
+    "syncTrigger_automatic": "Automatisch",
+    "syncTrigger_manual": "Manuell gestartet",
+    "syncTrigger_authorization": "Nach Bank-Freigabe",
+    "syncConnector": "Verbindungsweg",
+    "syncConnector_fints": "FinTS",
+    "syncConnector_enable-banking": "Bank Account Data",
+    "syncErrorCode": "Fehlercode",
+    "syncError_CANCELLED": "Abgebrochen",
+    "syncError_SYNC_FAILED": "Abruf fehlgeschlagen",
+    "syncError_FINTS_SYNC_FAILED": "FinTS-Abruf fehlgeschlagen",
+    "syncError_FINTS_TAN_REQUIRED": "TAN erforderlich",
+    "syncError_FINTS_SECRET_MISSING": "Zugangsdaten fehlen",
+    "syncError_FINTS_NOT_CONFIGURED": "FinTS ist nicht eingerichtet",
+    "syncError_ASPSP_RATE_LIMIT_EXCEEDED": "Bank hat zu viele Abrufe abgewiesen"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

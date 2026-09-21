@@ -375,7 +375,7 @@ public sealed class IngFinTsService(
         return await SyncConnectionAsync(connection, bypassCadence: true, ct);
     }
 
-    public async Task<BankConnectionDto> SyncConnectionAsync(BankConnectionDto connection, bool bypassCadence, CancellationToken ct)
+    public async Task<BankConnectionDto> SyncConnectionAsync(BankConnectionDto connection, bool bypassCadence, CancellationToken ct, string trigger = "automatic")
     {
         if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase)) return connection;
 
@@ -387,7 +387,7 @@ public sealed class IngFinTsService(
         if (secret is null)
         {
             var failed = await FailAsync(connection, "FINTS_SECRET_MISSING", ct);
-            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_SECRET_MISSING", CancellationToken.None);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_SECRET_MISSING", CancellationToken.None, trigger);
             return failed;
         }
 
@@ -405,7 +405,7 @@ public sealed class IngFinTsService(
                 var pendingTan = await backend.UpsertConnectionAsync(ToWrite(connection,
                     authorizationId: JsonSerializer.Serialize(secret, Json), status: "TAN_REQUIRED", lastError: "FINTS_TAN_REQUIRED",
                     nextSyncAllowedAt: null, clearNextSyncAllowedAt: true), ct);
-                await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_TAN_REQUIRED", CancellationToken.None);
+                await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_TAN_REQUIRED", CancellationToken.None, trigger);
                 return pendingTan;
             }
 
@@ -445,12 +445,12 @@ public sealed class IngFinTsService(
             var completed = await backend.UpsertConnectionAsync(ToWrite(connection,
                 authorizationId: JsonSerializer.Serialize(secret, Json), status: "AUTHORIZED",
                 lastSyncedAt: DateTimeOffset.UtcNow, nextSyncAllowedAt: nextAllowed, consecutiveFailures: 0, lastError: null), ct);
-            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "success", null, CancellationToken.None);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "success", null, CancellationToken.None, trigger);
             return completed;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None, trigger);
             throw;
         }
         catch (FinTsInteractiveRequiredException interactive)
@@ -459,7 +459,7 @@ public sealed class IngFinTsService(
             var pendingTan = await backend.UpsertConnectionAsync(ToWrite(connection,
                 authorizationId: JsonSerializer.Serialize(secret, Json), status: "TAN_REQUIRED",
                 clearNextSyncAllowedAt: true, consecutiveFailures: 0, lastError: "FINTS_TAN_REQUIRED"), ct);
-            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_TAN_REQUIRED", CancellationToken.None);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_TAN_REQUIRED", CancellationToken.None, trigger);
             return pendingTan;
         }
         catch (FinTsException ex)
@@ -473,30 +473,36 @@ public sealed class IngFinTsService(
                 clearNextSyncAllowedAt: terminal,
                 consecutiveFailures: connection.ConsecutiveFailures + 1,
                 lastError: errorCode), ct);
-            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", errorCode, CancellationToken.None, trigger);
             return failed;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "FinTS sync failed for ING.");
             var failed = await FailAsync(connection, "FINTS_SYNC_FAILED", ct);
-            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_SYNC_FAILED", CancellationToken.None);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_SYNC_FAILED", CancellationToken.None, trigger);
             return failed;
         }
     }
 
+    /// <summary>
+    /// #167: der Verbindungsweg ist hier immer FinTS - diese Klasse kennt keinen anderen. Der
+    /// Ausloeser kommt von aussen herein, weil nur der Aufrufer weiss, ob jemand auf den Knopf
+    /// gedrueckt hat.
+    /// </summary>
     private async Task RecordSyncHistorySafeAsync(
         Guid connectionId,
         DateTimeOffset startedAt,
         string result,
         string? errorCode,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? trigger = null)
     {
         try
         {
             await backend.RecordSyncHistoryAsync(
                 connectionId,
-                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode),
+                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode, trigger, "fints"),
                 ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

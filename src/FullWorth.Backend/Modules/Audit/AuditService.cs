@@ -45,7 +45,9 @@ public sealed class AuditService(DbContext db)
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
         string result,
-        string? errorCode)
+        string? errorCode,
+        string? trigger = null,
+        string? connector = null)
     {
         if (db.Model.FindEntityType(typeof(AuditEvent)) is null)
             return;
@@ -59,6 +61,18 @@ public sealed class AuditService(DbContext db)
         var safeErrorCode = SanitizeMachineCode(errorCode);
         if (completedAt < startedAt) completedAt = startedAt;
 
+        // #167: nur die Werte, die diese Anwendung selbst kennt. Ein Auslöser oder Verbindungsweg
+        // kommt ueber die interne Schnittstelle herein, und was dort steht, landet sonst ungeprueft
+        // in der Historie und von dort auf den Bildschirm.
+        var safeTrigger = trigger switch
+        {
+            "manual" => "manual",
+            "authorization" => "authorization",
+            "automatic" => "automatic",
+            _ => null
+        };
+        var safeConnector = SanitizeProviderKey(connector);
+
         db.Set<AuditEvent>().Add(new AuditEvent
         {
             FullWorthSpaceId = fullWorthSpaceId,
@@ -71,7 +85,9 @@ public sealed class AuditService(DbContext db)
                 completedAt,
                 Math.Max(0L, (long)(completedAt - startedAt).TotalMilliseconds),
                 safeResult,
-                safeErrorCode)),
+                safeErrorCode,
+                safeTrigger,
+                safeConnector)),
             OccurredAt = completedAt
         });
     }
@@ -131,6 +147,25 @@ public sealed class AuditService(DbContext db)
         var safe = new string(value.Trim().ToUpperInvariant()
             .Where(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')
             .Take(128)
+            .ToArray());
+        return safe.Length == 0 ? null : safe;
+    }
+
+    /// <summary>
+    /// Wie <see cref="SanitizeMachineCode"/>, aber ohne Grossschreibung (#167).
+    ///
+    /// Fehlercodes sind gross (<c>FINTS_TAN_REQUIRED</c>), ein Verbindungsweg ist es nicht: das ist
+    /// derselbe Schluessel, den <c>BankConnection.Provider</c> traegt (<c>fints</c>,
+    /// <c>enable-banking</c>), und den liest der Rest des Systems klein. Ihn hier grosszuschreiben
+    /// hiesse, dass die Historie einen anderen Namen fuer denselben Weg verwendet als jede andere
+    /// Stelle - und die Uebersetzung in der Oberflaeche haengt an diesem Schluessel.
+    /// </summary>
+    private static string? SanitizeProviderKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var safe = new string(value.Trim().ToLowerInvariant()
+            .Where(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')
+            .Take(64)
             .ToArray());
         return safe.Length == 0 ? null : safe;
     }

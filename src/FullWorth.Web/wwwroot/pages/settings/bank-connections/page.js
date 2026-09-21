@@ -155,12 +155,35 @@ async function openSyncHistory(connection){
     history=await api(`api/bank-connections/${connection.id}/sync-history?limit=10`);
   }catch(err){toast(err.message||get('common.error'));return}
   const locale=state.lang==='de'?'de-DE':'en-US';
+  // #167: die Standardansicht bleibt kompakt, die Einzelheiten stecken in einem <details>. Ein Lauf
+  // hat mehr Angaben, als in eine Zeile passen - und wer die Liste ueberfliegt, sucht erst einmal nur
+  // die eine rote Zeile.
   const rows=(history||[]).map(item=>{
     const resultKey={success:'accounts.syncResultSuccess',partial:'accounts.syncResultPartial',error:'accounts.syncResultError'}[item.result]||'accounts.syncResultError';
     const seconds=Math.max(0,Number(item.durationMs)||0)/1000;
     const duration=new Intl.NumberFormat(locale,{maximumFractionDigits:2}).format(seconds)+' s';
-    const error=item.errorCode?` · ${esc(item.errorCode)}`:'';
-    return `<div class="row"><div class="row-main"><div class="row-title">${esc(get(resultKey))}${error}</div><div class="row-sub">${esc(get('accounts.syncStartedAt'))}: ${esc(dateTime(item.startedAt))} · ${esc(get('accounts.syncFinishedAt'))}: ${esc(dateTime(item.completedAt))}</div></div><div class="row-side"><span class="row-sub">${esc(get('accounts.syncDuration'))}: ${esc(duration)}</span></div></div>`;
+    // Der Klartext zuerst, der technische Code daneben: das eine ist fuer den Nutzer, das andere fuer
+    // eine Fehlersuche. Ein unbekannter Code faellt auf sich selbst zurueck, statt zu verschwinden -
+    // auch ein Code ohne Uebersetzung ist mehr als nichts.
+    const errorText=item.errorCode
+      ? (get('accounts.syncError_'+item.errorCode)||'').startsWith('accounts.')
+        ? item.errorCode
+        : get('accounts.syncError_'+item.errorCode)
+      : '';
+    const error=item.errorCode?` · ${esc(errorText)}`:'';
+    const facts=[
+      // Auslöser und Verbindungsweg fehlen bei Laeufen, die vor #167 aufgezeichnet wurden. Dann
+      // bleibt die Zeile weg, statt "unbekannt" zu behaupten.
+      item.trigger?[get('accounts.syncTrigger'),get('accounts.syncTrigger_'+item.trigger)||item.trigger]:null,
+      item.connector?[get('accounts.syncConnector'),get('accounts.syncConnector_'+item.connector)||item.connector]:null,
+      [get('accounts.syncStartedAt'),dateTime(item.startedAt)],
+      [get('accounts.syncFinishedAt'),dateTime(item.completedAt)],
+      [get('accounts.syncDuration'),duration],
+      item.errorCode?[get('accounts.syncErrorCode'),item.errorCode]:null
+    ].filter(Boolean)
+      .map(([label,value])=>`<div class="row-sub"><strong>${esc(label)}:</strong> ${esc(value)}</div>`).join('');
+    return `<div class="row"><div class="row-main"><div class="row-title">${esc(get(resultKey))}${error}</div><div class="row-sub">${esc(dateTime(item.startedAt))}</div>
+      <details class="sync-history-details"><summary>${esc(get('accounts.syncDetails'))}</summary>${facts}</details></div></div>`;
   }).join('');
   const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||emptyRow(get('accounts.syncHistoryEmpty'))}</div>
     <textarea class="report-text" data-report-text rows="8" readonly hidden></textarea>

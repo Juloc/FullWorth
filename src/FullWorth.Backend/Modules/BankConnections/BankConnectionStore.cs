@@ -113,7 +113,9 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
             request.StartedAt,
             completedAt,
             request.Result,
-            request.ErrorCode);
+            request.ErrorCode,
+            request.Trigger,
+            request.Connector);
         await db.SaveChangesAsync(ct);
         return true;
     }
@@ -507,7 +509,9 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
                 metadata.CompletedAt,
                 Math.Max(0, metadata.DurationMs),
                 metadata.Result,
-                metadata.ErrorCode);
+                metadata.ErrorCode,
+                metadata.Trigger,
+                metadata.Connector);
         }
         catch (JsonException)
         {

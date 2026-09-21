@@ -22,7 +22,12 @@ public sealed record BankSyncHistoryWrite(
     DateTimeOffset StartedAt,
     DateTimeOffset CompletedAt,
     string Result,
-    string? ErrorCode);
+    string? ErrorCode,
+    // #167: optional, damit ein aelterer Banking-Prozess gegen ein neueres Backend weiterschreiben
+    // kann - zwischen diesen Projekten gibt es keine gemeinsame Vertrags-Bibliothek und keinen Build,
+    // der eine Abweichung faengt.
+    string? Trigger = null,
+    string? Connector = null);
 
 public sealed record BankSyncHistoryItem(
     Guid Id,
@@ -30,7 +35,11 @@ public sealed record BankSyncHistoryItem(
     DateTimeOffset CompletedAt,
     long DurationMs,
     string Result,
-    string? ErrorCode);
+    string? ErrorCode,
+    // Bei Laeufen, die vor #167 aufgezeichnet wurden, bleiben beide leer - die Oberflaeche laesst die
+    // Zeile dann einfach weg, statt "unbekannt" zu behaupten.
+    string? Trigger,
+    string? Connector);
 
 public sealed record BankConnectionWrite(
     Guid? Id,
