@@ -1239,6 +1239,29 @@
   function writeAnswer(method, pathname, init) {
     const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
     if (after.startsWith('compensation/calculate')) return { status: 200, body: COMPENSATION_RESULT };
+    // #115: der Vorschlag ist ein POST, weil die Auswahl eine Kategorienliste ist - geschrieben wird
+    // nichts. Ohne eigene Antwort bekaeme die Seite den allgemeinen Schreib-Echo ({id:'stub'}) und
+    // zeigte einen Vorschlag aus undefined-Werten. Die Zahlen wachsen mit der Anzahl gewaehlter
+    // Kategorien, damit im Harness sichtbar ist, dass der Vorschlag dem Geltungsbereich folgt und
+    // nicht mehr der einen Kategorie.
+    if (after.startsWith('budget-suggestions')) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
+      const count = Math.max(1, (body?.categories || []).length);
+      return { status: 200, body: {
+        cadence: 'Monthly',
+        options: [
+          { cadence: 'Weekly', confidence: 0.31, completePeriods: 12, activeShare: 0.58, variation: 0.44 },
+          { cadence: 'Monthly', confidence: 0.82, completePeriods: 6, activeShare: 0.95, variation: 0.18 },
+          { cadence: 'Quarterly', confidence: 0.4, completePeriods: 2, activeShare: 1, variation: 0.12 },
+          { cadence: 'Yearly', confidence: 0.1, completePeriods: 0, activeShare: 0, variation: 0 }
+        ],
+        confidence: 0.82, weakData: false,
+        average: 318.4 * count, suggested: 340 * count,
+        periodsUsed: 6, outliersDamped: 1, currency: 'EUR',
+        matchingTransactions: 47 * count, incomeDates: [], expectedNextIncome: null
+      } };
+    }
     if (after.startsWith('pension/projection')) {
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }

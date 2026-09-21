@@ -152,6 +152,41 @@ public sealed class BudgetScopeUiTests
         Assert.Contains("buttonClass(ButtonRole.Primary)", body);
     }
 
+    /// <summary>
+    /// Der Vorschlag muss ueber das gerechnet werden, was das Budget wirklich zaehlt. Vorher ging
+    /// immer nur die einzelne Kategorie an <c>/api/budget-suggestions</c> - ein Budget ueber drei
+    /// Kategorien bekam den Vorschlag fuer eine davon, und sobald der Geltungsbereich das
+    /// Kategoriefeld sperrt, kam ueberhaupt keiner mehr (das Feld feuert dann kein change-Ereignis).
+    /// </summary>
+    [Fact]
+    public void The_suggestion_is_computed_over_the_scope_when_one_is_set()
+    {
+        var body = BodyOf(PageJs(), @"async function refreshSuggestion\([^)]*\)\s*\{", "refreshSuggestion(...)");
+
+        Assert.Contains("scopeCategories.length > 0", body);
+        Assert.Contains("ctx.jsonBody({ categories: scoped", body);
+        // Keine festverdrahtete Einzelkategorie mehr in der Anfrage.
+        Assert.DoesNotContain("categories: [{ categoryId, includeDescendants: true }]", body);
+
+        // Und eine Bereichsaenderung loest die Neuberechnung aus - sonst bliebe der Vorschlag auf dem
+        // Stand der Kategorie, die gar nicht mehr zaehlt.
+        Assert.Contains("void refreshSuggestion({ fill: !existing })", DialogBody());
+    }
+
+    /// <summary>
+    /// Vorfuellen nur bei einem neuen Budget. Bei einem bestehenden hat der Benutzer Intervall und
+    /// Betrag schon entschieden; eine Bereichsaenderung ist kein Grund, das zu ueberschreiben.
+    /// </summary>
+    [Fact]
+    public void Changing_the_scope_of_an_existing_budget_does_not_overwrite_its_amount()
+    {
+        var body = DialogBody();
+
+        Assert.Contains("fill: !existing", body);
+        // Der Betrag wird ohnehin nur gesetzt, wenn er leer ist - beides zusammen ist die Zusage.
+        Assert.Contains("if (!amountInput.value) amountInput.value", body);
+    }
+
     [Fact]
     public void Both_locales_carry_the_scope_texts()
     {

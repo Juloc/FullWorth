@@ -423,6 +423,10 @@ async function openBudgetDialog(existing) {
       const includeDescendants = picker.querySelector('[data-descendants]').checked;
       scopeCategories = list.getSelectedIds().map(categoryId => ({ categoryId, includeDescendants }));
       paintScope();
+      // Der Vorschlag gehoert neu gerechnet, sobald sich aendert, WAS das Budget zaehlt. Vorgefuellt
+      // wird dabei nur bei einem neuen Budget: bei einem bestehenden hat der Benutzer Intervall und
+      // Betrag schon entschieden, und eine Bereichsaenderung ist kein Grund, das zu ueberschreiben.
+      void refreshSuggestion({ fill: !existing });
       close();
     };
     picker.showModal();
@@ -500,8 +504,16 @@ async function openBudgetDialog(existing) {
   let suggestionToken = 0;
 
   async function refreshSuggestion({ fill }) {
-    const categoryId = categorySelect.value;
-    if (!categoryId) { suggestionLine.hidden = true; return; }
+    // Der Vorschlag muss ueber das gerechnet werden, was das Budget wirklich zaehlt (#115). Ist ein
+    // Geltungsbereich gesetzt, ist das seine Kategorienliste - sonst die einzelne Kategorie oben.
+    // Vorher ging hier immer nur die einzelne hin: ein Budget ueber drei Kategorien bekam den
+    // Vorschlag fuer eine davon, und bei gesperrtem Feld gar keinen mehr.
+    const scoped = scopeCategories.length > 0
+      ? scopeCategories
+      : categorySelect.value
+        ? [{ categoryId: categorySelect.value, includeDescendants: true }]
+        : [];
+    if (!scoped.length) { suggestionLine.hidden = true; return; }
 
     // Eine aeltere Antwort darf eine neuere nicht ueberschreiben - die Auswahl aendert sich schneller,
     // als der Server rechnet.
@@ -509,7 +521,7 @@ async function openBudgetDialog(existing) {
     let suggestion;
     try {
       suggestion = await ctx.api(`api/budget-suggestions?fullWorthSpaceId=${encodeURIComponent(state.space?.id || '')}`, {
-        ...ctx.jsonBody({ categories: [{ categoryId, includeDescendants: true }], incomeCategoryId: null }),
+        ...ctx.jsonBody({ categories: scoped, incomeCategoryId: null }),
         method: 'POST'
       });
     } catch {
