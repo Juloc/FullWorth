@@ -58,7 +58,12 @@ function updateCoachSelectionBar() {
   const items = coachSelection.getSelectedIds().map(id => currentItemsById.get(id)).filter(Boolean);
   const currency = items.every(item => item.currency === items[0]?.currency) ? (items[0]?.currency || '') : '';
   const total = currency ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
-  bar.innerHTML = `<span><strong>${coachSelection.count}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  bar.innerHTML = `<span><strong>${coachSelection.count}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-collect>${ctx.esc(ctx.get('collections.addToCollection'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  // #124: die Massenzuordnung. Die Auswahl gab es hier schon, sie fuehrte aber nur zum Coach - eine
+  // Reise oder Renovierung ist damit Zeile fuer Zeile zuzuordnen gewesen, obwohl der Endpunkt eine
+  // ganze Liste auf einmal nimmt.
+  bar.querySelector('[data-selection-collect]').onclick =
+    () => openBulkCollectionPicker(coachSelection.getSelectedIds());
   bar.querySelector('[data-selection-clear]').onclick = () => {
     coachSelection.selectAll(false);
     // selectAll() setzt .checked auf jeder gebundenen Checkbox direkt (siehe selection-list.js), feuert
@@ -90,6 +95,62 @@ function updateCoachSelectionBar() {
       details: { count: String(coachSelection.count), amount: total == null ? '' : String(total), currency }
     });
   };
+}
+
+/**
+ * Ausgewaehlte Buchungen einer oder mehreren Sammlungen zuordnen (#124).
+ *
+ * Mehrere Sammlungen sind erlaubt, weil eine Buchung mehreren angehoeren darf - dieselbe
+ * Baumarkt-Zahlung gehoert zu "Wohnung" UND zu "Badrenovierung". Der Endpunkt nimmt je Sammlung eine
+ * ganze Liste, also eine Anweisung je Sammlung und nicht eine je Buchung.
+ *
+ * Zugeordnet wird HINZUGEFUEGT, nicht ersetzt: aus der Liste sieht der Benutzer nicht, in welchen
+ * Sammlungen die markierten Buchungen schon stecken, und was man nicht sieht, darf man nicht
+ * ueberschreiben. Das Ersetzen gibt es im Buchungsdetail, wo genau diese Liste sichtbar ist.
+ */
+async function openBulkCollectionPicker(transactionIds) {
+  if (!transactionIds.length) return;
+  let rows;
+  try { rows = (await ctx.api('api/collections')) || []; }
+  catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  if (!rows.length) { ctx.toast(ctx.get('collections.assignEmpty')); return; }
+
+  const items = rows.map(row => ({
+    id: ctx.esc(row.id),
+    html: `<div class="row-main"><div class="row-title">${ctx.esc(row.name)}</div>${row.status && row.status !== 'active' ? `<div class="row-sub">${ctx.esc(ctx.get('collections.status_' + row.status))}</div>` : ''}</div>`
+  }));
+  const list = createSelectionList();
+  const dlg = ctx.dialog(`<div class="dialog-card">
+    <div class="panel-head"><div><h2>${ctx.esc(ctx.get('collections.addToCollection'))}</h2><div class="row-sub">${ctx.esc(ctx.get('collections.addToCollectionHint').replace('{count}', String(transactionIds.length)))}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(ctx.get('collections.candidateSelectAll')) })}
+    <div class="dialog-actions">
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
+    </div>
+  </div>`);
+  list.mount(dlg);
+  const close = () => dlg.close();
+  dlg.querySelector('[data-close]').onclick = close;
+  dlg.querySelector('[data-cancel]').onclick = close;
+  dlg.querySelector('[data-apply]').onclick = async event => {
+    const chosen = list.getSelectedIds();
+    if (!chosen.length) { close(); return; }
+    event.currentTarget.disabled = true;
+    try {
+      // Der Reihe nach, nicht parallel: jede dieser Anweisungen schreibt, und eine halb
+      // durchgelaufene Runde ist leichter zu verstehen, wenn klar ist, welche Sammlung sie erreichte.
+      for (const collectionId of chosen)
+        await ctx.api(`api/collections/${collectionId}/transactions`,
+          ctx.jsonBody({ transactionIds }));
+      close();
+      ctx.toast(ctx.get('common.saved'));
+      await refreshList();
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('common.error'));
+      event.currentTarget.disabled = false;
+    }
+  };
+  dlg.showModal();
 }
 
 export function bindTransactions(context) {

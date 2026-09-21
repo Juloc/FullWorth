@@ -1505,6 +1505,8 @@
     "reason_category": "Kategorie passt",
     "reason_period": "Im Zeitraum",
     "incomplete": "unvollständig",
-    "incompleteHint": "Unvollständig: für {currencies} fehlt ein historischer Wechselkurs."
+    "incompleteHint": "Unvollständig: für {currencies} fehlt ein historischer Wechselkurs.",
+    "addToCollection": "Zu Sammlung",
+    "addToCollectionHint": "{count} ausgewählte Buchungen hinzufügen"
   }
 }

@@ -1505,6 +1505,8 @@
     "reason_category": "Category matches",
     "reason_period": "Within the period",
     "incomplete": "incomplete",
-    "incompleteHint": "Incomplete: a historical exchange rate is missing for {currencies}."
+    "incompleteHint": "Incomplete: a historical exchange rate is missing for {currencies}.",
+    "addToCollection": "Add to collection",
+    "addToCollectionHint": "Add {count} selected transactions"
   }
 }

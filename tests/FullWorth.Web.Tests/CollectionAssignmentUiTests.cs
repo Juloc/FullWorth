@@ -29,12 +29,11 @@ public sealed class CollectionAssignmentUiTests
     private static string PageJs() => File.ReadAllText(Path.Combine(
         Root(), "src", "FullWorth.Web", "wwwroot", "pages", "transactions", "page.js"));
 
-    /// <summary>Der Body von <c>openDetail(...)</c>, von der oeffnenden bis zur passenden Klammer.</summary>
-    private static string OpenDetailBody()
+    /// <summary>Der Body einer benannten Funktion, von der oeffnenden bis zur passenden Klammer.</summary>
+    private static string BodyOf(string js, string pattern, string name)
     {
-        var js = PageJs();
-        var match = Regex.Match(js, @"async function openDetail\([^)]*\)\s*\{", RegexOptions.Singleline);
-        Assert.True(match.Success, "openDetail(...) wurde nicht gefunden.");
+        var match = Regex.Match(js, pattern, RegexOptions.Singleline);
+        Assert.True(match.Success, $"{name} wurde nicht gefunden.");
 
         var start = match.Index + match.Length;
         var depth = 1;
@@ -47,6 +46,9 @@ public sealed class CollectionAssignmentUiTests
         }
         return js[start..end];
     }
+
+    private static string OpenDetailBody() =>
+        BodyOf(PageJs(), @"async function openDetail\([^)]*\)\s*\{", "openDetail(...)");
 
     /// <summary>
     /// Der Kern: beide Richtungen werden tatsaechlich aufgerufen. Lesen allein wuerde die Zuordnung nur
@@ -156,6 +158,43 @@ public sealed class CollectionAssignmentUiTests
         Assert.DoesNotContain("type=\"checkbox\"", body[pickerStart..pickerEnd]);
     }
 
+    /// <summary>
+    /// #124 verlangt neben der Zuordnung im Detail auch die Massenzuordnung aus der Liste. Die
+    /// Mehrfachauswahl gab es dort schon, sie fuehrte aber nur zum Coach - eine Reise oder Renovierung
+    /// war damit Zeile fuer Zeile zuzuordnen, obwohl der Endpunkt eine ganze Liste auf einmal nimmt.
+    /// </summary>
+    [Fact]
+    public void The_transaction_list_can_assign_a_whole_selection_at_once()
+    {
+        var js = PageJs();
+
+        Assert.Contains("data-selection-collect", js);
+        Assert.Contains("openBulkCollectionPicker(coachSelection.getSelectedIds())", js);
+
+        var body = BodyOf(js, @"async function openBulkCollectionPicker\([^)]*\)\s*\{",
+            "openBulkCollectionPicker(...)");
+        // Eine Anweisung je Sammlung mit der ganzen Liste - nicht eine Runde je Buchung.
+        Assert.Contains("api/collections/${collectionId}/transactions", body);
+        Assert.Contains("ctx.jsonBody({ transactionIds })", body);
+        Assert.Contains("for (const collectionId of chosen)", body);
+    }
+
+    /// <summary>
+    /// Aus der Liste wird HINZUGEFUEGT, nicht ersetzt. Dort sieht der Benutzer nicht, in welchen
+    /// Sammlungen die markierten Buchungen schon stecken - und was man nicht sieht, darf man nicht
+    /// ueberschreiben. Das Ersetzen gehoert ins Buchungsdetail, wo genau diese Liste sichtbar ist.
+    /// </summary>
+    [Fact]
+    public void The_bulk_path_adds_and_never_replaces()
+    {
+        var body = BodyOf(PageJs(), @"async function openBulkCollectionPicker\([^)]*\)\s*\{",
+            "openBulkCollectionPicker(...)");
+
+        // Der Ersetzen-Endpunkt (PUT auf die Buchung) darf hier nicht auftauchen.
+        Assert.DoesNotContain("/collections`", body);
+        Assert.DoesNotContain("'PUT'", body);
+    }
+
     /// <summary>Die beiden neuen Texte stehen in beiden Sprachdateien - eine fehlende Uebersetzung zeigt
     /// sonst den rohen Schluessel im Dialog.</summary>
     [Fact]
@@ -165,8 +204,8 @@ public sealed class CollectionAssignmentUiTests
         {
             var json = File.ReadAllText(Path.Combine(
                 Root(), "src", "FullWorth.Web", "wwwroot", "locales", $"{locale}.json"));
-            Assert.Contains("\"assignNone\"", json);
-            Assert.Contains("\"assignEmpty\"", json);
+            foreach (var key in new[] { "assignNone", "assignEmpty", "addToCollection", "addToCollectionHint" })
+                Assert.Contains($"\"{key}\"", json);
         }
     }
 }
