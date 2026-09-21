@@ -531,10 +531,14 @@
           updatedAt: '2026-09-11T09:14:00Z', completedAt: null, pausedAt: null, isPaused: false },
         total: 4, queued: 2, processing: 1, completed: 1, needsReview: 0, skippedDuplicates: 0, failed: 0,
         items: [
-          { id: 'ri1', batchId: 'rb1', sourceType: 'upload', displayName: 'REWE 11.09.png', status: 'processing', receiptScanJobId: 'j1', purchaseId: 'p1' },
+          // #129: jobStage/jobEngine je Beleg. ri1 laeuft gerade (zeigt den Schritt), ri4 ist fertig
+          // (zeigt, WOMIT verarbeitet wurde), und ri2/ri3 haben nichts davon - so wie jeder Beleg,
+          // der noch nicht angefangen hat. Die beiden Engines sind bewusst verschieden, damit die
+          // Unterscheidung KI/OCR im Harness sichtbar ist.
+          { id: 'ri1', batchId: 'rb1', sourceType: 'upload', displayName: 'REWE 11.09.png', status: 'processing', receiptScanJobId: 'j1', purchaseId: 'p1', jobStage: 'ocr', jobEngine: 'tesseract' },
           { id: 'ri2', batchId: 'rb1', sourceType: 'upload', displayName: 'Edeka 10.09.png', status: 'queued', receiptScanJobId: 'j2', purchaseId: 'p2' },
           { id: 'ri3', batchId: 'rb1', sourceType: 'upload', displayName: 'Apotheke 09.09.png', status: 'queued', receiptScanJobId: 'j3', purchaseId: 'p3' },
-          { id: 'ri4', batchId: 'rb1', sourceType: 'upload', displayName: 'Bahn 08.09.pdf', status: 'done', receiptScanJobId: 'j4', purchaseId: 'p4' }
+          { id: 'ri4', batchId: 'rb1', sourceType: 'upload', displayName: 'Bahn 08.09.pdf', status: 'done', receiptScanJobId: 'j4', purchaseId: 'p4', jobStage: 'saving', jobEngine: 'codex' }
         ]
       },
       {

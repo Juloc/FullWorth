@@ -126,10 +126,58 @@ function renderItem(item) {
     ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-analyse-item="${esc(item.id)}">${esc(t('Analysieren', 'Analyse'))}</button>`
     : '';
 
+  // #129: was mit diesem Beleg gerade passiert und womit.
+  //
+  // Der grobe Status sagt nur "wird verarbeitet". Welcher Schritt laeuft - Seiten vorbereiten, OCR,
+  // KI-Analyse, Zusammenfuehren, Speichern - stand bisher nur im Kamera-Pfad, obwohl der Scan-Job ihn
+  // fuer jeden Beleg fuehrt. Beim Massenimport ist er sogar wichtiger: dort laeuft es unbeaufsichtigt,
+  // und "haengt das oder rechnet es" ist die einzige Frage, die man dann hat.
+  //
+  // Nur waehrend der Verarbeitung: bei einem fertigen Beleg ist der letzte Schritt keine Auskunft
+  // mehr, und daneben steht dann ohnehin, was herauskam.
+  const step = status === 'processing' && item.jobStage
+    ? ` · ${stageLabel(item.jobStage, item.jobEngine)}`
+    : '';
+  // Womit verarbeitet wurde, bleibt danach ablesbar - das Issue verlangt ausdruecklich, dass eine
+  // KI-Nutzung nicht suggeriert wird, wo keine war.
+  const engine = status !== 'processing' && item.jobEngine
+    ? `<div class="row-sub">${esc(t('Verarbeitet mit', 'Processed with'))}: ${esc(engineLabel(item.jobEngine))}</div>`
+    : '';
+
   return `<div class="receipt-import-batch-item" data-import-batch-item data-status="${esc(status)}" data-source="${esc(source)}">
-    <div class="receipt-import-batch-item-main"><strong>${esc(item.displayName || t('Beleg', 'Receipt'))}</strong><span>${esc(statusLabel(status))} · ${esc(sourceLabel(source))}${esc(reference)}</span>${error}</div>
+    <div class="receipt-import-batch-item-main"><strong>${esc(item.displayName || t('Beleg', 'Receipt'))}</strong><span>${esc(statusLabel(status))}${esc(step)} · ${esc(sourceLabel(source))}${esc(reference)}</span>${engine}${error}</div>
     <div class="receipt-import-batch-item-actions">${analyse}${receipt}</div>
   </div>`;
+}
+
+/**
+ * Derselbe Wortlaut wie im Kamera-Pfad (receipt-scan-set.js). Bewusst gespiegelt und nicht
+ * importiert: die Stufen gehoeren dem Scan-Job, nicht einer der beiden Seiten, und ein Import
+ * zwischen zwei Seiten-Modulen waere die falsche Abhaengigkeitsrichtung (Frontend-Regel 3 - was zwei
+ * Seiten teilen, gehoert nach components/). Waechst das hier weiter, ist genau das der naechste
+ * Schritt; fuer sieben Zeilen Beschriftung eine gemeinsame Datei anzulegen waere heute mehr Gerüst
+ * als Nutzen.
+ */
+function stageLabel(stage, engine) {
+  const labels = {
+    queued: t('Wartet auf Server …', 'Waiting on server …'),
+    preparing: t('Seiten werden vorbereitet …', 'Preparing pages …'),
+    connecting: t('KI-Verbindung wird geprüft …', 'Checking AI connection …'),
+    analyzing: t('KI analysiert die Seiten …', 'AI is analyzing the pages …'),
+    structuring: t('Artikel werden zusammengeführt …', 'Merging items …'),
+    ocr: t('OCR läuft …', 'OCR is running …'),
+    saving: t('Ergebnis wird gespeichert …', 'Saving result …')
+  };
+  const base = labels[stage] || t('Wird verarbeitet …', 'Processing …');
+  return engine && stage === 'ocr' ? `${base} (${engine})` : base;
+}
+
+/** Ob KI im Spiel war, muss ablesbar sein - und darf nicht behauptet werden, wo keine war. */
+function engineLabel(engine) {
+  const key = String(engine || '').toLowerCase();
+  if (key.includes('codex') || key.includes('gpt') || key.includes('openai')) return t('KI-Analyse', 'AI analysis');
+  if (key.includes('tesseract')) return t('OCR (Tesseract)', 'OCR (Tesseract)');
+  return engine;
 }
 
 function applyFilters(panel, status, source) {

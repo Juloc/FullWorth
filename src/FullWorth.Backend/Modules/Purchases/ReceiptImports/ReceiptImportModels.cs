@@ -130,7 +130,11 @@ public sealed record ReceiptImportItemRow(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string? JobStatus = null,
-    string? ReviewState = null);
+    string? ReviewState = null,
+    // #129: welcher Schritt gerade laeuft und womit verarbeitet wird. Beide kommen aus dem ohnehin
+    // gejointen Scan-Job und sind der Unterschied zwischen "wird verarbeitet" und "OCR laeuft".
+    string? JobStage = null,
+    string? JobEngine = null);
 
 public sealed record ReceiptImportBatchView(
     ReceiptImportBatchRow Batch,

@@ -34,7 +34,8 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         var rows = await db.Database.SqlQuery<ReceiptImportItemProjection>($"""
             SELECT i."Id", i."BatchId", i."FullWorthSpaceId", i."SourceType", i."ExternalKey", i."DisplayName",
                    i."SourceReference", i."ContentFingerprint", i."ReceiptScanJobId", i."PurchaseId", i."Status",
-                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", p."ReviewState"
+                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", j."Stage" AS "JobStage",
+                   j."Engine" AS "JobEngine", p."ReviewState"
             FROM "ReceiptImportItems" i
             LEFT JOIN "ReceiptScanJobs" j ON j."Id" = i."ReceiptScanJobId"
             LEFT JOIN "Purchases" p ON p."Id" = i."PurchaseId"
@@ -483,7 +484,8 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         var rows = await db.Database.SqlQuery<ReceiptImportItemProjection>($"""
             SELECT i."Id", i."BatchId", i."FullWorthSpaceId", i."SourceType", i."ExternalKey", i."DisplayName",
                    i."SourceReference", i."ContentFingerprint", i."ReceiptScanJobId", i."PurchaseId", i."Status",
-                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", p."ReviewState"
+                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", j."Stage" AS "JobStage",
+                   j."Engine" AS "JobEngine", p."ReviewState"
             FROM "ReceiptImportItems" i
             LEFT JOIN "ReceiptScanJobs" j ON j."Id" = i."ReceiptScanJobId"
             LEFT JOIN "Purchases" p ON p."Id" = i."PurchaseId"
@@ -498,7 +500,8 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         var rows = await db.Database.SqlQuery<ReceiptImportItemProjection>($"""
             SELECT i."Id", i."BatchId", i."FullWorthSpaceId", i."SourceType", i."ExternalKey", i."DisplayName",
                    i."SourceReference", i."ContentFingerprint", i."ReceiptScanJobId", i."PurchaseId", i."Status",
-                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", p."ReviewState"
+                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", j."Stage" AS "JobStage",
+                   j."Engine" AS "JobEngine", p."ReviewState"
             FROM "ReceiptImportItems" i
             LEFT JOIN "ReceiptScanJobs" j ON j."Id" = i."ReceiptScanJobId"
             LEFT JOIN "Purchases" p ON p."Id" = i."PurchaseId"
@@ -513,7 +516,8 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         var rows = await db.Database.SqlQuery<ReceiptImportItemProjection>($"""
             SELECT i."Id", i."BatchId", i."FullWorthSpaceId", i."SourceType", i."ExternalKey", i."DisplayName",
                    i."SourceReference", i."ContentFingerprint", i."ReceiptScanJobId", i."PurchaseId", i."Status",
-                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", p."ReviewState"
+                   i."Error", i."CreatedAt", i."UpdatedAt", j."Status" AS "JobStatus", j."Stage" AS "JobStage",
+                   j."Engine" AS "JobEngine", p."ReviewState"
             FROM "ReceiptImportItems" i
             LEFT JOIN "ReceiptScanJobs" j ON j."Id" = i."ReceiptScanJobId"
             LEFT JOIN "Purchases" p ON p."Id" = i."PurchaseId"
@@ -589,7 +593,8 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
 
     private static ReceiptImportItemRow ToRow(ReceiptImportItemProjection x) =>
         new(x.Id, x.BatchId, x.FullWorthSpaceId, x.SourceType, x.ExternalKey, x.DisplayName, x.SourceReference,
-            x.ContentFingerprint, x.ReceiptScanJobId, x.PurchaseId, x.Status, x.Error, x.CreatedAt, x.UpdatedAt, x.JobStatus, x.ReviewState);
+            x.ContentFingerprint, x.ReceiptScanJobId, x.PurchaseId, x.Status, x.Error, x.CreatedAt, x.UpdatedAt, x.JobStatus, x.ReviewState,
+            x.JobStage, x.JobEngine);
 
     private static string NormalizeCurrency(string value)
     {
@@ -636,6 +641,11 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
         public string? JobStatus { get; set; }
+        // #129: welcher Schritt gerade laeuft und womit. Der Scan-Job ist ohnehin schon gejoint -
+        // diese beiden Spalten mitzunehmen kostet nichts und ist der Unterschied zwischen "wird
+        // verarbeitet" und "OCR laeuft gerade".
+        public string? JobStage { get; set; }
+        public string? JobEngine { get; set; }
         public string? ReviewState { get; set; }
     }
 
