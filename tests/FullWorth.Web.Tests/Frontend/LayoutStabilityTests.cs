@@ -79,7 +79,23 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         // nicht vorab wissbar, bevor die Antwort da ist. Die zweite, kleinere, unveraenderte Quelle ist
         // die untere Navigationsleiste beim Sprachwechsel Deutsch->en-US (dieselbe wie beim allgemeinen
         // 1,4e-5-Fund oben, hier nur zwei Zellen breiter als anderswo).
-        ("/transactions",    0.0,    0.007),
+        //
+        // 2026-09-21 auf 0,008 korrigiert, und das ist eine Korrektur der Schranke, keine Lockerung
+        // der Seite: 0,007 war auf den gemessenen Wert SELBST gesetzt, ohne einen Schritt Spielraum.
+        // Ueber 6 gezielte Laeufe liest die Seite fuenfmal 0,007 und einmal 0,008 - derselbe Sprung,
+        // nur auf die dritte Stelle anders gerundet. Der Test war damit in etwa jedem sechsten Lauf
+        // rot, ohne dass sich an der Seite etwas geaendert haette, und ein Waechter, der zufaellig
+        // rot wird, bringt niemandem etwas bei.
+        //
+        // Die Meldung nennt dabei KEIN verschobenes Element (culprits ist leer) - der Browser
+        // schreibt den Sprung keinem Knoten zu. Das passt zu den beiden bekannten Quellen oben
+        // (Tagesueberschriften statt gleicher Platzhalter, untere Leiste beim Sprachwechsel) und
+        // nicht zu einer neuen.
+        //
+        // Ueber der Schranke liegen heisst weiterhin: nachsehen. 0,008 ist der beobachtete Hoechstwert,
+        // genauso wie /coach und /admin unten ueber ihrem gemessenen Maximum stehen - das ist die
+        // Konvention dieser Tabelle, und /transactions war die eine Zeile, die sie nicht einhielt.
+        ("/transactions",    0.0,    0.008), // 0.007-0.008 mobil ueber 6 Laeufe
         ("/contracts",       0.0,    0.0), // 0.000 / 0.000   nichts
         ("/settings",        0.0,    0.0), // 0.000 / 0.003   Überschrift bricht am Telefon um
         // Scheibe 14 gab /coach zum ersten Mal eine echte Fixture (Konversation, Ausgaben-Review) statt
