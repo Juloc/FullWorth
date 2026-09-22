@@ -39,7 +39,7 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
         fixture.FinanceDb.Purchases.Add(purchase);
         await fixture.FinanceDb.SaveChangesAsync();
 
-        var settings = fixture.Settings(Product: true);
+        var settings = fixture.Settings();
         fixture.Provider.OutputFactory = request =>
             request.SystemInstruction.Contains("product normalization", StringComparison.OrdinalIgnoreCase)
                 ? $$"""{"suggestions":[{"itemId":"{{item.Id:N}}","canonicalName":"Coca-Cola Zero 1.5L","categoryKey":"food.groceries","confidenceBand":"high","evidenceSummary":"Barcode and article name match a grocery product."}]}"""
@@ -90,7 +90,7 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
         fixture.FinanceDb.Purchases.Add(purchase);
         await fixture.FinanceDb.SaveChangesAsync();
 
-        var settings = fixture.Settings(Receipt: true);
+        var settings = fixture.Settings();
         fixture.Provider.OutputFactory = request =>
             request.SystemInstruction.Contains("receipt follow-up", StringComparison.OrdinalIgnoreCase)
                 ? $$"""{"suggestions":[{"documentId":"{{document.Id:N}}","action":"manual_review","confidenceBand":"high","evidenceSummary":"The latest extraction failed for a multi-page receipt."}]}"""
@@ -143,7 +143,7 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
         }
         await fixture.FinanceDb.SaveChangesAsync();
 
-        var settings = fixture.Settings(Contract: true);
+        var settings = fixture.Settings();
         fixture.Provider.OutputFactory = request =>
             request.SystemInstruction.Contains("recurring-contract", StringComparison.OrdinalIgnoreCase)
                 ? """{"suggestions":[{"merchant":"NETFLIX","currency":"EUR","providerName":"Netflix","contractKind":"streaming","categoryKey":"subscriptions.streaming","confidenceBand":"high","evidenceSummary":"Stable monthly recurring payment."}]}"""
@@ -263,16 +263,17 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
                 credential, adapter, space, job);
         }
 
-        public AiInstanceSettings Settings(bool Product = false, bool Receipt = false, bool Contract = false) => new()
+        /// <summary>
+        /// Nur noch Zugang und Modelle. Welcher Teil des Laufs arbeitet, sagt seit dem Umbau die
+        /// Freigabe, die <c>ProcessAsync</c> uebergeben bekommt - siehe <c>Granted(...)</c>.
+        /// </summary>
+        public AiInstanceSettings Settings() => new()
         {
             Enabled = true,
             Provider = "fake",
             CredentialId = Credential.Id,
             DefaultTextModel = "fake-model",
-            DefaultVisionModel = "fake-model",
-            ProductAiEnabled = Product,
-            ReceiptAiEnabled = Receipt,
-            ContractAiEnabled = Contract
+            DefaultVisionModel = "fake-model"
         };
 
         public Purchase AddPurchase(string merchant, DateOnly date) => new()

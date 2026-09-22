@@ -66,13 +66,6 @@ public sealed class AiInstanceSettings
     public bool DailyScanEnabled { get; set; }
     public bool WeeklyDeepScanEnabled { get; set; }
     public bool MonthlyReviewEnabled { get; set; }
-    public bool ReceiptAiEnabled { get; set; }
-    public bool MerchantAiEnabled { get; set; }
-    public bool CategoryAiEnabled { get; set; }
-    public bool ContractAiEnabled { get; set; }
-    public bool ProductAiEnabled { get; set; }
-    public bool LogoResearchEnabled { get; set; }
-    public bool InternetResearchEnabled { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -99,11 +92,6 @@ public sealed class AiUserSettings
     public Guid? CredentialId { get; set; }
     public string? TextModel { get; set; }
     public string? VisionModel { get; set; }
-    public bool? ReceiptAiEnabled { get; set; }
-    public bool? MerchantAiEnabled { get; set; }
-    public bool? CategoryAiEnabled { get; set; }
-    public bool? ContractAiEnabled { get; set; }
-    public bool? ProductAiEnabled { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

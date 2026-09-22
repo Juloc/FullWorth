@@ -15,13 +15,11 @@ public sealed record AiInstanceSettingsView(
     bool DailyScanEnabled,
     bool WeeklyDeepScanEnabled,
     bool MonthlyReviewEnabled,
-    bool ReceiptAiEnabled,
-    bool MerchantAiEnabled,
-    bool CategoryAiEnabled,
-    bool ContractAiEnabled,
-    bool ProductAiEnabled,
-    bool LogoResearchEnabled,
-    bool InternetResearchEnabled,
+    /// <summary>Wofuer der eingetragene Zugang arbeiten darf - siehe <see cref="AiModules"/>.</summary>
+    IReadOnlyList<string> Modules,
+    /// <summary>Alles, was freigegeben werden KANN. Die Oberflaeche baut daraus ihre Liste,
+    /// damit ein neues Modul dort nicht noch einmal einzeln gepflegt werden muss.</summary>
+    IReadOnlyList<string> AvailableModules,
     DateTimeOffset UpdatedAt);
 
 public sealed record UpdateAiInstanceSettingsRequest(
@@ -36,13 +34,7 @@ public sealed record UpdateAiInstanceSettingsRequest(
     bool DailyScanEnabled,
     bool WeeklyDeepScanEnabled,
     bool MonthlyReviewEnabled,
-    bool ReceiptAiEnabled,
-    bool MerchantAiEnabled,
-    bool CategoryAiEnabled,
-    bool ContractAiEnabled,
-    bool ProductAiEnabled,
-    bool LogoResearchEnabled,
-    bool InternetResearchEnabled);
+    IReadOnlyList<string>? Modules);
 
 public sealed record CreateAiCredentialRequest(string Provider, string Name, string Secret);
 public sealed record RunIntelligenceJobRequest(string? IdempotencyKey);
@@ -73,7 +65,7 @@ public static class IntelligenceAdminEndpoints
 
             return Results.Ok(new
             {
-                settings = ToView(settings),
+                settings = ToView(settings, await GrantedAsync(db, settings, ct)),
                 providers = providers.Descriptors,
                 credentialCount = await db.AiCredentials.AsNoTracking().CountAsync(x => x.OwnerUserId == null, ct),
                 pendingSuggestions = await db.IntelligenceSuggestions.AsNoTracking().CountAsync(x => x.Status == IntelligenceSuggestionStatuses.Pending, ct),
@@ -245,10 +237,12 @@ public static class IntelligenceAdminEndpoints
             CurrentUserContext currentUser,
             IntelligenceAdminAuthorizer authorizer,
             IntelligenceStore store,
+            IntelligenceDbContext db,
             CancellationToken ct) =>
         {
             if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-            return Results.Ok(ToView(await store.GetOrCreateInstanceSettingsAsync(ct)));
+            var current = await store.GetOrCreateInstanceSettingsAsync(ct);
+            return Results.Ok(ToView(current, await GrantedAsync(db, current, ct)));
         });
 
         group.MapPut("/settings", async (
@@ -284,18 +278,11 @@ public static class IntelligenceAdminEndpoints
                     MonthlyBudgetEur = request.MonthlyBudgetEur,
                     DailyScanEnabled = request.DailyScanEnabled,
                     WeeklyDeepScanEnabled = request.WeeklyDeepScanEnabled,
-                    MonthlyReviewEnabled = request.MonthlyReviewEnabled,
-                    ReceiptAiEnabled = request.ReceiptAiEnabled,
-                    MerchantAiEnabled = request.MerchantAiEnabled,
-                    CategoryAiEnabled = request.CategoryAiEnabled,
-                    ContractAiEnabled = request.ContractAiEnabled,
-                    ProductAiEnabled = request.ProductAiEnabled,
-                    LogoResearchEnabled = request.LogoResearchEnabled,
-                    InternetResearchEnabled = request.InternetResearchEnabled
-                }, ct);
+                    MonthlyReviewEnabled = request.MonthlyReviewEnabled
+                }, request.Modules ?? [], ct);
                 IntelligenceAuditWriter.Record(db, actorUserId.Value, "settings.updated", "AiInstanceSettings", saved.Id);
                 await db.SaveChangesAsync(ct);
-                return Results.Ok(ToView(saved));
+                return Results.Ok(ToView(saved, await GrantedAsync(db, saved, ct)));
             }
             catch (ArgumentException ex)
             {
@@ -465,7 +452,18 @@ public static class IntelligenceAdminEndpoints
         return await authorizer.IsAdminAsync(userId, ct) ? userId : null;
     }
 
-    private static AiInstanceSettingsView ToView(AiInstanceSettings x) => new(
+    /// <summary>Die Freigaben des gerade eingetragenen Zugangs. Ohne Zugang gibt es keine.</summary>
+    private static async Task<IReadOnlyList<string>> GrantedAsync(
+        IntelligenceDbContext db, AiInstanceSettings settings, CancellationToken ct) =>
+        settings.CredentialId is { } credentialId
+            ? await db.AiModuleGrants.AsNoTracking()
+                .Where(grant => grant.CredentialId == credentialId)
+                .Select(grant => grant.Module)
+                .OrderBy(module => module)
+                .ToListAsync(ct)
+            : [];
+
+    private static AiInstanceSettingsView ToView(AiInstanceSettings x, IReadOnlyList<string> modules) => new(
         x.Enabled,
         x.Provider,
         x.CredentialId,
@@ -477,12 +475,7 @@ public static class IntelligenceAdminEndpoints
         x.DailyScanEnabled,
         x.WeeklyDeepScanEnabled,
         x.MonthlyReviewEnabled,
-        x.ReceiptAiEnabled,
-        x.MerchantAiEnabled,
-        x.CategoryAiEnabled,
-        x.ContractAiEnabled,
-        x.ProductAiEnabled,
-        x.LogoResearchEnabled,
-        x.InternetResearchEnabled,
+        modules,
+        AiModules.All,
         x.UpdatedAt);
 }

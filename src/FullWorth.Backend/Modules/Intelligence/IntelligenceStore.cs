@@ -47,6 +47,43 @@ public sealed class IntelligenceStore(
         }
     }
 
+    /// <summary>
+    /// Die Einstellungen der Instanz UND wofuer ihr Zugang arbeiten darf - in einem Schritt, weil
+    /// beides zusammen eine Entscheidung ist. Wer den Zugang wechselt, ohne die Freigaben mitzusetzen,
+    /// haette sonst eine KI ohne Auftrag oder Freigaben, die auf den alten Zugang zeigen.
+    ///
+    /// Ein unbekanntes Modul wird abgewiesen und nicht still verworfen: eine falsch geschriebene
+    /// Freigabe, die wie eine gespeicherte aussieht, waere schlimmer als eine Fehlermeldung.
+    /// </summary>
+    public async Task<AiInstanceSettings> SaveInstanceSettingsAsync(
+        AiInstanceSettings input, IReadOnlyList<string> modules, CancellationToken ct)
+    {
+        var requested = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var module in modules)
+        {
+            var normalized = AiModules.Normalize(module)
+                ?? throw new ArgumentException($"Unknown AI module: {module}");
+            requested.Add(normalized);
+        }
+
+        var settings = await SaveInstanceSettingsAsync(input, ct);
+
+        if (settings.CredentialId is not { } credentialId)
+        {
+            // Ohne Zugang gibt es nichts freizugeben. Freigaben ins Leere zu schreiben hiesse, sie
+            // beim naechsten eingetragenen Zugang ungefragt wirksam werden zu lassen.
+            return settings;
+        }
+
+        var existing = await db.AiModuleGrants.Where(grant => grant.CredentialId == credentialId).ToListAsync(ct);
+        db.AiModuleGrants.RemoveRange(existing.Where(grant => !requested.Contains(grant.Module)));
+        foreach (var module in requested.Where(module => existing.All(grant => grant.Module != module)))
+            db.AiModuleGrants.Add(new AiModuleGrant { CredentialId = credentialId, Module = module });
+
+        await db.SaveChangesAsync(ct);
+        return settings;
+    }
+
     public async Task<AiInstanceSettings> SaveInstanceSettingsAsync(AiInstanceSettings input, CancellationToken ct)
     {
         ValidateSettings(input);
@@ -63,13 +100,6 @@ public sealed class IntelligenceStore(
         settings.DailyScanEnabled = input.DailyScanEnabled;
         settings.WeeklyDeepScanEnabled = input.WeeklyDeepScanEnabled;
         settings.MonthlyReviewEnabled = input.MonthlyReviewEnabled;
-        settings.ReceiptAiEnabled = input.ReceiptAiEnabled;
-        settings.MerchantAiEnabled = input.MerchantAiEnabled;
-        settings.CategoryAiEnabled = input.CategoryAiEnabled;
-        settings.ContractAiEnabled = input.ContractAiEnabled;
-        settings.ProductAiEnabled = input.ProductAiEnabled;
-        settings.LogoResearchEnabled = input.LogoResearchEnabled;
-        settings.InternetResearchEnabled = input.InternetResearchEnabled;
         settings.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return settings;

@@ -125,6 +125,46 @@ function renderCredentials() {
   }
 }
 
+// Wofür der eingetragene Zugang arbeiten darf.
+//
+// WELCHE Module es gibt, sagt der Server (availableModules) — diese Datei zählt sie nicht auf. Nur
+// ihre deutschen Namen stehen hier, wie jeder andere Text dieser Seite auch. Fehlt einer, erscheint
+// der Schlüssel: sichtbar unschön, aber nichts verschwindet aus der Liste.
+const MODULE_LABELS = {
+  'categorization': 'Kategorisierung',
+  'receipts': 'Belege',
+  'products': 'Produkte',
+  'contracts': 'Verträge',
+  'coach': 'Coach',
+  'logo-research': 'Logo-Recherche',
+  'internet-research': 'Internet-Recherche'
+};
+
+function renderModules(available, granted) {
+  const host = $('ai-modules');
+  if (!host) return;
+  const active = new Set(granted);
+  host.replaceChildren();
+  for (const module of available) {
+    const label = document.createElement('label');
+    label.className = 'check';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('data-ai-module', module);
+    input.checked = active.has(module);
+    const text = document.createElement('span');
+    text.textContent = MODULE_LABELS[module] || module;
+    label.append(input, text);
+    host.append(label);
+  }
+}
+
+function selectedModules() {
+  return Array.from(document.querySelectorAll('[data-ai-module]'))
+    .filter(input => input.checked)
+    .map(input => input.getAttribute('data-ai-module'));
+}
+
 function renderSettings(settings) {
   $('ai-enabled').checked = settings.enabled;
   $('ai-provider').value = settings.provider;
@@ -133,13 +173,7 @@ function renderSettings(settings) {
   $('ai-daily-budget').value = settings.dailyBudgetEur ?? '';
   $('ai-monthly-budget').value = settings.monthlyBudgetEur ?? '';
   $('ai-allow-user-credentials').checked = settings.allowUserCredentials;
-  $('ai-receipt').checked = settings.receiptAiEnabled;
-  $('ai-merchant').checked = settings.merchantAiEnabled;
-  $('ai-category').checked = settings.categoryAiEnabled;
-  $('ai-contract').checked = settings.contractAiEnabled;
-  $('ai-product').checked = settings.productAiEnabled;
-  $('ai-logo').checked = settings.logoResearchEnabled;
-  $('ai-internet').checked = settings.internetResearchEnabled;
+  renderModules(settings.availableModules || [], settings.modules || []);
   $('ai-daily').checked = settings.dailyScanEnabled;
   $('ai-weekly').checked = settings.weeklyDeepScanEnabled;
   $('ai-monthly').checked = settings.monthlyReviewEnabled;
@@ -307,13 +341,7 @@ async function saveSettings() {
     dailyScanEnabled: $('ai-daily').checked,
     weeklyDeepScanEnabled: $('ai-weekly').checked,
     monthlyReviewEnabled: $('ai-monthly').checked,
-    receiptAiEnabled: $('ai-receipt').checked,
-    merchantAiEnabled: $('ai-merchant').checked,
-    categoryAiEnabled: $('ai-category').checked,
-    contractAiEnabled: $('ai-contract').checked,
-    productAiEnabled: $('ai-product').checked,
-    logoResearchEnabled: $('ai-logo').checked,
-    internetResearchEnabled: $('ai-internet').checked
+    modules: selectedModules()
   };
   try {
     const saved = await api('/settings', { method: 'PUT', body: JSON.stringify(payload) });

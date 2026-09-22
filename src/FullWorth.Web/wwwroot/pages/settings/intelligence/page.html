@@ -139,14 +139,10 @@
             <label><span>Monatsbudget €</span><input id="ai-monthly-budget" type="number" min="0" step="0.01"></label>
             <label class="check"><input id="ai-allow-user-credentials" type="checkbox"><span>Eigene User-Credentials erlauben</span></label>
           </div>
+          <!-- Wofür dieser Zugang arbeiten darf. Die Liste kommt vom Server (availableModules), damit
+               ein neues Modul hier nicht noch einmal von Hand gepflegt werden muss. -->
+          <div class="intel-feature-grid" id="ai-modules"></div>
           <div class="intel-feature-grid">
-            <label class="check"><input id="ai-receipt" type="checkbox"><span>Belege</span></label>
-            <label class="check"><input id="ai-merchant" type="checkbox"><span>Händler</span></label>
-            <label class="check"><input id="ai-category" type="checkbox"><span>Kategorien</span></label>
-            <label class="check"><input id="ai-contract" type="checkbox"><span>Verträge</span></label>
-            <label class="check"><input id="ai-product" type="checkbox"><span>Produkte</span></label>
-            <label class="check"><input id="ai-logo" type="checkbox"><span>Logo-Recherche</span></label>
-            <label class="check"><input id="ai-internet" type="checkbox"><span>Internet-Recherche</span></label>
             <label class="check"><input id="ai-daily" type="checkbox"><span>Daily Scan</span></label>
             <label class="check"><input id="ai-weekly" type="checkbox"><span>Weekly Deep Scan</span></label>
             <label class="check"><input id="ai-monthly" type="checkbox"><span>Monthly Review</span></label>
