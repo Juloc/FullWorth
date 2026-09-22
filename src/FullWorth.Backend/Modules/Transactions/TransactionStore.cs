@@ -315,14 +315,11 @@ public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore tr
             x.IsTransfer,
             x.CategorizationSource,
             x.UpdatedAt,
-            db.Purchases.Count(p =>
-                (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
-                (p.Visibility != "private" || p.CreatedByUserId == userId)),
-            db.Purchases
-                .Where(p =>
-                    (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
-                    (p.Visibility != "private" || p.CreatedByUserId == userId))
-                .SelectMany(p => p.Items).Count(),
+            // Die Kauf-Zaehler stehen hier NICHT mehr (#161, Teil L). Sie kommen fuer die ganze Seite
+            // in einer Abfrage nach - siehe PurchaseCountsAsync weiter unten. Gemessen an 200 000
+            // Buchungen: 716 ms je Seite als Unterabfrage pro Zeile, 5,5 ms fuer die Seite am Stueck.
+            0,
+            0,
             null,
             null,
             db.Accounts.Any(a => a.Id == x.AccountId && a.BankConnectionId == null),
@@ -330,6 +327,22 @@ public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore tr
             db.Accounts.Any(a => a.Id == x.AccountId && a.BankConnectionId != null &&
                 db.BankConnections.Any(c => c.Id == a.BankConnectionId && c.Provider != "fints")),
             x.TimelineSortKey)).ToListAsync(ct);
+
+        // Die Kauf-Zaehler fuer diese Seite, in einer Abfrage (#161, Teil L). Die eine Zeile mehr, die
+        // nur die Frage "geht es weiter?" beantwortet, bleibt dabei aussen vor - sie wird gleich
+        // verworfen und soll keine Nacharbeit kosten.
+        var pageIds = items.Take(limit).Select(item => item.Id).ToArray();
+        if (pageIds.Length > 0)
+        {
+            var counts = await PurchaseCountsAsync(userId, pageIds, ct);
+            for (var index = 0; index < items.Count; index++)
+                if (counts.TryGetValue(items[index].Id, out var count))
+                    items[index] = items[index] with
+                    {
+                        PurchaseCount = count.Purchases,
+                        PurchaseItemCount = count.Items
+                    };
+        }
 
         if (fullWorthSpaceId.HasValue && items.Count > 0)
         {
@@ -830,6 +843,53 @@ public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore tr
         }
 
         return Expression.Lambda<Func<FinanceTransaction, bool>>(Expression.AndAlso(notNull, matches), transaction);
+    }
+
+    /// <summary>
+    /// Wie viele Kaeufe und Artikel an den Buchungen DIESER Seite haengen (#161, Teil L).
+    ///
+    /// Vorher stand das als zwei korrelierte Unterabfragen in der Projektion, also einmal je Zeile.
+    /// Und beide hatten die Form <c>p.TransactionId = x.Id ODER es gibt eine Zahlungsverknuepfung</c> -
+    /// ein ODER zwischen einer Spalte und einer Unterabfrage auf einer ANDEREN Tabelle. Damit ist der
+    /// Index auf <c>Purchases.TransactionId</c> unbrauchbar, und PostgreSQL liest je Zeile die ganze
+    /// Kauftabelle. Gemessen an 200 000 Buchungen und 4 000 Kaeufen: 716 ms fuer eine Seite.
+    ///
+    /// Getrennt gefragt kann jede Haelfte ihren eigenen Index benutzen, und gefragt wird einmal fuer
+    /// die ganze Seite statt einmal je Zeile: 5,5 ms. Dieselbe Lehre wie bei der Volltextsuche - ein
+    /// ODER ueber zwei Tabellen kostet den Index.
+    /// </summary>
+    private async Task<Dictionary<Guid, (int Purchases, int Items)>> PurchaseCountsAsync(
+        Guid userId, Guid[] transactionIds, CancellationToken ct)
+    {
+        var direct = await db.Purchases.AsNoTracking()
+            .Where(p => p.TransactionId != null && transactionIds.Contains(p.TransactionId.Value) &&
+                        (p.Visibility != "private" || p.CreatedByUserId == userId))
+            .Select(p => new { TransactionId = p.TransactionId!.Value, PurchaseId = p.Id, Items = p.Items.Count })
+            .ToArrayAsync(ct);
+
+        // Ein Join, kein korreliertes SelectMany: daraus wuerde LATERAL/APPLY, und das kann SQLite
+        // nicht - die Einheitstests laufen darauf.
+        var linked = await db.PurchasePaymentLinks.AsNoTracking()
+            .Where(link => transactionIds.Contains(link.TransactionId))
+            .Join(
+                db.Purchases.AsNoTracking()
+                    .Where(p => p.Visibility != "private" || p.CreatedByUserId == userId),
+                link => link.PurchaseId,
+                purchase => purchase.Id,
+                (link, purchase) => new { link.TransactionId, PurchaseId = purchase.Id, Items = purchase.Items.Count })
+            .ToArrayAsync(ct);
+
+        // Ein Kauf kann direkt UND ueber eine Zahlungsverknuepfung an derselben Buchung haengen - er
+        // zaehlt einmal. Das war die eigentliche Aufgabe des ODER, und sie wird hier erledigt.
+        return direct.Concat(linked)
+            .GroupBy(row => row.TransactionId)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    var distinct = group.DistinctBy(row => row.PurchaseId).ToArray();
+                    return (distinct.Length, distinct.Sum(row => row.Items));
+                });
     }
 
     private IQueryable<FinanceTransaction> AccessibleTransactions(Guid userId, Guid? fullWorthSpaceId, bool requireOwner)

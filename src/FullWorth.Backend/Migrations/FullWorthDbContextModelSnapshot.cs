@@ -3872,6 +3872,8 @@ namespace FullWorth.Backend.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
+                    b.HasIndex("TimelineSortKey");
+
                     b.HasIndex("TransferGroupId");
 
                     b.HasIndex("AccountId", "ExternalKey")
