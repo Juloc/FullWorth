@@ -218,6 +218,32 @@ public sealed class BrandLogoResearchTests
         Assert.NotEqual(hash, BrandLogoResearchService.HashOf("MAX MUSTERMANM"));
     }
 
+    /// <summary>
+    /// Die Adresspruefung selbst, Adresse fuer Adresse. Sie steht oeffentlich, weil der
+    /// Verbindungsaufbau sie ein zweites Mal braucht: der Name wird vor dem Abruf aufgeloest UND vom
+    /// Client noch einmal, und dazwischen kann sich die Antwort aendern.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("10.0.0.5", false)]
+    [InlineData("172.16.3.9", false)]
+    [InlineData("172.31.255.254", false)]
+    [InlineData("192.168.1.1", false)]
+    [InlineData("169.254.169.254", false)]
+    [InlineData("100.64.0.1", false)]
+    [InlineData("0.0.0.0", false)]
+    [InlineData("224.0.0.1", false)]
+    [InlineData("::1", false)]
+    [InlineData("fd00::1", false)]
+    [InlineData("fe80::1", false)]
+    [InlineData("::ffff:127.0.0.1", false)]
+    [InlineData("93.184.216.34", true)]
+    [InlineData("2606:2800:220:1:248:1893:25c8:1946", true)]
+    [InlineData("172.32.0.1", true)]
+    [InlineData("172.15.255.254", true)]
+    public void Only_public_addresses_are_allowed(string address, bool expected) =>
+        Assert.Equal(expected, BrandLogoFetcher.IsPublic(System.Net.IPAddress.Parse(address)));
+
     private sealed class CountingHandler(
         Action? onSend = null,
         Func<HttpRequestMessage, HttpResponseMessage>? answer = null) : HttpMessageHandler

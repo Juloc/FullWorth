@@ -154,7 +154,14 @@ public sealed class BrandLogoFetcher(HttpClient httpClient)
         return addresses.Length > 0 && addresses.All(IsPublic);
     }
 
-    private static bool IsPublic(IPAddress address)
+    /// <summary>
+    /// Ob diese Adresse im oeffentlichen Netz liegt. Oeffentlich, weil auch der Verbindungsaufbau sie
+    /// braucht: der Name wird hier aufgeloest UND spaeter vom Client noch einmal, und dazwischen kann
+    /// sich die Antwort aendern. Ein Name, der einmal oeffentlich und beim zweiten Mal 127.0.0.1
+    /// beantwortet wird, ist ein bekannter Trick - deshalb prueft der Verbindungsaufbau die Adresse,
+    /// zu der er wirklich verbindet (siehe BackendApplication, ConnectCallback).
+    /// </summary>
+    public static bool IsPublic(IPAddress address)
     {
         if (IPAddress.IsLoopback(address)) return false;
         if (address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) || address.Equals(IPAddress.Broadcast))

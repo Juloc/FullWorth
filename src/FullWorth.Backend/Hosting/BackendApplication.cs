@@ -196,11 +196,38 @@ public static class BackendApplication
                 client.Timeout = TimeSpan.FromSeconds(10);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-logo-research)");
             })
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
             {
                 AllowAutoRedirect = false,
                 UseCookies = false,
-                UseDefaultCredentials = false
+                Credentials = null,
+                // Die zweite Haelfte der Adresspruefung. BrandLogoFetcher loest den Namen vor dem Abruf
+                // auf und verlangt, dass JEDE Antwort oeffentlich ist - aber der Client loest ihn
+                // danach noch einmal selbst auf, und dazwischen kann sich die Antwort aendern. Ein
+                // Name, der beim ersten Mal oeffentlich und beim zweiten Mal 127.0.0.1 beantwortet
+                // wird, ist genau der Trick, gegen den die erste Pruefung allein nichts ausrichtet.
+                // Hier wird geprueft, wohin die Verbindung tatsaechlich geht.
+                ConnectCallback = async (context, cancellationToken) =>
+                {
+                    var addresses = await System.Net.Dns.GetHostAddressesAsync(
+                        context.DnsEndPoint.Host, cancellationToken);
+                    var target = addresses.FirstOrDefault(BrandLogoFetcher.IsPublic)
+                        ?? throw new HttpRequestException("brand_logo_target_not_public");
+                    var socket = new System.Net.Sockets.Socket(
+                        System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp)
+                    { NoDelay = true };
+                    try
+                    {
+                        await socket.ConnectAsync(
+                            new System.Net.IPEndPoint(target, context.DnsEndPoint.Port), cancellationToken);
+                        return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch
+                    {
+                        socket.Dispose();
+                        throw;
+                    }
+                }
             });
         builder.Services.AddScoped<CollectionSuggestionAiAdapter>();
         builder.Services.AddScoped<CoachAiAccessResolver>();
