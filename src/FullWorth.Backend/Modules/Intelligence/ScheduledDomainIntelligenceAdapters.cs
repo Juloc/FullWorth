@@ -123,13 +123,15 @@ Use a supplied categoryKey or the literal string "unknown". Do not invent candid
         Guid fullWorthSpaceId,
         AiInstanceSettings settings,
         AiCredential credential,
+        IReadOnlySet<string> grantedModules,
         CancellationToken ct)
     {
-        if (settings.ProductAiEnabled)
+        // Die Freigabe entscheidet, nicht mehr drei feste Spalten (siehe AiModules).
+        if (grantedModules.Contains(AiModules.Products))
             await ProcessProductsAsync(job, fullWorthSpaceId, settings, credential, ct);
-        if (settings.ReceiptAiEnabled)
+        if (grantedModules.Contains(AiModules.Receipts))
             await ProcessReceiptsAsync(job, fullWorthSpaceId, settings, credential, ct);
-        if (settings.ContractAiEnabled)
+        if (grantedModules.Contains(AiModules.Contracts))
             await ProcessContractsAsync(job, fullWorthSpaceId, settings, credential, ct);
     }
 

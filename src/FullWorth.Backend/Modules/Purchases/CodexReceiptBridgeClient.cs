@@ -11,7 +11,7 @@ public sealed record CodexReceiptSource(Guid Id, Guid FileId, int SortOrder, int
 public sealed class CodexReceiptBridgeClient(
     IConfiguration configuration,
     IHttpClientFactory clients,
-    Intelligence.IntelligenceStore intelligence,
+    Intelligence.AiAccessResolver intelligence,
     ILogger<CodexReceiptBridgeClient> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -62,9 +62,17 @@ public sealed class CodexReceiptBridgeClient(
         var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
         if (baseUri is null) return null;
 
-        // Sein eingestelltes Vision-Modell. Es wurde gespeichert und angezeigt, aber nie mitgeschickt:
-        // hier stand fest null, und die Bruecke waehlte deshalb immer automatisch (#156).
-        var model = await intelligence.CodexVisionModelAsync(userId, ct);
+        // Wer diesen Scan bedienen darf - dieselbe Aufloesung wie fuer jede andere KI-Funktion.
+        // Vorher entschied das hier niemand: der Scan lief an Instanz-Einstellungen und Freigaben
+        // vollstaendig vorbei, und das eingestellte Vision-Modell stand fest auf null.
+        var access = await intelligence.ResolveAsync(
+            Intelligence.AiModules.Receipts, userId, Intelligence.AiModelKind.Vision, ct);
+        if (access is null) return null;
+
+        // Diese Bruecke ist der Codex-Weg. Loest die Freigabe auf einen anderen Anbieter auf, gibt es
+        // hier nichts zu tun - ein OpenAI-Modellname auf der Codex-Befehlszeile waere geraten.
+        if (access.Credential.Provider != Intelligence.IntelligenceProviders.Codex) return null;
+        var model = string.IsNullOrWhiteSpace(access.Model) ? null : access.Model;
 
         var payload = JsonSerializer.Serialize(new
         {

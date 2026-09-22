@@ -189,6 +189,7 @@ public sealed class ScheduledIntelligenceJobProcessor(
     AiCostEstimator costEstimator,
     ScheduledDomainIntelligenceAdapters domainAdapters,
     IntelligenceDigestService digests,
+    AiAccessResolver access,
     ILogger<ScheduledIntelligenceJobProcessor> logger,
     FinancialSignalJobProcessor? signalProcessor = null)
 {
@@ -257,11 +258,14 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
                 return;
             }
 
-            var anyProviderCapability =
-                (settings.MerchantAiEnabled && settings.CategoryAiEnabled) ||
-                settings.ProductAiEnabled ||
-                settings.ReceiptAiEnabled ||
-                settings.ContractAiEnabled;
+            // Wofuer der Zugang der Instanz freigegeben ist. Vorher standen hier vier feste Schalter;
+            // eine neue Funktion hiess eine neue Spalte und eine neue Zeile in dieser Bedingung.
+            var granted = settings.CredentialId is { } grantedCredentialId
+                ? (await access.GrantedModulesAsync(grantedCredentialId, ct)).ToHashSet(StringComparer.Ordinal)
+                : [];
+
+            var anyProviderCapability = granted.Overlaps(
+                [AiModules.Categorization, AiModules.Products, AiModules.Receipts, AiModules.Contracts]);
 
             AiCredential? credential = null;
             if (anyProviderCapability)
@@ -290,11 +294,11 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
             var digestNow = DateTimeOffset.UtcNow;
             foreach (var fullWorthSpaceId in spaces)
             {
-                if (credential is not null && settings.MerchantAiEnabled && settings.CategoryAiEnabled)
+                if (credential is not null && granted.Contains(AiModules.Categorization))
                     await ProcessSpaceAsync(job, fullWorthSpaceId, settings, credential, ct);
 
                 if (credential is not null)
-                    await domainAdapters.ProcessAsync(job, fullWorthSpaceId, settings, credential, ct);
+                    await domainAdapters.ProcessAsync(job, fullWorthSpaceId, settings, credential, granted, ct);
 
                 await digests.BuildAsync(job.Type, fullWorthSpaceId, digestNow, ct);
             }

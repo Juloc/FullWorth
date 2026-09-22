@@ -206,9 +206,14 @@ public sealed class ScheduledIntelligenceProcessorTests
                 DefaultTextModel = "fake-model",
                 DefaultVisionModel = "fake-model",
                 DailyBudgetEur = dailyBudgetEur,
-                MerchantAiEnabled = true,
-                CategoryAiEnabled = true,
                 DailyScanEnabled = true
+            });
+            // Wofuer dieser Zugang arbeiten darf. Vorher waren das die zwei Schalter
+            // MerchantAiEnabled und CategoryAiEnabled, die ohnehin nur gemeinsam galten.
+            intelligenceDb.AiModuleGrants.Add(new AiModuleGrant
+            {
+                CredentialId = credential.Id,
+                Module = AiModules.Categorization
             });
             var job = new IntelligenceJob
             {
@@ -242,6 +247,7 @@ public sealed class ScheduledIntelligenceProcessorTests
                 costEstimator,
                 adapters,
                 new IntelligenceDigestService(intelligenceDb, financeDb),
+                new AiAccessResolver(intelligenceDb, store, registry),
                 NullLogger<ScheduledIntelligenceJobProcessor>.Instance);
 
             return new Fixture(

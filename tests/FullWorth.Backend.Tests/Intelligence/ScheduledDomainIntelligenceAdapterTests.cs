@@ -15,6 +15,10 @@ namespace FullWorth.Backend.Tests.Intelligence;
 
 public sealed class ScheduledDomainIntelligenceAdapterTests
 {
+    /// <summary>Die Freigabe entscheidet, welcher Teil des Laufs arbeitet - nicht mehr drei feste Spalten.</summary>
+    private static IReadOnlySet<string> Granted(params string[] modules) =>
+        new HashSet<string>(modules, StringComparer.Ordinal);
+
     [Fact]
     public async Task Product_adapter_creates_reviewable_proposal_without_changing_purchase_item()
     {
@@ -41,7 +45,7 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
                 ? $$"""{"suggestions":[{"itemId":"{{item.Id:N}}","canonicalName":"Coca-Cola Zero 1.5L","categoryKey":"food.groceries","confidenceBand":"high","evidenceSummary":"Barcode and article name match a grocery product."}]}"""
                 : "{\"suggestions\":[]}";
 
-        await fixture.Adapter.ProcessAsync(fixture.Job, fixture.Space.Id, settings, fixture.Credential, CancellationToken.None);
+        await fixture.Adapter.ProcessAsync(fixture.Job, fixture.Space.Id, settings, fixture.Credential, Granted(AiModules.Products), CancellationToken.None);
 
         var suggestion = await fixture.IntelligenceDb.IntelligenceSuggestions.SingleAsync();
         Assert.Equal("product-normalization", suggestion.Type);
@@ -92,7 +96,7 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
                 ? $$"""{"suggestions":[{"documentId":"{{document.Id:N}}","action":"manual_review","confidenceBand":"high","evidenceSummary":"The latest extraction failed for a multi-page receipt."}]}"""
                 : "{\"suggestions\":[]}";
 
-        await fixture.Adapter.ProcessAsync(fixture.Job, fixture.Space.Id, settings, fixture.Credential, CancellationToken.None);
+        await fixture.Adapter.ProcessAsync(fixture.Job, fixture.Space.Id, settings, fixture.Credential, Granted(AiModules.Receipts), CancellationToken.None);
 
         var suggestion = await fixture.IntelligenceDb.IntelligenceSuggestions.SingleAsync();
         Assert.Equal("receipt-follow-up", suggestion.Type);
@@ -145,7 +149,7 @@ public sealed class ScheduledDomainIntelligenceAdapterTests
                 ? """{"suggestions":[{"merchant":"NETFLIX","currency":"EUR","providerName":"Netflix","contractKind":"streaming","categoryKey":"subscriptions.streaming","confidenceBand":"high","evidenceSummary":"Stable monthly recurring payment."}]}"""
                 : "{\"suggestions\":[]}";
 
-        await fixture.Adapter.ProcessAsync(fixture.Job, fixture.Space.Id, settings, fixture.Credential, CancellationToken.None);
+        await fixture.Adapter.ProcessAsync(fixture.Job, fixture.Space.Id, settings, fixture.Credential, Granted(AiModules.Contracts), CancellationToken.None);
 
         var suggestion = await fixture.IntelligenceDb.IntelligenceSuggestions.SingleAsync();
         Assert.Equal("contract-enrichment", suggestion.Type);
