@@ -409,7 +409,6 @@ POST             /api/contracts/price-changes/{id:guid}/confirm
 POST             /api/contracts/price-changes/{id:guid}/ignore
 POST             /api/contracts/{contractId:guid}/links
 POST             /api/contracts/{contractId:guid}/split
-POST             /api/export/wealth-backup/validate
 POST             /api/fullworth-spaces/{spaceId:guid}/invites
 POST             /api/fullworth-spaces/{spaceId:guid}/members
 POST             /api/import-jobs/upload

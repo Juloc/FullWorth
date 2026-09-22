@@ -8,6 +8,9 @@
 #
 #   /api/bootstrap/*                bedient der Auth-Host (FullWorth.Web), nicht die Anwendung
 #   /api/coach/ask                  die kurze Frage ohne Unterhaltung; die Seite benutzt Unterhaltungen
+#   /api/intelligence/brand-assets  die Adresse kommt aus dem Katalog (BrandCatalogEndpoints setzt
+#                                   assetPath), und FullWorth.Web/Program.cs reicht sie durch - das
+#                                   Frontend schreibt sie deshalb nirgends hin
 #
 # Der Rest ist fertig gebaut und unerreichbar, und die groessten Brocken darunter sind:
 #
@@ -44,7 +47,6 @@ POST /api/category-intelligence/bulk
 POST /api/category-intelligence/learn
 POST /api/category-merge/{sourceCategoryId:guid}
 POST /api/coach/ask
-POST /api/export/wealth-backup/validate
 POST /api/import/wealth-backup/validate
 POST /api/transaction-bulk/advanced-preview
 POST /api/transaction-bulk/execute

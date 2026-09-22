@@ -4,7 +4,6 @@ namespace FullWorth.Backend.Modules.Export;
 
 public static class WealthPortableExportEndpoints
 {
-    private const long MaxValidationBytes = 1L * 1024 * 1024 * 1024;
 
     public static IEndpointRouteBuilder MapWealthPortableExportEndpoints(this IEndpointRouteBuilder app)
     {
@@ -28,22 +27,10 @@ public static class WealthPortableExportEndpoints
             return backup is null ? Results.NotFound() : Results.File(backup.Bytes, "application/zip", backup.FileName);
         }).WithTags("Export");
 
-        app.MapPost("/api/export/wealth-backup/validate", async (
-            Guid fullWorthSpaceId,
-            HttpRequest request,
-            CurrentUserContext currentUser,
-            WealthPortableExportService service,
-            CancellationToken ct) =>
-        {
-            if (request.ContentLength is > MaxValidationBytes)
-                return Results.BadRequest(new { error = "Backup is too large for in-app validation." });
-            await using var buffer = new MemoryStream();
-            await request.Body.CopyToAsync(buffer, ct);
-            if (buffer.Length == 0) return Results.BadRequest(new { error = "Backup ZIP body is required." });
-            buffer.Position = 0;
-            var result = await service.ValidateBackupAsync(currentUser.RequireUserId(), fullWorthSpaceId, buffer, ct);
-            return result is null ? Results.NotFound() : Results.Ok(result);
-        }).WithTags("Export");
+        // Das Pruefen einer hochgeladenen Sicherung stand hier ein zweites Mal, Zeile fuer Zeile
+        // gleich wie POST /api/import/wealth-backup/validate und mit demselben Aufruf dahinter.
+        // Keines von beiden hatte einen Aufrufer, und eine Sicherung prueft man, bevor man sie
+        // einspielt - das ist ein Import. Uebrig bleibt der eine Weg (#177).
 
         return app;
     }
