@@ -61,7 +61,7 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<Pur
                     .FirstOrDefault()
             })
             .ToListAsync(ct);
-        var reconciliation = Reconciliation(purchase);
+        var reconciliation = PurchaseReconciliationView.Of(purchase, await LegacyPaymentAmountAsync(purchase, ct));
         return new
         {
             purchase = ToPurchaseDto(purchase), reconciliation, allocationLinks,
@@ -251,7 +251,22 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<Pur
             .Include(x => x.PaymentLinks)
             .Include(x => x.AcceptedDifferences)
             .SingleOrDefaultAsync(x => x.Id == purchaseId, ct);
-        return purchase is null ? null : Reconciliation(purchase);
+        return purchase is null ? null : PurchaseReconciliationView.Of(purchase, await LegacyPaymentAmountAsync(purchase, ct));
+    }
+
+    /// <summary>
+    /// Die alte Einzelverknuepfung, solange es zu ihr noch keine Zeile in "PurchasePaymentLinks" gibt.
+    /// Genau diese Umrechnung macht das Bestaetigen (PurchaseLifecycleService.ConfirmAsync), nur dass
+    /// es sie dort auch speichert - eine Anzeige darf das nicht, also rechnet sie sie nur mit.
+    /// </summary>
+    private async Task<decimal?> LegacyPaymentAmountAsync(Purchase purchase, CancellationToken ct)
+    {
+        if (purchase.PaymentLinks.Count > 0 || !purchase.TransactionId.HasValue) return null;
+        var amount = await db.Transactions.AsNoTracking()
+            .Where(x => x.Id == purchase.TransactionId.Value)
+            .Select(x => (decimal?)x.Amount)
+            .SingleOrDefaultAsync(ct);
+        return amount.HasValue ? Math.Min(Math.Abs(amount.Value), Math.Abs(purchase.TotalAmount)) : null;
     }
 
     public async Task<(PurchaseMutationResult Result, object? Value, string? Error)> AcceptDifferenceAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, DifferenceAcceptanceWrite request, CancellationToken ct)
@@ -560,38 +575,6 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<Pur
         if (visibility == "private" && purchase.CreatedByUserId.HasValue && purchase.CreatedByUserId != userId) return PurchaseMutationResult.Forbidden;
         if (!purchase.CreatedByUserId.HasValue) purchase.CreatedByUserId = userId;
         purchase.Visibility = visibility; purchase.UpdatedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct); return PurchaseMutationResult.Success;
-    }
-
-    private object Reconciliation(Purchase purchase)
-    {
-        var calculation = CalculateReconciliation(purchase);
-        var accepted = purchase.AcceptedDifferences.ToDictionary(x => x.Kind, x => new { x.Amount, x.Reason, x.Note, x.AcceptedAt });
-        return new
-        {
-            purchase.Id, purchase.Currency,
-            calculation.PurchaseTotal,
-            calculation.ItemTotal,
-            calculation.MerchandiseTotal,
-            calculation.ItemDiscountTotal,
-            calculation.BasketDiscountTotal,
-            totalDiscount = calculation.ItemDiscountTotal + calculation.BasketDiscountTotal,
-            calculation.DepositTotal,
-            calculation.AdditionalChargeTotal,
-            calculation.RoundingAmount,
-            calculation.ItemDifference,
-            calculation.SubtotalAmount,
-            calculation.FormulaTotal,
-            calculation.FormulaDifference,
-            calculation.LinkedPaymentTotal,
-            calculation.PaymentDifference,
-            calculation.ItemsReconciled,
-            calculation.FormulaReconciled,
-            calculation.PaymentsReconciled,
-            calculation.FullyReconciled,
-            calculation.Tolerance,
-            hasForeignCurrencyPayments = purchase.PaymentLinks.Any(x => !string.Equals(x.Currency, purchase.Currency, StringComparison.OrdinalIgnoreCase)),
-            acceptedDifferences = accepted
-        };
     }
 
     private static PurchaseReconciliationCalculation CalculateReconciliation(Purchase purchase) =>

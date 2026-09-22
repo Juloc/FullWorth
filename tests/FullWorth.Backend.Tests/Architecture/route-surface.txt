@@ -254,7 +254,6 @@ GET              /api/purchase-analytics/price-changes
 GET              /api/purchase-analytics/products/{productId:guid}/merchants
 GET              /api/purchase-analytics/restock-forecast
 GET              /api/purchase-analytics/savings
-GET              /api/purchase-review/{purchaseId:guid}
 GET              /api/purchases/
 GET              /api/purchases/amazon/status
 GET              /api/purchases/amazon/sync-runs
@@ -484,8 +483,6 @@ POST             /api/products/merge
 POST             /api/products/{id:guid}/aliases
 POST             /api/products/{id:guid}/barcodes
 POST             /api/products/{id:guid}/restore
-POST             /api/purchase-review/{purchaseId:guid}/confirm
-POST             /api/purchase-review/{purchaseId:guid}/confirm-difference
 POST             /api/purchases/
 POST             /api/purchases/amazon/connect/start
 POST             /api/purchases/amazon/connect/{challengeId:guid}/complete

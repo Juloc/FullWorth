@@ -47,7 +47,6 @@ WHERE l."ImportBatchId"=@batch AND l."ImportSource"=@source AND l."PurchaseId"=p
   AND NOT EXISTS (SELECT 1 FROM "TransactionAllocations" x
                   WHERE x."PurchaseItemId" IN (SELECT "Id" FROM "PurchaseItems" WHERE "PurchaseId"=p."Id"))
   AND NOT EXISTS (SELECT 1 FROM "PurchaseDifferenceAcceptances" x WHERE x."PurchaseId"=p."Id")
-  AND NOT EXISTS (SELECT 1 FROM "PurchaseReconciliationConfirmations" x WHERE x."PurchaseId"=p."Id")
   AND NOT EXISTS (SELECT 1 FROM "PurchaseRefunds" x WHERE x."PurchaseId"=p."Id")
   AND NOT EXISTS (SELECT 1 FROM "SpendingReviews" x WHERE x."PurchaseId"=p."Id")
 RETURNING p."Id", p."ReceiptImagePath"

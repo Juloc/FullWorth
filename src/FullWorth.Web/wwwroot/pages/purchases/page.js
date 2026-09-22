@@ -306,8 +306,8 @@ function amazonReconciliation(purchase, rec, amazon) {
     purchaseTotal: Number(purchase.totalAmount || 0),
     itemTotal,
     itemDifference: Number(purchase.totalAmount || 0) - itemTotal,
-    transactionAmount: payments.length ? -bankAllocated : null,
-    transactionDifference: bankAllocated + nonBank - Number(purchase.totalAmount || 0)
+    linkedPaymentTotal: bankAllocated,
+    paymentDifference: bankAllocated + nonBank - Number(purchase.totalAmount || 0)
   };
 }
 
@@ -411,7 +411,9 @@ function renderReconcile(box, purchase, rec, dlg) {
   const amount = v => v == null ? '—' : ctx.money(v, cur);
   const diff = rec ? Number(rec.itemDifference || 0) : 0;
   const diffClass = Math.abs(diff) <= 0.01 ? 'positive' : 'negative';
-  const txAmount = rec && rec.transactionAmount != null ? ctx.money(Math.abs(rec.transactionAmount), cur) : ctx.get('purchases.notLinked');
+  const paid = rec ? Number(rec.linkedPaymentTotal || 0) : 0;
+  const offerLink = !purchase.transactionId && !paid && purchase.source !== 'amazon';
+  const txAmount = paid ? ctx.money(Math.abs(paid), cur) : ctx.get('purchases.notLinked');
 
   box.innerHTML = `<div class="reconcile-grid">
       <div class="detail-item"><span class="detail-k">${ctx.esc(ctx.get('purchases.bankAmount'))}</span><span class="detail-v">${ctx.esc(txAmount)}</span></div>
@@ -419,9 +421,9 @@ function renderReconcile(box, purchase, rec, dlg) {
       <div class="detail-item"><span class="detail-k">${ctx.esc(ctx.get('purchases.itemTotal'))}</span><span class="detail-v">${amount(rec ? rec.itemTotal : null)}</span></div>
       <div class="detail-item"><span class="detail-k">${ctx.esc(ctx.get('purchases.unallocated'))}</span><span class="detail-v ${diffClass}">${amount(rec ? rec.itemDifference : null)}</span></div>
     </div>
-    ${!purchase.transactionId && purchase.source !== 'amazon' ? `<div class="reconcile-link" data-link></div>` : ''}`;
+    ${offerLink ? `<div class="reconcile-link" data-link></div>` : ''}`;
 
-  if (!purchase.transactionId && purchase.source !== 'amazon') {
+  if (offerLink) {
     const linkBox = box.querySelector('[data-link]');
     linkBox.innerHTML = `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-auto-link>${ctx.esc(ctx.get('purchases.autoLink'))}</button> <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-load-candidates>${ctx.esc(ctx.get('purchases.linkTransaction'))}</button>`;
     linkBox.querySelector('[data-auto-link]').addEventListener('click', async () => {

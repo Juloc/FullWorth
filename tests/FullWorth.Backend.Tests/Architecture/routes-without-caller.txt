@@ -17,8 +17,6 @@
 #   /api/saved-analyses/*           gespeicherte Auswertungen, volles CRUD
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #   /api/category-merge             Kategorien zusammenfuehren
-#   /api/purchase-review            Kaufpruefung - ein Hintergrunddienst schreibt dafuer schon
-#                                   Benachrichtigungen, die ins Leere fuehren
 #
 DELETE /api/budget-groups/{id:guid}
 DELETE /api/saved-analyses/{id:guid}
@@ -32,7 +30,6 @@ GET /api/investments/net-worth-contribution
 GET /api/merchants/resolve
 GET /api/product-learning/category-suggestions
 GET /api/purchase-analytics/by-merchant
-GET /api/purchase-review/{purchaseId:guid}
 GET /api/purchases/discount-analytics
 GET /api/spending-reviews/reasons
 GET /api/tax/profiles
@@ -50,8 +47,6 @@ POST /api/category-merge/{sourceCategoryId:guid}
 POST /api/coach/ask
 POST /api/export/wealth-backup/validate
 POST /api/import/wealth-backup/validate
-POST /api/purchase-review/{purchaseId:guid}/confirm
-POST /api/purchase-review/{purchaseId:guid}/confirm-difference
 POST /api/transaction-bulk/advanced-preview
 POST /api/transaction-bulk/execute
 PUT /api/account-experience/{accountId:guid}/appearance

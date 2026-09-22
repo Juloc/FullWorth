@@ -188,18 +188,19 @@ public static class PurchaseAuthorizationEndpoints
             };
         });
 
+        // Dieselbe Rechnung wie in der Artikelwerkstatt und beim Bestaetigen - siehe
+        // PurchaseReconciliationView. Bis 2026-09-22 stand hier eine zweite, stehengebliebene
+        // Rechnung, die die Zahlung noch aus Purchases.TransactionId las: ein Kauf, der ueber
+        // PurchasePaymentLinks bezahlt ist, galt auf der Kaufseite als "nicht verknuepft" und damit
+        // als stimmig. Trinkgeld, Versand, Gebuehr und die Rabattzeilen kannte sie ebenfalls nicht.
         group.MapGet("/{id:guid}/reconciliation", async (
             Guid id,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            PurchaseAuthorizationStore store,
-            PurchaseReconciliationStore reconciliation,
+            PurchaseWorkspaceService workspace,
             CancellationToken ct) =>
         {
-            var userId = currentUser.RequireUserId();
-            if (await store.GetAccessAsync(userId, fullWorthSpaceId, id, ct) == PurchaseAccessLevel.None)
-                return Results.NotFound();
-            var state = await reconciliation.CalculateAsync(fullWorthSpaceId, id, ct);
+            var state = await workspace.ReconciliationAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return state is null ? Results.NotFound() : Results.Ok(state);
         });
 

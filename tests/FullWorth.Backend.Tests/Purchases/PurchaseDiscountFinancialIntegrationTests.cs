@@ -19,7 +19,8 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
         var spaceId = Guid.NewGuid();
         var purchaseId = Guid.NewGuid();
         var itemId = Guid.NewGuid();
-        await SeedAsync(factory, userId, spaceId, purchaseId, itemId, 36.98m, 35.98m);
+        // Der Beleg: Positionen 42,18 vor Rabatt, ein Korb-Coupon von 6,20, 1,00 Pfand - macht 36,98.
+        await SeedAsync(factory, userId, spaceId, purchaseId, itemId, 36.98m, 42.18m);
 
         using var save = UserRequest(HttpMethod.Put, $"/api/purchases/{purchaseId:D}/financials?fullWorthSpaceId={spaceId:D}", userId,
             JsonContent.Create(new
@@ -45,8 +46,14 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
         using var reconciliationResponse = await client.SendAsync(reconciliation);
         Assert.Equal(HttpStatusCode.OK, reconciliationResponse.StatusCode);
         using var json = JsonDocument.Parse(await reconciliationResponse.Content.ReadAsStringAsync());
-        Assert.Equal("receipt_financials", json.RootElement.GetProperty("reconciliationBasis").GetString());
-        Assert.Equal(36.98m, json.RootElement.GetProperty("calculatedTotal").GetDecimal());
+        // Weder der Coupon noch das Pfand duerfen wie eine fehlende Position aussehen: der Coupon
+        // wird von der Warensumme abgezogen, das Pfand kommt hinzu - und dann stimmt beides, die
+        // Positionsrechnung und die Belegformel.
+        Assert.Equal(42.18m, json.RootElement.GetProperty("subtotalAmount").GetDecimal());
+        Assert.Equal(6.20m, json.RootElement.GetProperty("totalDiscount").GetDecimal());
+        Assert.Equal(1.00m, json.RootElement.GetProperty("depositTotal").GetDecimal());
+        Assert.Equal(36.98m, json.RootElement.GetProperty("formulaTotal").GetDecimal());
+        Assert.True(json.RootElement.GetProperty("formulaReconciled").GetBoolean());
         Assert.Equal(0m, json.RootElement.GetProperty("itemDifference").GetDecimal());
         Assert.True(json.RootElement.GetProperty("itemsReconciled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("fullyReconciled").GetBoolean());
@@ -108,7 +115,7 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
     }
 
     [Fact]
-    public async Task DifferenceConfirmationSurvivesIdOnlyRewriteButInvalidatesOnSemanticChange()
+    public async Task AcceptedDifferenceDoesNotSurviveARewriteOfTheItems()
     {
         using var factory = new BackendWebApplicationFactory();
         using var client = factory.CreateClient();
@@ -118,9 +125,11 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
         var itemId = Guid.NewGuid();
         await SeedAsync(factory, userId, spaceId, purchaseId, itemId, 10m, 8m);
 
-        using var confirm = UserRequest(HttpMethod.Post, $"/api/purchase-review/{purchaseId:D}/confirm-difference?fullWorthSpaceId={spaceId:D}", userId);
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(confirm)).StatusCode);
-        Assert.True(await DifferenceConfirmedAsync(client, userId, spaceId, purchaseId));
+        using var accept = UserRequest(HttpMethod.Post,
+            $"/api/purchases/{purchaseId:D}/reconciliation/accept-difference?fullWorthSpaceId={spaceId:D}", userId,
+            JsonContent.Create(new { kind = "items", reason = "other", note = (string?)null }));
+        Assert.Equal(HttpStatusCode.Created, (await client.SendAsync(accept)).StatusCode);
+        Assert.True(await DifferenceAcceptedAsync(client, userId, spaceId, purchaseId));
 
         using var identicalRewrite = UserRequest(HttpMethod.Put, $"/api/purchases/{purchaseId:D}/items?fullWorthSpaceId={spaceId:D}", userId,
             JsonContent.Create(new[]
@@ -128,7 +137,7 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
                 new { categoryId = (Guid?)null, name = "Kaffee", brand = (string?)null, sku = (string?)null, asin = (string?)null, quantity = 1m, unitPrice = (decimal?)8m, totalPrice = 8m, currency = "EUR", notes = (string?)null }
             }));
         Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(identicalRewrite)).StatusCode);
-        Assert.True(await DifferenceConfirmedAsync(client, userId, spaceId, purchaseId));
+        Assert.False(await DifferenceAcceptedAsync(client, userId, spaceId, purchaseId));
 
         using var semanticRewrite = UserRequest(HttpMethod.Put, $"/api/purchases/{purchaseId:D}/items?fullWorthSpaceId={spaceId:D}", userId,
             JsonContent.Create(new[]
@@ -136,7 +145,7 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
                 new { categoryId = (Guid?)null, name = "Espresso", brand = (string?)null, sku = (string?)null, asin = (string?)null, quantity = 1m, unitPrice = (decimal?)8m, totalPrice = 8m, currency = "EUR", notes = (string?)null }
             }));
         Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(semanticRewrite)).StatusCode);
-        Assert.False(await DifferenceConfirmedAsync(client, userId, spaceId, purchaseId));
+        Assert.False(await DifferenceAcceptedAsync(client, userId, spaceId, purchaseId));
     }
 
     [Fact]
@@ -182,13 +191,13 @@ public sealed class PurchaseDiscountFinancialIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task<bool> DifferenceConfirmedAsync(HttpClient client, Guid userId, Guid spaceId, Guid purchaseId)
+    private static async Task<bool> DifferenceAcceptedAsync(HttpClient client, Guid userId, Guid spaceId, Guid purchaseId)
     {
-        using var request = UserRequest(HttpMethod.Get, $"/api/purchase-review/{purchaseId:D}?fullWorthSpaceId={spaceId:D}", userId);
+        using var request = UserRequest(HttpMethod.Get, $"/api/purchases/{purchaseId:D}/reconciliation?fullWorthSpaceId={spaceId:D}", userId);
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return json.RootElement.GetProperty("differenceConfirmed").GetBoolean();
+        return json.RootElement.GetProperty("acceptedDifferences").EnumerateObject().Any();
     }
 
     private static async Task SeedAsync(BackendWebApplicationFactory factory, Guid userId, Guid spaceId, Guid purchaseId, Guid itemId, decimal purchaseTotal, decimal itemTotal)
