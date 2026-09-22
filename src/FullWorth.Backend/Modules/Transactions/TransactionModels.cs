@@ -47,6 +47,12 @@ public sealed class FinanceTransaction
     /// Reihenfolge, die beim naechsten Schreibpfad vergessen wird - deshalb nur lesbar.
     /// </summary>
     public string TimelineSortKey { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Der Wortindex ueber Gegenpartei, Verwendungszweck und Notiz (#161). Ebenfalls von der
+    /// Datenbank gerechnet und hier nur lesbar.
+    /// </summary>
+    public NpgsqlTypes.NpgsqlTsVector? SearchVector { get; private set; }
 }
 
 // A split allocation line on a transaction. Amount uses the ledger sign convention and all lines NET

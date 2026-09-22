@@ -194,15 +194,45 @@ public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore tr
         if (!string.IsNullOrWhiteSpace(request.Query))
         {
             var pattern = $"%{request.Query.Trim()}%";
-            q = q.Where(x =>
-                (x.Counterparty != null && EF.Functions.ILike(x.Counterparty, pattern)) ||
-                (x.NormalizedCounterparty != null && EF.Functions.ILike(x.NormalizedCounterparty, pattern)) ||
-                (x.Description != null && EF.Functions.ILike(x.Description, pattern)) ||
-                (x.UserNote != null && EF.Functions.ILike(x.UserNote, pattern)) ||
-                db.Purchases.Any(p =>
-                    (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
-                    (p.Visibility != "private" || p.CreatedByUserId == userId) &&
-                    (EF.Functions.ILike(p.Merchant, pattern) || p.Items.Any(i => EF.Functions.ILike(i.Name, pattern)))));
+
+            // Die Treffer aus Kaeufen werden VORAB zu Buchungskennungen aufgeloest, statt als
+            // Unterabfrage neben der Textsuche zu stehen (#161).
+            //
+            // Das ist der ganze Unterschied zwischen 160 ms und 0,08 ms, gemessen an 200 000
+            // Buchungen: ein "ODER EXISTS(...)" neben dem Wortindex zwingt PostgreSQL, jede Zeile zu
+            // pruefen - der GIN-Index wird wertlos. Zwei Bedingungen auf derselben Tabelle kann es
+            // dagegen als BitmapOr ueber ZWEI Indizes zusammenlegen.
+            //
+            // Die Kauf-Abfrage selbst laeuft auf einer viel kleineren Tabelle und bleibt eine
+            // Textsuche: Artikelnamen sind kurz, und ein eigener Wortindex dafuer waere ein zweites
+            // Suchdokument, das mit dem ersten auseinanderlaufen kann.
+            // Ein Kauf zeigt auf zwei Weisen auf eine Buchung: direkt, oder ueber eine
+            // Zahlungsverknuepfung. Zwei einfache Abfragen statt einer verschachtelten - die liesse
+            // sich nicht uebersetzen, und ein Ausdruck, den der Anbieter erst zur Laufzeit ablehnt,
+            // ist eine Fehlermeldung statt einer Suche.
+            var matchingPurchases = db.Purchases.AsNoTracking().Where(p =>
+                (p.Visibility != "private" || p.CreatedByUserId == userId) &&
+                (EF.Functions.ILike(p.Merchant, pattern) || p.Items.Any(i => EF.Functions.ILike(i.Name, pattern))));
+
+            var direct = await matchingPurchases
+                .Where(p => p.TransactionId != null)
+                .Select(p => p.TransactionId!.Value)
+                .Distinct().Take(5000).ToArrayAsync(ct);
+            var viaLinks = await matchingPurchases
+                .SelectMany(p => p.PaymentLinks.Select(link => link.TransactionId))
+                .Distinct().Take(5000).ToArrayAsync(ct);
+            var purchaseMatches = direct.Concat(viaLinks).Distinct().ToArray();
+
+            // Wortanfang statt irgendwo im Wort: "REW" findet "REWE". Der Doppelpunkt-Stern ist die
+            // Praefix-Schreibweise von PostgreSQL; die Anfuehrungszeichen halten alles, was der
+            // Benutzer tippt, als EIN Wort zusammen - sonst waere ein ":" in seiner Eingabe plötzlich
+            // Syntax.
+            var term = TransactionSearchTerm.ToPrefixQuery(request.Query);
+            q = term is null
+                ? q.Where(x => purchaseMatches.Contains(x.Id))
+                : q.Where(x =>
+                    x.SearchVector!.Matches(EF.Functions.ToTsQuery("simple", term)) ||
+                    purchaseMatches.Contains(x.Id));
         }
 
         var descending = !string.Equals(request.Order, "asc", StringComparison.OrdinalIgnoreCase);

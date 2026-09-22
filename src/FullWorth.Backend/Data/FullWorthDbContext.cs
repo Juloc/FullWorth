@@ -269,10 +269,15 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             {
                 timelineSortKey.ValueGeneratedOnAddOrUpdate();
                 e.HasIndex(x => new { x.AccountId, x.TimelineSortKey });
+                e.Property(x => x.SearchVector).ValueGeneratedOnAddOrUpdate();
+                e.HasIndex(x => x.SearchVector).HasMethod("GIN");
             }
             else
             {
                 timelineSortKey.IsRequired(false);
+                // SQLite kennt keinen tsvector. Die Unit-Tests suchen nicht; die Volltextsuche
+                // pruefen die Integrationstests auf echtem PostgreSQL.
+                e.Ignore(x => x.SearchVector);
             }
             e.HasIndex(x => x.BookingDate);
             e.HasIndex(x => x.CategoryId);
