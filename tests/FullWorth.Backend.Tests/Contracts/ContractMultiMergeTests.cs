@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.Contracts;
@@ -219,7 +220,11 @@ public sealed class ContractMultiMergeTests
 
         Assert.Contains(".contracts-selection", css);
         Assert.Contains(".contract-merge-survivor", css);
-        Assert.DoesNotContain("#", css);
+        // Geprueft werden die REGELN, nicht die Kommentare. Ein '#' in einem Kommentar ist keine
+        // fest verdrahtete Farbe - eine Issue-Nummer sieht nur so aus, und den Waechter daran
+        // scheitern zu lassen hiesse, Kommentare zu verbieten statt Farben.
+        var rules = Regex.Replace(css, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        Assert.DoesNotContain("#", rules);
 
         // Das Stylesheet hing früher an contracts.js und wurde beim ersten Besuch der Seite per
         // JavaScript nachgeladen — die Ansicht zeichnete also einmal ungestylt und baute dann um.

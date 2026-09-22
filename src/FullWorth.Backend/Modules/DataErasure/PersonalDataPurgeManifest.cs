@@ -89,6 +89,15 @@ public static class PersonalDataPurgeManifest
         // How this installation identifies itself to a bank. The FinTS product id is issued per
         // registered product, so it survives every account deletion - there is no person in it.
         typeof(BankingInstanceSettings),
+        // Zwei Zwischenspeicher, die ein Hintergrunddienst fuellt: ob ein Anbieter gerade erreichbar
+        // ist, und welche Institute er kennt. Beides beschreibt die Aussenwelt, nicht einen Nutzer -
+        // sie stehen schon da, bevor sich jemand anmeldet, und ein geloeschtes Konto aendert an der
+        // Erreichbarkeit einer Bank nichts. Wer sie mitloeschte, wuerfe die Arbeit aller anderen weg
+        // und liesse die Kontoanlage bis zum naechsten Lauf ohne Institutsliste dastehen.
+        typeof(BankingProviderStatus),
+        typeof(BankingProviderStatusRefresh),
+        typeof(BankingInstitution),
+        typeof(BankingInstitutionRefresh),
         // Which data encryption key this installation's rows belong to. No person in it, and deleting
         // it would be actively harmful: the guard would re-baseline against whatever key is mounted
         // next, which is exactly the check it exists to make.

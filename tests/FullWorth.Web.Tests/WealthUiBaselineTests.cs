@@ -284,8 +284,13 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var sw = await GetAsync("/sw.js");
 
         Assert.Contains("portability.js", wrapper);
-        Assert.Contains("api/export/wealth-backup", portability);
-        Assert.Contains("Accept: 'application/zip'", portability);
+        // Der Kopfzeilenwert steht nicht mehr als Literal im Downloadpfad: seit CSV und XLSX
+        // denselben Pfad benutzen, bringt ihn jeder Aufrufer mit. Gepinnt wird deshalb beides -
+        // dass der Pfad den Wert des Aufrufers sendet, und dass die Sicherung ein ZIP verlangt.
+        // Nur nach "application/zip" irgendwo in der Datei zu suchen waere hier zu wenig: den
+        // Wert schickt auch der CSV-Export.
+        Assert.Contains("headers: { Accept: accept }", portability);
+        Assert.Matches(@"path: 'api/export/wealth-backup',\s*accept: 'application/zip'", portability);
         Assert.Contains("cache: 'no-store'", portability);
         // stopImmediatePropagation is gone: it used to guard against a legacy patch-layer handler
         // double-firing alongside the real one. app.js now wires #export-data to downloadWealthBackup
