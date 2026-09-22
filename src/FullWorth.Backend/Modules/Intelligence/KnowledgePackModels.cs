@@ -243,6 +243,58 @@ public sealed class CustomBrandAlias
     public string Country { get; set; } = "GLOBAL";
 }
 
+/// <summary>
+/// Ein selbst recherchiertes Logo (#176). Dieselben Felder wie ein Logo aus einem Paket, damit der
+/// Katalog es nicht anders behandeln muss - nur die Herkunft ist eine andere, und sie steht in
+/// <see cref="SourceUrl"/>.
+/// </summary>
+public sealed class ResearchedBrandAsset
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string BrandKey { get; set; } = string.Empty;
+    public string CanonicalName { get; set; } = string.Empty;
+    public string LogoKey { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "image/svg+xml";
+    public string ContentSha256 { get; set; } = string.Empty;
+    public int ByteLength { get; set; }
+    public string? SourceUrl { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class ResearchedBrandAlias
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string AliasKey { get; set; } = string.Empty;
+    public string BrandKey { get; set; } = string.Empty;
+    public string Country { get; set; } = "GLOBAL";
+}
+
+/// <summary>
+/// Ein Versuch, zu einem Haendlernamen ein Logo zu finden - mit seinem Ergebnis (#176).
+///
+/// Das ist die Antwort auf "wie oft": EIN Versuch je Name. Ohne dieses Gedaechtnis wuerde ein frischer
+/// Import mit hunderten unbekannten Haendlern hunderte Aufrufe ausloesen, und bei jedem weiteren
+/// Import wieder. Auch ein Misserfolg wird gemerkt; nach <see cref="RetryAfterDays"/> Tagen darf es
+/// erneut versucht werden, weil eine Marke inzwischen ein SVG bereitstellen kann.
+///
+/// Gemerkt wird der HASH des Namens, nicht der Name. Diese Tabelle gehoert der Instanz und ueberlebt
+/// das Loeschen eines Kontos - und eine Gegenpartei ist nicht immer eine Firma: eine Ueberweisung von
+/// "Max Mustermann" haette hier sonst dauerhaft einen Personennamen hinterlassen, den niemand mehr
+/// loeschen kann. Fuer die einzige Frage, die diese Tabelle beantwortet ("schon versucht?"), ist der
+/// Hash genau so gut. Ein <see cref="ResearchedBrandAlias"/> traegt den Namen im Klartext, aber den
+/// gibt es nur, wenn wirklich ein Logo gefunden wurde - also nur fuer eine Marke mit eigener Website.
+/// </summary>
+public sealed class BrandLogoResearchAttempt
+{
+    public const int RetryAfterDays = 30;
+
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string AliasHash { get; set; } = string.Empty;
+    public string Outcome { get; set; } = string.Empty;
+    public string? Domain { get; set; }
+    public DateTimeOffset AttemptedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class OfficialBrandAlias
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -404,6 +456,35 @@ public static class KnowledgePackModelConfiguration
             entity.Property(x => x.AliasKey).HasMaxLength(300);
             entity.Property(x => x.BrandKey).HasMaxLength(120);
             entity.Property(x => x.Country).HasMaxLength(8);
+        });
+
+        modelBuilder.Entity<ResearchedBrandAsset>(entity =>
+        {
+            entity.HasIndex(x => x.BrandKey).IsUnique();
+            entity.HasIndex(x => x.ContentSha256);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.CanonicalName).HasMaxLength(200);
+            entity.Property(x => x.LogoKey).HasMaxLength(120);
+            entity.Property(x => x.MediaType).HasMaxLength(80);
+            entity.Property(x => x.ContentSha256).HasMaxLength(64);
+            entity.Property(x => x.SourceUrl).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<ResearchedBrandAlias>(entity =>
+        {
+            entity.HasIndex(x => new { x.AliasKey, x.Country }).IsUnique();
+            entity.HasIndex(x => x.BrandKey);
+            entity.Property(x => x.AliasKey).HasMaxLength(300);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.Country).HasMaxLength(8);
+        });
+
+        modelBuilder.Entity<BrandLogoResearchAttempt>(entity =>
+        {
+            entity.HasIndex(x => x.AliasHash).IsUnique();
+            entity.Property(x => x.AliasHash).HasMaxLength(64);
+            entity.Property(x => x.Outcome).HasMaxLength(40);
+            entity.Property(x => x.Domain).HasMaxLength(253);
         });
 
         modelBuilder.Entity<OfficialBrandAlias>(entity =>

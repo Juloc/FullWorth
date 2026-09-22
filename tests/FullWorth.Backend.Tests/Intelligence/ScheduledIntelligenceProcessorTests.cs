@@ -248,6 +248,12 @@ public sealed class ScheduledIntelligenceProcessorTests
                 adapters,
                 new IntelligenceDigestService(intelligenceDb, financeDb),
                 new AiAccessResolver(intelligenceDb, store, registry),
+                // Die Logo-Recherche laeuft hier nie: sie holt sich ihren Zugang selbst, und in
+                // dieser Fixture ist das Modul nicht freigegeben.
+                new BrandLogoResearchService(
+                    intelligenceDb, store, new AiAccessResolver(intelligenceDb, store, registry),
+                    budgetGuard, costEstimator, new BrandLogoFetcher(new HttpClient()),
+                    NullLogger<BrandLogoResearchService>.Instance),
                 NullLogger<ScheduledIntelligenceJobProcessor>.Instance);
 
             return new Fixture(

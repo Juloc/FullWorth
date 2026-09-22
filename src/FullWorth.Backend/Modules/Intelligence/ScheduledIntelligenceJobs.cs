@@ -190,6 +190,7 @@ public sealed class ScheduledIntelligenceJobProcessor(
     ScheduledDomainIntelligenceAdapters domainAdapters,
     IntelligenceDigestService digests,
     AiAccessResolver access,
+    BrandLogoResearchService logoResearch,
     ILogger<ScheduledIntelligenceJobProcessor> logger,
     FinancialSignalJobProcessor? signalProcessor = null)
 {
@@ -302,6 +303,12 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
 
                 await digests.BuildAsync(job.Type, fullWorthSpaceId, digestNow, ct);
             }
+
+            // Logos ohne Cloud (#176). Die Freigabe prueft der Aufloeser selbst - hier steht nur der
+            // Deckel: ein frischer Import kann hunderte unbekannte Haendler mitbringen, und die alle
+            // in einem Lauf nachzuschlagen waere eine Rechnung, die niemand bestellt hat. Der naechste
+            // Lauf nimmt die naechsten.
+            await ResearchLogosAsync(ct);
 
             await CompleteAsync(job, ct);
         }
@@ -569,6 +576,40 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
         }
 
         return results;
+    }
+
+    /// <summary>So viele unbekannte Haendler bekommt ein Lauf - der naechste nimmt die naechsten.</summary>
+    private const int LogoResearchPerRun = 25;
+
+    /// <summary>
+    /// Die haeufigsten Haendlernamen, die noch kein Logo haben, einer nach dem anderen. Haeufig zuerst,
+    /// weil ein Logo dort am meisten zu sehen ist.
+    /// </summary>
+    private async Task ResearchLogosAsync(CancellationToken ct)
+    {
+        var names = await financeDb.Transactions.AsNoTracking()
+            .Where(x => x.NormalizedCounterparty != null && x.NormalizedCounterparty != "")
+            .GroupBy(x => x.NormalizedCounterparty!)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.Key)
+            .Take(LogoResearchPerRun * 8)
+            .ToListAsync(ct);
+
+        var done = 0;
+        foreach (var name in names)
+        {
+            if (done >= LogoResearchPerRun) break;
+            ct.ThrowIfCancellationRequested();
+            var outcome = await logoResearch.ResearchAsync(name, null, ct);
+            // Nur ein echter Versuch zaehlt gegen den Deckel. "Kennen wir schon" und "haben wir erst
+            // neulich versucht" kosten nichts und duerfen den Lauf nicht auffuellen.
+            if (outcome is not (BrandLogoResearchService.OutcomeAlreadyKnown or BrandLogoResearchService.OutcomeRecentlyTried))
+                done++;
+            // Nicht freigegeben heisst: hier gibt es nichts zu tun. Anbieter nicht erreichbar heisst:
+            // die naechsten hundert Aufrufe scheitern genauso. Beides beendet den Lauf, aber aus
+            // verschiedenen Gruenden - deshalb stehen sie als zwei Ergebnisse da und nicht als eines.
+            if (outcome is BrandLogoResearchService.OutcomeNoAccess or BrandLogoResearchService.OutcomeProviderFailed) return;
+        }
     }
 
     private async Task CompleteAsync(IntelligenceJob job, CancellationToken ct)

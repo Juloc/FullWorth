@@ -187,6 +187,21 @@ public static class BackendApplication
         builder.Services.AddScoped<FinancialSignalJobProcessor>();
         builder.Services.AddSingleton<DeterministicCoachEngine>();
         builder.Services.AddScoped<AiAccessResolver>();
+        builder.Services.AddScoped<BrandLogoResearchService>();
+        // Der einzige Client, der eine Adresse abruft, die mittelbar aus Nutzerdaten stammt (#176).
+        // Keine Umleitung: eine Umleitung waere die frei gewaehlte Adresse durch die Hintertuer, und
+        // sie umginge die Pruefung, dass jede Adresse hinter dem Namen oeffentlich ist.
+        builder.Services.AddHttpClient<BrandLogoFetcher>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-logo-research)");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                UseDefaultCredentials = false
+            });
         builder.Services.AddScoped<CollectionSuggestionAiAdapter>();
         builder.Services.AddScoped<CoachAiAccessResolver>();
         builder.Services.AddScoped<CoachModelCatalogService>();

@@ -43,6 +43,9 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<CustomBrandPack> CustomBrandPacks => Set<CustomBrandPack>();
     public DbSet<CustomBrandAsset> CustomBrandAssets => Set<CustomBrandAsset>();
     public DbSet<CustomBrandAlias> CustomBrandAliases => Set<CustomBrandAlias>();
+    public DbSet<ResearchedBrandAsset> ResearchedBrandAssets => Set<ResearchedBrandAsset>();
+    public DbSet<ResearchedBrandAlias> ResearchedBrandAliases => Set<ResearchedBrandAlias>();
+    public DbSet<BrandLogoResearchAttempt> BrandLogoResearchAttempts => Set<BrandLogoResearchAttempt>();
     public DbSet<OfficialOntologyEntity> OfficialOntologyEntities => Set<OfficialOntologyEntity>();
     public DbSet<OfficialOntologyAlias> OfficialOntologyAliases => Set<OfficialOntologyAlias>();
     public DbSet<OfficialOntologyRedirect> OfficialOntologyRedirects => Set<OfficialOntologyRedirect>();

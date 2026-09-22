@@ -118,6 +118,13 @@ public static class PersonalDataPurgeManifest
         typeof(CustomBrandAsset),
         typeof(CustomBrandAlias),
         typeof(BrandAssetBlob),
+        // Selbst recherchierte Logos (#176). Nachschlagewerk der Instanz wie die Pakete daneben: der
+        // Schluessel ist ein Markenname, kein Mensch. Sie beim Loeschen eines Kontos mitzunehmen wuerde
+        // allen anderen Benutzern ihre Logos wegnehmen - und der einzige Bezug zu einer Person, der
+        // Haendlername aus einer Buchung, verschwindet ohnehin mit der Buchung.
+        typeof(ResearchedBrandAsset),
+        typeof(ResearchedBrandAlias),
+        typeof(BrandLogoResearchAttempt),
         typeof(KnowledgePackArchive),
         typeof(KnowledgePackInstallation),
         // The verification key this installation pinned for its Cloud. A public key with no person in

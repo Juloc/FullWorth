@@ -388,6 +388,10 @@ public sealed class BrandPackService(IntelligenceDbContext db)
         var customAliases = packIds.Length == 0
             ? new List<CustomBrandAlias>()
             : await db.CustomBrandAliases.AsNoTracking().Where(x => packIds.Contains(x.PackId)).ToListAsync(ct);
+        // Selbst recherchiert (#176): dieselbe Ablage, dieselbe Auslieferung, nur die schwaechste
+        // Herkunft. Sie fuellt, was kein Paket abdeckt, und ueberschreibt nie etwas Kuratiertes.
+        var researchedAssets = await db.ResearchedBrandAssets.AsNoTracking().ToListAsync(ct);
+        var researchedAliases = await db.ResearchedBrandAliases.AsNoTracking().ToListAsync(ct);
 
         var assets = new Dictionary<string, BrandCatalogAssetView>(StringComparer.Ordinal);
         foreach (var pack in packs)
@@ -405,6 +409,14 @@ public sealed class BrandPackService(IntelligenceDbContext db)
                 continue;
             assets[asset.BrandKey] = ToView(asset, "official", 0);
         }
+        foreach (var asset in researchedAssets)
+        {
+            if (assets.ContainsKey(asset.BrandKey) || !blobHashes.Contains(asset.ContentSha256))
+                continue;
+            assets[asset.BrandKey] = new BrandCatalogAssetView(
+                asset.BrandKey, asset.CanonicalName, asset.LogoKey, asset.ContentSha256,
+                null, asset.SourceUrl, null, "researched", -1);
+        }
 
         var aliases = new List<BrandCatalogAliasView>();
         foreach (var pack in packs)
@@ -412,6 +424,8 @@ public sealed class BrandPackService(IntelligenceDbContext db)
                 .Select(x => new BrandCatalogAliasView(x.AliasKey, x.BrandKey, x.Country, $"custom:{pack.Name}", pack.Priority)));
         aliases.AddRange(officialAliases.Select(x =>
             new BrandCatalogAliasView(x.AliasKey, x.BrandKey, x.Country, "official", 0)));
+        aliases.AddRange(researchedAliases.Select(x =>
+            new BrandCatalogAliasView(x.AliasKey, x.BrandKey, x.Country, "researched", -1)));
 
         return (
             assets.Values.OrderByDescending(x => x.Priority).ThenBy(x => x.BrandKey).ToList(),
