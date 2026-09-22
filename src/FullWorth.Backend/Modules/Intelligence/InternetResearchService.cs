@@ -5,7 +5,8 @@ namespace FullWorth.Backend.Modules.Intelligence;
 
 /// <summary>Was ueber ein Geschaeft herauskam. <see cref="Kind"/> und <see cref="Summary"/> sind nur bei Erfolg gefuellt.</summary>
 public sealed record BusinessDescription(
-    string Outcome, string? Domain, string? Url, string? Kind, string? Summary, string? CategoryKey = null);
+    string Outcome, string? Domain, string? Url, string? Kind, string? Summary,
+    string? CategoryKey = null, string? Title = null);
 
 /// <summary>
 /// Nachschlagen im Netz, ohne Cloud (#176) - und zwar genau eine Frage: <b>was fuer ein Geschaeft ist
@@ -139,6 +140,7 @@ Return only JSON matching the supplied schema.
         var page = await fetcher.FetchHomepageAsync(domain.Value, ct);
         var text = page.Html is null ? null : WebPageText.Extract(page.Html, MaximumPageChars);
         if (text is null) return await RecordAsync(attempt, hash, OutcomeNoText, domain.Value, ct);
+        var title = WebPageText.ExtractTitle(page.Html!, 120);
 
         var described = await AskAsync(
             resolved, "internet-research-describe", DescribeInstruction, DescribeSchema(categoryKeys),
@@ -151,7 +153,7 @@ Return only JSON matching the supplied schema.
         await RecordAsync(attempt, hash, OutcomeOk, domain.Value, ct);
         return new BusinessDescription(
             OutcomeOk, domain.Value, page.Url,
-            described.Value.Value.Kind, described.Value.Value.Summary, described.Value.Value.CategoryKey);
+            described.Value.Value.Kind, described.Value.Value.Summary, described.Value.Value.CategoryKey, title);
     }
 
     private async Task<(bool Failed, T? Value)> AskAsync<T>(

@@ -14,7 +14,10 @@ public sealed class ScheduledDomainIntelligenceAdapters(
     IntelligenceStore store,
     IntelligenceProviderRegistry providers,
     AiBudgetGuard budgetGuard,
-    AiCostEstimator costEstimator)
+    AiCostEstimator costEstimator,
+    // Optional: ohne freigegebenes Modul gibt es hier nichts nachzuschlagen, und die Tests bauen den
+    // Adapter ohne. Siehe ResearchUnansweredProvidersAsync.
+    InternetResearchService? research = null)
 {
     private const int CandidateLimit = 30;
 
@@ -419,6 +422,7 @@ Use a supplied categoryKey or the literal string "unknown". Do not invent candid
 
         var categoryKeys = categories.Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
         var candidateKeys = candidates.ToDictionary(x => $"{x.Currency}\n{x.Merchant}", StringComparer.OrdinalIgnoreCase);
+        var answered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var accepted = 0;
         using var doc = JsonDocument.Parse(response.Provider.OutputJson);
         foreach (var element in Suggestions(doc.RootElement))
@@ -467,10 +471,81 @@ Use a supplied categoryKey or the literal string "unknown". Do not invent candid
                 RunId = response.Run.Id
             }, ct);
             AddRunItem(response.Run.Id, "contract-candidate", subjectId, candidate, element.GetRawText());
+            answered.Add($"{candidate.Currency}\n{candidate.Merchant}");
             accepted++;
         }
         await intelligenceDb.SaveChangesAsync(ct);
         await store.CompleteRunAsync(response.Run.Id, true, accepted, response.Provider.InputTokens, response.Provider.OutputTokens, null, ct);
+
+        // Wen das Modell aus eigener Kenntnis nicht benennen konnte, schlagen wir nach (#176) - aber
+        // nur dann. Das ist die zweite Haelfte dessen, was "Internet-Recherche" beantworten soll, und
+        // sie steht hier und nicht in einem eigenen Ablauf: die Kandidaten sind schon ermittelt,
+        // gefiltert und gegen bestehende Vertraege und abgelehnte Vorschlaege geprueft. Das ein
+        // zweites Mal zu bauen hiesse, zwei Fassungen derselben Erkennung zu pflegen.
+        await ResearchUnansweredProvidersAsync(fullWorthSpaceId, candidates, answered, categoryKeys, ct);
+    }
+
+    /// <summary>So viele Kandidaten bekommt ein Lauf - der naechste nimmt die naechsten.</summary>
+    private const int ProviderResearchPerRun = 5;
+
+    private async Task ResearchUnansweredProvidersAsync(
+        Guid fullWorthSpaceId,
+        IReadOnlyList<ContractCandidate> candidates,
+        HashSet<string> answered,
+        HashSet<string> categoryKeys,
+        CancellationToken ct)
+    {
+        if (research is null) return;
+        var done = 0;
+        foreach (var candidate in candidates)
+        {
+            if (done >= ProviderResearchPerRun) break;
+            ct.ThrowIfCancellationRequested();
+            if (answered.Contains($"{candidate.Currency}\n{candidate.Merchant}")) continue;
+
+            var described = await research.DescribeAsync(candidate.Merchant, null, categoryKeys, ct);
+            if (described.Outcome is InternetResearchService.OutcomeNoAccess
+                or InternetResearchService.OutcomeProviderFailed
+                or InternetResearchService.OutcomeBudget) return;
+            if (described.Outcome != InternetResearchService.OutcomeOk) continue;
+            done++;
+            // Ohne Art des Geschaefts gibt es nichts vorzuschlagen - der Anbietername allein sagt
+            // nicht, dass dahinter ein Vertrag steckt.
+            if (described.Kind is null) continue;
+
+            await store.TryAddSuggestionAsync(new IntelligenceSuggestion
+            {
+                FullWorthSpaceId = fullWorthSpaceId,
+                Type = "contract-enrichment",
+                SubjectType = "contract-candidate",
+                SubjectId = ContractSubjectId(candidate.Merchant, candidate.Currency),
+                SemanticKey = "contract-enrichment:v1",
+                ProposedPayloadJson = JsonSerializer.Serialize(new
+                {
+                    // Der Seitentitel ist der Name, unter dem sich der Anbieter selbst nennt - besser
+                    // als der Text auf einem Kontoauszug. Fehlt er, bleibt der Buchungstext.
+                    providerName = described.Title ?? candidate.Merchant,
+                    contractKind = described.Kind,
+                    categoryKey = described.CategoryKey,
+                    candidate.TypicalAmount,
+                    candidate.Currency,
+                    candidate.MedianGapDays
+                }),
+                EvidenceJson = JsonSerializer.Serialize(new
+                {
+                    source = "internet-research",
+                    described.Domain,
+                    described.Url,
+                    candidate.Samples,
+                    candidate.AmountVariation,
+                    evidenceSummary = described.Summary
+                }),
+                Provider = "internet-research",
+                Model = string.Empty,
+                Confidence = 0.5m
+            }, ct);
+        }
+        await intelligenceDb.SaveChangesAsync(ct);
     }
 
     private async Task<ProviderExecution> ExecuteAsync(

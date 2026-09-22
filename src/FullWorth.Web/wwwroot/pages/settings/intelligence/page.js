@@ -136,6 +136,7 @@ const MODULE_LABELS = {
   'products': 'Produkte',
   'contracts': 'Verträge',
   'coach': 'Coach',
+  'collection-suggestions': 'Sammlungen',
   'logo-research': 'Logo-Recherche',
   'internet-research': 'Internet-Recherche'
 };

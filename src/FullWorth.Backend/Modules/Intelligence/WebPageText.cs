@@ -30,6 +30,28 @@ public static partial class WebPageText
     [GeneratedRegex(@"\s+", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex Whitespace();
 
+    [GeneratedRegex(@"<title\b[^>]*>(.*?)</title\s*>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline, matchTimeoutMilliseconds: 2000)]
+    private static partial Regex Title();
+
+    /// <summary>
+    /// Der Titel der Seite - meist der Name, unter dem sich ein Anbieter selbst nennt, und damit
+    /// besser als der Text auf einem Kontoauszug. Null, wenn die Seite keinen hat.
+    /// </summary>
+    public static string? ExtractTitle(string html, int maxChars)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return null;
+        try
+        {
+            var match = Title().Match(html);
+            if (!match.Success) return null;
+            var text = Whitespace().Replace(WebUtility.HtmlDecode(Tags().Replace(match.Groups[1].Value, " ")), " ").Trim();
+            if (text.Length == 0) return null;
+            return text.Length <= maxChars ? text : text[..maxChars];
+        }
+        catch (RegexMatchTimeoutException) { return null; }
+    }
+
     /// <summary>
     /// Null, wenn nichts Lesbares uebrig bleibt. Die Laengenbegrenzung ist kein Schoenheitsmittel: was
     /// an die KI geht, wird bezahlt, und eine Startseite ist selten dort interessant, wo sie lang wird.

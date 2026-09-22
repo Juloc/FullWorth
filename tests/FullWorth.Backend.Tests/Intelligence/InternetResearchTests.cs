@@ -162,6 +162,18 @@ public sealed class InternetResearchTests
         Assert.Contains("categoryKeys.Select(key => JsonSerializer.Serialize(key))", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Der Seitentitel ist der Name, unter dem sich ein Anbieter selbst nennt - und damit besser als
+    /// der Text auf einem Kontoauszug, wo aus "Stadtwerke Muenchen" gern "SWM 4711 LASTSCHRIFT" wird.
+    /// </summary>
+    [Theory]
+    [InlineData("<html><head><title>Stadtwerke M&uuml;nchen</title></head><body>x</body></html>", "Stadtwerke München")]
+    [InlineData("<html><head><TITLE>  Netflix  </TITLE></head></html>", "Netflix")]
+    [InlineData("<html><head></head><body>ohne Titel</body></html>", null)]
+    [InlineData("<html><head><title>   </title></head></html>", null)]
+    public void The_page_title_becomes_the_provider_name(string html, string? expected) =>
+        Assert.Equal(expected, WebPageText.ExtractTitle(html, 120));
+
     private static string Root()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
