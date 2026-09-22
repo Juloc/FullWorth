@@ -31,7 +31,6 @@ GET /api/merchants/resolve
 GET /api/product-learning/category-suggestions
 GET /api/purchase-analytics/by-merchant
 GET /api/purchases/discount-analytics
-GET /api/spending-reviews/reasons
 GET /api/tax/profiles
 POST /api/account-experience/reorder
 POST /api/account-experience/{accountId:guid}/seen

@@ -292,7 +292,6 @@ GET              /api/push/subscriptions
 GET              /api/push/vapid-public-key
 GET              /api/reconciliation/securities-bookings
 GET              /api/saved-analyses/
-GET              /api/spending-reviews/reasons
 GET              /api/spending-reviews/recent
 GET              /api/spending-reviews/summary
 GET              /api/spending-reviews/transactions/{transactionId:guid}

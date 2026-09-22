@@ -8,8 +8,10 @@ public static class CoachEndpoints
     {
         var group = app.MapGroup("/api/spending-reviews").WithTags("Spending Reviews");
 
-        group.MapGet("/reasons", () => Results.Ok(SpendingReviewService.ReasonCatalog));
-
+        // Es gab hier ein GET /reasons, das den Katalog ausgeliefert haette. Niemand hat es je
+        // aufgerufen: die Knoepfe stehen mitsamt ihren Beschriftungen im Frontend, und ein Katalog,
+        // den man erst laedt, verschiebt sie nach dem ersten Zeichnen. Dass die beiden Listen
+        // trotzdem nicht auseinanderlaufen, haelt SpendingReviewReasonParityTests fest.
         group.MapGet("/transactions/{transactionId:guid}", async (
             Guid transactionId,
             Guid fullWorthSpaceId,
