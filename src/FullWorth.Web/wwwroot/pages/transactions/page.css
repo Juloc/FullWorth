@@ -303,3 +303,17 @@
 /* #146: die zwei Auswege, wenn es keine Gegenbuchung gibt. Abgesetzt von der Kandidatenliste, damit
    sie nicht wie ein weiterer Kandidat aussehen - aber im selben Dialog, weil es dieselbe Frage ist. */
 .tx-transfer-external { border-top: 1px solid var(--border); margin-top: var(--s3); padding-top: var(--s3); }
+
+/* Nachlade-Ankerpunkte (#139 Prognose, #161 aeltere Buchungen). Sie zeigen nichts, brauchen aber eine
+   Hoehe: ein Element ohne Flaeche hat keinen Schnittbereich, und ob ein IntersectionObserver dafuer
+   ueberhaupt meldet, unterscheidet sich zwischen Browsern. Ein Pixel ist unsichtbar und eindeutig.
+   Die letzte Buchungszeile davor behaelt ohne die zweite Regel ihre Trennlinie und zeichnet damit
+   einen Strich unter das Listenende, den es dort sonst nicht gibt. */
+.tx-forecast-sentinel,.tx-more-sentinel{height:1px}
+.tx-row:has(+ .tx-more-sentinel){border-bottom:0}
+
+/* #161: eine Zeile, die gerade nicht im Bild ist, muss nicht vermessen und nicht gezeichnet werden.
+   Die Klasse setzt page.js erst, NACHDEM die Zeile einmal wirklich vermessen wurde und ihre echte
+   Hoehe in contain-intrinsic-size steht - vorher waere die Liste beim Nachladen verrutscht (die
+   Messung steht bei parkRows). */
+.tx-row.tx-parked{content-visibility:auto}

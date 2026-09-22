@@ -228,6 +228,10 @@ function scrollHost() {
 // Kategoriefiltern: wer nach "Lebensmittel" filtert, sieht weiterhin den echten Kontostand des Kontos
 // und keinen erfundenen Saldo aus Lebensmittelbuchungen (#126).
 let dayBalances = new Map();
+// Welche Tage schon abgefragt wurden - nicht, welche eine Antwort hatten. Ein Tag ohne belastbaren
+// Stand liefert keinen Punkt, und ohne dieses Gedaechtnis waere er bei jedem Nachladen wieder
+// "fehlend" und zoege die Zeitspanne der naechsten Abfrage immer weiter auf.
+let dayBalancesAsked = new Set();
 let dayAnchors = [];
 let dayBarFrame = 0;
 // Ob die aktuell gezeichnete Liste aufsteigend sortiert ist (#139, Teil 2) - nur dann bedeutet "heute"
@@ -246,16 +250,57 @@ let forecastObserver = null;
 let forecastLoadingMore = false;
 let forecastArmHost = null;
 let forecastArmListener = null;
-// Wird pro renderTransactions()-Aufruf erhoeht, bevor irgendein await passiert - loadMoreForecast()
-// haelt seine eigene Nummer und prueft sie nach dem Abruf gegen den aktuellen Stand. Ohne das koennte
-// ein schneller Konto-/Gruppenwechsel waehrend eine Nachlade-Anfrage noch unterwegs ist deren Antwort
-// in die inzwischen laengst andere, angezeigte Liste splicen (fremdes Konto, falscher Anker).
-let forecastRenderId = 0;
+// Wird pro renderTransactions()-Aufruf erhoeht, bevor irgendein await passiert - jeder Nachlader
+// (Prognose wie Buchungen) haelt seine eigene Nummer und prueft sie nach dem Abruf gegen den
+// aktuellen Stand. Ohne das koennte ein schneller Konto-/Gruppenwechsel waehrend eine Nachlade-Anfrage
+// noch unterwegs ist deren Antwort in die inzwischen laengst andere, angezeigte Liste splicen
+// (fremdes Konto, falscher Anker).
+let listRenderId = 0;
 
+// --- Unsichtbares Nachladen der Buchungen (#161, Teil C) ---
+//
+// Vorher holte die Seite pauschal 500 Zeilen. Das war nicht nur eine grosse Anfrage, sondern in der
+// aufsteigenden Zukunfts-Timeline (#139) auch falsch: aufsteigend sind die ersten 500 die AELTESTEN
+// Buchungen des Kontos. Wer mehr als 500 hat, bekam eine Liste, die Jahre in der Vergangenheit
+// aufhoert - "heute" war gar nicht geladen, der Sprung dorthin fand keinen Ankerpunkt, und die
+// Zukunftszeilen standen direkt hinter einer Buchung von damals.
+//
+// Deshalb holt die Liste IMMER die neuesten Buchungen zuerst und blaettert per Cursor in die
+// Vergangenheit - auch aufsteigend. Aufsteigend wird die geholte Seite nur umgedreht gezeichnet, und
+// die naechste (aeltere) Seite kommt OBEN dazu. Es gibt damit nur eine Nachladerichtung
+// ("aelter"), und der Cursor des Servers passt ohne Gegenstueck.
+const TX_PAGE_SIZE = 60;
+// Der Cursor der naechsten (aelteren) Seite; null heisst: es gibt nichts mehr.
+let txCursor = null;
+let txLoadingMore = false;
+let txObserver = null;
+// Die Abfrage der aktuellen Sicht ohne "after" - das Nachladen darf keine der Filterentscheidungen
+// aus renderTransactions() ein zweites Mal treffen, sonst driften erste und weitere Seite auseinander.
+let txPageQuery = null;
+let txScope = null;
+// Der Vorgemerkt-Kopf gehoert zur ganzen Liste, nicht zu einem Block - sonst bekaeme eine zweite
+// Seite, die noch vorgemerkte Buchungen enthaelt, einen zweiten davon.
+let pendingHeaderRendered = false;
+// Wie viele Buchungszeilen gerade gezeichnet sind. Nach einer Aenderung wird die Liste komplett neu
+// aufgebaut (refreshList) - mit nur einer Seite waere jemand, der weit zurueckgescrollt hatte, danach
+// wieder am Anfang, und der Anker, an dem keepListPosition die Stelle festhaelt, existierte gar nicht
+// mehr. Der Neuaufbau holt deshalb so viele Zeilen zurueck, wie vorher dastanden - in EINER Anfrage
+// ueber denselben Index, nicht als Wiederholung der einzelnen Seiten.
+let txLoadedCount = 0;
+// Ab hier ist es kein Wiederherstellen mehr, sondern eine grosse Abfrage. Wer so weit gescrollt ist,
+// verliert nach einer Aenderung die aeltesten Zeilen und scrollt sie bei Bedarf erneut nach.
+const TX_RESTORE_MAX = 1000;
+// Das juengste bereits gezeichnete Datum (absteigend: das unterste) - damit ein nachgeladener Block
+// keinen zweiten Kopf fuer denselben Tag oeffnet.
+let txLastDay = null;
+
+// Ergaenzt, statt zu ersetzen: eine nachgeladene Seite bringt weitere Tage mit, und die schon
+// geholten Staende bleiben gueltig (#161, Teil C). Geleert wird nur beim vollen Neuzeichnen.
 async function loadDayBalances(scope, days) {
-  dayBalances = new Map();
-  if (!days.length) return;
-  const sorted = [...days].sort();
+  const missing = days.filter(day => day && !dayBalancesAsked.has(day));
+  if (!missing.length) return;
+  for (const day of missing) dayBalancesAsked.add(day);
+  const sorted = [...missing].sort();
   const query = new URLSearchParams({ from: sorted[0], to: sorted[sorted.length - 1] });
   if (scope.accountId) query.set('accountId', scope.accountId);
   else if (scope.groupId) query.set('groupId', scope.groupId);
@@ -287,6 +332,17 @@ function todayAnchor() {
 // dieses Problem nicht - sie ist Teil des normalen Fluss und ihre Position stimmt immer.
 function todayScrollTarget(anchor) {
   return anchor.element.nextElementSibling || anchor.element;
+}
+
+// Die Tagesanker in echter DOM-Reihenfolge (paintDayBar() bricht beim ersten Kopf ab, der nicht mehr
+// oben ist, und braucht sie deshalb genau so). Nach jedem Nachladen erneut, sonst kennt die
+// Tagesleiste die neu dazugekommenen Tage nicht.
+function refreshDayAnchors() {
+  const body = ctx.$('#transactions-body');
+  if (!body) return;
+  dayAnchors = [...body.querySelectorAll('.tx-date-head')]
+    .filter(element => ascendingTimeline || element.dataset.day)
+    .map(element => ({ element, day: element.dataset.day || '', label: element.dataset.label, kind: element.dataset.kind }));
 }
 
 function paintDayBar() {
@@ -642,7 +698,8 @@ async function refreshList(anchorId) {
   // #139 Teil 2: kein Sprung zu "heute" nach einem Speichern - keepListPosition haelt die Stelle, an
   // der der Benutzer war (oder den bearbeiteten Datensatz), fest; ein zusaetzlicher Heute-Sprung wuerde
   // das sofort wieder aufheben.
-  await keepListPosition(() => renderTransactions(ctx, { skipTodayScroll: true }), anchorId ? { anchor: `[data-tx-id="${anchorId}"]` } : {});
+  const restore = Math.min(Math.max(TX_PAGE_SIZE, txLoadedCount), TX_RESTORE_MAX);
+  await keepListPosition(() => renderTransactions(ctx, { skipTodayScroll: true, limit: restore }), anchorId ? { anchor: `[data-tx-id="${anchorId}"]` } : {});
 }
 
 export async function renderTransactions(context, opts = {}) {
@@ -650,7 +707,7 @@ export async function renderTransactions(context, opts = {}) {
   // Vor jedem await erhoeht, damit ein spaeter noch aufloesendes loadMoreForecast() aus einem
   // inzwischen ueberholten Aufruf (schneller Konto-/Gruppenwechsel) sich selbst erkennt und nichts
   // mehr in die laengst andere, gerade angezeigte Liste schreibt.
-  const renderId = ++forecastRenderId;
+  const renderId = ++listRenderId;
   await ensureOfficialBrandCatalog(ctx.api);
   const body = ctx.$('#transactions-body');
   // URL scope (UX rework §3): ?accountId= one account, ?groupId= every account in that group. The
@@ -667,7 +724,7 @@ export async function renderTransactions(context, opts = {}) {
   // into the box and use it for the request so the box, the scope banner and the list always agree.
   const urlQuery = params.get('query') || '';
   ctx.$('#tx-query').value = urlQuery;
-  const q = new URLSearchParams({ limit: '500' });
+  const q = new URLSearchParams({ limit: String(opts.limit || TX_PAGE_SIZE) });
   const text = urlQuery;
   const dir = params.get('direction') || '';
   const status = params.get('status') || '';
@@ -707,11 +764,12 @@ export async function renderTransactions(context, opts = {}) {
     transfersOnly || ignoredOnly || refundOnly || hasReceipt || categoryId || fromDate || toDate ||
     collectionIds.length);
   ascendingTimeline = forecastEligible;
-  // Zukunfts-Timeline (#139), Teil 2: nur in dieser einfachen Sicht aufsteigend sortieren - der
-  // Backend-Store gruppiert vorgemerkte Buchungen bei order=asc bereits automatisch als EINE
-  // zusammenhaengende Gruppe NACH allen gebuchten (TransactionStore.SearchForUserAsync), keine eigene
-  // Nacharbeit hier noetig. Jede andere Sicht bleibt absteigend wie bisher.
-  if (forecastEligible) q.set('order', 'asc');
+  // Zukunfts-Timeline (#139), Teil 2: nur in dieser einfachen Sicht wird aufsteigend GEZEICHNET.
+  // Geholt wird trotzdem absteigend (#161, Teil C, siehe TX_PAGE_SIZE): eine aufsteigende erste Seite
+  // waere die aelteste, nicht die juengste. Das Umdrehen einer absteigenden Seite ergibt exakt
+  // dieselbe Reihenfolge, die der Server bei order=asc geliefert haette - auch fuer die vorgemerkten
+  // Buchungen, die dort ueber denselben Sortierschluessel als eine zusammenhaengende Gruppe stehen
+  // (TransactionStore.SearchForUserAsync) und umgedreht damit hinter den gebuchten landen.
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
@@ -724,6 +782,18 @@ export async function renderTransactions(context, opts = {}) {
   forecastArmHost?.removeEventListener('scroll', forecastArmListener);
   forecastArmHost = null;
   forecastArmListener = null;
+  // Nachladezustand der Buchungen (#161, Teil C) - ein Neuzeichnen faengt immer bei der ersten Seite an.
+  txObserver?.disconnect();
+  txObserver = null;
+  txCursor = null;
+  txLoadingMore = false;
+  // Die Folgeseiten sind immer wieder eine normale Seite gross, auch wenn diese erste ein
+  // Wiederherstellen war (siehe TX_RESTORE_MAX).
+  txPageQuery = new URLSearchParams(q);
+  txPageQuery.set('limit', String(TX_PAGE_SIZE));
+  txScope = { accountId, groupId };
+  pendingHeaderRendered = false;
+  txLastDay = null;
   const forecastQuery = new URLSearchParams();
   if (accountId) forecastQuery.set('accountId', accountId);
   else if (groupId) forecastQuery.set('groupId', groupId);
@@ -732,10 +802,16 @@ export async function renderTransactions(context, opts = {}) {
     ctx.api(`api/transactions?${q}`),
     forecastEligible ? ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null) : Promise.resolve(null)
   ]);
-  const items = data.items || [];
+  // Absteigend geholt, aufsteigend gezeichnet (siehe oben): das Umdrehen passiert an genau dieser
+  // einen Stelle. Alles danach - Kopfzeilen, Vorgemerkt-Gruppe, Tagesanker, der Sprung zu heute -
+  // liest nur noch die Reihenfolge, in der die Zeilen tatsaechlich stehen.
+  const items = ascendingTimeline ? [...(data.items || [])].reverse() : (data.items || []);
+  // Der Cursor der naechsten (aelteren) Seite. hasNext ist die Antwort auf limit+1, kein COUNT (#161).
+  txCursor = data.hasNext ? (data.nextCursor || null) : null;
+  txLoadedCount = items.length;
 
   currentItemsById = new Map(items.map(item => [String(item.id), item]));
-  // Voller Neuaufbau der Tabelle (siehe body.innerHTML='' zwei Zeilen weiter unten): reset() nimmt
+  // Voller Neuaufbau der Tabelle (siehe body.replaceChildren() weiter unten): reset() nimmt
   // Bestand, Auswahl UND die Bindungen an die alten (gleich verworfenen) Checkboxen mit.
   coachSelection.reset();
   updateCoachSelectionBar();
@@ -744,25 +820,93 @@ export async function renderTransactions(context, opts = {}) {
   // .table-panel (das Kartenraster in styles/design-depth.css legt seinen Glanzschimmer per
   // ::after direkt darueber) an einer wachsenden Liste und kann zwischen dem leeren und dem
   // fertigen Zustand einen zweiten, sichtbaren Absatz zeichnen.
+  const fragment = buildRowBlock(items);
+  // Zukunfts-Timeline (#139): erwartete Vertragsbuchungen/Eingaenge/Budgetperioden, angehaengt NACH
+  // allem oben. Ascending (Teil 2, forecastEligible): das ist jetzt die echte Zukunft, direkt nach der
+  // (nun trailing) Vorgemerkt-Gruppe. Descending (unveraendert, jede andere Sicht): der Forecast wird
+  // dort erst gar nicht geladen (forecastEligible ist dann false, siehe der Promise.all oben).
+  const forecastItems = forecast?.items || [];
+  if (forecastItems.length) {
+    fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast'));
+    for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
+    forecastLatestDate = forecastItems[forecastItems.length - 1].date;
+  }
+  // Nachlade-Ankerpunkt: nur wenn diese Sicht ueberhaupt Prognose zeigt und der 180-Tage-Deckel noch
+  // nicht erreicht ist - sonst gaebe es nichts Weiteres zu holen, ein Beobachter darauf liefe ins Leere.
+  if (forecastEligible && forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) {
+    fragment.appendChild(forecastSentinel());
+  }
+  // Nachlade-Ankerpunkt fuer AELTERE Buchungen (#161, Teil C). Aufsteigend liegt die Vergangenheit
+  // oben, absteigend unten - der Anker steht jeweils am Rand, hinter dem es weitergeht.
+  if (txCursor) {
+    if (ascendingTimeline) fragment.prepend(txSentinel());
+    else fragment.appendChild(txSentinel());
+  }
+  body.replaceChildren(fragment);
+  // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
+  // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
+  // Blaetterung eine andere Zahl (#126).
+  // paintDayBar()s Suche nach der massgeblichen Gruppe setzt voraus, dass dayAnchors in echter
+  // DOM-Reihenfolge steht (sie bricht beim ersten Kopf ab, der nicht mehr oben ist) - ein Filtern nach
+  // [data-day] und separates Anhaengen der uebrigen Koepfe wuerde den (in Wahrheit FUEHRENDEN)
+  // Vorgemerkt-Kopf ans Ende der Liste setzen und die Suche falsch abbrechen lassen. Ein einziger
+  // Durchlauf ueber ALLE Koepfe in ihrer wirklichen Reihenfolge, danach gefiltert, vermeidet das.
+  // Absteigend/gefiltert bleibt unveraendert: dort bleibt der (fuehrende) Vorgemerkt-Kopf kein Anker,
+  // genau wie vor dieser Aenderung. Aufsteigend (#139 Teil 2) zaehlen auch der (nun nachgestellte)
+  // Vorgemerkt- und der Erwartet-Kopf mit, damit die Leiste dort weiterhin etwas zeigt statt auf dem
+  // letzten echten Datum einzufrieren, waehrend jemand tief in die Zukunft gescrollt ist.
+  refreshDayAnchors();
+  // Initialer Sprung zu "heute" (#139 Teil 2) - nur beim ersten Zeichnen dieser Sicht, nie nach
+  // refreshList()s keepListPosition (siehe dort). Ohne echten Heute-Anker (z.B. ein Konto ganz ohne
+  // Buchungen und ohne Prognose) bleibt die natuerliche Scrollposition unangetastet.
+  if (ascendingTimeline && !opts.skipTodayScroll) {
+    const anchor = todayAnchor();
+    if (anchor) todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'instant' });
+  }
+  dayBalances = new Map();
+  dayBalancesAsked = new Set();
+  parkRows([...body.querySelectorAll('.tx-row')]);
+  await loadDayBalances(txScope, dayAnchors.map(anchor => anchor.day).filter(Boolean));
+  trackDayBar();
+  observeForecastSentinel(accountId, groupId, renderId);
+  observeTxSentinel(renderId);
+  await showTransferCandidates();
+  await updateBookingAction(accountId);
+
+  if (!items.length) {
+    const filtered = !!(text || dir || status || merchantId || merchant || minAmount || maxAmount || transfersOnly || ignoredOnly || refundOnly || hasReceipt || fromDate || toDate || categoryId || accountId || groupId);
+    body.innerHTML = txEmptyState(filtered, text ? 'search' : (fromDate || toDate) ? 'period' : 'filters');
+  }
+}
+
+// Ein Block Zeilen als Fragment - dieselbe Funktion fuer die erste Seite und fuer jede nachgeladene
+// (#161, Teil C). Vorher stand das nur inline in renderTransactions(); ein nachgeladener Block haette
+// Kopfzeilen, Vorgemerkt-Gruppe und die Bindungen jeder Zeile ein zweites Mal beschreiben muessen -
+// und die zweite Beschreibung waere die gewesen, die irgendwann abweicht.
+//
+// opts.ownDays: der Block bringt seine eigene Tagesfolge mit und fuehrt txLastDay NICHT fort. Das ist
+// der aufsteigende Fall, wo der Block OBEN angesetzt wird: seine Tage laufen auf die schon
+// gezeichneten zu, nicht von ihnen weg.
+function buildRowBlock(items, opts = {}) {
   const fragment = document.createDocumentFragment();
-  let lastDate = null;
   // Pending entries are not booked yet: the API sorts them into one contiguous run (leading when
   // descending, trailing when ascending - see below), and they get their own header so a date header
   // next to them still means only booked rows. Without it a pending row dated today sat under the
   // today header among real bookings, and one with no booking date at all opened an unlabelled group.
   // Descending (any incompatible filter active): pending is the LEADING group, exactly as before -
   // inPendingGroup starts true and the loop leaves that state for good the moment the first booked row
-  // shows up. Ascending (forecastEligible, order=asc requested above): the backend now puts pending as
-  // the TRAILING group instead (TransactionStore.SearchForUserAsync), so grouping starts in date-mode
-  // and switches into the pending header the moment the first pending row appears - and, since that run
-  // is guaranteed contiguous either way, never switches back.
-  let inPendingGroup = !forecastEligible, pendingHeaderDone = false;
+  // shows up. Ascending (die umgedrehte Seite, siehe renderTransactions): pending steht dort als
+  // TRAILING group, also startet die Gruppierung im Datumsmodus und wechselt in den Vorgemerkt-Kopf,
+  // sobald die erste vorgemerkte Zeile kommt - und da dieser Lauf so oder so zusammenhaengend ist,
+  // nie wieder zurueck.
+  let inPendingGroup = !ascendingTimeline && txLastDay === null && !pendingHeaderRendered;
+  let lastDate = opts.ownDays ? null : txLastDay;
   for (const x of items) {
     const isPending = String(x.status || '').toUpperCase() === 'PDNG';
-    if (forecastEligible && isPending) inPendingGroup = true;
+    if (ascendingTimeline && isPending) inPendingGroup = true;
     if (inPendingGroup && isPending) {
-      if (!pendingHeaderDone) {
-        pendingHeaderDone = true;
+      if (!pendingHeaderRendered) {
+        pendingHeaderRendered = true;
         fragment.appendChild(groupHeaderRow(ctx.get('transactions.pending'), '', 'pending'));
       }
     } else {
@@ -814,54 +958,141 @@ export async function renderTransactions(context, opts = {}) {
     row.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
     fragment.appendChild(row);
   }
-  // Zukunfts-Timeline (#139): erwartete Vertragsbuchungen/Eingaenge/Budgetperioden, angehaengt NACH
-  // allem oben. Ascending (Teil 2, forecastEligible): das ist jetzt die echte Zukunft, direkt nach der
-  // (nun trailing) Vorgemerkt-Gruppe. Descending (unveraendert, jede andere Sicht): der Forecast wird
-  // dort erst gar nicht geladen (forecastEligible ist dann false, siehe der Promise.all oben).
-  const forecastItems = forecast?.items || [];
-  if (forecastItems.length) {
-    fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast'));
-    for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
-    forecastLatestDate = forecastItems[forecastItems.length - 1].date;
-  }
-  // Nachlade-Ankerpunkt: nur wenn diese Sicht ueberhaupt Prognose zeigt und der 180-Tage-Deckel noch
-  // nicht erreicht ist - sonst gaebe es nichts Weiteres zu holen, ein Beobachter darauf liefe ins Leere.
-  if (forecastEligible && forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) {
-    fragment.appendChild(forecastSentinel());
-  }
-  body.replaceChildren(fragment);
-  // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
-  // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
-  // Blaetterung eine andere Zahl (#126).
-  // paintDayBar()s Suche nach der massgeblichen Gruppe setzt voraus, dass dayAnchors in echter
-  // DOM-Reihenfolge steht (sie bricht beim ersten Kopf ab, der nicht mehr oben ist) - ein Filtern nach
-  // [data-day] und separates Anhaengen der uebrigen Koepfe wuerde den (in Wahrheit FUEHRENDEN)
-  // Vorgemerkt-Kopf ans Ende der Liste setzen und die Suche falsch abbrechen lassen. Ein einziger
-  // Durchlauf ueber ALLE Koepfe in ihrer wirklichen Reihenfolge, danach gefiltert, vermeidet das.
-  // Absteigend/gefiltert bleibt unveraendert: dort bleibt der (fuehrende) Vorgemerkt-Kopf kein Anker,
-  // genau wie vor dieser Aenderung. Aufsteigend (#139 Teil 2) zaehlen auch der (nun nachgestellte)
-  // Vorgemerkt- und der Erwartet-Kopf mit, damit die Leiste dort weiterhin etwas zeigt statt auf dem
-  // letzten echten Datum einzufrieren, waehrend jemand tief in die Zukunft gescrollt ist.
-  dayAnchors = [...body.querySelectorAll('.tx-date-head')]
-    .filter(element => forecastEligible || element.dataset.day)
-    .map(element => ({ element, day: element.dataset.day || '', label: element.dataset.label, kind: element.dataset.kind }));
-  // Initialer Sprung zu "heute" (#139 Teil 2) - nur beim ersten Zeichnen dieser Sicht, nie nach
-  // refreshList()s keepListPosition (siehe dort). Ohne echten Heute-Anker (z.B. ein Konto ganz ohne
-  // Buchungen und ohne Prognose) bleibt die natuerliche Scrollposition unangetastet.
-  if (ascendingTimeline && !opts.skipTodayScroll) {
-    const anchor = todayAnchor();
-    if (anchor) todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'instant' });
-  }
-  await loadDayBalances({ accountId, groupId }, dayAnchors.map(anchor => anchor.day).filter(Boolean));
-  trackDayBar();
-  observeForecastSentinel(accountId, groupId, renderId);
-  await showTransferCandidates();
-  await updateBookingAction(accountId);
+  if (!opts.ownDays) txLastDay = lastDate;
+  return fragment;
+}
 
-  if (!items.length) {
-    const filtered = !!(text || dir || status || merchantId || merchant || minAmount || maxAmount || transfersOnly || ignoredOnly || refundOnly || hasReceipt || fromDate || toDate || categoryId || accountId || groupId);
-    body.innerHTML = txEmptyState(filtered, text ? 'search' : (fromDate || toDate) ? 'period' : 'filters');
+// Der Ankerpunkt, hinter dem es weitergeht (#161, Teil C). Kein Text, kein Knopf: das Nachladen
+// dauert weniger lang als der Blick darauf, und ein sichtbarer "Mehr laden"-Schritt waere nur ein
+// Umweg. Dieselbe Entscheidung wie beim Prognose-Anker daneben.
+function txSentinel() {
+  const sentinel = document.createElement('div');
+  sentinel.className = 'tx-more-sentinel';
+  sentinel.setAttribute('aria-hidden', 'true');
+  return sentinel;
+}
+
+// rootMargin: die naechste Seite soll fertig sein, BEVOR der Rand im Bild ist - sonst sieht man beim
+// normalen Scrolltempo eine Luecke. 1000 px sind knapp zwei Bildschirmhoehen auf dem Telefon und
+// etwa eine auf dem Schreibtisch, also in beiden Faellen ein Vorlauf und keine Nachhut.
+function observeTxSentinel(renderId) {
+  const sentinel = ctx.$('.tx-more-sentinel');
+  if (!sentinel) return;
+  txObserver?.disconnect();
+  txObserver = new IntersectionObserver(entries => {
+    if (entries[0]?.isIntersecting) loadMoreTransactions(renderId);
+  }, { rootMargin: '1000px' });
+  txObserver.observe(sentinel);
+}
+
+// Die naechste (aeltere) Seite, an die schon gezeichnete Liste gespleisst - ohne sie neu aufzubauen
+// und ohne die Scrollposition zu bewegen (#161, Teil C).
+//
+// Aufsteigend kommt der Block OBEN dazu. Das verschiebt alles darunter um seine Hoehe nach unten,
+// also waere die Stelle, die der Nutzer gerade liest, ohne Gegenrechnung weggesprungen - deshalb wird
+// der Scrollwert um genau den Hoehenzuwachs mitgezogen. Absteigend entfaellt das: unten anzuhaengen
+// bewegt nichts, was schon sichtbar ist.
+async function loadMoreTransactions(renderId) {
+  if (txLoadingMore || !txCursor || !txPageQuery) return;
+  txLoadingMore = true;
+  txObserver?.disconnect();
+  try {
+    const query = new URLSearchParams(txPageQuery);
+    query.set('after', txCursor);
+    const data = await ctx.api(`api/transactions?${query}`).catch(() => null);
+    // Ein Konto-/Gruppen-/Filterwechsel waehrend dieser Abruf unterwegs war hat laengst eine neue
+    // renderTransactions() gestartet - die veraltete Antwort gehoert nicht in die jetzt gezeigte Liste.
+    if (renderId !== listRenderId) return;
+    // Kein Ergebnis heisst hier "gerade nicht erreichbar", nicht "es gibt nichts mehr": der Cursor
+    // bleibt stehen, und der naechste Scroll versucht es erneut.
+    if (!data) return;
+    const page = data.items || [];
+    txCursor = data.hasNext ? (data.nextCursor || null) : null;
+    const body = ctx.$('#transactions-body');
+    if (!body) return;
+    // Erst weg, dann neu: der Ankerpunkt wandert mit dem Rand der Liste. Bliebe der alte stehen, saesse
+    // er nach dem ersten Nachladen MITTEN in der Liste und damit dauerhaft im Bild - der Beobachter
+    // haette immer wieder gemeldet, und die Seite haette den gesamten Bestand am Stueck geholt. Genau
+    // das war beim ersten Messen im Harness zu sehen: 60 Zeilen wurden in einem Rutsch 246.
+    body.querySelectorAll('.tx-more-sentinel').forEach(node => node.remove());
+    if (!page.length) return;
+    for (const item of page) currentItemsById.set(String(item.id), item);
+    txLoadedCount += page.length;
+    const ordered = ascendingTimeline ? [...page].reverse() : page;
+    const fragment = buildRowBlock(ordered, { ownDays: ascendingTimeline });
+    // Vor dem Einsetzen gemerkt: danach gehoeren die Knoten dem Dokument, nicht mehr dem Fragment.
+    const rows = [...fragment.querySelectorAll('.tx-row')];
+    if (ascendingTimeline) {
+      // Der neue Block endet an dem Tag, an dem die bisherige Liste beginnt - dessen Kopf steht dann
+      // zweimal da. Der aeltere (aus dem neuen Block) ist der richtige: er oeffnet die Gruppe wirklich.
+      const lastNewDay = [...fragment.querySelectorAll('.tx-date-head')].pop()?.dataset.day || '';
+      const firstOldHead = body.querySelector('.tx-date-head');
+      if (lastNewDay && firstOldHead?.dataset.day === lastNewDay) firstOldHead.remove();
+      const host = scrollHost();
+      const box = host === window ? (document.scrollingElement || document.documentElement) : host;
+      // Gemessen wird an der ersten bisherigen Zeile, nicht an der Gesamthoehe der Seite. Die
+      // Gesamthoehe hat im Test auf dem Telefon 689 px zu wenig gemeldet - sie haengt an allem, was
+      // sich sonst noch im Dokument setzt, waehrend die Zeile, an der der Nutzer gerade liest, genau
+      // das misst, was hier nicht springen darf.
+      const anchor = body.firstElementChild;
+      const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+      body.prepend(fragment);
+      if (txCursor) body.prepend(txSentinel());
+      const moved = (anchor?.getBoundingClientRect().top ?? 0) - anchorTop;
+      if (moved) box.scrollTop += moved;
+    } else {
+      body.append(fragment);
+      if (txCursor) body.append(txSentinel());
+    }
+    parkRows(rows);
+    refreshDayAnchors();
+    await loadDayBalances(txScope || {}, dayAnchors.map(anchor => anchor.day).filter(Boolean));
+    if (renderId !== listRenderId) return;
+    paintDayBar();
+  } finally {
+    txLoadingMore = false;
+    if (renderId === listRenderId && txCursor) observeTxSentinel(renderId);
   }
+}
+
+// Der begrenzte DOM (#161, Teil C) - ohne Virtualisierung, weil gemessen wurde, was sie kosten muesste.
+//
+// Gemessen im Harness, Einsetzen EINER Seite (60 Zeilen) samt Scrollausgleich, gegen die Anzahl
+// Zeilen, die schon dastehen:
+//
+//     Zeilen      ohne        mit
+//        65     38 ms       9 ms
+//       567     67 ms      16 ms
+//     1 127    110 ms      13 ms
+//     2 187    194 ms      20 ms
+//     4 247    476 ms      90 ms
+//    16 367   1 596 ms     142 ms
+//
+// Die Kosten kommen nicht von den 60 neuen Zeilen, sondern davon, dass die ganze Liste neu vermessen
+// wird. content-visibility laesst den Browser genau das fuer alles ueberspringen, was gerade nicht im
+// Bild ist - 100 000 Buchungen bleiben damit 100 000 Knoten, kosten aber nicht mehr wie 100 000.
+//
+// Die Reihenfolge ist der Punkt: erst einsetzen und ausgleichen, DANN ueberspringen lassen. Eine
+// uebersprungene Zeile hat keine echte Hoehe mehr, sondern die geschaetzte aus contain-intrinsic-size,
+// und die Schaetzung waehrend des Einsetzens zu benutzen hat die Liste im Versuch um 1 632 px
+// verrutschen lassen. Deshalb wird jede Zeile einmal wirklich vermessen und ihre echte Hoehe
+// festgehalten, bevor sie uebersprungen werden darf. Erst lesen, dann schreiben - sonst erzwingt jede
+// Zeile eine eigene Neuberechnung.
+function parkRows(rows) {
+  // contain-intrinsic-size beschreibt den INHALTSKASTEN, nicht die Zeilenhoehe. Die gemessene Hoehe
+  // roh einzutragen hat jede uebersprungene Zeile um Innenabstand und Rahmen wachsen lassen - 67 px
+  // wurden 90 - und die Liste ist beim ersten Bild um 46 px gesprungen (LayoutStabilityTests hat
+  // genau das gemeldet: 0,052 statt 0,008). Deshalb erst lesen, dann rechnen, dann schreiben.
+  const boxes = rows.map(row => {
+    const style = getComputedStyle(row);
+    return row.getBoundingClientRect().height
+      - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+      - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
+  });
+  rows.forEach((row, index) => {
+    if (boxes[index] > 0) row.style.containIntrinsicSize = `auto ${boxes[index]}px`;
+    row.classList.add('tx-parked');
+  });
 }
 
 // Loading skeleton rows: monochrome shimmer placeholders matching the row layout while the list loads.
@@ -993,9 +1224,9 @@ async function loadMoreForecast(accountId, groupId, renderId) {
     forecastQuery.set('horizonDays', String(forecastHorizonDays));
     const forecast = await ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null);
     // Ein schneller Konto-/Gruppenwechsel waehrend dieser Abruf unterwegs war, hat laengst eine neue
-    // renderTransactions() gestartet (und damit forecastRenderId weitergezaehlt) - ohne diese Wache
+    // renderTransactions() gestartet (und damit listRenderId weitergezaehlt) - ohne diese Wache
     // wuerde die veraltete Antwort in die inzwischen ganz andere, gerade angezeigte Liste gespleisst.
-    if (renderId !== forecastRenderId) return;
+    if (renderId !== listRenderId) return;
     const items = (forecast?.items || []).filter(entry => !forecastLatestDate || entry.date > forecastLatestDate);
     const body = ctx.$('#transactions-body');
     const sentinel = body?.querySelector('.tx-forecast-sentinel');

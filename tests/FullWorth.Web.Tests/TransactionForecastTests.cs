@@ -90,19 +90,27 @@ public sealed class TransactionForecastTests
     }
 
     /// <summary>
-    /// #139, part 2: the sort reversal. The forecast-eligible (plain, unfiltered/lightly-scoped) view
-    /// must ask the backend for ascending order - <c>TransactionStore.SearchForUserAsync</c> already
-    /// puts pending rows into one contiguous group AFTER every booked row under <c>order=asc</c>, which
-    /// is what finally lets "today" sit in the middle of the list instead of forcing the forecast to be
-    /// appended below the oldest transaction. Every other (filtered) view must keep the old descending
-    /// default untouched.
+    /// #139, part 2 mit der Korrektur aus #161: die einfache (ungefilterte) Sicht wird aufsteigend
+    /// GEZEICHNET, aber nicht aufsteigend GEHOLT.
+    ///
+    /// Aufsteigend zu holen hiess: die erste Seite sind die AELTESTEN Buchungen. Solange die Seite
+    /// pauschal 500 Zeilen nahm, fiel das bei kleinen Bestaenden nicht auf - wer mehr als 500 Buchungen
+    /// hat, bekam eine Liste, die Jahre in der Vergangenheit aufhoert: "heute" war nie geladen, der
+    /// Sprung dorthin fand keinen Ankerpunkt, und die Zukunftszeilen standen direkt hinter einer
+    /// Buchung von damals. Seit die Seite blaettert (#161) waere jede erste Seite so.
+    ///
+    /// Deshalb: absteigend holen (die juengsten zuerst) und die Seite umdrehen. Das ergibt exakt
+    /// dieselbe Reihenfolge, die order=asc geliefert haette - einschliesslich der vorgemerkten
+    /// Buchungen, die ueber denselben Sortierschluessel eine zusammenhaengende Gruppe bilden und
+    /// umgedreht hinter den gebuchten landen.
     /// </summary>
     [Fact]
-    public void ForecastEligible_view_requests_ascending_order()
+    public void ForecastEligible_view_draws_ascending_without_asking_for_the_oldest_page()
     {
         var js = PageJs();
 
-        Assert.Contains("if (forecastEligible) q.set('order', 'asc');", js);
+        Assert.DoesNotContain("'order', 'asc'", js);
+        Assert.Contains("ascendingTimeline ? [...(data.items || [])].reverse() : (data.items || [])", js);
     }
 
     /// <summary>
@@ -116,7 +124,7 @@ public sealed class TransactionForecastTests
     {
         var js = PageJs();
 
-        Assert.Contains("let inPendingGroup = !forecastEligible", js);
+        Assert.Contains("let inPendingGroup = !ascendingTimeline", js);
     }
 
     /// <summary>
@@ -260,7 +268,8 @@ public sealed class TransactionForecastTests
     {
         var js = PageJs();
 
-        Assert.Contains("const renderId = ++forecastRenderId;", js);
+        // Der Zaehler heisst seit #161 listRenderId - er bewacht jetzt zwei Nachlader, nicht nur die Prognose.
+        Assert.Contains("const renderId = ++listRenderId;", js);
         Assert.Contains("observeForecastSentinel(accountId, groupId, renderId);", js);
 
         var match = Regex.Match(js, @"async function loadMoreForecast\([^)]*\)\s*\{", RegexOptions.Singleline);
@@ -276,11 +285,11 @@ public sealed class TransactionForecastTests
         }
         var body = js[start..end];
 
-        Assert.Contains("if (renderId !== forecastRenderId) return;", body);
+        Assert.Contains("if (renderId !== listRenderId) return;", body);
         // The guard must run AFTER the await (it exists to catch a response that arrives late) and
         // BEFORE any DOM mutation or state write, or a stale response could still slip a partial change
         // through before being caught.
-        var guardIndex = body.IndexOf("if (renderId !== forecastRenderId) return;", StringComparison.Ordinal);
+        var guardIndex = body.IndexOf("if (renderId !== listRenderId) return;", StringComparison.Ordinal);
         var awaitIndex = body.IndexOf("await ctx.api(", StringComparison.Ordinal);
         var mutationIndex = body.IndexOf("forecastLatestDate = items", StringComparison.Ordinal);
         Assert.True(awaitIndex >= 0 && guardIndex > awaitIndex, "The guard must run after the awaited fetch.");

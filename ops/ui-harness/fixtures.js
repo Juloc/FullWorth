@@ -1353,6 +1353,36 @@
     return undefined;
   }
 
+
+  // #161: eine Vergangenheit, die laenger ist als eine Seite - ohne sie liesse sich das Nachladen im
+  // Harness nicht ansehen und nicht messen. Absteigend nach Datum, direkt im Anschluss an die sechs
+  // von Hand geschriebenen Zeilen oben, damit die Fixture in einer Reihenfolge steht und nicht in zwei.
+  const TRANSACTION_HISTORY = (() => {
+    const kinds = [
+      ['REWE Markt GmbH', 'Einkauf', 'c1', -34.71],
+      ['Stadtwerke', 'Abschlag Strom', 'c1', -78.5],
+      ['Deutsche Bahn', 'Fahrkarte', 'c2', -19.9],
+      ['Apotheke am Markt', 'Rezept', 'c2', -12.35],
+      ['Arbeitgeber AG', 'Gehalt', 'c3', 2810.44],
+      ['Tankstelle Nord', 'Kartenzahlung', 'c1', -62.18],
+      ['Buchhandlung Lesezeit', 'Buch', 'c2', -24.0]
+    ];
+    const rows = [];
+    const day = new Date('2026-08-27T12:00:00Z');
+    for (let index = 0; index < 240; index++) {
+      const [counterparty, description, categoryId, base] = kinds[index % kinds.length];
+      rows.push({
+        id: 'th' + index,
+        bookingDate: day.toISOString().slice(0, 10),
+        amount: Math.round((base - (index % 11) * 1.13) * 100) / 100,
+        currency: 'EUR', counterparty, description, categoryId, accountId: 'a1',
+        status: 'BOOK', isSplit: false
+      });
+      day.setUTCDate(day.getUTCDate() - 1);
+    }
+    return rows;
+  })();
+
   const realFetch = window.fetch.bind(window);
 
   window.fetch = async (input, init) => {
@@ -1366,22 +1396,31 @@
     const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
     const status = write?.status ?? 200;
     let body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
-    // #139: order=asc is the one query parameter this harness cannot ignore, because match() drops the
-    // whole query string before matching (it answers by path only) - every OTHER parameter (filters,
-    // scope) is fine to ignore since the fixture is small enough to show unfiltered, but the sort
-    // direction changes which group (Vorgemerkt leading vs. trailing) is even meant to be first, which
-    // no amount of "same data, different query" can paper over. Real backend rule, copied exactly:
-    // TransactionStore.SearchForUserAsync sorts pending as one contiguous group AFTER every booked row
-    // under order=asc (ascending overall), leading under the default descending order.
-    if (method === 'GET' && /\/api\/transactions$/.test(url.pathname) && url.searchParams.get('order') === 'asc' && Array.isArray(body?.items)) {
-      const sorted = [...body.items].sort((a, b) => {
-        const aPending = a.status === 'PDNG', bPending = b.status === 'PDNG';
-        if (aPending !== bPending) return aPending ? 1 : -1;
-        const aDate = a.bookingDate || a.valueDate || '';
-        const bDate = b.bookingDate || b.valueDate || '';
-        return aDate < bDate ? -1 : aDate > bDate ? 1 : 0;
-      });
-      body = { ...body, items: sorted };
+    // #161: Blaetterung ist der eine Teil der Abfrage, den diese Fixture nicht ignorieren darf.
+    // match() beantwortet nur den Pfad, und jeder andere Parameter (Filter, Bereich) laesst sich hier
+    // gefahrlos uebergehen - die Buchungsliste ist klein genug, um ungefiltert zu zeigen, was gemeint
+    // ist. "limit" und "after" nicht: die Seite laedt inzwischen seitenweise nach, und eine Fixture,
+    // die immer dieselben sechs Zeilen zurueckgibt, wuerde das Nachladen zwar ausloesen, aber nie
+    // etwas anhaengen - nicht kaputt, nur nicht vorfuehrbar. Genauso wichtig ist, dass die Liste
+    // laenger als eine Seite ist: sonst kaeme der Ankerpunkt gar nicht erst ins Spiel.
+    //
+    // Der Cursor ist hier die Id der zuletzt gelieferten Zeile. Fuer die Seite ist er ohnehin
+    // undurchsichtig (sie reicht ihn nur zurueck), und einen echten Sortierschluessel nachzubauen
+    // hiesse, die Regel des Servers ein zweites Mal aufzuschreiben.
+    if (method === 'GET' && /\/api\/transactions$/.test(url.pathname) && Array.isArray(body?.items)) {
+      const all = [...body.items, ...TRANSACTION_HISTORY];
+      const after = url.searchParams.get('after');
+      const limit = Math.max(1, Number(url.searchParams.get('limit')) || 60);
+      const start = after ? all.findIndex(item => item.id === after) + 1 : 0;
+      const page = all.slice(start, start + limit);
+      const hasNext = start + limit < all.length;
+      body = {
+        ...body,
+        items: page,
+        total: after ? null : all.length,
+        hasNext,
+        nextCursor: hasNext && page.length ? page[page.length - 1].id : null
+      };
     }
     // #139 Teil 3 (Nachladen): die Fixture selbst kennt keinen Horizont, sie liefert immer dieselben
     // fuenf Eintraege bis 2026-10-27. Ohne diesen Zusatz wuerde "Weiter laden" im Harness zwar feuern,
