@@ -1,10 +1,8 @@
 using FullWorth.Backend.Validation;
 using System.Globalization;
-using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Xml.Linq;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
@@ -56,14 +54,14 @@ public static class ImportMappingEndpoints
         if (fileResult.Error is not null) return Results.BadRequest(new { error = fileResult.Error });
         try
         {
-            var rows = Parse(fileResult.FileName!, fileResult.Bytes!);
+            var rows = ImportTabularFile.Read(fileResult.FileName!, fileResult.Bytes!);
             if (rows.Count == 0) return Results.BadRequest(new { error = "No data rows found." });
             var headers = rows[0].Keys.ToArray();
             return Results.Ok(new
             {
                 fileName = fileResult.FileName,
                 headers,
-                suggestedMapping = Suggest(headers),
+                suggestedMapping = ImportTabularFile.SuggestColumns(headers),
                 preview = rows.Take(10),
                 rowCount = rows.Count
             });
@@ -95,7 +93,7 @@ public static class ImportMappingEndpoints
         await file.CopyToAsync(stream, ct);
         var bytes = stream.ToArray();
         List<Dictionary<string,string>> rows;
-        try { rows = Parse(file.FileName, bytes); }
+        try { rows = ImportTabularFile.Read(file.FileName, bytes); }
         catch (Exception exception) when (exception is InvalidDataException or FormatException) { return Results.BadRequest(new { error = exception.Message }); }
         if (rows.Count == 0) return Results.BadRequest(new { error = "No data rows found." });
         var headers = rows[0].Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -284,9 +282,6 @@ public static class ImportMappingEndpoints
 
     private static async Task<(byte[]? Bytes,string? FileName,string? Error)> ReadFile(HttpRequest request,CancellationToken ct)
     {if(!request.HasFormContentType)return(null,null,"Expected multipart/form-data.");var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return(null,null,"No file uploaded.");if(file.Length>MaxUploadBytes)return(null,null,"Maximum file size is 25 MB.");if(Path.GetExtension(file.FileName).ToLowerInvariant() is not(".csv" or ".xlsx"))return(null,null,"Supported formats are CSV and XLSX.");await using var ms=new MemoryStream(checked((int)file.Length));await file.CopyToAsync(ms,ct);return(ms.ToArray(),Path.GetFileName(file.FileName),null);}
-    private static List<Dictionary<string,string>> Parse(string fileName,byte[] bytes)=>Path.GetExtension(fileName).Equals(".csv",StringComparison.OrdinalIgnoreCase)?ParseCsv(bytes):ParseXlsx(bytes);
-    private static ImportColumnMapping Suggest(IEnumerable<string> headers){var h=headers.ToArray();string? Find(params string[] names)=>h.FirstOrDefault(x=>names.Any(n=>Norm(x)==Norm(n)));return new(Find("date","datum","booking date","buchungsdatum")??"",Find("amount","betrag","value","umsatz")??"",Find("currency","währung","waehrung"),Find("counterparty","empfänger","empfaenger","payee","merchant","gegenpartei"),Find("description","verwendungszweck","text","purpose","memo"),Find("account","konto","account name","referenzkonto"),Find("category","kategorie"),Find("id","booking id","transaction id","buchungs-id"));}
-    private static string Norm(string value)=>new(value.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     private static string? Clean(string? value)=>string.IsNullOrWhiteSpace(value)?null:value.Trim();
     /// <summary>
     /// Same rule as ImportJobEndpoints.RowCurrency: a mapped currency column that IS present but
@@ -311,12 +306,4 @@ public static class ImportMappingEndpoints
     private static string SemanticKey(Guid accountId,DateOnly date,decimal amount,string currency,string? normalizedParty)=>$"{accountId:N}|{date:yyyy-MM-dd}|{amount.ToString(CultureInfo.InvariantCulture)}|{currency.ToUpperInvariant()}|{normalizedParty}";
     private static string Sha256(string value)=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
-    private static List<Dictionary<string,string>> ParseCsv(byte[] bytes){var text=Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');var records=SplitCsvRecords(text);if(records.Count<2)return[];var delimiter=GuessDelimiter(records[0]);var header=ParseCsvLine(records[0],delimiter);return records.Skip(1).Where(line=>!string.IsNullOrWhiteSpace(line)).Select(line=>{var cells=ParseCsvLine(line,delimiter);var row=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);for(var i=0;i<header.Count;i++)row[header[i]]=i<cells.Count?cells[i]:"";return row;}).ToList();}
-    private static char GuessDelimiter(string line)=>new[]{';',',','\t'}.OrderByDescending(c=>line.Count(x=>x==c)).First();
-    private static List<string> SplitCsvRecords(string text){var rows=new List<string>();var sb=new StringBuilder();var quoted=false;for(var i=0;i<text.Length;i++){var ch=text[i];if(ch=='\"'){if(quoted&&i+1<text.Length&&text[i+1]=='\"'){sb.Append("\"\"");i++;continue;}quoted=!quoted;sb.Append(ch);}else if((ch=='\n'||ch=='\r')&&!quoted){if(ch=='\r'&&i+1<text.Length&&text[i+1]=='\n')i++;rows.Add(sb.ToString());sb.Clear();}else sb.Append(ch);}if(sb.Length>0)rows.Add(sb.ToString());return rows;}
-    private static List<string> ParseCsvLine(string line,char delimiter){var cells=new List<string>();var sb=new StringBuilder();var quoted=false;for(var i=0;i<line.Length;i++){var ch=line[i];if(ch=='\"'){if(quoted&&i+1<line.Length&&line[i+1]=='\"'){sb.Append('\"');i++;}else quoted=!quoted;}else if(ch==delimiter&&!quoted){cells.Add(sb.ToString());sb.Clear();}else sb.Append(ch);}cells.Add(sb.ToString());return cells;}
-    private static List<Dictionary<string,string>> ParseXlsx(byte[] bytes){using var ms=new MemoryStream(bytes);using var zip=new ZipArchive(ms,ZipArchiveMode.Read);var shared=ReadSharedStrings(zip);var sheet=zip.GetEntry("xl/worksheets/sheet1.xml")??throw new InvalidDataException("XLSX has no first worksheet.");using var stream=sheet.Open();var doc=XDocument.Load(stream);XNamespace ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";var rows=doc.Descendants(ns+"row").Select(r=>ReadXlsxRow(r,ns,shared)).ToList();if(rows.Count<2)return[];var header=rows[0];var result=new List<Dictionary<string,string>>();foreach(var cells in rows.Skip(1)){var row=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);for(var i=0;i<header.Count;i++)row[header[i]]=i<cells.Count?cells[i]:"";result.Add(row);}return result;}
-    private static List<string> ReadSharedStrings(ZipArchive zip){var entry=zip.GetEntry("xl/sharedStrings.xml");if(entry is null)return[];using var s=entry.Open();var doc=XDocument.Load(s);XNamespace ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";return doc.Descendants(ns+"si").Select(si=>string.Concat(si.Descendants(ns+"t").Select(t=>t.Value))).ToList();}
-    private static List<string> ReadXlsxRow(XElement row,XNamespace ns,IReadOnlyList<string> shared){var values=new SortedDictionary<int,string>();foreach(var cell in row.Elements(ns+"c")){var reference=(string?)cell.Attribute("r")??"A1";var column=ColumnIndex(reference);var type=(string?)cell.Attribute("t");var value=type=="inlineStr"?string.Concat(cell.Descendants(ns+"t").Select(t=>t.Value)):cell.Element(ns+"v")?.Value??"";if(type=="s"&&int.TryParse(value,out var si)&&si>=0&&si<shared.Count)value=shared[si];values[column]=value;}var max=values.Count==0?-1:values.Keys.Max();return Enumerable.Range(0,max+1).Select(i=>values.GetValueOrDefault(i,"")).ToList();}
-    private static int ColumnIndex(string reference){var letters=new string(reference.TakeWhile(char.IsLetter).ToArray()).ToUpperInvariant();var n=0;foreach(var ch in letters)n=n*26+(ch-'A'+1);return Math.Max(0,n-1);}
 }

@@ -562,6 +562,7 @@ public static class BackendApplication
         endpoints.MapContractCancellationEndpoints();
         endpoints.MapRefundCandidateEndpoints();
         endpoints.MapAnalysisQueryEndpoints();
+        endpoints.MapImportDetectionEndpoints();
         endpoints.MapImportJobEndpoints();
         endpoints.MapImportMappingEndpoints();
         endpoints.MapInvestmentEndpoints();

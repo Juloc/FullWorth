@@ -1277,6 +1277,39 @@
     // zeigte einen Vorschlag aus undefined-Werten. Die Zahlen wachsen mit der Anzahl gewaehlter
     // Kategorien, damit im Harness sichtbar ist, dass der Vorschlag dem Geltungsbereich folgt und
     // nicht mehr der einen Kategorie.
+    // #131: der Schritt NACH der Erkennung. Ohne eigene Antwort bekam die Spaltenzuordnung den
+    // allgemeinen Schreib-Echo ({id:'stub'}) und brach mit "headers is not iterable" ab - der Weg vom
+    // Waehlen der Datei bis zur Vorschau liess sich im Harness also nie am Stueck ansehen.
+    if (after.startsWith('import-mapping/detect')) {
+      return { status: 200, body: {
+        fileName: 'umsaetze.csv',
+        headers: ['Buchungstag', 'Betrag', 'Währung', 'Empfänger', 'Verwendungszweck', 'Konto', 'Kategorie'],
+        suggestedMapping: { date: 'Buchungstag', amount: 'Betrag', currency: 'Währung', counterparty: 'Empfänger', description: 'Verwendungszweck', account: 'Konto', category: 'Kategorie', externalKey: null },
+        preview: [
+          { Buchungstag: '10.09.2026', Betrag: '-42,19', 'Währung': 'EUR', 'Empfänger': 'REWE Markt GmbH', Verwendungszweck: 'Einkauf', Konto: 'Girokonto', Kategorie: 'Lebensmittel' },
+          { Buchungstag: '09.09.2026', Betrag: '-9,99', 'Währung': 'EUR', 'Empfänger': 'Spotify', Verwendungszweck: 'Abo', Konto: 'Girokonto', Kategorie: 'Abos' },
+          { Buchungstag: '28.08.2026', Betrag: '2810,44', 'Währung': 'EUR', 'Empfänger': 'Arbeitgeber AG', Verwendungszweck: 'Gehalt August', Konto: 'Girokonto', Kategorie: 'Gehalt' }
+        ],
+        rowCount: 48
+      } };
+    }
+    // #131: die Quellenerkennung. Ohne eigene Antwort bekaeme die Seite den allgemeinen Schreib-Echo
+    // ({id:'stub'}) und zeigte "Unbekannt" fuer jede Datei - das Verhalten, das gerade NICHT gemeint
+    // ist, liesse sich also nicht ansehen. Geantwortet wird nach der Endung: das ist nicht, was der
+    // Server tut (er liest den Inhalt), aber es ist ehrlich das, was eine Fixture kann, und es macht
+    // jeden der fuenf Wege im Harness erreichbar.
+    if (after.startsWith('import/detect')) {
+      const uploaded = init?.body instanceof FormData ? init.body.get('file') : null;
+      const fileName = uploaded && typeof uploaded.name === 'string' ? uploaded.name : 'datei.csv';
+      const extension = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+      const detected =
+        extension === '.pdf' ? { adapter: 'broker-pdf', confidence: 'likely', reasonKey: 'pdf', rows: 0, accounts: [] }
+        : extension === '.xlsx' ? { adapter: 'finanzguru', confidence: 'certain', reasonKey: 'finanzguruHeaders', rows: 312, accounts: ['C24 Girokonto', 'PayPal', 'DKB Girokonto'], from: iso('2024-01-01'), to: iso('2026-09-13') }
+        : ['.xml', '.sta', '.mt940', '.940', '.camt', '.txt'].includes(extension) ? { adapter: 'statement', confidence: 'certain', reasonKey: 'camt', rows: 24, accounts: ['DE02120300000000202051'], from: iso('2026-08-01'), to: iso('2026-08-31') }
+        : extension === '.csv' ? { adapter: 'transactions', confidence: 'likely', reasonKey: 'tabularColumns', rows: 48, accounts: [], headers: ['Buchungstag', 'Betrag', 'Empfänger'], suggestedMapping: { date: 'Buchungstag', amount: 'Betrag', counterparty: 'Empfänger' } }
+        : { adapter: 'unknown', confidence: 'unknown', reasonKey: 'unreadable', rows: 0, accounts: [] };
+      return { status: 200, body: { from: null, to: null, headers: [], suggestedMapping: null, ...detected, fileName } };
+    }
     if (after.startsWith('budget-suggestions')) {
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }

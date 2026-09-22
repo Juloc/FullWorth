@@ -421,6 +421,7 @@ POST             /api/import-mapping/detect
 POST             /api/import-mapping/jobs/{jobId:guid}/commit
 POST             /api/import-mapping/jobs/{jobId:guid}/duplicate-preview
 POST             /api/import-mapping/upload
+POST             /api/import/detect
 POST             /api/import/finanzguru
 POST             /api/import/finanzguru/accounts/{importAccountId:guid}/link
 POST             /api/import/finanzguru/accounts/{targetAccountId:guid}/confirm-history

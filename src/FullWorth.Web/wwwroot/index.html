@@ -564,6 +564,16 @@
         <div class="row"><div class="row-main"><div class="row-title" id="space-label">FullWorth Space</div><div class="row-sub" id="space-name">—</div></div></div>
       </div>
 
+      <article class="panel import-workflow" id="import-detect">
+        <div class="panel-head"><div><h2 id="detect-title">Datei importieren</h2><p class="row-sub" id="detect-hint"></p></div></div>
+        <div class="import-form-grid">
+          <label class="field span-2"><span id="detect-file-label">Datei</span><input id="detect-file" type="file" accept=".csv,.xlsx,.xml,.txt,.sta,.mt940,.940,.camt,.pdf"></label>
+        </div>
+        <div id="detect-status" class="row-sub import-status" role="status" aria-live="polite"></div>
+        <div id="detect-result" class="rows" hidden></div>
+      </article>
+
+      <p class="row-sub import-provider-intro" id="detect-or">oder Quelle selbst wählen</p>
       <div class="import-provider-grid" aria-label="Import sources">
         <button type="button" class="panel import-provider active" data-import-mode="transactions">
           <span class="provider-icon" aria-hidden="true">↕</span><strong id="source-transactions-title">CSV / XLSX</strong><span id="source-transactions-hint">Buchungen aus Banken und Finanz-Apps</span>

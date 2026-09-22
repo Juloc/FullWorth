@@ -133,3 +133,8 @@
 .ic-candidate-duplicate .row-sub{color:var(--warning)}
 .ic-candidate-duplicate{background:var(--warning-soft)}
 .ic-dup-hint{color:var(--warning)}
+
+/* #131: die Quellenkacheln sind seit der Dateierkennung der zweite Weg, nicht der erste - die
+   Ueberschrift darueber sagt das. Den Abstand traegt schon das Raster der Seite - hier noch einen
+   zu setzen hiesse, ihn zweimal zu haben. */
+.import-provider-intro{margin:0}

@@ -1,9 +1,7 @@
 using FullWorth.Backend.Validation;
 using System.Globalization;
-using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using System.Xml.Linq;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
@@ -49,8 +47,8 @@ public static class ImportJobEndpoints
         // job, review and commit as every other import - only the reading differs.
         if(BankStatementFile.CouldBeStatement(ext))
             return await UploadStatementAsync(fullWorthSpaceId,uid,file.FileName,bytes,sha,store,ct);
-        List<Dictionary<string,string>> rows;try{rows=ext==".csv"?ParseCsv(bytes):ParseXlsx(bytes);}catch(Exception e) when(e is InvalidDataException or FormatException){return Results.BadRequest(new{error=e.Message});}if(rows.Count==0)return Results.BadRequest(new{error="No data rows found."});
-        var mapping=DetectMapping(rows[0].Keys);if(mapping.Date is null||mapping.Amount is null)return Results.BadRequest(new{error="Could not detect date and amount columns. Rename columns or use common names such as Date/Datum and Amount/Betrag."});var jobId=Guid.NewGuid();var now=DateTimeOffset.UtcNow;var candidates=new List<Candidate>();var errors=0;
+        List<Dictionary<string,string>> rows;try{rows=ImportTabularFile.Read(file.FileName,bytes);}catch(Exception e) when(e is InvalidDataException or FormatException){return Results.BadRequest(new{error=e.Message});}if(rows.Count==0)return Results.BadRequest(new{error="No data rows found."});
+        var mapping=ImportTabularFile.SuggestColumns(rows[0].Keys);if(mapping.Date.Length==0||mapping.Amount.Length==0)return Results.BadRequest(new{error="Could not detect date and amount columns. Rename columns or use common names such as Date/Datum and Amount/Betrag."});var jobId=Guid.NewGuid();var now=DateTimeOffset.UtcNow;var candidates=new List<Candidate>();var errors=0;
         // A file without a currency column states no currency, so the space's own base currency is the
         // honest reading - not a hardcoded EUR, which mislabelled every row for a space that is not in
         // euro. (A row that DOES carry an unreadable currency becomes an error below.)
@@ -230,9 +228,6 @@ public static class ImportJobEndpoints
         return Results.Ok(new { jobId = id, removed, kept = linked - removed });
     }
 
-    private sealed record Mapping(string? Date,string? Amount,string? Currency,string? Counterparty,string? Description,string? Account,string? Category,string? ExternalKey);
-    private static Mapping DetectMapping(IEnumerable<string> headers){var h=headers.ToArray();string? Find(params string[] names)=>h.FirstOrDefault(x=>names.Any(n=>string.Equals(Norm(x),Norm(n),StringComparison.OrdinalIgnoreCase)));return new(Find("date","datum","booking date","buchungsdatum"),Find("amount","betrag","value","umsatz"),Find("currency","währung","waehrung"),Find("counterparty","empfänger","empfaenger","payee","merchant","gegenpartei"),Find("description","verwendungszweck","text","purpose","memo"),Find("account","konto","account name","referenzkonto"),Find("category","kategorie"),Find("id","booking id","transaction id","buchungs-id"));}
-    private static string Norm(string value)=>new(value.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     private static string? Clean(string? v)=>string.IsNullOrWhiteSpace(v)?null:v.Trim();
     /// <summary>
     /// The row currency. A column that IS present but unusable throws, so the row shows up as an error
@@ -248,17 +243,11 @@ public static class ImportJobEndpoints
     }
     // The culture-dependent fallback this used to end with read a German 03.04.2026 as 4 March on any
     // host that was not de-DE - including the invariant culture a container runs with. See ImportDate.
-    private static DateOnly ParseDate(string? value)=>ImportDate.Parse(value);
+    private static DateOnly ParseDate(string? value)=>ImportDate.Parse(value,allowExcelSerial:true);
     // Statement amounts, so three trailing digits after a single separator mean grouping - see ImportNumber.
     private static decimal ParseAmount(string? value)=>ImportNumber.Parse(value,ImportNumber.ThreeDigitTail.Grouping);
     private static string Fingerprint(DateOnly? date,decimal amount,string currency,string? party,string? desc,string? external)=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{date:yyyy-MM-dd}|{amount}|{currency}|{party}|{desc}|{external}"))).ToLowerInvariant();
 
-    private static List<Dictionary<string,string>> ParseCsv(byte[] bytes){var text=Encoding.UTF8.GetString(bytes);var lines=SplitCsvRecords(text);if(lines.Count<2)return[];var delimiter=GuessDelimiter(lines[0]);var header=ParseCsvLine(lines[0],delimiter);var result=new List<Dictionary<string,string>>();foreach(var line in lines.Skip(1)){if(string.IsNullOrWhiteSpace(line))continue;var cells=ParseCsvLine(line,delimiter);var row=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);for(var i=0;i<header.Count;i++)row[header[i]]=i<cells.Count?cells[i]:"";result.Add(row);}return result;}
-    private static char GuessDelimiter(string line){var choices=new[]{';',',','\t'};return choices.OrderByDescending(c=>line.Count(x=>x==c)).First();}
-    private static List<string> SplitCsvRecords(string text){var rows=new List<string>();var sb=new StringBuilder();var quoted=false;for(var i=0;i<text.Length;i++){var ch=text[i];if(ch=='\"'){quoted=!quoted;sb.Append(ch);}else if((ch=='\n'||ch=='\r')&&!quoted){if(ch=='\r'&&i+1<text.Length&&text[i+1]=='\n')i++;rows.Add(sb.ToString());sb.Clear();}else sb.Append(ch);}if(sb.Length>0)rows.Add(sb.ToString());return rows;}
-    private static List<string> ParseCsvLine(string line,char delimiter){var cells=new List<string>();var sb=new StringBuilder();var quoted=false;for(var i=0;i<line.Length;i++){var ch=line[i];if(ch=='\"'){if(quoted&&i+1<line.Length&&line[i+1]=='\"'){sb.Append('\"');i++;}else quoted=!quoted;}else if(ch==delimiter&&!quoted){cells.Add(sb.ToString().Trim());sb.Clear();}else sb.Append(ch);}cells.Add(sb.ToString().Trim());return cells;}
 
-    private static List<Dictionary<string,string>> ParseXlsx(byte[] bytes){using var ms=new MemoryStream(bytes);using var zip=new ZipArchive(ms,ZipArchiveMode.Read);var shared=new List<string>();var sharedEntry=zip.GetEntry("xl/sharedStrings.xml");if(sharedEntry is not null){using var s=sharedEntry.Open();var doc=XDocument.Load(s);XNamespace ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";shared=doc.Descendants(ns+"si").Select(si=>string.Concat(si.Descendants(ns+"t").Select(t=>t.Value))).ToList();}var sheet=zip.GetEntry("xl/worksheets/sheet1.xml")??throw new InvalidDataException("Workbook has no first worksheet.");using var stream=sheet.Open();var x=XDocument.Load(stream);XNamespace n="http://schemas.openxmlformats.org/spreadsheetml/2006/main";var rawRows=new List<List<string>>();foreach(var row in x.Descendants(n+"row")){var cells=new SortedDictionary<int,string>();foreach(var cell in row.Elements(n+"c")){var reference=(string?)cell.Attribute("r")??"A1";var col=ColumnIndex(reference);var type=(string?)cell.Attribute("t");var value=cell.Element(n+"v")?.Value??cell.Element(n+"is")?.Element(n+"t")?.Value??"";if(type=="s"&&int.TryParse(value,out var si)&&si>=0&&si<shared.Count)value=shared[si];cells[col]=value;}var max=cells.Count==0?0:cells.Keys.Max();var arr=new List<string>();for(var i=0;i<=max;i++)arr.Add(cells.GetValueOrDefault(i,"") );rawRows.Add(arr);}if(rawRows.Count<2)return[];var headers=rawRows[0];var result=new List<Dictionary<string,string>>();foreach(var cells in rawRows.Skip(1)){var row=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);for(var i=0;i<headers.Count;i++)row[headers[i]]=i<cells.Count?cells[i]:"";result.Add(row);}return result;}
-    private static int ColumnIndex(string reference){var letters=new string(reference.TakeWhile(char.IsLetter).ToArray()).ToUpperInvariant();var result=0;foreach(var c in letters)result=result*26+(c-'A'+1);return result-1;}
 
 }
