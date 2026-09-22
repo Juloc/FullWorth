@@ -162,30 +162,90 @@ public sealed class IntelligenceFeedbackRecorder(
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        CloudOutboxProjection? projection = null;
-        if (cloudEligible)
-        {
-            projection = new CloudOutboxProjection(
-                "merchant_mapping",
-                JsonSerializer.Serialize(new
-                {
-                    alias = cloudAlias,
-                    mapping = new
-                    {
-                        categoryKey = categoryKey!.Trim(),
-                        categoryAlias = categoryName!.Trim(),
-                        categoryLocale = NormalizeLocale(categoryLocale),
-                        categoryIsCustom
-                    },
-                    direction = normalizedDirection,
-                    action = "corrected",
-                    confidence = 1m,
-                    observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
-                }));
-        }
+        var projection = cloudEligible
+            ? MerchantMappingProjection(cloudAlias!, normalizedDirection!, categoryKey!, categoryName!, categoryIsCustom, categoryLocale, "corrected")
+            : null;
 
         return TryRecordAsync(feedback, ct, projection);
     }
+
+    /// <summary>
+    /// Der Benutzer hat eine Haendler-zu-Kategorie-Zuordnung BESTAETIGT - entweder einen KI-Vorschlag
+    /// angenommen oder selbst eine Regel angelegt.
+    ///
+    /// Das ist dieselbe Erkenntnis wie eine Korrektur in den Buchungsdetails, nur auf der Ebene des
+    /// Haendlers statt einer einzelnen Buchung: "REWE ist Lebensmittel" gilt fuer jeden. Deshalb
+    /// dieselbe Eignungsregel und dieselbe Projektion - ein zweiter Cloud-Weg wuerde frueher oder
+    /// spaeter etwas anderes hinausschicken als dieser.
+    ///
+    /// Was hinausgeht, ist der normalisierte Haendlername und der Kategorieschluessel. Kein Betrag,
+    /// kein Datum, keine Buchung, kein Konto - die Zuordnung ist Allgemeinwissen, die Buchung nicht.
+    /// </summary>
+    public Task<bool> RecordMerchantMappingConfirmedAsync(
+        Guid fullWorthSpaceId,
+        Guid userId,
+        string? normalizedCounterparty,
+        string direction,
+        string? categoryKey,
+        string? categoryName,
+        string eventType,
+        CancellationToken ct,
+        bool categoryIsCustom = false,
+        string? categoryLocale = null)
+    {
+        var normalizedMerchant = MerchantNormalization.Normalize(normalizedCounterparty);
+        var normalizedDirection = NormalizeDirection(direction);
+        var cloudEligible = normalizedMerchant is not null &&
+                            normalizedDirection is not null &&
+                            !string.IsNullOrWhiteSpace(categoryKey) &&
+                            !string.IsNullOrWhiteSpace(categoryName);
+
+        var feedback = new IntelligenceFeedbackEvent
+        {
+            FullWorthSpaceId = fullWorthSpaceId,
+            UserId = userId,
+            EventType = eventType,
+            SubjectType = "merchant",
+            SubjectId = normalizedMerchant ?? string.Empty,
+            SubjectFingerprint = Fingerprint("merchant-direction", $"{normalizedMerchant}|{normalizedDirection}"),
+            OldValueJson = "{}",
+            NewValueJson = JsonSerializer.Serialize(new { categoryKey, direction = normalizedDirection }),
+            Source = "user",
+            CloudEligible = cloudEligible,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        var projection = cloudEligible
+            ? MerchantMappingProjection(normalizedMerchant!, normalizedDirection!, categoryKey!, categoryName!, categoryIsCustom, categoryLocale, "confirmed")
+            : null;
+
+        return TryRecordAsync(feedback, ct, projection);
+    }
+
+    private static CloudOutboxProjection MerchantMappingProjection(
+        string alias,
+        string direction,
+        string categoryKey,
+        string categoryName,
+        bool categoryIsCustom,
+        string? categoryLocale,
+        string action) =>
+        new("merchant_mapping",
+            JsonSerializer.Serialize(new
+            {
+                alias,
+                mapping = new
+                {
+                    categoryKey = categoryKey.Trim(),
+                    categoryAlias = categoryName.Trim(),
+                    categoryLocale = NormalizeLocale(categoryLocale),
+                    categoryIsCustom
+                },
+                direction,
+                action,
+                confidence = 1m,
+                observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
+            }));
 
     private async Task<bool> TryRecordAsync(
         IntelligenceFeedbackEvent feedback,

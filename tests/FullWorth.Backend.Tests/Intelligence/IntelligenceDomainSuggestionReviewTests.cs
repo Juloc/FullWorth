@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Intelligence;
@@ -9,6 +10,10 @@ namespace FullWorth.Backend.Tests.Intelligence;
 
 public sealed class IntelligenceDomainSuggestionReviewTests
 {
+    /// <summary>Die Rueckmeldung ist Nebensache dieser Tests; sie prueft LearningFeedsTheCloudTests.</summary>
+    private static IntelligenceFeedbackRecorder Recorder(IntelligenceDbContext db) =>
+        new(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
+
     [Fact]
     public async Task Accepting_product_proposal_marks_review_only_and_keeps_item_unchanged()
     {
@@ -64,7 +69,7 @@ public sealed class IntelligenceDomainSuggestionReviewTests
         await intelligenceDb.SaveChangesAsync();
         var actor = Guid.NewGuid();
 
-        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb)
+        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb))
             .AcceptAsync(suggestion.Id, actor, CancellationToken.None);
 
         Assert.True(result.Success);
@@ -116,7 +121,7 @@ public sealed class IntelligenceDomainSuggestionReviewTests
         intelligenceDb.IntelligenceSuggestions.Add(suggestion);
         await intelligenceDb.SaveChangesAsync();
 
-        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb)
+        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb))
             .AcceptAsync(suggestion.Id, Guid.NewGuid(), CancellationToken.None);
 
         Assert.False(result.Success);

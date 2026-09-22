@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Categories;
@@ -10,6 +11,10 @@ namespace FullWorth.Backend.Tests.Intelligence;
 
 public sealed class IntelligenceSuggestionReviewTests
 {
+    /// <summary>Die Rueckmeldung ist Nebensache dieser Tests; sie prueft LearningFeedsTheCloudTests.</summary>
+    private static IntelligenceFeedbackRecorder Recorder(IntelligenceDbContext db) =>
+        new(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
+
     [Fact]
     public async Task Accepting_merchant_category_suggestion_creates_confirmed_mapping_and_feedback()
     {
@@ -58,7 +63,7 @@ public sealed class IntelligenceSuggestionReviewTests
         intelligenceDb.IntelligenceSuggestions.Add(suggestion);
         await intelligenceDb.SaveChangesAsync();
         var actor = Guid.NewGuid();
-        var service = new IntelligenceSuggestionReviewService(intelligenceDb, financeDb);
+        var service = new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb));
 
         var result = await service.AcceptAsync(suggestion.Id, actor, CancellationToken.None);
 
@@ -74,7 +79,14 @@ public sealed class IntelligenceSuggestionReviewTests
             (await intelligenceDb.IntelligenceSuggestions.SingleAsync()).Status);
         var feedback = await intelligenceDb.IntelligenceFeedbackEvents.SingleAsync();
         Assert.Equal("ai_suggestion_accepted", feedback.EventType);
-        Assert.False(feedback.CloudEligible);
+
+        // Hier stand "Assert.False". Das war die Luecke, nicht die Regel: eine bestaetigte Zuordnung
+        // ist teilbares Wissen - "REWE ist Lebensmittel" gilt fuer jeden und enthaelt niemanden.
+        Assert.True(feedback.CloudEligible);
+
+        // Teilbar heisst nicht geteilt. Ohne angebundene und zugestimmte Cloud bleibt die Outbox leer,
+        // und diese Testwelt hat keine. Was tatsaechlich hinausgeht, prueft LearningFeedsTheCloudTests.
+        Assert.Empty(await intelligenceDb.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Fact]
@@ -107,7 +119,7 @@ public sealed class IntelligenceSuggestionReviewTests
         };
         intelligenceDb.IntelligenceSuggestions.Add(suggestion);
         await intelligenceDb.SaveChangesAsync();
-        var service = new IntelligenceSuggestionReviewService(intelligenceDb, financeDb);
+        var service = new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb));
 
         var result = await service.RejectAsync(suggestion.Id, Guid.NewGuid(), CancellationToken.None);
 

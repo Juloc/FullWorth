@@ -8,7 +8,8 @@ public sealed record IntelligenceSuggestionReviewResult(bool Success, string? Er
 
 public sealed class IntelligenceSuggestionReviewService(
     IntelligenceDbContext intelligenceDb,
-    FullWorthDbContext financeDb)
+    FullWorthDbContext financeDb,
+    IntelligenceFeedbackRecorder feedback)
 {
     public Task<List<IntelligenceSuggestion>> ListPendingAsync(int limit, CancellationToken ct) =>
         intelligenceDb.IntelligenceSuggestions.AsNoTracking()
@@ -97,21 +98,27 @@ public sealed class IntelligenceSuggestionReviewService(
         }
 
         MarkAccepted(suggestion, actorUserId, now);
-        intelligenceDb.IntelligenceFeedbackEvents.Add(new IntelligenceFeedbackEvent
-        {
-            FullWorthSpaceId = suggestion.FullWorthSpaceId.Value,
-            UserId = actorUserId,
-            EventType = "ai_suggestion_accepted",
-            SubjectType = "merchant",
-            SubjectId = normalizedCounterparty,
-            SubjectFingerprint = string.Empty,
-            OldValueJson = "{}",
-            NewValueJson = JsonSerializer.Serialize(new { categoryKey, direction }),
-            Source = "ai-review",
-            CloudEligible = false,
-            CreatedAt = now
-        });
         await intelligenceDb.SaveChangesAsync(ct);
+
+        // Das Uebernehmen verbessert das deterministische System - die LearnedMerchantMapping oben -
+        // UND geht als Erkenntnis an die Cloud, sofern sie aktiv ist. Genau dieser zweite Teil fehlte:
+        // die Rueckmeldung wurde mit CloudEligible=false geschrieben und blieb deshalb liegen, obwohl
+        // "REWE ist Lebensmittel" fuer jeden gilt und kein persoenliches Datum enthaelt.
+        //
+        // Ueber denselben Recorder wie die Korrektur in den Buchungsdetails: dieselbe Eignungsregel,
+        // dieselbe Projektion. Ein zweiter Cloud-Weg wuerde frueher oder spaeter etwas anderes
+        // hinausschicken als dieser.
+        await feedback.RecordMerchantMappingConfirmedAsync(
+            suggestion.FullWorthSpaceId.Value,
+            actorUserId,
+            normalizedCounterparty,
+            direction,
+            category.Key,
+            category.Name,
+            "ai_suggestion_accepted",
+            ct,
+            categoryIsCustom: !category.IsSystem);
+
         return new(true, null, suggestion);
     }
 

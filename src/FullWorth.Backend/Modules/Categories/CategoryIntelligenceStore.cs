@@ -11,6 +11,9 @@ namespace FullWorth.Backend.Modules.Categories;
 /// <summary>Ob eine Buchung von Hand als geprueft markiert wurde.</summary>
 public sealed record TransactionReviewState(bool IsReviewed);
 
+/// <summary>Was eine bestaetigte Zuordnung ueber ihre Kategorie mitteilen muss.</summary>
+public sealed record CategoryLearningFacts(string Key, string Name, bool IsSystem);
+
 /// <summary>Die Farbe, die eine Kategorie in der Oberflaeche bekommt.</summary>
 public sealed record CategoryAppearance(Guid CategoryId, string? Color);
 
@@ -80,6 +83,17 @@ public sealed class CategoryIntelligenceStore(FullWorthDbContext db)
     public Task<bool> CategoryExistsAsync(Guid space, Guid categoryId, CancellationToken ct) =>
         db.Categories.AsNoTracking().AnyAsync(category =>
             category.Id == categoryId && category.FullWorthSpaceId == space, ct);
+
+    /// <summary>
+    /// Was die Cloud-Rueckmeldung ueber eine Kategorie braucht: ihr Schluessel, ihr Name und ob sie
+    /// selbst angelegt wurde. Drei Felder aus einer Zeile - drei Abfragen dafuer waeren drei Wege,
+    /// auf denen sie auseinanderlaufen koennen.
+    /// </summary>
+    public Task<CategoryLearningFacts?> CategoryFactsAsync(Guid categoryId, CancellationToken ct) =>
+        db.Categories.AsNoTracking()
+            .Where(category => category.Id == categoryId)
+            .Select(category => new CategoryLearningFacts(category.Key, category.Name, category.IsSystem))
+            .SingleOrDefaultAsync(ct);
 
     public Task<string> CategoryNameAsync(Guid categoryId, CancellationToken ct) =>
         db.Categories.AsNoTracking()

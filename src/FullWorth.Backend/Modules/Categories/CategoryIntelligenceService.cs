@@ -37,7 +37,9 @@ public sealed record LearnResult(int Changed, Guid? RuleId);
 /// "existing" schreiben nur Buchungen um und gelten als Handarbeit, "future" legt zusaetzlich eine
 /// Regel an - und erst dann tragen die Buchungen die Herkunft "rule".
 /// </summary>
-public sealed class CategoryIntelligenceService(CategoryIntelligenceStore store)
+public sealed class CategoryIntelligenceService(
+    CategoryIntelligenceStore store,
+    Intelligence.IntelligenceFeedbackRecorder feedback)
 {
     /// <summary>So viele Buchungen zeigt die Ansicht hoechstens - darueber hinaus hilft die Suche.</summary>
     private const int OverviewLimit = 5000;
@@ -179,6 +181,18 @@ public sealed class CategoryIntelligenceService(CategoryIntelligenceStore store)
         await store.ApplyAsync(affected, updateCategory: true, request.CategoryId,
             scope == "future" ? "rule" : "manual", isIgnored: null, ct);
         foreach (var transaction in affected) await store.SetReviewedAsync(space, transaction.Id, true, ct);
+
+        // "Kuenftig so" ist eine bestaetigte Haendler-zu-Kategorie-Zuordnung - dieselbe Erkenntnis wie
+        // ein angenommener KI-Vorschlag, nur von Hand. Sie ging bisher nur in die lokale Regel; die
+        // Cloud erfuhr davon nichts, obwohl "REWE ist Lebensmittel" fuer jeden gilt. Bei "diese eine"
+        // oder "alle bisherigen" wird bewusst nichts gemeldet: dort sagt der Benutzer etwas ueber
+        // seine Buchungen, nicht ueber den Haendler.
+        if (scope == "future" && await store.CategoryFactsAsync(request.CategoryId, ct) is { } category)
+        {
+            await feedback.RecordMerchantMappingConfirmedAsync(
+                space, userId, merchant, direction, category.Key, category.Name,
+                "merchant_rule_confirmed", ct, categoryIsCustom: !category.IsSystem);
+        }
 
         return new LearnResult(affected.Count, ruleId);
     }
