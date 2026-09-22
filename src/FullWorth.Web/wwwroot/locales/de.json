@@ -1059,13 +1059,9 @@
     "user": "Nutzer"
   },
   "export": {
-    "title": "Vollständige Sicherung",
-    "hint": "ZIP mit allen Daten dieses Bereichs, wiederherstellbar",
-    "done": "Export heruntergeladen.",
-    "csvTitle": "Tabellen als CSV",
-    "csvHint": "ZIP mit einer Tabelle je Bereich, für Excel oder Numbers",
-    "xlsxTitle": "Excel-Arbeitsmappe",
-    "xlsxHint": "Dieselben Daten als xlsx, ein Blatt je Bereich"
+    "title": "Daten exportieren",
+    "hint": "Sicherung oder Tabellen – als ZIP, Excel oder JSON",
+    "done": "Export heruntergeladen."
   },
   "sharing": {
     "title": "Freigabe & Mitglieder",
