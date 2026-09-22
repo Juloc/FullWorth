@@ -1,0 +1,61 @@
+# Routen, die heute kein Aufrufer im Frontend erreicht (#177).
+#
+# Das ist eine RATSCHE, keine Bestandsaufnahme: die Liste darf nur kuerzer werden.
+# RouteReachabilityTests haelt beides fest - eine neue unerreichbare Route laesst den Test rot werden,
+# und eine Route, die inzwischen einen Aufrufer hat, muss hier heraus.
+#
+# Nicht jede Zeile ist ein Fehler. Manches ist absichtlich ohne Oberflaeche:
+#
+#   /api/bootstrap/*                bedient der Auth-Host (FullWorth.Web), nicht die Anwendung
+#   /api/coach/ask                  die kurze Frage ohne Unterhaltung; die Seite benutzt Unterhaltungen
+#
+# Der Rest ist fertig gebaut und unerreichbar, und die groessten Brocken darunter sind:
+#
+#   /api/transaction-bulk/*         Sammelbearbeitung von Buchungen, 716 Zeilen in vier Dateien
+#   /api/analytics/query|sankey     freie Auswertung samt Fluss-Diagramm - und der Rumpf laeuft nicht
+#                                   einmal, FinancialReconciliationMiddleware faengt beide Routen ab
+#   /api/saved-analyses/*           gespeicherte Auswertungen, volles CRUD
+#   /api/account-experience/*       Darstellung und Reihenfolge der Konten
+#   /api/category-merge             Kategorien zusammenfuehren
+#   /api/purchase-review            Kaufpruefung - ein Hintergrunddienst schreibt dafuer schon
+#                                   Benachrichtigungen, die ins Leere fuehren
+#
+DELETE /api/budget-groups/{id:guid}
+DELETE /api/saved-analyses/{id:guid}
+GET /api/account-experience/group-appearances
+GET /api/bank-capabilities
+GET /api/category-intelligence/category-appearances
+GET /api/category-merge/{sourceCategoryId:guid}/preview
+GET /api/intelligence/brand-assets/{contentSha256}
+GET /api/intelligence/digests/{id:guid}
+GET /api/investments/net-worth-contribution
+GET /api/merchants/resolve
+GET /api/product-learning/category-suggestions
+GET /api/purchase-analytics/by-merchant
+GET /api/purchase-review/{purchaseId:guid}
+GET /api/purchases/discount-analytics
+GET /api/spending-reviews/reasons
+GET /api/tax/profiles
+POST /api/account-experience/reorder
+POST /api/account-experience/{accountId:guid}/seen
+POST /api/analytics/sankey
+POST /api/bootstrap/accept-invite
+POST /api/bootstrap/deactivate-user
+POST /api/bootstrap/first-admin
+POST /api/bootstrap/purge-user
+POST /api/bootstrap/reactivate-user
+POST /api/category-intelligence/bulk
+POST /api/category-intelligence/learn
+POST /api/category-merge/{sourceCategoryId:guid}
+POST /api/coach/ask
+POST /api/export/wealth-backup/validate
+POST /api/import/wealth-backup/validate
+POST /api/purchase-review/{purchaseId:guid}/confirm
+POST /api/purchase-review/{purchaseId:guid}/confirm-difference
+POST /api/transaction-bulk/advanced-preview
+POST /api/transaction-bulk/execute
+PUT /api/account-experience/{accountId:guid}/appearance
+PUT /api/budget-groups/{id:guid}
+PUT /api/category-intelligence/category-appearances/{categoryId:guid}
+PUT /api/category-order
+PUT /api/saved-analyses/{id:guid}
