@@ -351,11 +351,14 @@ async function openCandidates(row) {
   // Baustein wie bei der ING-Kontoauswahl schliesst diese Luecke, statt sie eigens nachzubauen.
   const items = candidates.map(candidate => ({
     id: ctx.esc(candidate.transactionId),
-    selected: true,
+    // Vorgewählt ist, was nicht als unwahrscheinlich bewertet wurde. Ohne KI ist `band` leer und
+    // alles bleibt vorgewählt — genau wie bisher (#124).
+    selected: candidate.band !== 'low',
     html: `<div class="row-main">
         <div class="row-title">${ctx.esc(candidate.counterparty || ctx.get('common.empty'))}</div>
         <div class="row-sub">${candidate.date ? ctx.date(candidate.date) : ''}${candidate.categoryName ? ` · ${ctx.esc(candidate.categoryName)}` : ''}${candidate.accountName ? ` · ${ctx.esc(candidate.accountName)}` : ''}</div>
         <div class="col-candidate-reasons">${candidate.reasons.map(reason => `<span class="col-reason">${ctx.esc(t('reason_' + reason))}</span>`).join('')}</div>
+        ${candidate.reason ? `<div class="row-sub col-candidate-verdict">${ctx.esc(candidate.reason)}</div>` : ''}
       </div>
       <span class="amount">${ctx.money(candidate.amount, candidate.currency)}</span>`
   }));

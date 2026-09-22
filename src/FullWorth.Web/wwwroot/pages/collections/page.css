@@ -58,3 +58,7 @@
 .col-search-assigned{opacity:.6}
 
 .col-search-more>summary{cursor:pointer;color:var(--cta)}
+
+/* #124, KI-Stufe: der Satz, warum ein Kandidat passt oder nicht. Er steht unter den deterministischen
+   Gründen und ist ruhiger als sie - eine Bewertung ist weicher als ein Merkmal. */
+.col-candidate-verdict { font-style: italic; opacity: .85; }

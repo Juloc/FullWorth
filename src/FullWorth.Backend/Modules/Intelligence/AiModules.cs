@@ -34,6 +34,12 @@ public static class AiModules
     /// <summary>Der Finanz-Coach.</summary>
     public const string Coach = "coach";
 
+    /// <summary>
+    /// Kandidaten einer Sammlung nachbewerten und begruenden (#124). Die Kandidaten selbst findet
+    /// das deterministische System; diese Stufe ordnet sie und sagt, warum.
+    /// </summary>
+    public const string CollectionSuggestions = "collection-suggestions";
+
     /// <summary>Logos zu Haendlern finden, wenn keine Cloud angebunden ist.</summary>
     public const string LogoResearch = "logo-research";
 
@@ -47,6 +53,7 @@ public static class AiModules
         Products,
         Contracts,
         Coach,
+        CollectionSuggestions,
         LogoResearch,
         InternetResearch
     ];

@@ -219,7 +219,7 @@ public static class CollectionEndpoints
     /// <summary>Vorschlaege - und ausdruecklich ohne einen einzigen Schreibvorgang.</summary>
     private static async Task<IResult> Candidates(
         Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
-        CollectionStore store, CancellationToken ct)
+        CollectionStore store, Intelligence.CollectionSuggestionAiAdapter ranking, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
@@ -228,8 +228,27 @@ public static class CollectionEndpoints
         if (entity is null) return Results.NotFound();
 
         var visible = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
-        return Results.Ok(await store.CandidatesAsync(
-            fullWorthSpaceId, id, entity.StartDate, entity.EndDate, visible, ct));
+        var candidates = await store.CandidatesAsync(
+            fullWorthSpaceId, id, entity.StartDate, entity.EndDate, visible, ct);
+
+        // Die KI-Stufe aus #124. Sie ordnet und begruendet, was das deterministische System gefunden
+        // hat - und liefert es unveraendert zurueck, wenn keine KI da oder das Modul nicht freigegeben
+        // ist. Der Aufrufer merkt den Unterschied nur an band/reason.
+        var ranked = await ranking.RankAsync(userId, fullWorthSpaceId, id, entity.Name, candidates, ct);
+        return Results.Ok(ranked.Select(item => new
+        {
+            item.Candidate.TransactionId,
+            item.Candidate.Date,
+            item.Candidate.Amount,
+            item.Candidate.Currency,
+            item.Candidate.Counterparty,
+            item.Candidate.CategoryName,
+            item.Candidate.AccountName,
+            item.Candidate.Reasons,
+            item.Candidate.Score,
+            item.Band,
+            item.Reason
+        }));
     }
 
     private static async Task<IResult> OfTransaction(
