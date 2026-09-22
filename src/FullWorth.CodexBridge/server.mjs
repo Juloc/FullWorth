@@ -137,11 +137,52 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+/**
+ * Was vom Befehl ins Protokoll darf (#156).
+ *
+ * Frueher stand hier die ganze Befehlszeile - und der Prompt haengt als Argument daran. Damit lag
+ * bei jeder Inferenz der vollstaendige Eingabetext im Containerlog: bei einem Beleg also Haendler,
+ * Artikel und Betraege, bei einer Gehaltsabrechnung mehr. Fuer eine Finanzanwendung ist das kein
+ * Rauschen, sondern ein Datenschutzproblem.
+ *
+ * Uebrig bleibt, was eine Fehlersuche wirklich braucht: der Unterbefehl und die Namen der Schalter.
+ * Deren WERTE nicht - ein Wert ist entweder ein Pfad, ein Modellname oder eben der Prompt, und die
+ * Unterscheidung am String festzumachen waere eine Vermutung. Statt des Prompts steht seine Laenge
+ * da; das beantwortet "ist er ueberhaupt angekommen" und "war er zu gross", ohne ihn zu zeigen.
+ */
 function commandForLog(args) {
-  return ['codex', ...args].map(x => /\s/.test(x) ? JSON.stringify(x) : x).join(' ');
+  const parts = ['codex'];
+  let values = 0;
+  for (const arg of args) {
+    if (typeof arg === 'string' && arg.startsWith('-')) {
+      // Ein Schalter kann seinen Wert per Gleichheitszeichen tragen - der gehoert genauso wenig hin.
+      parts.push(arg.split('=')[0]);
+      continue;
+    }
+    // Ein kurzes Wort ohne Leerzeichen ist ein Unterbefehl (exec, login, status), kein Nutzertext.
+    if (typeof arg === 'string' && arg.length <= 24 && !/\s/.test(arg)) parts.push(arg);
+    else values += 1;
+  }
+  const args_ = args.filter(x => typeof x === 'string');
+  const promptChars = args_.reduce((sum, x) => sum + (/\s/.test(x) ? x.length : 0), 0);
+  return values > 0
+    ? `${parts.join(' ')} [+${values} Wert(e), ${promptChars} Zeichen]`
+    : parts.join(' ');
 }
 
-async function runCodex(args, { ownerScope, scope = 'codex', stage = 'command', requestId = null, timeoutMs = 180000 } = {}) {
+async function runCodex(args, {
+  ownerScope,
+  scope = 'codex',
+  stage = 'command',
+  requestId = null,
+  timeoutMs = 180000,
+  // Ob die Ausgabe des Kindprozesses zeilenweise ins Protokoll darf (#156).
+  //
+  // Standardmaessig nicht, und zwar genau andersherum als vorher: bei einer Inferenz IST die Ausgabe
+  // das Ergebnis - die erkannten Buchungen, Betraege, Namen. Erlaubt wird sie nur dort, wo sie keine
+  // Nutzerdaten enthalten kann (Version, Anmeldestatus, Modellliste), und dort wird sie gebraucht.
+  logOutput = false
+} = {}) {
   const home = codexHome(ownerScope);
   await mkdir(home, { recursive: true });
   return await new Promise((resolve) => {
@@ -173,23 +214,30 @@ async function runCodex(args, { ownerScope, scope = 'codex', stage = 'command', 
       setTimeout(() => child.kill('SIGKILL'), 3000).unref();
     }, timeoutMs);
 
+    // Was der Prozess ausgibt, wird IMMER gesammelt - der Aufrufer braucht es als Ergebnis. Ins
+    // Protokoll geht es nur, wenn es dort nichts zu suchen haben kann (siehe logOutput oben).
+    // Andernfalls bleibt eine Zaehlung: dass etwas kam und wieviel, ohne was.
     const consume = (stream, target, streamName) => {
       let pending = '';
+      let lines_ = 0;
+      let chars = 0;
+      const take = raw => {
+        const line = redact(raw);
+        target.push(line);
+        lines_ += 1;
+        chars += line.length;
+        if (logOutput) addLog(ownerScope, scope, stage, streamName, line, requestId);
+      };
       stream.on('data', chunk => {
         pending += chunk.toString('utf8');
         const lines = pending.split(/\r?\n/);
         pending = lines.pop() ?? '';
-        for (const raw of lines) {
-          const line = redact(raw);
-          target.push(line);
-          addLog(ownerScope, scope, stage, streamName, line, requestId);
-        }
+        for (const raw of lines) take(raw);
       });
       stream.on('end', () => {
-        if (!pending) return;
-        const line = redact(pending);
-        target.push(line);
-        addLog(ownerScope, scope, stage, streamName, line, requestId);
+        if (pending) take(pending);
+        if (!logOutput && lines_ > 0)
+          addLog(ownerScope, scope, stage, 'system', `${streamName}: ${lines_} Zeile(n), ${chars} Zeichen`, requestId);
       });
     };
 
@@ -200,16 +248,57 @@ async function runCodex(args, { ownerScope, scope = 'codex', stage = 'command', 
   });
 }
 
+/**
+ * Die Version wird einmal je Bruecken-Prozess ermittelt (#156).
+ *
+ * Sie kann sich waehrend der Laufzeit nicht aendern: die ausfuehrbare Datei liegt im Abbild, und ein
+ * neues Abbild bedeutet einen neuen Prozess. Sie bei jeder Inferenz neu zu erfragen war ein
+ * Kindprozess fuer eine Antwort, die schon feststand.
+ */
+let versionPromise = null;
+function codexVersion(ownerScope, requestId) {
+  versionPromise ??= runCodex(['--version'], {
+    ownerScope, scope: 'auth', stage: 'version', requestId, timeoutMs: 15000, logOutput: true
+  }).then(result => result.stdout.trim() || result.stderr.trim() || null)
+    // Ein gescheiterter Versuch darf sich nicht festschreiben - sonst bleibt die Version fuer die
+    // Lebensdauer des Prozesses leer, weil der erste Aufruf unglücklich lief.
+    .catch(() => { versionPromise = null; return null; });
+  return versionPromise;
+}
+
+/**
+ * Der Anmeldezustand wird je Besitzer zwischengespeichert (#156).
+ *
+ * Er kann sich aendern - jemand meldet sich ab, ein Token laeuft aus -, deshalb mit Verfallszeit und
+ * nicht fuer immer. Fuenf Minuten: lange genug, dass eine Statusseite oder ein Modellwaehler nicht
+ * bei jedem Blick einen Prozess startet, kurz genug, dass eine abgelaufene Anmeldung nicht lange
+ * unbemerkt bleibt. Anmelden, Abmelden und ein Fehlschlag, der nach fehlender Anmeldung aussieht,
+ * verwerfen ihn sofort - darauf zu warten waere der Fall, in dem die Verfallszeit stoert.
+ */
+const authCacheTtlMs = 5 * 60 * 1000;
+const authCache = new Map();
+
+function invalidateAuth(ownerScope) {
+  authCache.delete(ownerScope);
+}
+
 async function codexStatus(ownerScope, requestId = null) {
-  const version = await runCodex(['--version'], { ownerScope, scope: 'auth', stage: 'version', requestId, timeoutMs: 15000 });
-  const status = await runCodex(['login', 'status'], { ownerScope, scope: 'auth', stage: 'status', requestId, timeoutMs: 20000 });
+  const cached = authCache.get(ownerScope);
+  if (cached && Date.now() - cached.at < authCacheTtlMs)
+    return { ...cached.value, codexVersion: await codexVersion(ownerScope, requestId) };
+
+  const [version, status] = await Promise.all([
+    codexVersion(ownerScope, requestId),
+    runCodex(['login', 'status'], { ownerScope, scope: 'auth', stage: 'status', requestId, timeoutMs: 20000, logOutput: true })
+  ]);
   const combined = `${status.stdout}\n${status.stderr}`.trim();
-  return {
+  const value = {
     connected: status.code === 0 && !/not logged|not signed|logged out/i.test(combined),
-    codexVersion: version.stdout.trim() || version.stderr.trim() || null,
     statusText: combined || null,
     exitCode: status.code
   };
+  authCache.set(ownerScope, { at: Date.now(), value });
+  return { ...value, codexVersion: version };
 }
 
 function parseAuthHints(text) {
@@ -299,6 +388,9 @@ async function startDeviceAuth(ownerScope) {
     if (session.timer) clearTimeout(session.timer);
     session.exitCode = code;
     if (session.status === 'waiting') session.status = code === 0 ? 'connected' : 'error';
+    // #156: nach einem Anmeldeversuch ist der zwischengespeicherte Zustand ueberholt - in beide
+    // Richtungen, denn auch ein gescheiterter Versuch kann eine vorher gueltige Sitzung beendet haben.
+    invalidateAuth(ownerScope);
     session.completedAt ||= new Date().toISOString();
     session.process = null;
     session.timer = null;
@@ -607,6 +699,11 @@ Do not use shell commands, files, web browsing, MCP tools, or any external tools
     let output = '';
     try { output = await readFile(outputPath, 'utf8'); } catch { /* handled below */ }
     const success = execution.code === 0 && Boolean(output.trim());
+    // #156: sieht der Fehlschlag nach einer abgelaufenen Anmeldung aus, ist der zwischengespeicherte
+    // Zustand nachweislich falsch - sonst behauptet er bis zum Ablauf der Frist weiter "angemeldet",
+    // und jeder Versuch in diesem Fenster scheitert gleich.
+    if (!success && /not logged|not signed|logged out|unauthor/i.test(execution.stderr || ''))
+      invalidateAuth(ownerScope);
     return {
       success,
       requestId,
@@ -645,7 +742,10 @@ async function scanReceipt(payload, ownerScope) {
     const prompt = buildPrompt(payload.categories || [], prepared.sources);
     await writeFile(schemaPath, JSON.stringify(receiptSchema, null, 2), { mode: 0o600 });
     addLog(ownerScope, 'scan', 'schema', 'system', 'Structured output schema written.', requestId);
-    addLog(ownerScope, 'scan', 'prompt', 'prompt', prompt, requestId);
+    // Der Prompt stand hier frueher vollstaendig im Protokoll (#156). Er beschreibt den Beleg - und
+    // damit Haendler, Artikel und Betraege. Uebrig bleibt seine Groesse: das beantwortet, ob er
+    // gebaut wurde und ob er zu gross war, ohne seinen Inhalt zu zeigen.
+    addLog(ownerScope, 'scan', 'prompt', 'system', `Prompt built: ${prompt.length} Zeichen.`, requestId);
 
     const args = [
       'exec', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules',
@@ -730,7 +830,9 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/logout') {
       cancelActiveAuth(ownerScope, 'Device login cancelled by logout.');
-      const result = await runCodex(['logout'], { ownerScope, scope: 'auth', stage: 'logout', timeoutMs: 20000 });
+      // #156: der zwischengespeicherte Anmeldezustand ist ab hier falsch.
+      invalidateAuth(ownerScope);
+      const result = await runCodex(['logout'], { ownerScope, scope: 'auth', stage: 'logout', timeoutMs: 20000, logOutput: true });
       return send(res, result.code === 0 ? 200 : 500, {
         success: result.code === 0,
         stdout: result.stdout,
@@ -746,7 +848,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/models') {
-      const result = await runCodex(['debug', 'models'], { ownerScope, scope: 'models', stage: 'catalog', timeoutMs: 30000 });
+      const result = await runCodex(['debug', 'models'], { ownerScope, scope: 'models', stage: 'catalog', timeoutMs: 30000, logOutput: true });
       let models = null;
       try { models = JSON.parse(result.stdout); } catch { /* raw remains available */ }
       return send(res, result.code === 0 ? 200 : 500, {
