@@ -143,7 +143,13 @@ public static class PersonalDataPurgeManifest
     /// </summary>
     private static readonly HashSet<Type> DeletedWithRelatedRootTypes =
     [
-        typeof(CloudSubmissionOutbox)
+        typeof(CloudSubmissionOutbox),
+        // Wofuer ein Zugang arbeiten darf. Die meisten Zeilen gehoeren dem Zugang der INSTANZ und
+        // ueberleben jede Kontoloeschung - die hat keine Wurzel in einem Benutzer. Hat ein Benutzer
+        // einen eigenen Zugang, faellt dessen Freigabe mit ihm: der Fremdschluessel auf
+        // "AiCredentials" ist ON DELETE CASCADE. Als Instanzdaten zu fuehren waere deshalb falsch -
+        // es haengt am Zugang, nicht an der Installation.
+        typeof(AiModuleGrant)
     ];
 
     public static IReadOnlyList<PurgeEntityDescriptor> Describe(IModel model)

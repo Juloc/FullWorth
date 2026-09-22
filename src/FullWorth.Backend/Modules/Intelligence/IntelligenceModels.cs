@@ -76,6 +76,21 @@ public sealed class AiInstanceSettings
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Wofuer ein Zugang arbeiten darf - eine Zeile je Modul. Siehe <see cref="AiModules"/>.
+///
+/// Haengt am ZUGANG, nicht an der Instanz: "welche KI darf was" ist die Frage, und wer die KI
+/// austauscht, hat damit auch die Freigaben der alten nicht mehr. Ein eigener Zugang eines Benutzers
+/// braucht keine Freigabe - er ist seiner.
+/// </summary>
+public sealed class AiModuleGrant
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CredentialId { get; set; }
+    public string Module { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class AiUserSettings
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -203,6 +218,20 @@ public static class IntelligenceModelConfiguration
             e.Property(x => x.DefaultVisionModel).HasMaxLength(120);
             e.Property(x => x.DailyBudgetEur).HasPrecision(18, 4);
             e.Property(x => x.MonthlyBudgetEur).HasPrecision(18, 4);
+        });
+
+        b.Entity<AiModuleGrant>(e =>
+        {
+            // Dieselbe Freigabe zweimal ist keine zweite Freigabe.
+            e.HasIndex(x => new { x.CredentialId, x.Module }).IsUnique();
+            e.Property(x => x.Module).HasMaxLength(64);
+            // Der Fremdschluessel ist nicht Zierde: eine Freigabe ohne ihren Zugang ist nichts, und
+            // das Loeschen eines Kontos findet abhaengige Zeilen genau ueber diese Kante. Ohne sie
+            // bliebe die Freigabe eines geloeschten eigenen Zugangs als Waise stehen.
+            e.HasOne<AiCredential>()
+                .WithMany()
+                .HasForeignKey(x => x.CredentialId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<AiUserSettings>(e =>

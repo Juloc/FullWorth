@@ -184,6 +184,7 @@ public static class BackendApplication
         builder.Services.AddScoped<FinancialDomainSignalDetectionService>();
         builder.Services.AddScoped<FinancialSignalJobProcessor>();
         builder.Services.AddSingleton<DeterministicCoachEngine>();
+        builder.Services.AddScoped<AiAccessResolver>();
         builder.Services.AddScoped<CoachAiAccessResolver>();
         builder.Services.AddScoped<CoachModelCatalogService>();
         builder.Services.AddScoped<ICoachProviderResolver, UserAiCoachProviderResolver>();

@@ -22,91 +22,26 @@ public sealed record CoachModelCatalog(
     string? DefaultModel,
     IReadOnlyList<CoachModelOption> Models);
 
-public sealed class CoachAiAccessResolver(
-    IntelligenceDbContext db,
-    IntelligenceStore store,
-    IntelligenceProviderRegistry providers)
+/// <summary>
+/// Der Zugang des Coach - aufgeloest von <see cref="AiAccessResolver"/> wie bei jeder anderen
+/// Funktion auch.
+///
+/// Hier stand bis zuletzt die einzige richtige Aufloesung der Anwendung: Benutzer zuerst, Instanz
+/// darunter. Sie lag nur im falschen Modul, und deshalb hatten die geplanten Jobs und der Belegscan
+/// jeweils ihre eigene. Die Logik ist unveraendert in das KI-System gewandert; was hier bleibt, ist
+/// die Uebersetzung in den Coach-eigenen Typ und das Modul, fuer das gefragt wird.
+/// </summary>
+public sealed class CoachAiAccessResolver(AiAccessResolver resolver)
 {
     public async Task<CoachAiAccess?> ResolveAsync(Guid userId, CancellationToken ct)
     {
-        var instance = await db.AiInstanceSettings.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.ScopeKey == AiInstanceSettings.InstanceScopeKey, ct);
-        var userSettings = await db.AiUserSettings.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.UserId == userId, ct);
-
-        var systemReady = instance?.Enabled == true && instance.CredentialId.HasValue;
-        var userAllowed = !systemReady || instance!.AllowUserCredentials;
-
-        if (userAllowed && userSettings?.Enabled == true && userSettings.CredentialId is { } userCredentialId)
-        {
-            var userAccess = await TryResolveAsync(
-                userCredentialId,
-                userId,
-                userSettings.TextModel,
-                "user",
-                ct);
-            if (userAccess is not null) return userAccess;
-        }
-
-        if (systemReady && instance!.CredentialId is { } systemCredentialId)
-        {
-            var systemAccess = await TryResolveAsync(
-                systemCredentialId,
-                null,
-                instance.DefaultTextModel,
-                "system",
-                ct);
-            if (systemAccess is not null) return systemAccess;
-        }
-
-        // A personal credential remains usable on an instance that has no active system credential,
-        // even when AllowUserCredentials was never explicitly enabled.
-        if (!systemReady && userSettings?.Enabled == true && userSettings.CredentialId is { } fallbackUserCredentialId)
-            return await TryResolveAsync(
-                fallbackUserCredentialId,
-                userId,
-                userSettings.TextModel,
-                "user",
-                ct);
-
-        return null;
-    }
-
-    private async Task<CoachAiAccess?> TryResolveAsync(
-        Guid credentialId,
-        Guid? ownerUserId,
-        string? configuredModel,
-        string source,
-        CancellationToken ct)
-    {
-        var credential = await db.AiCredentials.AsNoTracking()
-            .SingleOrDefaultAsync(
-                x => x.Id == credentialId && x.OwnerUserId == ownerUserId,
-                ct);
-        if (credential is null) return null;
-
-        IIntelligenceProvider provider;
-        try { provider = providers.GetRequired(credential.Provider); }
-        catch (InvalidOperationException) { return null; }
-
-        string secret;
-        try { secret = await store.ResolveCredentialSecretAsync(credential.Id, ownerUserId, ct); }
-        catch (KeyNotFoundException) { return null; }
-
-        var model = NormalizeDefaultModel(configuredModel, credential.Provider);
-        if (credential.Provider == IntelligenceProviders.OpenAiCompatible && string.IsNullOrWhiteSpace(model))
-            return null;
-
-        return new(source, credential, provider, secret, model);
-    }
-
-    private static string NormalizeDefaultModel(string? model, string provider)
-    {
-        var value = model?.Trim() ?? string.Empty;
-        if (value.Length > 120) value = value[..120];
-        if (string.IsNullOrWhiteSpace(value) && provider == IntelligenceProviders.OpenAi)
-            return "gpt-5.6-terra";
-        return value;
+        var access = await resolver.ResolveAsync(AiModules.Coach, userId, AiModelKind.Text, ct);
+        return access is null
+            ? null
+            // "system" ist der Name, unter dem der Coach die Instanz seit jeher fuehrt - er steht so
+            // in der Modellauswahl der Oberflaeche.
+            : new(access.Source == "instance" ? "system" : access.Source,
+                access.Credential, access.Provider, access.Secret, access.Model);
     }
 }
 

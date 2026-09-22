@@ -17,6 +17,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
 
     public DbSet<AiCredential> AiCredentials => Set<AiCredential>();
     public DbSet<AiInstanceSettings> AiInstanceSettings => Set<AiInstanceSettings>();
+    public DbSet<AiModuleGrant> AiModuleGrants => Set<AiModuleGrant>();
     public DbSet<AiUserSettings> AiUserSettings => Set<AiUserSettings>();
     public DbSet<AiRun> AiRuns => Set<AiRun>();
     public DbSet<AiRunItem> AiRunItems => Set<AiRunItem>();
