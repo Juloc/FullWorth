@@ -90,7 +90,15 @@ public sealed class FinancialReconciliationReportService(
             key = pair.Key,
             value = Measure(pair.Value, request.Measure),
             count = pair.Value.Select(item => item.TransactionId).Distinct().Count()
-        }).OrderBy(x => x.key, StringComparer.OrdinalIgnoreCase).ToArray();
+        })
+        // Bei "spend" und "income" ist eine Null keine Aussage, sondern ein leerer Balken: die Gruppe
+        // existiert nur, weil dort Betraege der ANDEREN Richtung liegen. Eine Kategorie, in der nichts
+        // ausgegeben wurde, gehoert nicht in eine Ausgabenreihe - /api/analytics/chart zeigt sie auch
+        // nicht, und zwei Auswertungen derselben Daten sollen nicht verschieden viele Balken haben.
+        // Bei "net" ist die Null dagegen eine echte Aussage (Einnahmen gleich Ausgaben) und bleibt.
+        .Where(x => x.value != 0 || !string.Equals(request.Measure, "spend", StringComparison.OrdinalIgnoreCase)
+                                 && !string.Equals(request.Measure, "income", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(x => x.key, StringComparer.OrdinalIgnoreCase).ToArray();
 
         return new
         {

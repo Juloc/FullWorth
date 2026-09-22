@@ -13,6 +13,12 @@ public sealed record SavedAnalysisWrite(string Name, AnalysisQueryWrite Query, s
 /// Hier steht, was die Antwort ist: welche Kennzahlen und Dimensionen es gibt, wie ein Betrag seinem
 /// Schluessel zugeordnet wird, und wie aus den Betraegen eine Zahl wird. Woher die Betraege kommen,
 /// entscheidet <see cref="AnalysisContributionService"/>.
+///
+/// <b>Achtung:</b> <c>Query</c> und <c>Sankey</c> laufen heute NICHT. <c>FinancialReconciliationMiddleware</c>
+/// faengt <c>POST /api/analytics/query</c> und <c>POST /api/analytics/sankey</c> vor der Zuordnung ab
+/// und beantwortet sie aus <c>FinancialReconciliationReportService.AnalyticsAsync</c>. Wer hier etwas
+/// aendert, aendert nichts - nachgemessen an einer Antwort, die die Aenderung nicht zeigte. Die
+/// gespeicherten Auswertungen darunter laufen dagegen normal.
 /// </summary>
 public static class AnalysisQueryEndpoints
 {
