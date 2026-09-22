@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.FullWorthSpaces;
@@ -55,6 +56,41 @@ public sealed class PurchaseReconciliationAgreementTests
 
         foreach (var flag in new[] { "itemsReconciled", "formulaReconciled", "paymentsReconciled", "fullyReconciled" })
             Assert.Equal(workspace.GetProperty(flag).GetBoolean(), direct.GetProperty(flag).GetBoolean());
+    }
+
+    [Fact]
+    public async Task The_purchase_page_reads_only_fields_the_answer_actually_has()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var world = new World();
+        await SeedAsync(factory, world, purchaseTotal: 24m, itemTotal: 20m, tip: 4m);
+        using var client = factory.CreateClient();
+
+        var state = await ReadAsync(client, world, $"/api/purchases/{world.Purchase:D}/reconciliation");
+        var fields = state.EnumerateObject().Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
+
+        // Zwischen dieser Antwort und der Kaufseite steht nichts - kein Vertrag, kein Typ, kein
+        // Compiler. Wird hier ein Feld umbenannt, zeigt die Seite stumm ein Gedankenstrich-Zeichen
+        // und niemand merkt es. Deshalb liest der Test nach, was die Seite anfasst.
+        var read = Regex.Matches(PurchasePage(), @"\brec\.([a-zA-Z][a-zA-Z0-9]*)")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        Assert.NotEmpty(read);
+
+        var missing = read.Where(name => !fields.Contains(name)).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Assert.True(missing.Length == 0,
+            "pages/purchases/page.js liest Felder, die GET /api/purchases/{id}/reconciliation nicht " +
+            "liefert:" + Environment.NewLine + "  " + string.Join(Environment.NewLine + "  ", missing));
+    }
+
+    private static string PurchasePage()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(
+            dir!.FullName, "src", "FullWorth.Web", "wwwroot", "pages", "purchases", "page.js"));
     }
 
     [Fact]
