@@ -686,6 +686,24 @@
     // Das Depot des Girokontos a9. Drei Positionen tragen einen Einstand und damit einen Gewinn,
     // die vierte nicht: so sieht ein Depot aus, in das die Bank Bestaende liefert und der
     // Eigentuemer seine Kaeufe noch nicht eingetragen hat.
+    // Merkliste (#135). Eine Liste, drei beobachtete Papiere - eines mit Zielkurs und Notiz, eines
+    // ohne beides, und eines ohne bekannten Kurs: das ist der Fall, in dem die Zeile keine erfundene
+    // Zahl zeigen darf.
+    'investments/watchlists': [{ id: 'w1', name: 'Merkliste' }],
+    'investments/watchlists/w1/items': [
+      { securityId: 's1', name: 'MSCI World ETF', ticker: 'IWDA', assetType: 'etf',
+        targetPrice: 95, notes: 'Nachkaufen unter 95', price: 102.4, priceDate: '2026-09-19', currency: 'EUR' },
+      { securityId: 's2', name: 'Allianz SE', ticker: 'ALV', assetType: 'stock',
+        targetPrice: null, notes: null, price: 288.1, priceDate: '2026-09-19', currency: 'EUR' },
+      { securityId: 's3', name: 'Frisch notiert AG', ticker: 'NEU', assetType: 'stock',
+        targetPrice: null, notes: null, price: null, priceDate: null, currency: 'EUR' }
+    ],
+    'investments/securities': [
+      { id: 's1', name: 'MSCI World ETF', ticker: 'IWDA', assetType: 'etf' },
+      { id: 's2', name: 'Allianz SE', ticker: 'ALV', assetType: 'stock' },
+      { id: 's3', name: 'Frisch notiert AG', ticker: 'NEU', assetType: 'stock' },
+      { id: 's4', name: 'Noch nicht beobachtet SE', ticker: 'FREI', assetType: 'stock' }
+    ],
     'investments/portfolios': [
       { id: 'p1', name: 'Direkt-Depot', currency: 'EUR', accountId: 'a9', isArchived: false, isManual: false,
         totalValue: 3218.42, marketValue: 3218.42, positions: 4, costBasis: 2319.58, unrealizedResult: 174.39,

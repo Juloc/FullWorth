@@ -70,6 +70,10 @@ const COPY = {
     manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen',
     trendTitle: 'Wie entwickelt sich dein Vermögen?', allocationTitle: 'Verteilung deines Vermögens',
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
+    watchlistTitle: 'Merkliste', watchlistEmpty: 'Noch kein Papier beobachtet',
+    watchlistAdd: 'Papier beobachten', watchlistSecurity: 'Wertpapier',
+    watchlistTarget: 'Zielkurs', watchlistNotes: 'Notiz', watchlistRemove: 'Nicht mehr beobachten',
+    watchlistNoPrice: 'Kein Kurs bekannt', watchlistNoSecurities: 'Alle bekannten Wertpapiere stehen schon auf der Merkliste',
     window: 'Zeitraum', noTrend: 'Noch keine Verlaufsdaten.',
     trendSinglePoint: 'Bisher ist nur der heutige Stand gespeichert - ein Verlauf entsteht ab dem zweiten Tag.',
     // Deliberately NOT the same word as the hero's "Vermögenswerte": a donut cannot draw a negative
@@ -125,6 +129,10 @@ const COPY = {
     manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated',
     trendTitle: 'How is your wealth developing?', allocationTitle: 'Your wealth distribution',
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
+    watchlistTitle: 'Watchlist', watchlistEmpty: 'Nothing watched yet',
+    watchlistAdd: 'Watch a security', watchlistSecurity: 'Security',
+    watchlistTarget: 'Target price', watchlistNotes: 'Note', watchlistRemove: 'Stop watching',
+    watchlistNoPrice: 'No price known', watchlistNoSecurities: 'Every known security is already on the watchlist',
     window: 'Time range', noTrend: 'No history yet.',
     trendSinglePoint: 'Only today is recorded so far - a trend starts on the second day.',
     assetMix: 'Asset mix', assetMixNote: 'Values with a negative balance are hidden here but still count toward the net worth above.',
@@ -215,7 +223,7 @@ export async function renderNetWorth(context) {
     return;
   }
 
-  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref, projectionPref, previewBasis] = await Promise.all([
+  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref, projectionPref, previewBasis, watchlist] = await Promise.all([
     loadHistory(nw.windowMonths),
     loadBookingActivity(nw.windowMonths),
     loadFinanzguruCompleteness(ctx.api),
@@ -226,7 +234,8 @@ export async function renderNetWorth(context) {
     ctx.api('api/investments/portfolios').catch(() => []),
     ctx.api('api/preferences/wealth.emergencyFund').catch(() => ({ value: {} })),
     ctx.api('api/preferences/wealth.projection').catch(() => ({ value: {} })),
-    ctx.api('api/wealth/preview-basis?months=6').catch(() => null)
+    ctx.api('api/wealth/preview-basis?months=6').catch(() => null),
+    loadWatchlist()
   ]);
 
   lastOverview = overview;
@@ -248,6 +257,7 @@ export async function renderNetWorth(context) {
   nw.emergency = emergencyPref?.value && typeof emergencyPref.value === 'object' ? emergencyPref.value : {};
   nw.projection = projectionPref?.value && typeof projectionPref.value === 'object' ? projectionPref.value : {};
   nw.previewBasis = previewBasis || null;
+  nw.watchlist = watchlist;
   nw.currency = overview.currency;
 
   paintNetWorth();
@@ -263,6 +273,7 @@ function paintNetWorth() {
   const hero = host.querySelector('.nw-hero');
   if (hero) wireHero(hero);
   host.querySelector('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
+  host.querySelector('[data-action="watchlist-add"]')?.addEventListener('click', () => void openWatchlistAdd());
   host.querySelector('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
   host.querySelectorAll('[data-action="emergency-fund"]').forEach(button => button.addEventListener('click', () => openEmergencyFundDialog()));
   host.querySelectorAll('[data-emergency-w]').forEach(bar => { bar.style.width = bar.dataset.emergencyW + '%'; });
@@ -271,6 +282,7 @@ function paintNetWorth() {
   renderAssets(nw.assets);
   renderLiabilities(nw.liabilities);
   renderInvestments(nw.portfolios, nw.overview);
+  renderWatchlist();
   void refreshWealthExtensions();
 
   // Loans are owned by features/loans.js. Re-bind its "add" button (our rebuilt markup replaced the
@@ -1287,9 +1299,13 @@ function manageMarkup() {
   const assetsCard = sectionCard(t('manualAssets'), `<div id="assets-list" class="rows"></div>`, { className: 'nw-sub', action: add('new-asset') });
   const liabilitiesCard = sectionCard(t('debt'), `<div id="liabilities-list" class="rows"></div>`, { className: 'nw-sub', action: add('new-liability') });
   const loansCard = sectionCard(ctx.get('loans.title'), `<div id="nw-loans" class="rows"></div>`, { className: 'nw-sub', action: add('new-loan') });
+  // #135: die Merkliste. Sechs Routen standen fertig da und hatten keinen Knopf. Sie gehoert unter
+  // "Verwalten" und nicht nach oben: beobachtete Papiere sind keine Position im Vermoegen - sie
+  // zaehlen nirgends mit, und genau das soll die Stelle in der Seite auch sagen.
+  const watchlistCard = sectionCard(t('watchlistTitle'), `<div id="nw-watchlist" class="rows"></div>`, { className: 'nw-sub', action: add('watchlist-add') });
   const emergencyBody = `<div class="row-sub">${ctx.esc((nw.emergency?.enabled === true && num(nw.emergency?.targetAmount) > 0) ? ctx.money(nw.emergency.targetAmount, nw.currency) + ' · ' + emergencyScopeLabel() : t('emergencyHint'))}</div>`;
   const emergencyCard = sectionCard(t('emergencyTitle'), emergencyBody, { className: 'nw-sub', action: { label: (nw.emergency?.enabled === true ? t('emergencyEdit') : t('emergencySetup')), attr: 'data-action="emergency-fund"' } });
-  return `<details class="nw-manage"><summary><span>${ctx.esc(t('manageTitle'))}</span><span class="nw-manage-hint">${ctx.esc(t('manageHint'))}</span></summary><div class="nw-manage-body">${emergencyCard}${accountsCard}${assetsCard}${liabilitiesCard}${loansCard}</div></details>`;
+  return `<details class="nw-manage"><summary><span>${ctx.esc(t('manageTitle'))}</span><span class="nw-manage-hint">${ctx.esc(t('manageHint'))}</span></summary><div class="nw-manage-body">${emergencyCard}${accountsCard}${assetsCard}${liabilitiesCard}${loansCard}${watchlistCard}</div></details>`;
 }
 
 /* ---- Management list renderers (unchanged behaviour; targets live inside the Details section) --- */
@@ -1329,6 +1345,135 @@ function renderAccounts(accounts) {
     }
   }
   el.appendChild(frag);
+}
+
+/* ---- Merkliste (#135): beobachtete Papiere, Zielkurs, Notiz ------------------------------------ */
+
+// Listen UND Eintraege vor dem ersten Zeichnen - beides in EINEM Ausdruck, der in das grosse
+// Promise.all geht. Die Eintraege erst nach dem Zeichnen zu holen hiesse, die Karte waechst
+// nachtraeglich (Frontend-Regel 1).
+async function loadWatchlist() {
+  const lists = await ctx.api('api/investments/watchlists').catch(() => []);
+  const first = (lists || [])[0] || null;
+  const items = first
+    ? await ctx.api(`api/investments/watchlists/${first.id}/items`).catch(() => [])
+    : [];
+  return { lists: lists || [], id: first?.id || null, items: items || [] };
+}
+
+function renderWatchlist() {
+  const el = ctx.$('#nw-watchlist'); if (!el) return;
+  el.innerHTML = '';
+  const items = nw.watchlist?.items || [];
+  if (!items.length) { el.innerHTML = emptyRow(t('watchlistEmpty')); return; }
+
+  const frag = document.createDocumentFragment();
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = 'row nw-item';
+    // Der zuletzt bekannte Kurs kommt aus derselben Antwort - die Liste braucht keinen zweiten Aufruf.
+    const price = item.price == null
+      ? ctx.esc(t('watchlistNoPrice'))
+      : `${ctx.money(item.price, item.currency)}${item.priceDate ? ` · ${ctx.esc(dateValue(item.priceDate))}` : ''}`;
+    const target = item.targetPrice == null
+      ? ''
+      : `<span class="row-sub">${ctx.esc(t('watchlistTarget'))}: ${ctx.money(item.targetPrice, item.currency)}</span>`;
+    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(item.name || item.ticker || '—')}</div>` +
+      `<div class="row-sub">${ctx.esc(item.ticker || '')}${item.notes ? ` · ${ctx.esc(item.notes)}` : ''}</div></div>` +
+      `<div class="row-side"><span class="amount">${price}</span>${target}` +
+      `<button class="${buttonClass(ButtonRole.Icon)}" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button>` +
+      `<button class="${buttonClass(ButtonRole.Icon)}" data-remove title="${ctx.esc(t('watchlistRemove'))}" aria-label="${ctx.esc(t('watchlistRemove'))}">${TRASH_ICON}</button></div>`;
+    row.querySelector('[data-edit]').onclick = () => openWatchlistEntry(item);
+    row.querySelector('[data-remove]').onclick = () => saveWatchlistItems(
+      (nw.watchlist.items || []).filter(other => other.securityId !== item.securityId));
+    frag.appendChild(row);
+  }
+  el.appendChild(frag);
+}
+
+// PUT ersetzt IMMER die ganze Liste (InvestmentStore.ReplaceWatchlistItemsAsync loescht erst alles).
+// Deshalb geht hier nie ein einzelner Eintrag hinaus, sondern immer der vollstaendige Stand - sonst
+// loescht das Aendern eines Zielkurses alle anderen Papiere.
+async function saveWatchlistItems(items) {
+  const listId = nw.watchlist?.id;
+  if (!listId) return;
+  try {
+    await ctx.api(`api/investments/watchlists/${listId}/items`, jsonBody(items.map(item => ({
+      securityId: item.securityId,
+      targetPrice: item.targetPrice ?? null,
+      notes: item.notes || null
+    })), 'PUT'));
+    await renderNetWorth(ctx);
+  } catch (error) { ctx.toast(error.message || ctx.get('common.error')); }
+}
+
+// Zielkurs und Notiz eines bereits beobachteten Papiers.
+function openWatchlistEntry(item) {
+  openFormDialog({
+    title: item.name || item.ticker || t('watchlistTitle'),
+    closeLabel: ctx.get('common.close'),
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'target', kind: FieldKind.Money, label: t('watchlistTarget'), min: 0 },
+      { name: 'notes', kind: FieldKind.Text, label: t('watchlistNotes'), maxLength: 500 }
+    ],
+    values: { target: item.targetPrice ?? '', notes: item.notes || '' },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close('cancel') },
+      { name: 'save', label: ctx.get('common.save'), role: 'primary', submit: true }
+    ],
+    onSubmit: ({ values, close }) => {
+      close('saved');
+      void saveWatchlistItems((nw.watchlist.items || []).map(other => other.securityId === item.securityId
+        ? { ...other, targetPrice: values.target === '' ? null : Number(values.target), notes: values.notes || null }
+        : other));
+    }
+  });
+}
+
+// Ein Papier aufnehmen. Gibt es noch keine Liste, entsteht sie hier - der Benutzer soll nicht erst
+// eine "Merkliste" anlegen muessen, um etwas zu merken.
+async function openWatchlistAdd() {
+  let securities;
+  try { securities = await ctx.api('api/investments/securities'); }
+  catch (error) { ctx.toast(error.message || ctx.get('common.error')); return; }
+
+  const known = new Set((nw.watchlist?.items || []).map(item => String(item.securityId)));
+  const options = (securities || [])
+    .filter(security => !known.has(String(security.id)))
+    .map(security => ({ value: security.id, label: security.ticker ? `${security.name} · ${security.ticker}` : security.name }));
+  if (!options.length) { ctx.toast(t('watchlistNoSecurities')); return; }
+
+  openFormDialog({
+    title: t('watchlistAdd'),
+    closeLabel: ctx.get('common.close'),
+    create: html => ctx.dialog(html),
+    comboboxCtx: ctx,
+    fields: [
+      { name: 'security', kind: FieldKind.Select, label: t('watchlistSecurity'), searchable: true, options },
+      { name: 'target', kind: FieldKind.Money, label: t('watchlistTarget'), min: 0 },
+      { name: 'notes', kind: FieldKind.Text, label: t('watchlistNotes'), maxLength: 500 }
+    ],
+    values: { security: options[0].value, target: '', notes: '' },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close('cancel') },
+      { name: 'add', label: ctx.get('common.add'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, close }) => {
+      close('added');
+      try {
+        if (!nw.watchlist?.id) {
+          const created = await ctx.api('api/investments/watchlists', jsonBody({ name: t('watchlistTitle') }));
+          nw.watchlist = { lists: [created], id: created.id, items: [] };
+        }
+        await saveWatchlistItems([...(nw.watchlist.items || []), {
+          securityId: values.security,
+          targetPrice: values.target === '' ? null : Number(values.target),
+          notes: values.notes || null
+        }]);
+      } catch (error) { ctx.toast(error.message || ctx.get('common.error')); }
+    }
+  });
 }
 
 function renderAssets(assets) {
