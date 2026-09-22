@@ -211,6 +211,84 @@ public sealed class CollectionIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// Die Sammlung als Filterdimension in der normalen Buchungsliste - der Weg zurueck. Ohne ihn ist
+    /// die Zuordnung eine Einbahnstrasse: man kann Buchungen einsammeln, aber die Buchungsliste weiss
+    /// nichts davon.
+    /// </summary>
+    [Fact]
+    public async Task The_transaction_list_can_be_filtered_by_a_collection()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var world = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        var trip = await CreateAsync(client, world, "Gardasee 2026");
+        await AssignAsync(client, world, trip, world.Hotel);
+        await AssignAsync(client, world, trip, world.Fuel);
+
+        var ids = await SearchAsync(client, world, $"&collectionIds={trip:D}");
+
+        Assert.Equal(2, ids.Length);
+        Assert.Contains(world.Hotel, ids);
+        Assert.Contains(world.Fuel, ids);
+        Assert.DoesNotContain(world.Bauhaus, ids);
+    }
+
+    /// <summary>
+    /// Mehrere Sammlungen heisst ODER. Die eigentliche Falle steckt in der Buchung, die in BEIDEN
+    /// liegt: ein JOIN haette sie zweimal geliefert, und eine Buchungsliste mit Doppelgaengern ist
+    /// schlimmer als gar kein Filter.
+    /// </summary>
+    [Fact]
+    public async Task Two_collections_mean_or_and_a_transaction_in_both_appears_once()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var world = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        var home = await CreateAsync(client, world, "Wohnung");
+        var bath = await CreateAsync(client, world, "Badrenovierung");
+        await AssignAsync(client, world, home, world.Bauhaus);
+        await AssignAsync(client, world, bath, world.Bauhaus);
+        await AssignAsync(client, world, home, world.Hotel);
+
+        var ids = await SearchAsync(client, world, $"&collectionIds={home:D}&collectionIds={bath:D}");
+
+        Assert.Equal(2, ids.Length);
+        Assert.Single(ids, id => id == world.Bauhaus);
+        Assert.Contains(world.Hotel, ids);
+    }
+
+    /// <summary>
+    /// Eine fremde Sammlungskennung darf nicht einfach ignoriert werden - dann kaeme die ungefilterte
+    /// Liste zurueck. Sie liefert nichts, und schon die Trefferzahl verraet damit nichts.
+    /// </summary>
+    [Fact]
+    public async Task A_collection_from_another_space_matches_nothing()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var mine = await SeedAsync(factory);
+        var theirs = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        var foreign = await CreateAsync(client, theirs, "Fremde Sammlung");
+        await AssignAsync(client, theirs, foreign, theirs.Hotel);
+
+        Assert.Empty(await SearchAsync(client, mine, $"&collectionIds={foreign:D}"));
+    }
+
+    private static async Task<Guid[]> SearchAsync(HttpClient client, World world, string extraQuery)
+    {
+        using var response = await client.SendAsync(Request(HttpMethod.Get,
+            $"/api/transactions?fullWorthSpaceId={world.Space:D}&limit=200{extraQuery}", world.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return json.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("id").GetGuid())
+            .ToArray();
+    }
+
     private static async Task<Guid> CreateAsync(
         HttpClient client, World world, string name, DateOnly? start = null, DateOnly? end = null)
     {

@@ -33,6 +33,7 @@ public static class TransactionEndpoints
             bool? hasReceipt,
             string? status,
             bool? ignoredOnly,
+            Guid[]? collectionIds,
             CurrentUserContext currentUser,
             TransactionStore store,
             CancellationToken ct) =>
@@ -40,7 +41,8 @@ public static class TransactionEndpoints
                 new TransactionQuery(
                     accountId, categoryId, from, to, direction, query, includeIgnored, transfersOnly,
                     sort, order, offset, limit, accountGroupId, includeDescendants, merchant,
-                    minAmount, maxAmount, refundOnly, hasReceipt, status, ignoredOnly, merchantId), ct)));
+                    minAmount, maxAmount, refundOnly, hasReceipt, status, ignoredOnly, merchantId,
+                    collectionIds), ct)));
 
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {

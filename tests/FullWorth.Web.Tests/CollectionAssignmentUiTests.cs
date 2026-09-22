@@ -298,6 +298,58 @@ public sealed class CollectionAssignmentUiTests
         Assert.Contains(".tx-collection-chips{margin-bottom:0}", css);
     }
 
+    /// <summary>
+    /// Der Rueckweg: die Sammlung als Filterdimension in der normalen Buchungsliste. Ohne ihn ist die
+    /// Zuordnung eine Einbahnstrasse - man kann Buchungen einsammeln, aber die Liste weiss nichts
+    /// davon, und die Sammlung ist nur ueber ihre eigene Seite erreichbar.
+    /// </summary>
+    [Fact]
+    public void The_filter_sheet_offers_collections_and_the_list_query_forwards_them()
+    {
+        var js = PageJs();
+        var sheet = BodyOf(js, @"async function openFilterSheet\(\)\s*\{", "openFilterSheet()");
+
+        // Die Auswahl steht im Dialog, ihre Liste kommt aus derselben Quelle wie ueberall sonst...
+        Assert.Contains("name: 'collection'", sheet);
+        Assert.Contains("ctx.api('api/collections')", sheet);
+        // ...und wird in DERSELBEN Promise.all geladen wie die uebrigen Nachschlagelisten (Regel 1).
+        Assert.Contains("merchants, collections] = await Promise.all", sheet);
+        // Gesetzt wird ueber die URL, wie jeder andere Filter auch - und Zuruecksetzen raeumt ihn mit auf.
+        Assert.Contains("setOrDel('collectionIds', values.collection)", sheet);
+        Assert.Contains("'collectionIds'].forEach", sheet);
+
+        // Und die Liste reicht ihn an den Server weiter. append, nicht set: mehrere heissen ODER.
+        Assert.Contains("params.getAll('collectionIds')", js);
+        Assert.Contains("q.append('collectionIds', collectionId)", js);
+    }
+
+    /// <summary>
+    /// Ein gesetzter Filter, den man nicht sieht, aendert die Liste stillschweigend - deshalb zaehlt
+    /// ihn das Abzeichen am Filterknopf mit, wie jeden anderen hinter "Mehr Filter".
+    /// </summary>
+    [Fact]
+    public void A_set_collection_filter_is_counted_on_the_filter_badge()
+    {
+        var js = PageJs();
+
+        Assert.Contains("f.collectionId", BodyOf(js, @"function updateFilterBadge\(f\)\s*\{", "updateFilterBadge(f)"));
+        Assert.Contains("collectionId: collectionIds[0]", js);
+    }
+
+    /// <summary>
+    /// Die Zukunfts-Timeline (#139) darf hier nicht mitlaufen. Eine erwartete Vertragsbuchung gehoert
+    /// zu keiner Sammlung - sie stuende ungefragt in einer Liste, die genau nach einer gefiltert ist.
+    /// </summary>
+    [Fact]
+    public void A_collection_filter_switches_the_forecast_off()
+    {
+        var js = PageJs();
+        var eligible = Regex.Match(js, @"const forecastEligible = !\([^;]*;", RegexOptions.Singleline);
+
+        Assert.True(eligible.Success, "forecastEligible wurde nicht gefunden.");
+        Assert.Contains("collectionIds.length", eligible.Value);
+    }
+
     /// <summary>Die beiden neuen Texte stehen in beiden Sprachdateien - eine fehlende Uebersetzung zeigt
     /// sonst den rohen Schluessel im Dialog.</summary>
     [Fact]

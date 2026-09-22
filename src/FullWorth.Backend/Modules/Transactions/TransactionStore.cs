@@ -126,6 +126,33 @@ public sealed class TransactionStore(FullWorthDbContext db)
             q = q.Where(x => Math.Abs(x.Amount) <= maximum);
         }
 
+        if (request.CollectionIds is { Count: > 0 } requestedCollections)
+        {
+            // Eine Sammlung ist ein FinanceTag (#124) und gehoert einem Space. Es wird nie nach einer
+            // Kennung gefiltert, die der Anfragende nicht sehen darf - sonst verriete schon die
+            // Trefferzahl, welche Buchungen in einer fremden Sammlung liegen.
+            var visible = await db.Set<FinanceTag>().AsNoTracking()
+                .Where(tag =>
+                    requestedCollections.Contains(tag.Id) &&
+                    (!fullWorthSpaceId.HasValue || tag.FullWorthSpaceId == fullWorthSpaceId.Value) &&
+                    db.FullWorthSpaceMembers.Any(member =>
+                        member.FullWorthSpaceId == tag.FullWorthSpaceId && member.UserId == userId))
+                .Select(tag => tag.Id)
+                .ToArrayAsync(ct);
+
+            // ODER: in mindestens einer der gewaehlten Sammlungen. Das DISTINCT ist der eigentliche
+            // Punkt - eine Buchung, die in zweien der gewaehlten liegt, stuende sonst zweimal in der
+            // Liste. Npgsql uebersetzt das anschliessende Contains zu einem "= ANY(@p)", also EINEM
+            // Parameter und keiner IN-Liste, die mit der Sammlung waechst.
+            var members = visible.Length == 0
+                ? []
+                : await db.Database.SqlQuery<Guid>(
+                    $"""SELECT DISTINCT "TransactionId" FROM "TransactionTags" WHERE "TagId" = ANY({visible})""")
+                    .ToArrayAsync(ct);
+
+            q = members.Length == 0 ? q.Where(_ => false) : q.Where(x => members.Contains(x.Id));
+        }
+
         if (request.MerchantId.HasValue)
         {
             if (!fullWorthSpaceId.HasValue)

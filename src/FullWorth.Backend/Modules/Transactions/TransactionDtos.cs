@@ -84,7 +84,9 @@ public sealed record TransactionQuery(
     bool? HasReceipt = null,
     string? Status = null,
     bool? IgnoredOnly = null,
-    Guid? MerchantId = null);
+    Guid? MerchantId = null,
+    /// <summary>Sammlungen (#124). Mehrere heisst ODER: in mindestens einer davon.</summary>
+    IReadOnlyList<Guid>? CollectionIds = null);
 
 public sealed record TransactionClassification(Guid? CategoryId, bool IsIgnored, bool IsTransfer, string? TransferPurpose = null, string? UserNote = null);
 

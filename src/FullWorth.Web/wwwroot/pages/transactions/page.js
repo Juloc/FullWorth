@@ -429,7 +429,8 @@ function updateFilterBadge(f) {
   const btn = ctx.$('#tx-filter'); if (!btn) return;
   const n = [
     f.direction, f.from || f.to, f.categoryId, f.accountId, f.groupId, f.merchantId || f.merchant,
-    f.minAmount || f.maxAmount, f.status, f.transfersOnly, f.ignoredOnly, f.refundOnly, f.hasReceipt
+    f.minAmount || f.maxAmount, f.status, f.transfersOnly, f.ignoredOnly, f.refundOnly, f.hasReceipt,
+    f.collectionId
   ].filter(Boolean).length;
   let badge = btn.querySelector('.tx-filter-count');
   if (n) { if (!badge) { badge = document.createElement('span'); badge.className = 'tx-filter-count'; btn.appendChild(badge); } badge.textContent = String(n); }
@@ -451,14 +452,15 @@ function updateFilterBadge(f) {
 // emptyValue.
 async function openFilterSheet() {
   const params = new URLSearchParams(location.search);
-  let catOptions = '', categories = [], accounts = [], groups = [], merchants = [];
+  let catOptions = '', categories = [], accounts = [], groups = [], merchants = [], collections = [];
   try {
-    [catOptions, categories, accounts, groups, merchants] = await Promise.all([
+    [catOptions, categories, accounts, groups, merchants, collections] = await Promise.all([
       ctx.categoryOptions(params.get('categoryId') || undefined).catch(() => ''),
       ctx.api('api/categories').catch(() => []),
       ctx.api('api/accounts').catch(() => []),
       ctx.api('api/account-groups').catch(() => []),
-      ctx.api('api/merchants').catch(() => [])
+      ctx.api('api/merchants').catch(() => []),
+      ctx.api('api/collections').catch(() => [])
     ]);
   } catch { /* every lookup is best-effort */ }
 
@@ -499,6 +501,11 @@ async function openFilterSheet() {
           { value: 'pending', label: ctx.get('transactions.pendingOnly') }] },
       { name: 'merchantId', kind: FieldKind.Select, label: deLabel('Händler', 'Merchant'), advanced: true, emptyValue: '',
         options: [{ value: '', label: all }, ...(merchants || []).map(x => ({ value: x.id, label: x.name }))] },
+      // Die zweite Zuordnungsachse als Filterdimension (#124). Der Server nimmt mehrere Sammlungen
+      // entgegen und versteht sie als ODER; hier steht bewusst eine Auswahl, denn "Buchungen der
+      // Wohnung" ist die Frage, die gestellt wird - nicht "der Wohnung oder der Reise".
+      { name: 'collection', kind: FieldKind.Select, label: ctx.get('collections.title'), advanced: true, emptyValue: '',
+        options: [{ value: '', label: all }, ...(collections || []).map(x => ({ value: x.id, label: x.name }))] },
       { name: 'minAmount', kind: FieldKind.Money, label: deLabel('Betrag ab', 'Minimum amount'), min: 0, advanced: true, group: 'amount' },
       { name: 'maxAmount', kind: FieldKind.Money, label: deLabel('Betrag bis', 'Maximum amount'), min: 0, advanced: true, group: 'amount' },
       { name: 'transfersOnly', kind: FieldKind.Check, label: ctx.get('transactions.transfersOnly'), advanced: true },
@@ -515,6 +522,7 @@ async function openFilterSheet() {
       category: params.get('categoryId') || '',
       status: params.get('status') || '',
       merchantId: selectedMerchant ? selectedMerchant.id : '',
+      collection: params.get('collectionIds') || '',
       minAmount: params.get('minAmount') || '',
       maxAmount: params.get('maxAmount') || '',
       transfersOnly: params.get('transfersOnly') === 'true',
@@ -544,7 +552,7 @@ async function openFilterSheet() {
 
   function reset({ close }) {
     const p = new URLSearchParams(location.search);
-    ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','merchantId','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
+    ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','merchantId','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt','collectionIds'].forEach(k => p.delete(k));
     close('reset');
     txReplaceUrl(p);
   }
@@ -564,6 +572,7 @@ async function openFilterSheet() {
     if (values.category) { p.set('categoryId', values.category); p.set('includeDescendants', 'true'); }
     else { p.delete('categoryId'); p.delete('includeDescendants'); }
     setOrDel('merchantId', values.merchantId);
+    setOrDel('collectionIds', values.collection);
     if (values.merchantId) p.delete('merchant');
     setOrDel('minAmount', values.minAmount); setOrDel('maxAmount', values.maxAmount);
     for (const key of ['transfersOnly', 'ignoredOnly', 'refundOnly', 'hasReceipt']) {
@@ -669,6 +678,8 @@ export async function renderTransactions(context, opts = {}) {
   const ignoredOnly = params.get('ignoredOnly') === 'true';
   const refundOnly = params.get('refundOnly') === 'true';
   const hasReceipt = params.get('hasReceipt') === 'true';
+  // Mehrere sind erlaubt und heissen ODER (#124) - die URL bleibt auch dann die einzige Wahrheit.
+  const collectionIds = params.getAll('collectionIds').filter(Boolean);
   if (text) q.set('query', text);
   if (dir) q.set('direction', dir);
   if (status) q.set('status', status);
@@ -680,18 +691,20 @@ export async function renderTransactions(context, opts = {}) {
   if (ignoredOnly) { q.set('ignoredOnly', 'true'); q.set('includeIgnored', 'true'); }
   if (refundOnly) q.set('refundOnly', 'true');
   if (hasReceipt) q.set('hasReceipt', 'true');
+  for (const collectionId of collectionIds) q.append('collectionIds', collectionId);
   if (accountId) q.set('accountId', accountId);
   if (groupId) q.set('accountGroupId', groupId);
   if (categoryId) { q.set('categoryId', categoryId); if (includeDescendants) q.set('includeDescendants', 'true'); }
   if (fromDate) q.set('from', fromDate);
   if (toDate) q.set('to', toDate);
-  updateFilterBadge({ direction: dir, from: fromDate, to: toDate, categoryId, accountId, groupId, merchant, merchantId, minAmount, maxAmount, status, transfersOnly, ignoredOnly, refundOnly, hasReceipt });
+  updateFilterBadge({ direction: dir, from: fromDate, to: toDate, categoryId, accountId, groupId, merchant, merchantId, minAmount, maxAmount, status, transfersOnly, ignoredOnly, refundOnly, hasReceipt, collectionId: collectionIds[0] });
   // Zukunfts-Timeline (#139): der Forecast passt nur zur EINFACHEN Konto-/Gruppen-/Alle-Konten-Sicht.
   // Sobald irgendein anderer Filter aktiv ist, wuerde eine erwartete Vertragsbuchung neben gefilterten
   // echten Buchungen stehen, die selbst gar nicht zu diesem Filter gehoert (sie hat ja noch keine
   // Kategorie, keinen Haendler, keinen Betrag im gesuchten Bereich) - deshalb dann einfach keine.
   const forecastEligible = !(text || dir || status || merchant || merchantId || minAmount || maxAmount ||
-    transfersOnly || ignoredOnly || refundOnly || hasReceipt || categoryId || fromDate || toDate);
+    transfersOnly || ignoredOnly || refundOnly || hasReceipt || categoryId || fromDate || toDate ||
+    collectionIds.length);
   ascendingTimeline = forecastEligible;
   // Zukunfts-Timeline (#139), Teil 2: nur in dieser einfachen Sicht aufsteigend sortieren - der
   // Backend-Store gruppiert vorgemerkte Buchungen bei order=asc bereits automatisch als EINE
