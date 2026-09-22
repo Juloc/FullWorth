@@ -79,6 +79,14 @@ public sealed class TransactionInfiniteLoadingTests
 
         Assert.Contains("if (txLoadingMore || !txCursor || !txPageQuery) return;", js);
         Assert.Contains("if (renderId !== listRenderId) return;", js);
+        // Und zwar VOR dem Abbau des Beobachters, nicht erst nach dem Abruf: ein ueberholter Aufruf
+        // haette ihn sonst abgehaengt und danach ohne ihn zurueckgegeben - die Liste haette ab da
+        // nichts mehr nachgeladen, ohne dass irgendetwas kaputt aussieht.
+        var start = js.IndexOf("async function loadMoreTransactions(", StringComparison.Ordinal);
+        Assert.True(start > 0, "loadMoreTransactions(...) wurde nicht gefunden.");
+        var guard = js.IndexOf("if (renderId !== listRenderId) return;", start, StringComparison.Ordinal);
+        var disconnect = js.IndexOf("txObserver?.disconnect();", start, StringComparison.Ordinal);
+        Assert.True(guard > 0 && guard < disconnect, "Die Nummer wird erst nach dem Abbau des Beobachters geprueft.");
     }
 
     /// <summary>

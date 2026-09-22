@@ -976,6 +976,10 @@ function txSentinel() {
 // normalen Scrolltempo eine Luecke. 1000 px sind knapp zwei Bildschirmhoehen auf dem Telefon und
 // etwa eine auf dem Schreibtisch, also in beiden Faellen ein Vorlauf und keine Nachhut.
 function observeTxSentinel(renderId) {
+  // Ein ueberholtes Zeichnen darf den Beobachter der jetzt gezeigten Liste nicht uebernehmen: seine
+  // Nummer stimmt nicht mehr, und jedes Feuern wuerde nur noch abbrechen - das Nachladen waere
+  // stillschweigend zu Ende, ohne dass irgendetwas kaputt aussieht.
+  if (renderId !== listRenderId) return;
   const sentinel = ctx.$('.tx-more-sentinel');
   if (!sentinel) return;
   txObserver?.disconnect();
@@ -993,6 +997,10 @@ function observeTxSentinel(renderId) {
 // der Scrollwert um genau den Hoehenzuwachs mitgezogen. Absteigend entfaellt das: unten anzuhaengen
 // bewegt nichts, was schon sichtbar ist.
 async function loadMoreTransactions(renderId) {
+  // Die Nummer wird VOR dem Abbau des Beobachters geprueft, nicht erst nach dem Abruf. Sonst haette
+  // ein ueberholter Aufruf den Beobachter abgehaengt und danach ohne ihn zurueckgegeben - die Liste
+  // haette ab da nichts mehr nachgeladen.
+  if (renderId !== listRenderId) return;
   if (txLoadingMore || !txCursor || !txPageQuery) return;
   txLoadingMore = true;
   txObserver?.disconnect();
