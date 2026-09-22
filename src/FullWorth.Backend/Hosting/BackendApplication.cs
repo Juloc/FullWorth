@@ -188,47 +188,57 @@ public static class BackendApplication
         builder.Services.AddSingleton<DeterministicCoachEngine>();
         builder.Services.AddScoped<AiAccessResolver>();
         builder.Services.AddScoped<BrandLogoResearchService>();
+        builder.Services.AddScoped<InternetResearchService>();
+        builder.Services.AddScoped<InternetResearchSuggestionAdapter>();
         // Der einzige Client, der eine Adresse abruft, die mittelbar aus Nutzerdaten stammt (#176).
         // Keine Umleitung: eine Umleitung waere die frei gewaehlte Adresse durch die Hintertuer, und
         // sie umginge die Pruefung, dass jede Adresse hinter dem Namen oeffentlich ist.
+        builder.Services.AddHttpClient<WebPageFetcher>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(12);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+internet-research)");
+            })
+            .ConfigurePrimaryHttpMessageHandler(PublicOnlyHandler);
         builder.Services.AddHttpClient<BrandLogoFetcher>(client =>
             {
                 client.Timeout = TimeSpan.FromSeconds(10);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-logo-research)");
             })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            .ConfigurePrimaryHttpMessageHandler(PublicOnlyHandler);
+        // Der Handler fuer JEDEN Abruf, den diese Instanz aufgrund von Nutzerdaten macht (#176):
+        // Logo und Anbieterseite. Keine Umleitung - die waere die frei gewaehlte Adresse durch die
+        // Hintertuer. Und der Verbindungsaufbau prueft selbst, wohin er geht: der Name wird vor dem
+        // Abruf aufgeloest UND hier noch einmal, und dazwischen kann sich die Antwort aendern. Ein
+        // Name, der beim zweiten Mal 127.0.0.1 beantwortet wird, ist genau der Trick, gegen den eine
+        // Pruefung allein vorher nichts ausrichtet.
+        static SocketsHttpHandler PublicOnlyHandler() => new()
+        {
+            AllowAutoRedirect = false,
+            UseCookies = false,
+            Credentials = null,
+            ConnectCallback = async (context, cancellationToken) =>
             {
-                AllowAutoRedirect = false,
-                UseCookies = false,
-                Credentials = null,
-                // Die zweite Haelfte der Adresspruefung. BrandLogoFetcher loest den Namen vor dem Abruf
-                // auf und verlangt, dass JEDE Antwort oeffentlich ist - aber der Client loest ihn
-                // danach noch einmal selbst auf, und dazwischen kann sich die Antwort aendern. Ein
-                // Name, der beim ersten Mal oeffentlich und beim zweiten Mal 127.0.0.1 beantwortet
-                // wird, ist genau der Trick, gegen den die erste Pruefung allein nichts ausrichtet.
-                // Hier wird geprueft, wohin die Verbindung tatsaechlich geht.
-                ConnectCallback = async (context, cancellationToken) =>
+                var addresses = await System.Net.Dns.GetHostAddressesAsync(
+                    context.DnsEndPoint.Host, cancellationToken);
+                var target = addresses.FirstOrDefault(PublicWebAddress.IsPublic)
+                    ?? throw new HttpRequestException("web_target_not_public");
+                var socket = new System.Net.Sockets.Socket(
+                    System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp)
+                { NoDelay = true };
+                try
                 {
-                    var addresses = await System.Net.Dns.GetHostAddressesAsync(
-                        context.DnsEndPoint.Host, cancellationToken);
-                    var target = addresses.FirstOrDefault(BrandLogoFetcher.IsPublic)
-                        ?? throw new HttpRequestException("brand_logo_target_not_public");
-                    var socket = new System.Net.Sockets.Socket(
-                        System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp)
-                    { NoDelay = true };
-                    try
-                    {
-                        await socket.ConnectAsync(
-                            new System.Net.IPEndPoint(target, context.DnsEndPoint.Port), cancellationToken);
-                        return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
-                    }
-                    catch
-                    {
-                        socket.Dispose();
-                        throw;
-                    }
+                    await socket.ConnectAsync(
+                        new System.Net.IPEndPoint(target, context.DnsEndPoint.Port), cancellationToken);
+                    return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
                 }
-            });
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+        };
+
         builder.Services.AddScoped<CollectionSuggestionAiAdapter>();
         builder.Services.AddScoped<CoachAiAccessResolver>();
         builder.Services.AddScoped<CoachModelCatalogService>();

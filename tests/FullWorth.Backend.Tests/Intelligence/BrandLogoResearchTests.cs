@@ -39,7 +39,7 @@ public sealed class BrandLogoResearchTests
     [InlineData(null)]
     public void Only_a_bare_domain_is_accepted(string? value)
     {
-        var normalized = BrandLogoFetcher.NormalizeDomain(value);
+        var normalized = PublicWebAddress.NormalizeDomain(value);
 
         // "rewe.de." ist derselbe Name mit abschliessendem Wurzelpunkt und darf durch - alles andere nicht.
         if (value == "rewe.de.") Assert.Equal("rewe.de", normalized);
@@ -50,7 +50,7 @@ public sealed class BrandLogoResearchTests
     [InlineData("REWE.de", "rewe.de")]
     [InlineData("  logo.brand.co.uk  ", "logo.brand.co.uk")]
     public void A_bare_domain_survives_normalization(string value, string expected) =>
-        Assert.Equal(expected, BrandLogoFetcher.NormalizeDomain(value));
+        Assert.Equal(expected, PublicWebAddress.NormalizeDomain(value));
 
     /// <summary>
     /// Ein Name, der im eigenen Netz landet, wird gar nicht erst abgerufen. Ohne diese Pruefung waere
@@ -242,7 +242,7 @@ public sealed class BrandLogoResearchTests
     [InlineData("172.32.0.1", true)]
     [InlineData("172.15.255.254", true)]
     public void Only_public_addresses_are_allowed(string address, bool expected) =>
-        Assert.Equal(expected, BrandLogoFetcher.IsPublic(System.Net.IPAddress.Parse(address)));
+        Assert.Equal(expected, PublicWebAddress.IsPublic(System.Net.IPAddress.Parse(address)));
 
     private sealed class CountingHandler(
         Action? onSend = null,

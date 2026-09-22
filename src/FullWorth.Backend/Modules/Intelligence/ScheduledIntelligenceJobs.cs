@@ -191,6 +191,7 @@ public sealed class ScheduledIntelligenceJobProcessor(
     IntelligenceDigestService digests,
     AiAccessResolver access,
     BrandLogoResearchService logoResearch,
+    InternetResearchSuggestionAdapter internetResearch,
     ILogger<ScheduledIntelligenceJobProcessor> logger,
     FinancialSignalJobProcessor? signalProcessor = null)
 {
@@ -300,6 +301,11 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
 
                 if (credential is not null)
                     await domainAdapters.ProcessAsync(job, fullWorthSpaceId, settings, credential, granted, ct);
+
+                // Nachschlagen im Netz (#176) fuer die Haendler, die sonst niemand einordnen konnte.
+                // Nach der Kategorisierung, nicht davor: was die KI aus eigener Kenntnis weiss, muss
+                // nicht erst von einer Webseite bestaetigt werden.
+                await internetResearch.ResearchUnknownMerchantsAsync(fullWorthSpaceId, ct);
 
                 await digests.BuildAsync(job.Type, fullWorthSpaceId, digestNow, ct);
             }

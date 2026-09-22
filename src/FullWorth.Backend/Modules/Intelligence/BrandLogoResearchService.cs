@@ -177,7 +177,7 @@ Return only JSON matching the supplied schema.
     {
         using var document = JsonDocument.Parse(outputJson);
         return document.RootElement.TryGetProperty("domain", out var value) && value.ValueKind == JsonValueKind.String
-            ? BrandLogoFetcher.NormalizeDomain(value.GetString())
+            ? PublicWebAddress.NormalizeDomain(value.GetString())
             : null;
     }
 

@@ -254,6 +254,14 @@ public sealed class ScheduledIntelligenceProcessorTests
                     intelligenceDb, store, new AiAccessResolver(intelligenceDb, store, registry),
                     budgetGuard, costEstimator, new BrandLogoFetcher(new HttpClient()),
                     NullLogger<BrandLogoResearchService>.Instance),
+                // Ebenso: ohne freigegebenes Modul schlaegt die Netz-Recherche nichts nach.
+                new InternetResearchSuggestionAdapter(
+                    financeDb, intelligenceDb, store,
+                    new InternetResearchService(
+                        intelligenceDb, store, new AiAccessResolver(intelligenceDb, store, registry),
+                        budgetGuard, costEstimator, new WebPageFetcher(new HttpClient()),
+                        NullLogger<InternetResearchService>.Instance),
+                    NullLogger<InternetResearchSuggestionAdapter>.Instance),
                 NullLogger<ScheduledIntelligenceJobProcessor>.Instance);
 
             return new Fixture(
