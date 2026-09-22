@@ -930,7 +930,10 @@
     "syncError_FINTS_TAN_REQUIRED": "TAN required",
     "syncError_FINTS_SECRET_MISSING": "Credentials missing",
     "syncError_FINTS_NOT_CONFIGURED": "FinTS is not configured",
-    "syncError_ASPSP_RATE_LIMIT_EXCEEDED": "The bank rejected too many requests"
+    "syncError_ASPSP_RATE_LIMIT_EXCEEDED": "The bank rejected too many requests",
+    "dataGap": "Data gap",
+    "dataGapHint": "No bookings exist for this period. A temporarily disconnected bank, the limited reach of the bank interface, or a file export that does not cover the period can all cause this.",
+    "dataGapRange": "{from} – {to}"
   },
   "a11y": {
     "skipToContent": "Skip to content"

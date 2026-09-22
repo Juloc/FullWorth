@@ -930,7 +930,10 @@
     "syncError_FINTS_TAN_REQUIRED": "TAN erforderlich",
     "syncError_FINTS_SECRET_MISSING": "Zugangsdaten fehlen",
     "syncError_FINTS_NOT_CONFIGURED": "FinTS ist nicht eingerichtet",
-    "syncError_ASPSP_RATE_LIMIT_EXCEEDED": "Bank hat zu viele Abrufe abgewiesen"
+    "syncError_ASPSP_RATE_LIMIT_EXCEEDED": "Bank hat zu viele Abrufe abgewiesen",
+    "dataGap": "Datenlücke",
+    "dataGapHint": "In diesem Zeitraum liegen keine Buchungen vor. Möglich sind eine zeitweise getrennte Bankverbindung, die begrenzte Reichweite der Bank-Schnittstelle oder ein Dateiexport, der den Zeitraum nicht abdeckt.",
+    "dataGapRange": "{from} – {to}"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

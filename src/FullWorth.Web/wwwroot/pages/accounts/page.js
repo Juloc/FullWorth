@@ -44,6 +44,11 @@ const acctId = last4 => last4 ? ` · ${maskIdentifier(last4)}` : '';
 // Welches Depot zu welchem Konto gehoert - gefuellt beim Laden der Liste.
 let depotByAccount=new Map();
 
+// Auffaellige Luecken in der Buchungshistorie je Konto (#131, Abschnitt 13). Der Server misst sie am
+// eigenen Rhythmus des Kontos, nicht an einer festen Tagesgrenze - hier steht nur, was er gefunden
+// hat, und nichts wird nachgerechnet.
+let gapsByAccount=new Map();
+
 // Mirrors the server's gate on PUT api/accounts/{id}/balance: an account without a bank connection
 // keeps its balance by hand. The UI used to ask for provider === 'manual' alone, so an imported
 // account - the one kind that has no connection AND no way to be synced - had no way to be given a
@@ -154,6 +159,9 @@ function accountRow(x,groups){
   // balance anchored from last month reads as last month's. capturedAt is merely when FullWorth wrote
   // it down; calling that the data date claimed a freshness nobody had promised, so it is labelled as
   // what it is: when the figure was fetched.
+  // Ein Wort in der Zeile, die Daten dazu auf der Detailseite: mehr passt hier nicht hin, und mehr
+  // braucht es auch nicht, um jemanden hinsehen zu lassen.
+  const gap=gapsByAccount.has(String(x.id))?` · ${esc(get('accounts.dataGap'))}`:'';
   const dataAsOf=x.latestBalance?.referenceDate
     ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(date(x.latestBalance.referenceDate))}`
     : x.latestBalance?.capturedAt
@@ -174,7 +182,7 @@ function accountRow(x,groups){
     : '';
   const row=document.createElement('div');row.className='row';
   const moreBtn=`<button type="button" class="${buttonClass(ButtonRole.Icon,'account-more')}" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${acctId(x.ibanLast4)}<span class="row-sub-wide">${providerName}${kind?` · ${esc(kind)}`:''}${dataAsOf}${balanceSource}</span>${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${depotLine}${walletsLine}${convertedAmt}</div>${moreBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${acctId(x.ibanLast4)}<span class="row-sub-wide">${providerName}${kind?` · ${esc(kind)}`:''}${dataAsOf}${balanceSource}</span>${needsBalance}${gap}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${depotLine}${walletsLine}${convertedAmt}</div>${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   // Drill-down (UX rework §3): the account row itself opens that account's bookings; management
   // controls keep their own click and are excluded here.
@@ -334,12 +342,17 @@ const accountSearchText=a=>[a.displayName,a.providerDisplayName,a.institutionNam
 async function loadAccountsView(){
   // Die Depots kommen mit: ihr Gewinn gehoert in die Zeile, und die Liste liefert ihn fuer alle auf
   // einmal. Faellt der Aufruf aus, fehlt die Prozentzahl - die Kontenliste steht trotzdem.
-  const [accounts,groups,portfolios]=await Promise.all([
+  const [accounts,groups,portfolios,gaps]=await Promise.all([
     api('api/accounts'),
     api('api/account-groups').catch(()=>[]),
-    api('api/investments/portfolios').catch(()=>[])
+    api('api/investments/portfolios').catch(()=>[]),
+    api('api/transactions/data-gaps').catch(()=>[])
   ]);
   depotByAccount=new Map((portfolios||[]).filter(item=>item.accountId).map(item=>[item.accountId,item]));
+  // Nur die groesste je Konto steht in der Liste - sie kommt als erste, der Server sortiert
+  // absteigend nach Laenge. Alle stehen auf der Kontodetailseite.
+  gapsByAccount=new Map();
+  for(const item of gaps||[])if(!gapsByAccount.has(String(item.accountId)))gapsByAccount.set(String(item.accountId),item);
   // Die Liste entsteht außerhalb des Dokuments und wird erst eingesetzt, wenn sie fertig ist -
   // samt Symbolen und Knöpfen. Vorher wurden die Zeilen gezeichnet und danach geschmückt, und jede
   // wuchs dabei von 73 auf 125 Pixel; die Seite sprang um 0,32.
@@ -606,9 +619,10 @@ async function loadAccountDetail(){
 
   // Gruppe und Verbindung stehen nicht am Konto, sondern daneben. Beides ist optional: faellt es aus,
   // fehlt die Zeile, statt dass dort ein erfundener Platzhalter steht.
-  const [groups,connections]=await Promise.all([
+  const [groups,connections,gaps]=await Promise.all([
     api('api/account-groups').catch(()=>[]),
-    account.bankConnectionId?api('api/bank-connections').catch(()=>[]):Promise.resolve([])
+    account.bankConnectionId?api('api/bank-connections').catch(()=>[]):Promise.resolve([]),
+    api(`api/transactions/data-gaps?accountId=${encodeURIComponent(id)}`).catch(()=>[])
   ]);
   const group=(groups||[]).find(g=>g.id===account.groupId);
   const connection=(connections||[]).find(c=>c.id===account.bankConnectionId);
@@ -633,7 +647,12 @@ async function loadAccountDetail(){
     detailRow(get('purchases.currency'),account.currency),
     detailRow(get('accounts.group'),group?group.name:''),
     detailRow(get('accounts.dataAsOf'),dataAsOf),
-    detailRow(get('accounts.connection'),connection?connection.institutionName:get('accounts.noConnection'))
+    detailRow(get('accounts.connection'),connection?connection.institutionName:get('accounts.noConnection')),
+    // Ein Hinweis, keine Behauptung: was in der Luecke fehlt, weiss niemand, und FullWorth traegt
+    // nichts nach. Der Satz darunter nennt die moeglichen Ursachen einmal, nicht je Luecke.
+    ...(gaps||[]).map(item=>detailRow(get('accounts.dataGap'),
+      get('accounts.dataGapRange').replace('{from}',date(item.from)).replace('{to}',date(item.to)))),
+    (gaps||[]).length?`<div class="row"><div class="row-main"><div class="row-sub">${esc(get('accounts.dataGapHint'))}</div></div></div>`:''
   ].join('');
 
   // Dasselbe Symbol wie in der Liste, aus derselben Quelle.

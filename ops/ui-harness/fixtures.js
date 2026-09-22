@@ -291,6 +291,13 @@
         { kind: 'income', sourceId: 'is1', date: iso('2026-10-27'), label: 'Gehalt', subLabel: null, amount: null, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: null, categoryIconKey: null }
       ]
     },
+    // #131, Abschnitt 13: eine erkannte Luecke in der Buchungshistorie. Eigener Schluessel aus
+    // demselben Grund wie bei 'transactions/forecast' - 'transactions' ist ein Objekt, ein kuerzerer
+    // Treffer gaebe die ganze Buchungsliste zurueck. Nur a1 hat eine; a2 hat keine, damit beide
+    // Zustaende in der Kontenliste nebeneinander zu sehen sind.
+    'transactions/data-gaps': [
+      { accountId: 'a1', from: iso('2026-07-01'), to: iso('2026-07-14'), days: 13 }
+    ],
     // #124: die Sammlungen EINER Buchung - die Gegenrichtung zu 'collections'. Eigene Schluessel aus
     // demselben Grund wie bei 'transactions/forecast': 'transactions' ist ein Objekt, ein kuerzerer
     // Treffer wuerde also die ganze Buchungsliste zurueckgeben statt einer Id-Liste. t1 haengt an einer

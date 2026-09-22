@@ -45,6 +45,13 @@ public static class TransactionEndpoints
                     minAmount, maxAmount, refundOnly, hasReceipt, status, ignoredOnly, merchantId,
                     collectionIds, after), ct)));
 
+        // Auffaellige Luecken in der Buchungshistorie (#131, Abschnitt 13). Vor {id:guid} gemappt:
+        // sonst faenge dieses Muster "data-gaps" ab und antwortete mit 400, weil es keine Guid ist.
+        group.MapGet("/data-gaps", async (
+            Guid? fullWorthSpaceId, Guid? accountId,
+            CurrentUserContext currentUser, TransactionDataGapStore store, CancellationToken ct) =>
+            Results.Ok(await store.FindForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, accountId, ct)));
+
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {
             var item = await store.GetForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);

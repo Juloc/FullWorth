@@ -171,6 +171,7 @@ public static class BackendApplication
         builder.Services.AddScoped<AccountStore>();
         builder.Services.AddScoped<TransferRuleStore>();
         builder.Services.AddScoped<TransactionStore>();
+        builder.Services.AddScoped<TransactionDataGapStore>();
         builder.Services.AddScoped<SpendingReviewService>();
         builder.Services.AddScoped<CoachContextBuilder>();
         builder.Services.AddScoped<FinancialContextSnapshotService>();
