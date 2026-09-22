@@ -256,8 +256,14 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<Pur
 
     /// <summary>
     /// Die alte Einzelverknuepfung, solange es zu ihr noch keine Zeile in "PurchasePaymentLinks" gibt.
-    /// Genau diese Umrechnung macht das Bestaetigen (PurchaseLifecycleService.ConfirmAsync), nur dass
-    /// es sie dort auch speichert - eine Anzeige darf das nicht, also rechnet sie sie nur mit.
+    /// Dieselbe Vertraeglichkeitsregel wendet das Bestaetigen an (PurchaseLifecycleService.ConfirmAsync),
+    /// nur dass es die Zeile dort auch schreibt - eine Anzeige darf das nicht, also rechnet sie sie
+    /// nur mit.
+    ///
+    /// Ein Unterschied bleibt, und zwar mit Absicht: das Bestaetigen kappt den Betrag auf die
+    /// Kaufsumme, weil es einen Anteil an einer womoeglich geteilten Buchung festschreibt. Die
+    /// Anzeige kappt nicht. Wer 30 abgebucht bekommt und einen Beleg ueber 25 hat, soll die
+    /// Differenz sehen und nicht eine Null.
     /// </summary>
     private async Task<decimal?> LegacyPaymentAmountAsync(Purchase purchase, CancellationToken ct)
     {
@@ -266,7 +272,7 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<Pur
             .Where(x => x.Id == purchase.TransactionId.Value)
             .Select(x => (decimal?)x.Amount)
             .SingleOrDefaultAsync(ct);
-        return amount.HasValue ? Math.Min(Math.Abs(amount.Value), Math.Abs(purchase.TotalAmount)) : null;
+        return amount.HasValue ? Math.Abs(amount.Value) : null;
     }
 
     public async Task<(PurchaseMutationResult Result, object? Value, string? Error)> AcceptDifferenceAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, DifferenceAcceptanceWrite request, CancellationToken ct)

@@ -345,53 +345,6 @@ public sealed class PurchaseAuthorizationStore(FullWorthDbContext db)
         return PurchaseMutationResult.Success;
     }
 
-    public async Task<object?> GetReconciliationForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct)
-    {
-        var purchase = await VisiblePurchases(userId, fullWorthSpaceId)
-            .Include(x => x.Items)
-            .Include(x => x.PaymentLinks)
-            .SingleOrDefaultAsync(x => x.Id == purchaseId, ct);
-        if (purchase is null) return null;
-
-        // Old records may have only the single legacy FK. Use it only when no modern link rows exist.
-        var paymentLinks = purchase.PaymentLinks.ToList();
-        decimal? legacyTransactionAmount = null;
-        if (paymentLinks.Count == 0 && purchase.TransactionId.HasValue)
-        {
-            legacyTransactionAmount = await AccessibleTransactions(userId, fullWorthSpaceId)
-                .Where(x => x.Id == purchase.TransactionId.Value)
-                .Select(x => (decimal?)x.Amount)
-                .SingleOrDefaultAsync(ct);
-        }
-
-        var rec = PurchaseArticleCalculator.Reconcile(purchase.TotalAmount, purchase.Items, paymentLinks, purchase.Currency);
-        var transactionAmount = paymentLinks.Count > 0 ? -rec.LinkedPaymentTotal : legacyTransactionAmount;
-        var transactionDifference = paymentLinks.Count > 0
-            ? -rec.PaymentDifference
-            : legacyTransactionAmount.HasValue ? Math.Abs(legacyTransactionAmount.Value) - Math.Abs(purchase.TotalAmount) : (decimal?)null;
-        var transactionReconciled = paymentLinks.Count > 0
-            ? rec.PaymentsReconciled
-            : !legacyTransactionAmount.HasValue || Math.Abs(transactionDifference!.Value) <= rec.Tolerance;
-
-        return new
-        {
-            purchase.Id,
-            purchase.TransactionId,
-            purchase.Currency,
-            purchaseTotal = rec.PurchaseTotal,
-            itemTotal = rec.ItemTotal,
-            itemDifference = rec.ItemDifference,
-            linkedPaymentTotal = rec.LinkedPaymentTotal,
-            paymentDifference = rec.PaymentDifference,
-            transactionAmount,
-            transactionDifference,
-            itemsReconciled = rec.ItemsReconciled,
-            transactionReconciled,
-            fullyReconciled = rec.ItemsReconciled && transactionReconciled,
-            rec.Tolerance
-        };
-    }
-
     public async Task<string?> GetReceiptPathForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct)
     {
         var purchase = await VisiblePurchases(userId, fullWorthSpaceId)

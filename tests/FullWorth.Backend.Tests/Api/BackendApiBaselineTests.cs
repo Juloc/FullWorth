@@ -153,10 +153,13 @@ public sealed class BackendApiBaselineTests
         Assert.Equal(25.00m, result.GetProperty("purchaseTotal").GetDecimal());
         Assert.Equal(20.00m, result.GetProperty("itemTotal").GetDecimal());
         Assert.Equal(5.00m, result.GetProperty("itemDifference").GetDecimal());
-        Assert.Equal(-30.00m, result.GetProperty("transactionAmount").GetDecimal());
-        Assert.Equal(5.00m, result.GetProperty("transactionDifference").GetDecimal());
+        // Die alte Einzelverknuepfung Purchases.TransactionId zaehlt wie eine Zahlung, ungekappt:
+        // abgebucht wurden 30,00, der Beleg sagt 25,00, und diese 5,00 sollen sichtbar bleiben.
+        // Das Vorzeichen folgt der Konvention des Rechners (Kaufsumme minus Zahlung).
+        Assert.Equal(30.00m, result.GetProperty("linkedPaymentTotal").GetDecimal());
+        Assert.Equal(-5.00m, result.GetProperty("paymentDifference").GetDecimal());
         Assert.False(result.GetProperty("itemsReconciled").GetBoolean());
-        Assert.False(result.GetProperty("transactionReconciled").GetBoolean());
+        Assert.False(result.GetProperty("paymentsReconciled").GetBoolean());
         Assert.False(result.GetProperty("fullyReconciled").GetBoolean());
     }
 
