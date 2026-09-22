@@ -21,7 +21,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         // 10 days apart — well outside the 3-day auto-detection window, which manual linking ignores.
         var result = await store.LinkTransferForOwnerAsync(s.Owner, Space, s.Out1, s.In1, CancellationToken.None);
@@ -39,7 +39,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         Assert.Equal(TransferLinkResult.Invalid, await store.LinkTransferForOwnerAsync(s.Owner, Space, s.Out1, s.Out1, CancellationToken.None));
         Assert.Equal(TransferLinkResult.Invalid, await store.LinkTransferForOwnerAsync(s.Owner, Space, s.Out1, s.SameAccountCredit, CancellationToken.None)); // same account
@@ -53,7 +53,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         Assert.Equal(TransferLinkResult.Linked, await store.LinkTransferForOwnerAsync(s.Owner, Space, s.Out1, s.In1, CancellationToken.None));
         // A third leg trying to pair with an already-linked transaction is rejected, not silently regrouped.
@@ -66,7 +66,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
         await store.LinkTransferForOwnerAsync(s.Owner, Space, s.Out1, s.In1, CancellationToken.None);
 
         Assert.Equal(TransferUnlinkResult.Unlinked, await store.UnlinkTransferForOwnerAsync(s.Owner, Space, s.Out1, CancellationToken.None));
@@ -81,7 +81,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         Assert.Equal(TransferUnlinkResult.NotLinked, await store.UnlinkTransferForOwnerAsync(s.Owner, Space, s.Out1, CancellationToken.None));
     }
@@ -94,7 +94,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
         await store.LinkTransferForOwnerAsync(s.Owner, Space, s.Out1, s.In1, CancellationToken.None);
 
         var result = await store.ClassifyForOwnerAsync(s.Owner, Space, s.Out1, new TransactionClassification(null, false, false), CancellationToken.None);
@@ -112,7 +112,7 @@ public sealed class TransferLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         await store.ClassifyForOwnerAsync(s.Owner, Space, s.Out1, new TransactionClassification(null, false, true), CancellationToken.None);
 

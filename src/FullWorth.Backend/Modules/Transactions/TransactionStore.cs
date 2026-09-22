@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Transactions;
 
-public sealed class TransactionStore(FullWorthDbContext db)
+public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore transferRules)
 {
     public async Task<object> SearchForUserAsync(Guid userId, Guid? fullWorthSpaceId, TransactionQuery request, CancellationToken ct)
     {
@@ -472,6 +472,39 @@ public sealed class TransactionStore(FullWorthDbContext db)
             entity.IsTransfer = true;
             entity.UpdatedAt = now;
         }
+
+        // #146: aus einer BESTAETIGTEN Verknuepfung lernen. Genau hier und nicht in der Erkennung -
+        // sonst schriebe die Mechanik ihre eigenen Treffer als Regel fest, und ein einmaliger
+        // Fehltreffer waere von da an eine Regel.
+        await transferRules.LearnFromLinkAsync(userId, fullWorthSpaceId, first, second, ct);
+
+        await db.SaveChangesAsync(ct);
+        return TransferLinkResult.Linked;
+    }
+
+    /// <summary>
+    /// "Umbuchung, aber das Gegenkonto wird hier nicht gefuehrt" (#146).
+    ///
+    /// Der zweite Fall des Issues: eine Ueberweisung auf das Sparkonto ausser Haus, eine Einzahlung
+    /// ins Bargeld, ein Verrechnungskonto. Es gibt keine Gegenbuchung und soll auch keine erfundene
+    /// geben - die Buchung wird als Umbuchung gefuehrt, faellt damit aus jeder Einnahmen- und
+    /// Ausgabenauswertung heraus, und die Entscheidung wird als Regel behalten.
+    /// </summary>
+    public async Task<TransferLinkResult> MarkExternalTransferForOwnerAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid id, string? purpose, CancellationToken ct)
+    {
+        var entity = await AccessibleTransactions(userId, fullWorthSpaceId, requireOwner: true)
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return TransferLinkResult.NotFound;
+        // Wer bereits eine Gegenbuchung hat, hat kein externes Ziel. Beides gleichzeitig zu behaupten
+        // waere ein Widerspruch, den spaeter niemand aufloest.
+        if (entity.TransferGroupId is not null) return TransferLinkResult.Invalid;
+
+        entity.IsTransfer = true;
+        entity.TransferPurpose = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim()[..Math.Min(purpose.Trim().Length, 80)];
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await transferRules.LearnExternalAsync(userId, fullWorthSpaceId, entity, ct);
         await db.SaveChangesAsync(ct);
         return TransferLinkResult.Linked;
     }

@@ -80,7 +80,7 @@ public sealed class TransactionClassificationTests
             });
             await db.SaveChangesAsync();
 
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             var result = await store.ClassifyForOwnerAsync(
                 userId,
                 FullWorthSpaceDefaults.LegacyId,
@@ -119,7 +119,7 @@ public sealed class TransactionClassificationTests
             db.Transactions.Add(new FinanceTransaction { Id = transactionId, AccountId = account.Id, ExternalKey = "note-tx", Amount = -10m, Currency = "EUR" });
             await db.SaveChangesAsync();
 
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             Assert.Equal(TransactionClassificationResult.Updated, await store.ClassifyForOwnerAsync(userId, FullWorthSpaceDefaults.LegacyId, transactionId,
                 new TransactionClassification(null, false, false, UserNote: "  Reimbursed by Alex  "), CancellationToken.None));
         }
@@ -128,7 +128,7 @@ public sealed class TransactionClassificationTests
 
         await using (var db = database.CreateContext())
         {
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             Assert.Equal(TransactionClassificationResult.Updated, await store.ClassifyForOwnerAsync(userId, FullWorthSpaceDefaults.LegacyId, transactionId,
                 new TransactionClassification(null, false, false, UserNote: "   "), CancellationToken.None));
         }
@@ -199,7 +199,7 @@ public sealed class TransactionClassificationTests
         });
         await db.SaveChangesAsync();
 
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
         var result = await store.ClassifyForOwnerAsync(
             userId,
             FullWorthSpaceDefaults.LegacyId,
@@ -231,7 +231,7 @@ public sealed class TransactionClassificationTests
             db.Transactions.Add(new FinanceTransaction { Id = txId, AccountId = account.Id, ExternalKey = "purpose-tx", Amount = -200m, Currency = "EUR" });
             await db.SaveChangesAsync();
 
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             // Mark as transfer with a savings purpose.
             await store.ClassifyForOwnerAsync(userId, FullWorthSpaceDefaults.LegacyId, txId,
                 new TransactionClassification(null, false, IsTransfer: true, TransferPurpose: "savings"), CancellationToken.None);
@@ -243,7 +243,7 @@ public sealed class TransactionClassificationTests
             Assert.Equal("savings", stored.TransferPurpose);
 
             // Removing the transfer flag must clear the purpose so no stale label remains.
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             await store.ClassifyForOwnerAsync(userId, FullWorthSpaceDefaults.LegacyId, txId,
                 new TransactionClassification(null, false, IsTransfer: false, TransferPurpose: "savings"), CancellationToken.None);
         }

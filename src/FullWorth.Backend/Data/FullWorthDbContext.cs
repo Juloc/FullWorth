@@ -42,6 +42,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
     public DbSet<BalanceSnapshot> BalanceSnapshots => Set<BalanceSnapshot>();
     public DbSet<FinanceTransaction> Transactions => Set<FinanceTransaction>();
+    public DbSet<TransferRule> TransferRules => Set<TransferRule>();
     public DbSet<TransactionAllocation> TransactionAllocations => Set<TransactionAllocation>();
     public DbSet<FinanceCategory> Categories => Set<FinanceCategory>();
     public DbSet<CategorizationRule> CategorizationRules => Set<CategorizationRule>();

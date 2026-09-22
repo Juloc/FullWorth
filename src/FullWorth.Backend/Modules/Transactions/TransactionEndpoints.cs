@@ -118,6 +118,23 @@ public static class TransactionEndpoints
             };
         });
 
+        // #146: "Umbuchung, aber das Gegenkonto wird hier nicht gefuehrt." Eine eigene Route und kein
+        // Feld in der Klassifizierung, weil es eine ausdrueckliche Entscheidung ist - nur aus einer
+        // solchen wird gelernt, nie aus einem beilaeufigen Speichern.
+        group.MapPost("/{id:guid}/transfer-external", async (
+            Guid id, Guid fullWorthSpaceId, ExternalTransferRequest request, CurrentUserContext currentUser,
+            TransactionStore store, CancellationToken ct) =>
+        {
+            var result = await store.MarkExternalTransferForOwnerAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, id, request.Purpose, ct);
+            return result switch
+            {
+                TransferLinkResult.Linked => Results.NoContent(),
+                TransferLinkResult.Invalid => Results.BadRequest(new { error = "transfer_already_linked" }),
+                _ => Results.NotFound()
+            };
+        });
+
         group.MapDelete("/{id:guid}/transfer-link", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {
             var result = await store.UnlinkTransferForOwnerAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);

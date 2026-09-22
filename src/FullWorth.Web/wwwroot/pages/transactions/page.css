@@ -299,3 +299,7 @@
    das Aussehen; hier faellt nur der Aussenabstand weg, den die Filterleiste dort braucht und eine
    Zeile im Detail nicht. */
 .tx-collection-chips{margin-bottom:0}
+
+/* #146: die zwei Auswege, wenn es keine Gegenbuchung gibt. Abgesetzt von der Kandidatenliste, damit
+   sie nicht wie ein weiterer Kandidat aussehen - aber im selben Dialog, weil es dieselbe Frage ist. */
+.tx-transfer-external { border-top: 1px solid var(--border); margin-top: var(--s3); padding-top: var(--s3); }

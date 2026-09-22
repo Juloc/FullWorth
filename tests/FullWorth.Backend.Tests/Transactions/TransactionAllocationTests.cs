@@ -24,7 +24,7 @@ public sealed class TransactionAllocationTests
         await using (var db = database.CreateContext())
         {
             await Seed.PopulateAsync(db, s, txAmount: -50m);
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             var result = await store.ReplaceAllocationsForOwnerAsync(s.UserId, FullWorthSpaceDefaults.LegacyId, s.TxId,
                 new[] { new AllocationLine(s.CatB, -30m, "groceries"), new AllocationLine(s.CatA, -20m, null) }, CancellationToken.None);
             Assert.Equal(AllocationResult.Updated, result);
@@ -32,7 +32,7 @@ public sealed class TransactionAllocationTests
 
         await using (var db = database.CreateContext())
         {
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             var view = await store.GetAllocationsForUserAsync(s.UserId, FullWorthSpaceDefaults.LegacyId, s.TxId, CancellationToken.None);
             var json = JsonSerializer.SerializeToElement(view!);
             Assert.Equal(2, json.GetProperty("lines").GetArrayLength());
@@ -48,7 +48,7 @@ public sealed class TransactionAllocationTests
         await using var db = database.CreateContext();
         await Seed.PopulateAsync(db, s, txAmount: -50m);
 
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
         var result = await store.ReplaceAllocationsForOwnerAsync(s.UserId, FullWorthSpaceDefaults.LegacyId, s.TxId,
             new[] { new AllocationLine(s.CatB, -30m, null), new AllocationLine(s.CatA, -10m, null) }, CancellationToken.None);
         Assert.Equal(AllocationResult.Unbalanced, result);
@@ -62,7 +62,7 @@ public sealed class TransactionAllocationTests
         var s = Seed.New();
         await using var db = database.CreateContext();
         await Seed.PopulateAsync(db, s, txAmount: -50m);
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         // Gross category B spend is 60, a +10 coupon in A reduces the real bank charge to 50.
         var result = await store.ReplaceAllocationsForOwnerAsync(s.UserId, FullWorthSpaceDefaults.LegacyId, s.TxId,
@@ -84,7 +84,7 @@ public sealed class TransactionAllocationTests
         db.AddRange(otherSpace, foreignCategory);
         await db.SaveChangesAsync();
 
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
         var result = await store.ReplaceAllocationsForOwnerAsync(s.UserId, FullWorthSpaceDefaults.LegacyId, s.TxId,
             new[] { new AllocationLine(foreignCategory.Id, -50m, null) }, CancellationToken.None);
         Assert.Equal(AllocationResult.InvalidCategory, result);
@@ -97,7 +97,7 @@ public sealed class TransactionAllocationTests
         var s = Seed.New();
         await using var db = database.CreateContext();
         await Seed.PopulateAsync(db, s, txAmount: -50m);
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         await store.ReplaceAllocationsForOwnerAsync(s.UserId, FullWorthSpaceDefaults.LegacyId, s.TxId,
             new[] { new AllocationLine(s.CatB, -50m, null) }, CancellationToken.None);

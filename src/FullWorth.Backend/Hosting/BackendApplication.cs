@@ -169,6 +169,7 @@ public static class BackendApplication
         builder.Services.AddScoped<FullWorth.Backend.Modules.BankConnections.FinTsRawResponseStore>();
         builder.Services.AddScoped<EnableBankingProfileStore>();
         builder.Services.AddScoped<AccountStore>();
+        builder.Services.AddScoped<TransferRuleStore>();
         builder.Services.AddScoped<TransactionStore>();
         builder.Services.AddScoped<SpendingReviewService>();
         builder.Services.AddScoped<CoachContextBuilder>();

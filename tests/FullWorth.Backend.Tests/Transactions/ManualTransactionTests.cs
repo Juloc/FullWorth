@@ -23,7 +23,7 @@ public sealed class ManualTransactionTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         var (expenseResult, expenseId) = await store.CreateManualForOwnerAsync(s.Owner, Space,
             new CreateTransactionRequest(s.ManualAccount, 12.50m, "expense", new DateOnly(2026, 8, 20), null, "Bäckerei", s.Category, "Frühstück"), CancellationToken.None);
@@ -59,7 +59,7 @@ public sealed class ManualTransactionTests
         transaction.CategoryId = s.Category;
         await db.SaveChangesAsync();
 
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
         var query = new TransactionQuery(null, null, null, null, null, null, null, null, null, null, null, 20);
 
         var listJson = JsonSerializer.Serialize(
@@ -85,7 +85,7 @@ public sealed class ManualTransactionTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         var (result, id) = await store.CreateManualForOwnerAsync(s.Owner, Space,
             new CreateTransactionRequest(s.BankAccount, 5m, "expense", new DateOnly(2022, 3, 4), null, "Fehlende Buchung", null, null), CancellationToken.None);
@@ -104,7 +104,7 @@ public sealed class ManualTransactionTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         var (badCategory, _) = await store.CreateManualForOwnerAsync(s.Owner, Space,
             new CreateTransactionRequest(s.ManualAccount, 5m, "expense", null, null, "X", Guid.NewGuid(), null), CancellationToken.None);
@@ -129,7 +129,7 @@ public sealed class ManualTransactionTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         await Assert.ThrowsAsync<ArgumentException>(() => store.CreateManualForOwnerAsync(s.Owner, Space,
             new CreateTransactionRequest(s.ManualAccount, amount, direction, null, null, description, null, null), CancellationToken.None));
@@ -143,7 +143,7 @@ public sealed class ManualTransactionTests
         Guid id;
         await using (var db = database.CreateContext())
         {
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             (_, id) = await store.CreateManualForOwnerAsync(s.Owner, Space,
                 new CreateTransactionRequest(s.ManualAccount, 40m, "expense", null, null, "Splitme", null, null), CancellationToken.None);
             db.TransactionAllocations.Add(new TransactionAllocation { TransactionId = id, Amount = -40m, CategoryId = s.Category });
@@ -152,7 +152,7 @@ public sealed class ManualTransactionTests
 
         await using (var db = database.CreateContext())
         {
-            var store = new TransactionStore(db);
+            var store = new TransactionStore(db, new TransferRuleStore(db));
             Assert.Equal(TransactionDeleteResult.Deleted, await store.DeleteManualForOwnerAsync(s.Owner, Space, id, CancellationToken.None));
         }
 
@@ -169,7 +169,7 @@ public sealed class ManualTransactionTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         Assert.Equal(TransactionDeleteResult.NotManual, await store.DeleteManualForOwnerAsync(s.Owner, Space, s.ImportedTx, CancellationToken.None));
         Assert.True(await db.Transactions.AnyAsync(x => x.Id == s.ImportedTx));

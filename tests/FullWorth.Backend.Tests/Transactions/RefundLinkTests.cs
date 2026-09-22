@@ -20,7 +20,7 @@ public sealed class RefundLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         Assert.Equal(RefundLinkResult.Updated, await store.LinkRefundForOwnerAsync(s.User, FullWorthSpaceDefaults.LegacyId, s.Refund, s.Expense, null, CancellationToken.None));
         Assert.Equal(s.Expense, await db.Transactions.Where(x => x.Id == s.Refund).Select(x => x.RefundOfTransactionId).SingleAsync());
@@ -35,7 +35,7 @@ public sealed class RefundLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         // Original is not an expense (positive) -> invalid.
         Assert.Equal(RefundLinkResult.Invalid, await store.LinkRefundForOwnerAsync(s.User, FullWorthSpaceDefaults.LegacyId, s.Refund, s.Refund2, null, CancellationToken.None));
@@ -59,7 +59,7 @@ public sealed class RefundLinkTests
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
-        var store = new TransactionStore(db);
+        var store = new TransactionStore(db, new TransferRuleStore(db));
 
         // s.Expense is split into CatA (-30) / CatB (-20); linking to CatB is valid and persists.
         Assert.Equal(RefundLinkResult.Updated, await store.LinkRefundForOwnerAsync(s.User, FullWorthSpaceDefaults.LegacyId, s.Refund, s.Expense, s.CatB, CancellationToken.None));

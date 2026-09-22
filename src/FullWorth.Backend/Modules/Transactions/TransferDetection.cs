@@ -103,20 +103,65 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
             .ToDictionaryAsync(t => t.Id, ct);
         var byId = candidates.ToDictionary(x => x.Id);
 
+        // Die bestaetigten Beziehungen dieses Space, einmal geladen. Eine Regel sagt: diese
+        // Gegenpartei auf diesem Konto geht zu jenem Konto. Ein Paar ist bestaetigt, wenn BEIDE
+        // Seiten so eine Regel haben und sie aufeinander zeigen - eine Seite allein waere die halbe
+        // Aussage, und ein Konto, das viele Umbuchungen empfaengt, wuerde damit zu jedem passen.
+        var confirmedPairs = await ConfirmedPairKeysAsync(fullWorthSpaceId, ct);
+
         var result = pairs.Select(pair =>
         {
             var first = byId[pair.First];
             var second = byId[pair.Second];
             var exact = IdentifierRelationshipScore(first, second) > 0;
             var last4 = !exact && HasDirectionalLast4Match(first, second);
-            var confidence = exact ? "high" : last4 ? "medium" : "suggested";
+            // #146: hat der Benutzer genau dieses Paar von Konten fuer genau diese Gegenpartei schon
+            // einmal bestaetigt, ist das die staerkste Aussage, die es gibt - staerker als jede
+            // Mechanik, denn sie kommt von ihm.
+            var confirmed = confirmedPairs.Contains(PairKey(details[pair.First], details[pair.Second]));
+            var confidence = confirmed || exact ? "high" : last4 ? "medium" : "suggested";
             var reasons = new List<string> { "opposite_amount", "same_currency", "date_window" };
+            if (confirmed) reasons.Add("confirmed_before");
             if (exact) reasons.Add("owned_account_identifier");
             else if (last4) reasons.Add("account_last4");
             return new TransferCandidatePair(details[pair.First], details[pair.Second], confidence, reasons);
         }).ToList();
 
         return new(TransferDetectionResult.Success, result);
+    }
+
+    /// <summary>
+    /// Ein Schluessel je bestaetigtem Kontopaar, richtungsunabhaengig sortiert - dasselbe Paar soll
+    /// von beiden Seiten denselben Schluessel ergeben.
+    /// </summary>
+    private static string PairKey(TransferCandidateLeg first, TransferCandidateLeg second)
+    {
+        var a = first.AccountId.ToString("N");
+        var b = second.AccountId.ToString("N");
+        return string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
+    }
+
+    private async Task<HashSet<string>> ConfirmedPairKeysAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        var rules = await db.TransferRules.AsNoTracking()
+            .Where(rule => rule.FullWorthSpaceId == fullWorthSpaceId && rule.TargetAccountId != null)
+            .Select(rule => new { rule.AccountId, TargetAccountId = rule.TargetAccountId!.Value })
+            .ToListAsync(ct);
+
+        var directed = rules
+            .Select(rule => $"{rule.AccountId:N}->{rule.TargetAccountId:N}")
+            .ToHashSet(StringComparer.Ordinal);
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rule in rules)
+        {
+            // Beide Seiten muessen aufeinander zeigen.
+            if (!directed.Contains($"{rule.TargetAccountId:N}->{rule.AccountId:N}")) continue;
+            var a = rule.AccountId.ToString("N");
+            var b = rule.TargetAccountId.ToString("N");
+            keys.Add(string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}");
+        }
+        return keys;
     }
 
     public static List<(Guid First, Guid Second)> FindAutomaticPairs(IReadOnlyList<TransferCandidate> candidates, int windowDays)

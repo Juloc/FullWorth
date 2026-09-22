@@ -3909,6 +3909,48 @@ namespace FullWorth.Backend.Migrations
                     b.ToTable("TransactionAllocations");
                 });
 
+            modelBuilder.Entity("FullWorth.Backend.Modules.Transactions.TransferRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("FullWorthSpaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NormalizedCounterparty")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<Guid?>("TargetAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FullWorthSpaceId", "AccountId", "NormalizedCounterparty", "Direction")
+                        .IsUnique();
+
+                    b.ToTable("TransferRules");
+                });
+
             modelBuilder.Entity("FullWorth.Backend.Modules.Users.FullWorthUser", b =>
                 {
                     b.Property<Guid>("Id")

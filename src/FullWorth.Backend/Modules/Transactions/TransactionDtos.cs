@@ -97,3 +97,6 @@ public sealed record RefundLink(Guid? OriginalTransactionId, Guid? RefundCategor
 public sealed record CreateTransactionRequest(Guid AccountId, decimal Amount, string? Direction, DateOnly? Date, string? Currency, string? Counterparty, Guid? CategoryId, string? Note);
 
 public sealed record TransferLinkRequest(Guid OtherTransactionId);
+
+/// <summary>Eine Umbuchung ohne FullWorth-Gegenkonto (#146). Der Zweck ist optional und beschreibend.</summary>
+public sealed record ExternalTransferRequest(string? Purpose);

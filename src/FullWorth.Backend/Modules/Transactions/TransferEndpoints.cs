@@ -62,6 +62,35 @@ public static class TransferEndpoints
                 _ => Results.NotFound()
             };
         }).WithTags("Transfers");
+
+        // #146: die gelernten Regeln sind nachvollziehbar und loeschbar. Eine Regel, die man nicht
+        // mehr los wird, ist eine Entscheidung, die der Benutzer einmal getroffen hat und nie
+        // zuruecknehmen kann - und sie wirkt auf jede kuenftige Buchung desselben Musters.
+        app.MapGet("/api/transfers/rules", async (
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            SpaceAccess space,
+            TransferRuleStore rules,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            return Results.Ok(await rules.ListAsync(fullWorthSpaceId, ct));
+        }).WithTags("Transfers");
+
+        app.MapDelete("/api/transfers/rules/{id:guid}", async (
+            Guid id,
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            SpaceAccess space,
+            TransferRuleStore rules,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            return await rules.DeleteAsync(fullWorthSpaceId, id, ct) ? Results.NoContent() : Results.NotFound();
+        }).WithTags("Transfers");
+
         return app;
     }
 }

@@ -13,6 +13,7 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { createWizard } from '../../components/wizard.js';
 import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 import { registerRowSelection } from '../../components/mobile-interactions.js';
+import { state } from '../../core/state.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -1137,10 +1138,21 @@ async function openTransferPicker(t) {
   const rows = candidates.length
     ? candidates.map(x => `<button type="button" class="row candidate-row" data-id="${x.id}"><div class="row-main"><div class="row-title">${ctx.esc(x.account || '')}</div><div class="row-sub">${ctx.esc(ctx.date(x.bookingDate))} · ${ctx.esc(x.counterparty || '')}</div></div><div class="amount">${ctx.money(x.amount, x.currency)}</div></button>`).join('')
     : `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`;
+  // #146: es gibt nicht nur den Fall "Gegenbuchung ist da, sie wurde nur nicht gefunden". Eine
+  // Überweisung auf ein Sparkonto außer Haus hat gar keine, und bisher endete der Weg hier im Leeren:
+  // eine leere Liste und nichts, was man tun kann. Zwei Auswege, beide vom Nutzer bestätigt - es wird
+  // weder ein Konto ungefragt angelegt noch eine Gegenbuchung erfunden.
   const dlg = ctx.dialog(`<div class="dialog-card drawer">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('transactions.transferLink'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <p class="row-sub">${ctx.esc(ctx.get('transactions.transferPick'))}</p>
     <div class="refund-candidates">${rows}</div>
+    <div class="tx-transfer-external">
+      <p class="row-sub">${ctx.esc(deLabel('Kein Gegenkonto in FullWorth?', 'No counter-account in FullWorth?'))}</p>
+      <div class="dialog-actions">
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-new-account>${ctx.esc(deLabel('Manuelles Konto anlegen', 'Create a manual account'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-external>${ctx.esc(deLabel('Ohne Gegenkonto merken', 'Remember without a counter-account'))}</button>
+      </div>
+    </div>
   </div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelectorAll('.candidate-row').forEach(row => row.addEventListener('click', async () => {
@@ -1151,7 +1163,66 @@ async function openTransferPicker(t) {
       await refreshList(t.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   }));
+
+  // "Ohne Gegenkonto merken": die Buchung bleibt fachlich eine Umbuchung und fällt damit aus jeder
+  // Einnahmen-/Ausgabenauswertung - und der Server behält die Entscheidung als Regel, sodass die
+  // nächste Buchung desselben Musters erkannt wird.
+  dlg.querySelector('[data-external]').addEventListener('click', async () => {
+    try {
+      await ctx.api(`api/transactions/${t.id}/transfer-external`, ctx.jsonBody({ purpose: t.counterparty || null }));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await refreshList(t.id);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  });
+
+  // "Manuelles Konto anlegen": der Name wird aus der Gegenpartei vorgeschlagen, bestätigt wird er vom
+  // Nutzer. Es entsteht nur das Konto - keine Gegenbuchung: solange es keine gibt, wäre jede erfunden.
+  dlg.querySelector('[data-new-account]').addEventListener('click', () => {
+    dlg.close();
+    openManualCounterAccount(t);
+  });
   dlg.showModal();
+}
+
+// #146 Punkt 3: ein manuelles Gegenkonto für ein Ziel, das FullWorth nicht anbinden kann - Bargeld,
+// ein Sparkonto außer Haus, ein Verrechnungskonto.
+function openManualCounterAccount(t) {
+  openFormDialog({
+    title: deLabel('Manuelles Konto anlegen', 'Create a manual account'),
+    closeLabel: ctx.get('common.close'),
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('accounts.name'), required: true, maxLength: 120 },
+      { name: 'balance', kind: FieldKind.Money, label: deLabel('Aktueller Stand (optional)', 'Current balance (optional)') }
+    ],
+    // Aus "IKANO BANK" wird ein Vorschlag, keine Tatsache - der Nutzer sieht ihn und ändert ihn.
+    values: { name: t.counterparty || '', balance: '' },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close('cancel') },
+      { name: 'create', label: ctx.get('common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, close }) => {
+      close('created');
+      try {
+        await ctx.api('api/accounts', ctx.jsonBody({
+          fullWorthSpaceId: state.space?.id,
+          bankConnectionId: null,
+          displayName: values.name.trim(),
+          currency: t.currency,
+          includeInNetWorth: true,
+          sortOrder: 0,
+          institutionName: null,
+          initialBalance: values.balance === '' ? null : Number(values.balance)
+        }));
+        // Bewusst zurück in die Auswahl statt still zu verknüpfen: das neue Konto hat noch keine
+        // Buchung, es gibt also nichts zu verknüpfen. Der Nutzer bucht sie dort ein - oder merkt die
+        // Umbuchung ohne Gegenkonto.
+        ctx.toast(ctx.get('common.saved'));
+        await refreshList(t.id);
+      } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+    }
+  });
 }
 
 /**
