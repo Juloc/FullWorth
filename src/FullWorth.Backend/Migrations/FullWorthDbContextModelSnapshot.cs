@@ -3824,6 +3824,11 @@ namespace FullWorth.Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("TimelineSortKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("TransferGroupId")
                         .HasColumnType("uuid");
 
@@ -3862,6 +3867,8 @@ namespace FullWorth.Backend.Migrations
 
                     b.HasIndex("AccountId", "ExternalKey")
                         .IsUnique();
+
+                    b.HasIndex("AccountId", "TimelineSortKey");
 
                     b.ToTable("Transactions");
                 });

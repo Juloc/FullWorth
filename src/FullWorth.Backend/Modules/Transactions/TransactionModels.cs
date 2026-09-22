@@ -37,6 +37,16 @@ public sealed class FinanceTransaction
     public string RawJson { get; set; } = "{}";
     public DateTimeOffset FirstSeenAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Die Position in der Timeline als eine vergleichbare Zeichenkette (#161) - vorgemerkt, Datum,
+    /// UpdatedAt, Id in dieser Reihenfolge.
+    ///
+    /// Die Datenbank rechnet sie aus denselben Spalten, aus denen auch das ORDER BY kommt
+    /// (GENERATED ALWAYS ... STORED). Sie hier zu setzen waere eine zweite Wahrheit ueber die
+    /// Reihenfolge, die beim naechsten Schreibpfad vergessen wird - deshalb nur lesbar.
+    /// </summary>
+    public string TimelineSortKey { get; private set; } = string.Empty;
 }
 
 // A split allocation line on a transaction. Amount uses the ledger sign convention and all lines NET

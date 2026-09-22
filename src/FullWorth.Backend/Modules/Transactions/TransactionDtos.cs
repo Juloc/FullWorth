@@ -60,7 +60,10 @@ public sealed record TransactionListItem(
     bool IsManual = false,
     // Provider details are only fetchable with a provider transaction id, through a live non-FinTS
     // connection. FinTS details are already part of the imported transaction.
-    bool HasProviderDetails = false);
+    bool HasProviderDetails = false,
+    // Die Position dieser Zeile in der Timeline (#161). Sie IST der Cursor der naechsten Seite -
+    // deshalb steht sie an der Zeile und wird nicht nachtraeglich aus ihren Bestandteilen gebaut.
+    string TimelineSortKey = "");
 
 public sealed record TransactionQuery(
     Guid? AccountId,
@@ -86,7 +89,9 @@ public sealed record TransactionQuery(
     bool? IgnoredOnly = null,
     Guid? MerchantId = null,
     /// <summary>Sammlungen (#124). Mehrere heisst ODER: in mindestens einer davon.</summary>
-    IReadOnlyList<Guid>? CollectionIds = null);
+    IReadOnlyList<Guid>? CollectionIds = null,
+    /// <summary>Die Stelle, an der es weitergeht (#161). Ersetzt Offset auf der Timeline.</summary>
+    string? After = null);
 
 public sealed record TransactionClassification(Guid? CategoryId, bool IsIgnored, bool IsTransfer, string? TransferPurpose = null, string? UserNote = null);
 

@@ -256,6 +256,24 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
         b.Entity<FinanceTransaction>(e =>
         {
             e.HasIndex(x => new { x.AccountId, x.ExternalKey }).IsUnique();
+            // Die Datenbank rechnet ihn (#161). EF liest ihn und schreibt ihn nie - sonst waere die
+            // Reihenfolge an zwei Orten definiert.
+            //
+            // Der Ausdruck ist PostgreSQL. Die Schema-aus-dem-Modell-Datenbanken der Unit-Tests
+            // (SQLite) bekommen eine gewoehnliche Spalte: sie pruefen Umbuchungen, Splits und
+            // Erstattungen und nie die Reihenfolge einer langen Liste - dafuer gibt es die
+            // Integrationstests auf echtem PostgreSQL. Eine Spalte, die dort NULL bleibt, ist
+            // ehrlicher als ein zweiter Ausdruck, der etwas anderes rechnet als der echte.
+            var timelineSortKey = e.Property(x => x.TimelineSortKey);
+            if (Database.IsNpgsql())
+            {
+                timelineSortKey.ValueGeneratedOnAddOrUpdate();
+                e.HasIndex(x => new { x.AccountId, x.TimelineSortKey });
+            }
+            else
+            {
+                timelineSortKey.IsRequired(false);
+            }
             e.HasIndex(x => x.BookingDate);
             e.HasIndex(x => x.CategoryId);
             e.HasIndex(x => x.NormalizedCounterparty);
