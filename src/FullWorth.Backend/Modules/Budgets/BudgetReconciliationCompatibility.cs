@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Budgets.CarryOver;
 using FullWorth.Backend.Modules.Reconciliation;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Budgets;
@@ -35,7 +36,17 @@ public sealed record ReconciledBudgetStatus(
     string Trend,
     bool PartialAccess,
     bool IncompleteFx,
-    IReadOnlyList<ReconciledBudgetContribution> Contributing);
+    IReadOnlyList<ReconciledBudgetContribution> Contributing)
+{
+    /// <summary>Der Grundbetrag ohne Uebertrag. <c>BudgetAmount</c> ist der effektive.</summary>
+    public decimal BaseBudgetAmount { get; init; }
+
+    /// <summary>Was aus abgeschlossenen Perioden hereingetragen wird; negativ bei Ueberziehung.</summary>
+    public decimal CarryIn { get; init; }
+
+    public bool CarryOver { get; init; }
+    public bool CarryOverOverspend { get; init; }
+}
 
 public sealed class BudgetReconciliationService(
     FullWorthDbContext db,
@@ -66,13 +77,27 @@ public sealed class BudgetReconciliationService(
             : scope.AccountIds.Any(id => !visible.Contains(id));
 
         var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var period = BudgetCycleCalculator.CurrentPeriod(
-            BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate), day);
-        var loaded = await reconciliation.LoadAsync(
+        var cycle = BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate);
+        var period = BudgetCycleCalculator.CurrentPeriod(cycle, day);
+
+        var categoryIds = await ExpandCategoriesAsync(fullWorthSpaceId, scope.Categories, ct);
+        var merchants = scope.Merchants.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var tags = scope.TagIds.ToHashSet();
+
+        // Der Bereich des Budgets, auf eine geladene Spanne angewandt. Als eigene Funktion, weil die
+        // Historie fuer den Uebertrag GENAU denselben Filter braucht - waere er dort auch nur um eine
+        // Bedingung anders, zeigte die laufende Periode etwas anderes als die, aus der sie erbt.
+        List<CanonicalContribution> Relevant(IEnumerable<CanonicalContribution> items) => items.Where(item =>
+            item.Kind is ContributionKinds.Expense or ContributionKinds.Refund &&
+            (categoryIds.Count == 0 || (item.CategoryId.HasValue && categoryIds.Contains(item.CategoryId.Value))) &&
+            (merchants.Count == 0 || merchants.Contains(item.Merchant)) &&
+            (tags.Count == 0 || item.TagIds.Overlaps(tags))).ToList();
+
+        Task<CanonicalContributionLoad?> LoadAsync(DateOnly from, DateOnly to) => reconciliation.LoadAsync(
             userId,
             fullWorthSpaceId,
-            period.Start,
-            period.End,
+            from,
+            to,
             budget.Currency,
             effectiveAccounts,
             includeTransfers: false,
@@ -80,29 +105,53 @@ public sealed class BudgetReconciliationService(
             includeIgnored: false,
             refundMode: "reverse",
             ct);
+
+        var loaded = await LoadAsync(period.Start, period.End);
         if (loaded is null) return null;
 
-        var categoryIds = await ExpandCategoriesAsync(fullWorthSpaceId, scope.Categories, ct);
-        var merchants = scope.Merchants.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var tags = scope.TagIds.ToHashSet();
-        var relevant = loaded.Items.Where(item =>
-            item.Kind is ContributionKinds.Expense or ContributionKinds.Refund &&
-            (categoryIds.Count == 0 || (item.CategoryId.HasValue && categoryIds.Contains(item.CategoryId.Value))) &&
-            (merchants.Count == 0 || merchants.Contains(item.Merchant)) &&
-            (tags.Count == 0 || item.TagIds.Overlaps(tags))).ToList();
-
+        var relevant = Relevant(loaded.Items);
         var spent = FinancialReconciliationService.Spend(relevant);
+        var incompleteFx = loaded.IncompleteFx;
+
+        // Der Uebertrag (#115). Er stand im BudgetStore fertig da, aber diese Klasse bedient die drei
+        // oeffentlichen Status-Routen - ohne ihn zeigte ein Budget mit Uebertrag ueberall den nackten
+        // Grundbetrag, und die Einstellung war folgenlos.
+        var carryIn = 0m;
+        var carryMode = BudgetCarryOverWindow.Mode(budget);
+        if (carryMode != CarryOverMode.Disabled)
+        {
+            var activeFrom = BudgetCarryOverWindow.ActiveFrom(budget, cycle, day);
+            var priorPeriods = BudgetCarryOverWindow.PriorPeriods(cycle, activeFrom, period);
+            if (priorPeriods.Count > 0)
+            {
+                var historyFrom = activeFrom > priorPeriods[0].Start ? activeFrom : priorPeriods[0].Start;
+                var history = await LoadAsync(historyFrom, period.Start.AddDays(-1));
+                if (history is not null)
+                {
+                    // Ein fehlender Kurs in der Historie macht auch den Uebertrag unvollstaendig -
+                    // und damit jede Zahl, die auf ihm steht. Das gehoert weitergereicht.
+                    incompleteFx |= history.IncompleteFx;
+                    var spentByPeriod = Relevant(history.Items)
+                        .GroupBy(item => BudgetCycleCalculator.CurrentPeriod(cycle, item.Date).Start)
+                        .ToDictionary(group => group.Key, FinancialReconciliationService.Spend);
+                    var priorSpends = priorPeriods
+                        .Select(previous => spentByPeriod.GetValueOrDefault(previous.Start))
+                        .ToList();
+                    carryIn = BudgetCarryOverCalculator.CarriedIn(carryMode, budget.Amount, priorSpends);
+                }
+            }
+        }
+
+        var effectiveAmount = budget.Amount + carryIn;
         var totalDays = period.LengthInDays;
         var elapsedDays = Math.Clamp(day.DayNumber - period.Start.DayNumber + 1, 0, totalDays);
         var forecast = BudgetForecastCalculator.Project(new BudgetForecastInput(
-            budget.Amount,
+            effectiveAmount,
             spent,
             totalDays,
             elapsedDays,
             HistoricalDailyAverage: null));
-        var percent = budget.Amount == 0m
-            ? 0m
-            : Math.Round(spent / budget.Amount * 100m, 2, MidpointRounding.AwayFromZero);
+        var percent = BudgetCarryOverWindow.PercentUsed(effectiveAmount, spent);
 
         var categoryNames = await db.Categories.AsNoTracking()
             .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
@@ -130,16 +179,22 @@ public sealed class BudgetReconciliationService(
             budget.Period,
             period.Start,
             period.End,
-            budget.Amount,
+            effectiveAmount,
             spent,
-            budget.Amount - spent,
+            effectiveAmount - spent,
             percent,
             forecast.ProjectedEndSpend,
             forecast.ProjectedOverUnder,
             forecast.Trend.ToString(),
             partialAccess,
-            loaded.IncompleteFx,
-            contributions);
+            incompleteFx,
+            contributions)
+        {
+            BaseBudgetAmount = budget.Amount,
+            CarryIn = carryIn,
+            CarryOver = budget.CarryOver,
+            CarryOverOverspend = budget.CarryOverOverspend
+        };
     }
 
     public async Task<object?> GetListAsync(
@@ -191,7 +246,10 @@ public sealed class BudgetReconciliationService(
                 status.Spent,
                 status.Remaining,
                 percent = status.PercentUsed,
-                status.PartialAccess
+                status.PartialAccess,
+                status.BaseBudgetAmount,
+                status.CarryIn,
+                status.CarryOver
             });
         }
 
@@ -356,6 +414,10 @@ public sealed class BudgetReconciliationCompatibilityMiddleware(RequestDelegate 
                     status.ProjectedOverUnder,
                     status.PartialAccess,
                     incompleteFx = status.IncompleteFx,
+                    status.BaseBudgetAmount,
+                    status.CarryIn,
+                    status.CarryOver,
+                    status.CarryOverOverspend,
                     status.Contributing
                 }, cancellationToken: ct);
                 return;

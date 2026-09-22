@@ -80,11 +80,11 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
                 .SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
 
             var carryIn = 0m;
-            var carryMode = ResolveCarryMode(budget);
+            var carryMode = BudgetCarryOverWindow.Mode(budget);
             if (carryMode != CarryOverMode.Disabled)
             {
-                var activeFrom = BudgetActiveFrom(budget, cycle);
-                var priorPeriods = PriorPeriods(cycle, activeFrom, period);
+                var activeFrom = BudgetCarryOverWindow.ActiveFrom(budget, cycle, asOf);
+                var priorPeriods = BudgetCarryOverWindow.PriorPeriods(cycle, activeFrom, period);
                 if (priorPeriods.Count > 0)
                 {
                     var historyFrom = activeFrom > priorPeriods[0].Start ? activeFrom : priorPeriods[0].Start;
@@ -103,7 +103,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
             }
 
             var effectiveAmount = budget.Amount + carryIn;
-            var percentUsed = CalculatePercentUsed(effectiveAmount, spent);
+            var percentUsed = BudgetCarryOverWindow.PercentUsed(effectiveAmount, spent);
             signals.Add(new BudgetSignal(budget.Id, budget.Name, percentUsed, period.Start));
         }
         return signals;
@@ -145,11 +145,11 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         }
 
         var carryIn = 0m;
-        var carryMode = ResolveCarryMode(budget);
+        var carryMode = BudgetCarryOverWindow.Mode(budget);
         if (carryMode != CarryOverMode.Disabled)
         {
-            var activeFrom = BudgetActiveFrom(budget, cycle);
-            var priorPeriods = PriorPeriods(cycle, activeFrom, period);
+            var activeFrom = BudgetCarryOverWindow.ActiveFrom(budget, cycle, asOf);
+            var priorPeriods = BudgetCarryOverWindow.PriorPeriods(cycle, activeFrom, period);
             if (priorPeriods.Count > 0)
             {
                 var historyFrom = activeFrom > priorPeriods[0].Start ? activeFrom : priorPeriods[0].Start;
@@ -169,7 +169,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         var effectiveBudget = budget.Amount + carryIn;
         var spent = -(await ExpensesIn(period).SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
         var remaining = effectiveBudget - spent;
-        var percentUsed = CalculatePercentUsed(effectiveBudget, spent);
+        var percentUsed = BudgetCarryOverWindow.PercentUsed(effectiveBudget, spent);
 
         var previous = BudgetCycleCalculator.PreviousPeriod(cycle, asOf);
         var previousSpent = -(await ExpensesIn(previous).SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
@@ -207,57 +207,6 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
 
     private static BudgetCycleDefinition ResolveCycle(Budget budget) =>
         BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate);
-
-    private static CarryOverMode ResolveCarryMode(Budget budget) =>
-        !budget.CarryOver
-            ? CarryOverMode.Disabled
-            : budget.CarryOverOverspend ? CarryOverMode.Enabled : CarryOverMode.PositiveOnly;
-
-    /// <summary>
-    /// Ab wann der Uebertrag zaehlt. Das ist NICHT der Periodenbeginn: die Periode sagt, wie lang ein
-    /// Fenster ist, diese Angabe sagt, ab welchem Fenster ueberhaupt gerechnet wird (#115).
-    ///
-    /// Ohne Angabe bleibt es beim bisherigen Verhalten - ab dem Startdatum, sonst ab der Anlage.
-    /// </summary>
-    private static DateOnly BudgetActiveFrom(Budget budget, BudgetCycleDefinition cycle)
-    {
-        var current = BudgetCycleCalculator.CurrentPeriod(cycle, DateOnly.FromDateTime(DateTime.UtcNow));
-        switch (budget.CarryOverStart)
-        {
-            // Nur diese Periode: aeltere Historie beeinflusst den Uebertrag nicht.
-            case "this-period": return current.Start;
-            case "from-date" when budget.CarryOverFrom is { } chosen:
-                return BudgetCycleCalculator.CurrentPeriod(cycle, chosen).Start;
-        }
-        if (budget.StartDate is { } explicitStart) return explicitStart;
-        var created = DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
-        return BudgetCycleCalculator.CurrentPeriod(cycle, created).Start;
-    }
-
-    private static List<BudgetCyclePeriod> PriorPeriods(
-        BudgetCycleDefinition cycle,
-        DateOnly activeFrom,
-        BudgetCyclePeriod current)
-    {
-        if (activeFrom >= current.Start) return [];
-
-        var periods = new List<BudgetCyclePeriod>();
-        var cursor = BudgetCycleCalculator.CurrentPeriod(cycle, activeFrom);
-        var guard = 0;
-        while (cursor.Start < current.Start && guard++ < 20000)
-        {
-            periods.Add(cursor);
-            cursor = BudgetCycleCalculator.CurrentPeriod(cycle, cursor.EndExclusive);
-        }
-        return periods;
-    }
-
-    private static decimal CalculatePercentUsed(decimal effectiveBudget, decimal spent)
-    {
-        if (effectiveBudget > 0m)
-            return Math.Round(spent / effectiveBudget * 100m, 2, MidpointRounding.AwayFromZero);
-        return spent > 0m || effectiveBudget < 0m ? 101m : 0m;
-    }
 
     public async Task<BudgetAccessLevel> GetAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid budgetId, CancellationToken ct)
     {
