@@ -11,6 +11,7 @@ public sealed record CodexReceiptSource(Guid Id, Guid FileId, int SortOrder, int
 public sealed class CodexReceiptBridgeClient(
     IConfiguration configuration,
     IHttpClientFactory clients,
+    Intelligence.IntelligenceStore intelligence,
     ILogger<CodexReceiptBridgeClient> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -61,6 +62,10 @@ public sealed class CodexReceiptBridgeClient(
         var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
         if (baseUri is null) return null;
 
+        // Sein eingestelltes Vision-Modell. Es wurde gespeichert und angezeigt, aber nie mitgeschickt:
+        // hier stand fest null, und die Bruecke waehlte deshalb immer automatisch (#156).
+        var model = await intelligence.CodexVisionModelAsync(userId, ct);
+
         var payload = JsonSerializer.Serialize(new
         {
             files = files.Select(file => new
@@ -77,7 +82,7 @@ public sealed class CodexReceiptBridgeClient(
                 sortOrder = source.SortOrder,
                 pageNumber = source.PageNumber
             }),
-            model = (string?)null,
+            model,
             categories
         }, Json);
 

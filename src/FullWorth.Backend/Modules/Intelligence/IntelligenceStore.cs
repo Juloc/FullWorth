@@ -174,6 +174,30 @@ public sealed class IntelligenceStore(
             .SingleOrDefaultAsync(ct);
     }
 
+    /// <summary>
+    /// Sein Vision-Modell - aber nur, wenn Codex sein ausgewaehlter Anbieter ist. Ein Modellname
+    /// gehoert dem Anbieter, bei dem er eingetragen wurde: der Name aus einem OpenAI-Zugang hat fuer
+    /// die Codex-Befehlszeile keine Bedeutung. Null heisst "automatisch", und das ist fuer Codex ein
+    /// gueltiger Wert, kein Fehlerfall.
+    /// </summary>
+    public async Task<string?> CodexVisionModelAsync(Guid userId, CancellationToken ct)
+    {
+        var settings = await db.AiUserSettings.AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => new { x.CredentialId, x.VisionModel })
+            .SingleOrDefaultAsync(ct);
+        if (settings?.CredentialId is not { } credentialId) return null;
+        if (string.IsNullOrWhiteSpace(settings.VisionModel)) return null;
+
+        var isCodex = await db.AiCredentials.AsNoTracking()
+            .AnyAsync(
+                credential => credential.Id == credentialId
+                    && credential.OwnerUserId == userId
+                    && credential.Provider == IntelligenceProviders.Codex,
+                ct);
+        return isCodex ? settings.VisionModel : null;
+    }
+
     /// <summary>Das Modell, das der Benutzer gewaehlt hat. Leer heisst "automatisch".</summary>
     public async Task<string?> SetTextModelAsync(Guid userId, string? model, CancellationToken ct)
     {
