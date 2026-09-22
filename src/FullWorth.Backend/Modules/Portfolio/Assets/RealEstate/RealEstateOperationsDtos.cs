@@ -101,7 +101,11 @@ public sealed record PropertyImprovementWrite(
     string? Currency,
     decimal? EstimatedValueAdded,
     string? Description,
-    Guid? DocumentId);
+    Guid? DocumentId)
+{
+    /// <summary>Instandhaltung oder wertsteigernd. NULL laesst die Vermutung gelten (#174).</summary>
+    public string? Treatment { get; init; }
+}
 
 public sealed record PropertyImprovementView(
     Guid Id,
@@ -117,7 +121,14 @@ public sealed record PropertyImprovementView(
     Guid? DocumentId,
     IReadOnlyList<Guid> CashflowEntryIds,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    /// <summary>Was der Benutzer eingestellt hat. NULL heisst "nicht entschieden" (#174).</summary>
+    public string? Treatment { get; init; }
+
+    /// <summary>Was gilt: seine Angabe, sonst die Vermutung aus der Kategorie.</summary>
+    public string EffectiveTreatment { get; init; } = PropertyImprovementTreatments.Maintenance;
+}
 
 public sealed record ImprovementCashflowLinkWrite(Guid CashflowEntryId);
 

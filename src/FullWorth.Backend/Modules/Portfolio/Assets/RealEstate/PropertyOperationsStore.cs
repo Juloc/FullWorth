@@ -24,9 +24,9 @@ public sealed class PropertyOperationsStore(FullWorthDbContext db, AuditService 
         if (ValidateImprovement(request) is { } error) return new(RealEstateMutationResult.Invalid, Error: error);
         var id = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-INSERT INTO "PropertyImprovements" ("Id","AssetId","Title","Category","StartDate","CompletedDate","Cost","Currency","EstimatedValueAdded","Description","DocumentId","CreatedAt","UpdatedAt")
+INSERT INTO "PropertyImprovements" ("Id","AssetId","Title","Category","StartDate","CompletedDate","Cost","Currency","EstimatedValueAdded","Description","DocumentId","Treatment","CreatedAt","UpdatedAt")
 VALUES ({id},{assetId},{request.Title.Trim()},{request.Category.Trim().ToLowerInvariant()},{request.StartDate},{request.CompletedDate},{request.Cost},
-        {NormalizeCurrency(request.Currency)},{request.EstimatedValueAdded},{Trim(request.Description)},NULL,now(),now());
+        {NormalizeCurrency(request.Currency)},{request.EstimatedValueAdded},{Trim(request.Description)},NULL,{NormalizeTreatment(request.Treatment)},now(),now());
 """, ct);
         audit.Record(fullWorthSpaceId, userId, "property.improvement.created", "PropertyImprovement", id);
         await db.SaveChangesAsync(ct);
@@ -42,7 +42,8 @@ VALUES ({id},{assetId},{request.Title.Trim()},{request.Category.Trim().ToLowerIn
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
 UPDATE "PropertyImprovements"
 SET "Title"={request.Title.Trim()},"Category"={request.Category.Trim().ToLowerInvariant()},"StartDate"={request.StartDate},"CompletedDate"={request.CompletedDate},
-    "Cost"={request.Cost},"Currency"={NormalizeCurrency(request.Currency)},"EstimatedValueAdded"={request.EstimatedValueAdded},"Description"={Trim(request.Description)},"UpdatedAt"=now()
+    "Cost"={request.Cost},"Currency"={NormalizeCurrency(request.Currency)},"EstimatedValueAdded"={request.EstimatedValueAdded},"Description"={Trim(request.Description)},
+    "Treatment"={NormalizeTreatment(request.Treatment)},"UpdatedAt"=now()
 WHERE "Id"={improvementId} AND "AssetId"={assetId};
 """, ct);
         if (affected == 0) return new(RealEstateMutationResult.NotFound);
@@ -150,14 +151,14 @@ WHERE l."RecurringContractId"=source_contract."Id"
         {
             await using var command = connection.CreateCommand();
             command.CommandText = """
-SELECT i."Id",i."AssetId",i."Title",i."Category",i."StartDate",i."CompletedDate",i."Cost",i."Currency",i."EstimatedValueAdded",i."Description",i."DocumentId",i."CreatedAt",i."UpdatedAt"
+SELECT i."Id",i."AssetId",i."Title",i."Category",i."StartDate",i."CompletedDate",i."Cost",i."Currency",i."EstimatedValueAdded",i."Description",i."DocumentId",i."CreatedAt",i."UpdatedAt",i."Treatment"
 FROM "PropertyImprovements" i WHERE i."AssetId"=@asset ORDER BY COALESCE(i."CompletedDate",i."StartDate") DESC NULLS LAST,i."CreatedAt" DESC;
 """;
             AddParameter(command, "@asset", assetId);
             await using var reader = await command.ExecuteReaderAsync(ct);
-            var raw = new List<(Guid Id, Guid AssetId, string Title, string Category, DateOnly? Start, DateOnly? Completed, decimal? Cost, string? Currency, decimal? Added, string? Description, Guid? Document, DateTimeOffset Created, DateTimeOffset Updated)>();
+            var raw = new List<(Guid Id, Guid AssetId, string Title, string Category, DateOnly? Start, DateOnly? Completed, decimal? Cost, string? Currency, decimal? Added, string? Description, Guid? Document, DateTimeOffset Created, DateTimeOffset Updated, string? Treatment)>();
             while (await reader.ReadAsync(ct))
-                raw.Add((reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), DateOrNull(reader,4), DateOrNull(reader,5), DecimalOrNull(reader,6), StringOrNull(reader,7), DecimalOrNull(reader,8), StringOrNull(reader,9), reader.IsDBNull(10)?null:reader.GetGuid(10), reader.GetFieldValue<DateTimeOffset>(11), reader.GetFieldValue<DateTimeOffset>(12)));
+                raw.Add((reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), DateOrNull(reader,4), DateOrNull(reader,5), DecimalOrNull(reader,6), StringOrNull(reader,7), DecimalOrNull(reader,8), StringOrNull(reader,9), reader.IsDBNull(10)?null:reader.GetGuid(10), reader.GetFieldValue<DateTimeOffset>(11), reader.GetFieldValue<DateTimeOffset>(12), StringOrNull(reader,13)));
             await reader.CloseAsync();
             foreach (var item in raw)
             {
@@ -165,7 +166,12 @@ FROM "PropertyImprovements" i WHERE i."AssetId"=@asset ORDER BY COALESCE(i."Comp
                 links.CommandText = "SELECT \"CashflowEntryId\" FROM \"PropertyImprovementCashflows\" WHERE \"ImprovementId\"=@id ORDER BY \"CashflowEntryId\";";
                 AddParameter(links, "@id", item.Id);
                 var ids = new List<Guid>(); await using var linkReader = await links.ExecuteReaderAsync(ct); while (await linkReader.ReadAsync(ct)) ids.Add(linkReader.GetGuid(0));
-                result.Add(new PropertyImprovementView(item.Id,item.AssetId,item.Title,item.Category,item.Start,item.Completed,item.Cost,item.Currency,item.Added,item.Description,item.Document,ids,item.Created,item.Updated));
+                result.Add(new PropertyImprovementView(item.Id,item.AssetId,item.Title,item.Category,item.Start,item.Completed,item.Cost,item.Currency,item.Added,item.Description,item.Document,ids,item.Created,item.Updated)
+                {
+                    Treatment = item.Treatment,
+                    // Was gilt: seine Angabe, sonst die Vermutung aus der Kategorie (#174).
+                    EffectiveTreatment = PropertyCapitalClassification.Effective(item.Treatment, item.Category)
+                });
             }
             return result;
         }
@@ -222,6 +228,17 @@ ORDER BY l."Role",COALESCE(target."Name",c."Name");
 
     private async Task<bool> AccessibleContractExistsAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct) =>
         await db.Contracts.AsNoTracking().AnyAsync(contract=>contract.Id==contractId&&contract.FullWorthSpaceId==fullWorthSpaceId&&contract.MergedIntoContractId==null&&db.FullWorthSpaceMembers.Any(member=>member.FullWorthSpaceId==fullWorthSpaceId&&member.UserId==userId)&&(!contract.AccountId.HasValue||db.AccountOwners.Any(owner=>owner.AccountId==contract.AccountId.Value&&owner.UserId==userId)),ct);
+
+    /// <summary>
+    /// NULL heisst "nicht entschieden" und laesst die Vermutung aus der Kategorie gelten (#174). Eine
+    /// unbekannte Angabe wird zu NULL statt gespeichert zu werden: eine dritte Einstufung, die keine
+    /// Rechnung kennt, waere schlimmer als gar keine.
+    /// </summary>
+    private static string? NormalizeTreatment(string? treatment)
+    {
+        var value = treatment?.Trim().ToLowerInvariant();
+        return PropertyImprovementTreatments.IsKnown(value) ? value : null;
+    }
 
     private static string? ValidateImprovement(PropertyImprovementWrite request)
     {
