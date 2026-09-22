@@ -128,6 +128,9 @@ public sealed record PropertyImprovementView(
 
     /// <summary>Was gilt: seine Angabe, sonst die Vermutung aus der Kategorie.</summary>
     public string EffectiveTreatment { get; init; } = PropertyImprovementTreatments.Maintenance;
+
+    /// <summary>Wo eine Faustregel greift und FullWorth nachfragt - leer ist der Normalfall.</summary>
+    public IReadOnlyList<string> Hints { get; init; } = [];
 }
 
 public sealed record ImprovementCashflowLinkWrite(Guid CashflowEntryId);

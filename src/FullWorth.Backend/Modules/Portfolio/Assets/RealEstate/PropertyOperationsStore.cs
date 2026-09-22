@@ -13,7 +13,50 @@ public sealed class PropertyOperationsStore(FullWorthDbContext db, AuditService 
         Guid userId, Guid fullWorthSpaceId, Guid assetId, CancellationToken ct)
     {
         if (!await CanReadPropertyAsync(userId, fullWorthSpaceId, assetId, ct)) return new(RealEstateMutationResult.NotFound);
-        return new(RealEstateMutationResult.Success, await ReadImprovementsAsync(assetId, ct));
+        var improvements = await ReadImprovementsAsync(assetId, ct);
+
+        // #174: wo eine Faustregel greift, fragt FullWorth nach - an der Massnahme selbst, nicht in
+        // einer Meldung irgendwo daneben. Sie stellt nichts um; die Einstufung bleibt seine.
+        var (purchaseDate, purchasePrice) = await ReadPurchaseFactsAsync(assetId, ct);
+        var hints = PropertyCapitalClassification.Hints(
+            improvements
+                .Select(item => new PropertyImprovementFacts(
+                    item.Id, item.Category, item.Cost, item.CompletedDate, item.Treatment))
+                .ToArray(),
+            purchaseDate,
+            purchasePrice);
+
+        if (hints.Count == 0) return new(RealEstateMutationResult.Success, improvements);
+
+        var byImprovement = improvements.ToDictionary(item => item.Id, _ => new List<string>());
+        foreach (var hint in hints)
+            foreach (var id in hint.ImprovementIds)
+                if (byImprovement.TryGetValue(id, out var list)) list.Add(hint.Code);
+
+        return new(RealEstateMutationResult.Success, improvements
+            .Select(item => item with { Hints = byImprovement[item.Id] })
+            .ToArray());
+    }
+
+    /// <summary>Kaufdatum und Kaufpreis - die 15-%-Regel braucht beides, sonst gibt es nichts zu messen.</summary>
+    private async Task<(DateOnly? PurchaseDate, decimal? PurchasePrice)> ReadPurchaseFactsAsync(
+        Guid assetId, CancellationToken ct)
+    {
+        var connection = db.Database.GetDbConnection();
+        var close = connection.State != ConnectionState.Open;
+        if (close) await connection.OpenAsync(ct);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT \"PurchaseDate\",\"PurchasePrice\" FROM \"RealEstateAssetDetails\" WHERE \"AssetId\"=@asset;";
+            AddParameter(command, "@asset", assetId);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            return await reader.ReadAsync(ct)
+                ? (DateOrNull(reader, 0), DecimalOrNull(reader, 1))
+                : (null, null);
+        }
+        finally { if (close) await connection.CloseAsync(); }
     }
 
     public async Task<RealEstateMutationOutcome<PropertyImprovementView>> CreateImprovementAsync(

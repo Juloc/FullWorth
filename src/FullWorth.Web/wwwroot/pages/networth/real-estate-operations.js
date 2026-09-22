@@ -17,6 +17,9 @@ const COPY = {
     apartment: 'Wohnung', commercial: 'Gewerbe', parking: 'Stellplatz', storage: 'Lager',
     hoa: 'Hausgeld', property_tax: 'Grundsteuer', utilitiesRole: 'Versorger', maintenance_plan: 'Wartung',
     windows: 'Fenster', roof: 'Dach', heating: 'Heizung', insulation: 'Dämmung', electrical: 'Elektrik', plumbing: 'Sanitär', bathroom: 'Bad', kitchen: 'Küche', flooring: 'Boden', facade: 'Fassade', solar: 'Solar', structural: 'Bausubstanz',
+    treatment: 'Einstufung', treatmentAuto: 'Automatisch (nach Kategorie)', treatmentMaintenance: 'Instandhaltung', treatmentValueIncreasing: 'Wertsteigernd',
+    three_of_four_core_areas: 'Drei der vier Kernbereiche (Heizung, Sanitär, Elektrik, Fenster) innerhalb von fünf Jahren – das gilt üblicherweise als wertsteigernd. Umstellen?',
+    fifteen_percent_within_three_years: 'Mehr als 15 % des Kaufpreises innerhalb von drei Jahren nach dem Kauf – das gilt üblicherweise als wertsteigernd. Umstellen?',
     save: 'Speichern', link: 'Verknüpfen', notAvailable: 'N/A'
   },
   en: {
@@ -35,6 +38,9 @@ const COPY = {
     apartment: 'Apartment', commercial: 'Commercial', parking: 'Parking', storage: 'Storage',
     hoa: 'HOA', property_tax: 'Property tax', utilitiesRole: 'Utilities', maintenance_plan: 'Maintenance',
     windows: 'Windows', roof: 'Roof', heating: 'Heating', insulation: 'Insulation', electrical: 'Electrical', plumbing: 'Plumbing', bathroom: 'Bathroom', kitchen: 'Kitchen', flooring: 'Flooring', facade: 'Facade', solar: 'Solar', structural: 'Structural',
+    treatment: 'Classification', treatmentAuto: 'Automatic (by category)', treatmentMaintenance: 'Maintenance', treatmentValueIncreasing: 'Value-increasing',
+    three_of_four_core_areas: 'Three of the four core areas (heating, plumbing, electrical, windows) within five years – that usually counts as value-increasing. Change it?',
+    fifteen_percent_within_three_years: 'More than 15 % of the purchase price within three years of buying – that usually counts as value-increasing. Change it?',
     save: 'Save', link: 'Link', notAvailable: 'N/A'
   }
 };
@@ -251,6 +257,7 @@ function improvementListHtml(ctx, improvements, cashflows) {
       <div class="property-operation-row"><div><strong>${ctx.esc(item.title)}</strong><div class="row-sub">${ctx.esc(tr(item.category))}${item.startDate ? ` · ${ctx.esc(String(item.startDate))}` : ''}${item.completedDate ? ` – ${ctx.esc(String(item.completedDate))}` : ''}</div></div><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-improvement="${item.id}">${ctx.esc(tr('remove'))}</button></div>
       <div class="property-operation-facts">${item.cost != null ? `<span>${ctx.esc(tr('cost'))}: <strong>${ctx.money(item.cost, item.currency || 'EUR')}</strong></span>` : ''}${item.estimatedValueAdded != null ? `<span>${ctx.esc(tr('estimatedAdded'))}: <strong>${ctx.money(item.estimatedValueAdded, item.currency || 'EUR')}</strong></span>` : ''}<span>${ctx.esc(tr('linkedCashflows'))}: <strong>${(item.cashflowEntryIds || []).length}</strong></span></div>
       ${item.description ? `<div class="row-sub">${ctx.esc(item.description)}</div>` : ''}
+      ${(item.hints || []).map(hint => `<div class="property-operation-note">${ctx.esc(tr(hint))}</div>`).join('')}
       ${available.length ? `<form data-improvement-link-form="${item.id}" class="property-operation-inline"><select name="cashflowEntryId">${available.map(flow => `<option value="${flow.id}">${ctx.esc(String(flow.date))} · ${ctx.esc(cashflowTypeLabel(flow.type))} · ${ctx.money(flow.amount, flow.currency)}</option>`).join('')}</select><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('linkCashflow'))}</button></form>` : ''}
     </div>`;
   }).join('')}</div>`;
@@ -265,6 +272,10 @@ function improvementFormHtml(ctx, currency) {
     <label>${ctx.esc(tr('cost'))}<input name="cost" type="number" min="0" step="0.01"></label>
     <label>${ctx.esc(tr('currency'))}<input name="currency" maxlength="3" value="${ctx.esc(currency || 'EUR')}"></label>
     <label>${ctx.esc(tr('estimatedAdded'))}<input name="estimatedValueAdded" type="number" min="0" step="0.01"></label>
+    <!-- #174: Instandhaltung oder wertsteigernd. "Automatisch" ist die Voreinstellung und lässt die
+         Vermutung aus der Kategorie gelten - sie ist eine Vermutung, weil "Heizung" beides sein kann:
+         gleichwertiger Ersatz ist Erhaltung, eine Standardhebung nicht. -->
+    <label>${ctx.esc(tr('treatment'))}<select name="treatment"><option value="">${ctx.esc(tr('treatmentAuto'))}</option><option value="maintenance">${ctx.esc(tr('treatmentMaintenance'))}</option><option value="value_increasing">${ctx.esc(tr('treatmentValueIncreasing'))}</option></select></label>
     <label class="wide">${ctx.esc(tr('description'))}<textarea name="description" maxlength="4000" rows="3"></textarea></label>
     <div class="dialog-actions wide"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addImprovement'))}</button></div>
   </form>`;
@@ -333,7 +344,7 @@ function wireRenovations(ctx, dlg, data, asset, changed) {
     event.preventDefault(); const fd = new FormData(improvement); const cost = numberOrNull(fd.get('cost'));
     await mutate(ctx, `api/assets/${asset.id}/real-estate/improvements`, {
       title: fd.get('title'), category: fd.get('category'), startDate: fd.get('startDate') || null, completedDate: fd.get('completedDate') || null,
-      cost, currency: cost == null ? null : String(fd.get('currency') || asset.currency).toUpperCase(), estimatedValueAdded: numberOrNull(fd.get('estimatedValueAdded')),
+      cost, currency: cost == null ? null : String(fd.get('currency') || asset.currency).toUpperCase(), estimatedValueAdded: numberOrNull(fd.get('estimatedValueAdded')), treatment: String(fd.get('treatment') || '') || null,
       description: textOrNull(fd.get('description')), documentId: null
     }, changed);
   };
