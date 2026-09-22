@@ -1,0 +1,16 @@
+# Endpunktgruppen, deren Map...Endpoints() niemand aufruft (#177).
+#
+# Das ist eine RATSCHE, keine Bestandsaufnahme: die Liste darf nur kuerzer werden.
+# EndpointRegistrationTests haelt beides fest - eine neue unregistrierte Gruppe laesst den Test rot
+# werden, und eine Gruppe, die inzwischen registriert ist, muss hier heraus.
+#
+# Warum das eine eigene Wache braucht: RouteReachabilityTests liest die Routenflaeche, und in der
+# steht nur, was gemappt wurde. Eine Datei, die nie gemappt wird, ist dort gar nicht erst sichtbar.
+#
+#   MapCloudMerchantBenchmarkEndpoints
+#       GET /api/intelligence/benchmarks/merchants/{merchantId} - der Cloud-Vergleich fuer einen
+#       Haendler, 159 Zeilen, fertig gebaut und auf beiden Seiten nie verdrahtet. Es gibt sie seit
+#       dem Merge von feat/merchant-cloud-benchmarks. Registrieren hiesse: eine weitere Route ohne
+#       Oberflaeche. Loeschen hiesse: eine fertige Funktion wegwerfen. Beides ist eine Entscheidung
+#       und kein Aufraeumen, deshalb steht sie hier und waechst nicht weiter.
+MapCloudMerchantBenchmarkEndpoints

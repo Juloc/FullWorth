@@ -343,7 +343,6 @@ public static class BackendApplication
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
         // facades over these services and no longer own a second product or reconciliation model.
-        builder.Services.AddScoped<PurchaseStore>();
         builder.Services.AddScoped<PurchaseAuthorizationStore>();
         builder.Services.AddScoped<PurchaseCaptureService>();
         builder.Services.AddSingleton<ReceiptScanQueueSignal>();
