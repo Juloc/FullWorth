@@ -175,44 +175,19 @@ public static class CashflowEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> GetAvailable(Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser, SpaceAccess space, CashflowStore store, CurrencyConverter converter, CancellationToken ct)
+    /// <summary>
+    /// Was bis zum naechsten Eingang uebrig bleibt - aus <c>FinancialReconciliationReportService</c>.
+    ///
+    /// Hier stand bis 2026-09-23 eine eigene Rechnung ueber 38 Zeilen, und sie lief nie:
+    /// <c>FinancialReconciliationMiddleware</c> fing die Route vor der Zuordnung ab. Es gibt jetzt
+    /// eine Rechnung, und sie ist dieselbe wie die, aus der die Zukunfts-Timeline ihre Abzuege nimmt.
+    /// </summary>
+    private static async Task<IResult> GetAvailable(
+        Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser,
+        FinancialReconciliationReportService reports, CancellationToken ct)
     {
-        var userId=currentUser.RequireUserId(); if(!await space.IsMemberAsync(userId,fullWorthSpaceId,ct))return Results.NotFound();
-        var visible=await space.VisibleAccountIdsAsync(userId,fullWorthSpaceId,ct); var day=asOf??DateOnly.FromDateTime(DateTime.UtcNow);
-        var baseCurrency=await store.BaseCurrencyAsync(fullWorthSpaceId,ct); if(baseCurrency is null)return Results.NotFound();
-        var settingsResult=await store.LoadSettings(fullWorthSpaceId,ct); var schedules=await store.LoadActiveSchedules(fullWorthSpaceId,visible,ct);
-        var nextIncome=schedules.Where(x=>x.NextDate.HasValue&&x.NextDate.Value>=day).OrderBy(x=>x.NextDate).FirstOrDefault();
-        var horizon=settingsResult.HorizonMode=="end_of_month"||nextIncome is null ? new DateOnly(day.Year,day.Month,DateTime.DaysInMonth(day.Year,day.Month)) : nextIncome.NextDate!.Value;
-        var fx=await converter.PrepareAsync(baseCurrency,day.AddMonths(-2),horizon,ct); var incomplete=false;
-
-        var accountIds=await store.ActiveAccountIdsAsync(visible,ct);
-        // The same current-balance rule as the account list and net worth (Accounts.CurrentBalances): the
-        // newest capture per (account, CURRENCY), with the balance-type preference as the tiebreak. This
-        // used to take whatever row came first by CapturedAt alone - a sync stamps every balance type with
-        // an identical CapturedAt, so the forecast could start from a different balance than the account
-        // list showed for the same data - and it only ever read ONE currency per account, so a wallet
-        // account was forecast from a fraction of its money.
-        decimal balances=0;
-        foreach(var balance in await store.CurrentBalancesAsync(accountIds,ct))
-        {
-            var converted=fx.ToBaseOn(balance.Amount,balance.Currency,day);
-            if(converted.HasValue)balances+=converted.Value;else incomplete=true;
-        }
-
-        var lines=new List<CashflowLine>(); decimal income=0;
-        foreach(var schedule in schedules.Where(x=>x.NextDate>=day&&x.NextDate<=horizon&&x.Amount.HasValue)) {var converted=fx.ToBaseOn(schedule.Amount!.Value,schedule.Currency,schedule.NextDate!.Value); if(converted.HasValue)income+=converted.Value;else incomplete=true; lines.Add(new("income",schedule.Name,schedule.NextDate,schedule.Amount.Value,schedule.Currency,converted));}
-
-        var contracts=await store.DueFixedCostsAsync(fullWorthSpaceId,visible,day,horizon,ct); decimal fixedCosts=0;
-        foreach(var c in contracts){var converted=fx.ToBaseOn(c.Amount,c.Currency,c.NextDueDate!.Value); if(converted.HasValue)fixedCosts+=converted.Value;else incomplete=true; lines.Add(new("fixed",c.Name,c.NextDueDate,c.Amount,c.Currency,converted));}
-
-        var historyFrom=day.AddDays(-30);
-        var history=await store.RecentExpensesAsync(visible,historyFrom,day,settingsResult.IncludePendingExpenses,ct); decimal historicSpend=0;
-        foreach(var t in history){var d=t.BookingDate??t.ValueDate??day; var converted=fx.ToBaseOn(-t.Amount,t.Currency,d); if(converted.HasValue)historicSpend+=converted.Value;else incomplete=true;}
-        var days=Math.Max(0,horizon.DayNumber-day.DayNumber+1); var variableForecast=Math.Round(historicSpend/30m*days,2);
-        var reserveConverted=fx.ToBaseOn(settingsResult.Reserve,settingsResult.ReserveCurrency,day); if(!reserveConverted.HasValue){reserveConverted=0;incomplete=true;}
-        var available=balances+income-fixedCosts-variableForecast-reserveConverted.Value; var perDay=days>0?available/days:available;
-        var quality=nextIncome is null||incomplete?"limited":history.Count<10||contracts.Count==0?"medium":"high";
-        return Results.Ok(new{asOf=day,horizonDate=horizon,horizonReason=nextIncome is null||settingsResult.HorizonMode=="end_of_month"?"end_of_month":"next_income",currency=baseCurrency,spendableBalances=Math.Round(balances,2),expectedIncome=Math.Round(income,2),expectedFixedCosts=Math.Round(fixedCosts,2),forecastVariableSpend=variableForecast,safetyReserve=Math.Round(reserveConverted.Value,2),available=Math.Round(available,2),availablePerDay=Math.Round(perDay,2),daysRemaining=days,quality,incompleteFx=incomplete,items=lines.OrderBy(x=>x.Date)});
+        var result = await reports.CashflowAvailableAsync(currentUser.RequireUserId(), fullWorthSpaceId, asOf, ct);
+        return result is null ? Results.NotFound() : Results.Ok(result);
     }
     private static string NormalizeMode(string? value)=>string.Equals(value,"automatic",StringComparison.OrdinalIgnoreCase)?"automatic":"manual";
 }

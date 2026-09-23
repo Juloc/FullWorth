@@ -33,6 +33,11 @@ public static class InvestmentEndpoints
     ///
     /// <c>costBasis</c> und <c>unrealizedResult</c> sind NULL, wenn kein Einstand bekannt ist, und
     /// nicht 0. Die Prozentzahl bildet die Anzeige daraus - nur sie weiss, ob sie eine zeigen will.
+    ///
+    /// Ein Depot, das an einem Konto haengt, das dieser Benutzer nicht sehen darf, faellt heraus. Das
+    /// stand bis 2026-09-23 in einer Middleware, die die Route vor der Zuordnung abfing - und die
+    /// beantwortete sie mit NUR den Stammdaten. Die Werte oben kamen also nie an: die Vermoegensseite
+    /// liest totalValue, costBasis, unrealizedResult und gainIncomplete seit jeher und bekam nichts.
     /// </summary>
     private static async Task<IResult> ListPortfolios(
         Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
@@ -41,10 +46,13 @@ public static class InvestmentEndpoints
         var uid = currentUser.RequireUserId();
         if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
 
+        var visibleAccounts = await space.VisibleAccountIdsAsync(uid, fullWorthSpaceId, ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var rows = new List<object>();
         foreach (var row in await store.ListPortfoliosAsync(fullWorthSpaceId, ct))
         {
+            if (row.AccountId.HasValue && !visibleAccounts.Contains(row.AccountId.Value)) continue;
+
             var settings = await valuationStore.FindPortfolioAsync(fullWorthSpaceId, row.Id, ct);
             var calculation = settings is null ? null : await valuation.CalculateAsync(settings, today, ct);
             var gain = calculation is null

@@ -330,7 +330,12 @@ public sealed class FinancialReconciliationReportService(
         }
     }
 
-    private static string? ValidateAnalysis(AnalysisQueryWrite request)
+    /// <summary>
+    /// Was eine Auswertung ueberhaupt fragen darf. Oeffentlich, weil die gespeicherten Auswertungen
+    /// dasselbe pruefen muessen: es gab dort eine zweite Liste, und die kannte den Erstattungsmodus
+    /// nicht - man konnte eine Auswertung speichern, die beim Ausfuehren abgelehnt wird.
+    /// </summary>
+    public static string? ValidateAnalysis(AnalysisQueryWrite request)
     {
         if (!new[] { "spend", "income", "net", "count", "average", "median" }.Contains(request.Measure, StringComparer.OrdinalIgnoreCase)) return "Unsupported measure.";
         if (!new[] { "day", "week", "month", "quarter", "year", "category", "merchant", "account", "tag", "contract" }.Contains(request.Dimension, StringComparer.OrdinalIgnoreCase)) return "Unsupported dimension.";
@@ -429,81 +434,6 @@ public sealed class FinancialReconciliationReportService(
     private sealed record BudgetScope(List<CategoryScopeWrite> Categories, List<Guid> AccountIds, List<Guid> TagIds, List<string> Merchants);
     private sealed record CashflowSettings(string HorizonMode, decimal Reserve, string ReserveCurrency, bool IncludePendingIncome, bool IncludePendingExpenses);
     private sealed record IncomeScheduleRow(string Name, string? NormalizedCounterparty, decimal? Amount, string Currency, DateOnly? NextDate);
-}
-
-/// <summary>
-/// Compatibility adapter for the compact parity handlers. It keeps the public routes stable while all
-/// financial reports use the same contribution semantics for splits, refunds, transfers, tags, contracts
-/// and FX. Once the original handlers are folded into the shared engine this middleware can be removed
-/// without changing clients.
-/// </summary>
-public sealed class FinancialReconciliationMiddleware(RequestDelegate next)
-{
-    public async Task InvokeAsync(HttpContext context, CurrentUserContext currentUser, FinancialReconciliationReportService reports)
-    {
-        var path = context.Request.Path.Value ?? string.Empty;
-        var handlesAnalytics = HttpMethods.IsPost(context.Request.Method) &&
-            (path.Equals("/api/analytics/query", StringComparison.OrdinalIgnoreCase) || path.Equals("/api/analytics/sankey", StringComparison.OrdinalIgnoreCase));
-        var handlesCashflow = HttpMethods.IsGet(context.Request.Method) && path.Equals("/api/cashflow/available", StringComparison.OrdinalIgnoreCase);
-        // Der Budgetstand stand hier einmal als dritter Weg. Er kam nie an: eine Middleware davor
-        // beantwortete dieselbe Route, und als die wegfiel, waere ploetzlich DIESE Fassung gelaufen -
-        // die den Bereich eines Budgets nicht kennt und deshalb bei einem Budget auf einer
-        // Oberkategorie auch alle Unterkategorien mitzaehlte. Gefangen hat das
-        // BudgetReconciliationCompatibilityTests. Die Budget-Routen gehen jetzt durch ihre eigenen
-        // Handler in Modules/Budgets.
-        if (!handlesAnalytics && !handlesCashflow)
-        {
-            await next(context);
-            return;
-        }
-
-        var ct = context.RequestAborted;
-        var userId = currentUser.RequireUserId();
-        try
-        {
-            if (handlesAnalytics)
-            {
-                var request = await context.Request.ReadFromJsonAsync<AnalysisQueryWrite>(cancellationToken: ct);
-                if (request is null) { context.Response.StatusCode = 400; return; }
-                var sankey = path.Equals("/api/analytics/sankey", StringComparison.OrdinalIgnoreCase);
-                var result = await reports.AnalyticsAsync(userId, RequiredSpace(context), request, sankey, ct);
-                await Write(context, result, ct); return;
-            }
-            if (handlesCashflow)
-            {
-                var result = await reports.CashflowAvailableAsync(userId, RequiredSpace(context), OptionalDate(context, "asOf"), ct);
-                await Write(context, result, ct); return;
-            }
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            context.Response.StatusCode = 403;
-            await context.Response.WriteAsJsonAsync(new { error = exception.Message }, cancellationToken: ct);
-            return;
-        }
-        catch (ArgumentException exception)
-        {
-            context.Response.StatusCode = 400;
-            await context.Response.WriteAsJsonAsync(new { error = exception.Message }, cancellationToken: ct);
-            return;
-        }
-    }
-
-    private static Guid RequiredSpace(HttpContext context)
-    {
-        if (Guid.TryParse(context.Request.Query["fullWorthSpaceId"], out var id)) return id;
-        throw new ArgumentException("fullWorthSpaceId is required.");
-    }
-
-    private static DateOnly? OptionalDate(HttpContext context, string name) =>
-        DateOnly.TryParse(context.Request.Query[name], out var date) ? date : null;
-
-    private static async Task Write(HttpContext context, object? result, CancellationToken ct)
-    {
-        if (result is null) { context.Response.StatusCode = 404; return; }
-        context.Response.StatusCode = 200;
-        await context.Response.WriteAsJsonAsync(result, cancellationToken: ct);
-    }
 }
 
 /// <summary>Die Abfrageform einer gespeicherten Analyse. Sie wird von der Analyse UND von der

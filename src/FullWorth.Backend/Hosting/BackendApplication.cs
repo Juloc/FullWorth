@@ -658,9 +658,7 @@ public static class BackendApplication
         app.UseMiddleware<InternalUserContextMiddleware>();
         app.UseMiddleware<TransactionClassificationFeedbackMiddleware>();
         app.UseMiddleware<LegacyCapabilityAuthorizationMiddleware>();
-        app.UseMiddleware<FinancialReconciliationMiddleware>();
         app.UseMiddleware<ExportAuthorizationMiddleware>();
-        app.UseMiddleware<InvestmentLegacyReadSecurityMiddleware>();
         app.UseMiddleware<TransactionMutationAuthorizationMiddleware>();
     }
 
