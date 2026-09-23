@@ -74,7 +74,7 @@ async function categoryOptions(selected) {
  * Der Raum, in dem gearbeitet wird. Jede fachliche Abfrage hängt daran, deshalb lädt ihn jede Seite,
  * bevor sie zeichnet — und merkt sich die Wahl, damit ein Seitenwechsel sie nicht vergisst.
  */
-async function loadSpaces() {
+export async function loadSpaces() {
   const spaces = await api('api/fullworth-spaces');
   state.spaces = spaces || [];
   const saved = localStorage.getItem('finance.space');
@@ -126,23 +126,18 @@ export function createPageContext({ reload = () => location.reload() } = {}) {
 }
 
 /**
- * Was jede Seite vor dem Zeichnen braucht: Sprache, Rechte und Raum. Der Rahmen hat da schon
- * gestanden — Navigation, Topbar und Theme kommen aus dem Dokument selbst und nicht von hier, damit
- * nichts nachträglich eingefügt wird.
+ * Was jede Seite vor dem Zeichnen braucht: Zahlenformat, Rechte und Raum.
+ *
+ * Nicht die Sprache und nicht den Rahmen — das macht die Shell, und zwar vor dem Zeichnen. Hier
+ * steht nur, was eine fachliche Abfrage voraussetzt.
  */
-export async function startPage(render) {
+export async function loadSession(onError) {
   setMoneyLocale(state.lang);
-  await i18n.load(state.lang);
-  i18n.apply(document);
   await loadCapabilities();
-
-  const context = createPageContext({ reload: () => render(context) });
   try {
     await loadSpaces();
   } catch (error) {
     console.error(error);
-    context.toast(get('common.error'));
+    onError?.(get('common.error'));
   }
-  await render(context);
-  return context;
 }

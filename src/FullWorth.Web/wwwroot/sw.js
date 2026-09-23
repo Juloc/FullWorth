@@ -142,6 +142,8 @@ const APP_SHELL = [
   '/app/boot.js',
   '/app/menu.js',
   '/app/routes.js',
+  '/app/shell.js',
+  '/app/page-context.js',
   '/pages/settings/intelligence/page.js',
   '/pages/settings/intelligence/page.css',
   '/pages/settings/intelligence/cloud.js',

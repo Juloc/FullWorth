@@ -74,11 +74,16 @@ public sealed class MenuParityTests
     public void Nothing_is_reachable_on_only_one_of_the_two()
     {
         var appJs = Read("app.js");
+        // Das „Mehr"-Blatt zog mit #154 nach app/shell.js — dieselbe Datei, die auch jede
+        // Razor-Seite benutzt. Die Aussage bleibt: es entsteht aus der Definition und nicht aus
+        // dem, was gerade in der Seitenleiste steht.
+        var shellJs = Read(Path.Combine("app", "shell.js"));
 
         Assert.Contains("const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));", appJs);
-        Assert.Contains("MENU.map(group=>", appJs);
+        Assert.Contains("MENU.map(group =>", shellJs);
         // Das Handy-Blatt las früher die Seitenleiste aus. Diese Abfrage darf es nicht mehr geben.
         Assert.DoesNotContain(".sidebar button[data-view=", appJs);
+        Assert.DoesNotContain(".sidebar button[data-view=", shellJs);
     }
 
     /// <summary>

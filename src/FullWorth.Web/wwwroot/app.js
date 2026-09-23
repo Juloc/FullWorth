@@ -1,8 +1,7 @@
 import { money, setMoneyLocale } from './components/money.js';
-import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './components/privacy.js';
+import { isPrivate, onPrivacyChange } from './components/privacy.js';
 import { confirmDialog } from './components/confirm.js';
-import { setPrimaryAction, bindIdentityIcons } from './features/ux-kit.js';
-import { initLock } from './app/lock.js';
+import { bindIdentityIcons } from './features/ux-kit.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
 import { renderCoach, bindCoach } from './pages/coach/page.js';
 import { renderCategories, bindCategories, newCategory } from './pages/categories/page.js';
@@ -34,8 +33,8 @@ import { createFeatureRegistry } from './core/feature-registry.js';
 import { installNavigation, navigate } from './core/navigation.js';
 import { emitAppEvent, onAppEvent } from './core/event-bus.js';
 import { createToast } from './components/toast.js';
-import { openGlobalSearch } from './app/global-search.js';
-import { installTopbarMetrics } from './components/topbar-metrics.js';
+import { createShell } from './app/shell.js';
+import { loadSpaces as loadSpacesInto } from './app/page-context.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { SUBPAGES, MIGRATED, pathForView as canonicalPath } from './app/routes.js';
 import { renderAdmin } from './pages/admin/page.js';
@@ -86,7 +85,7 @@ async function boot(){
   const startPath=location.pathname===canonicalStart||location.pathname.startsWith(canonicalStart.replace(/\/$/,'')+'/')?location.pathname:undefined;
   await showView(startView,{replace:true,path:startPath});
   // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
-  initLock(ctx,{onUnlock:loadCurrent});
+  shell.startLock();
   await accessSetup.maybeOpenRegistrationOnboarding();
 }
 async function loadCapabilities(){
@@ -114,44 +113,21 @@ async function loadMessages(){await i18n.load(state.lang);renderTranslations();r
 function renderTranslations(){i18n.apply(document);
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.nav-item[data-entry]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
-function renderPageHeader(){
-  const p=state.messages.pages?.[state.view];
-  // Eine Seite ohne Untertitel hat keinen Schluessel dafuer - #125 nimmt der Kontenseite die
-  // Beschreibung. Ein leerer Wert in der Sprachdatei waere eine vergessene Uebersetzung.
-  if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle??''}
-  // A view whose copy lives in its own module has no pages.* entry. Without this it would keep the
-  // PREVIOUS screen's heading, which reads as a broken navigation. Fall back to the view's own nav
-  // label from the shell and clear the subtitle.
-  else{const nav=$(`.sidebar .nav-item[data-entry="${state.view}"] span`)?.textContent||'';$('#page-title').textContent=nav;$('#page-subtitle').textContent=''}
-  const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
-  if(action){btn.hidden=false;setPrimaryAction(btn,get(action[0]),action[2]||'add');btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
-}
+// Die Möbel der Topbar stehen in app/shell.js - dieselbe Datei, die jede Razor-Seite benutzt.
+const renderPageHeader=()=>shell.renderPageHeader();
 // Modus UND abgeleitete Farben kommen aus derselben Engine (app/theme.js, als klassisches <script>
 // schon vor diesem Modul geladen - siehe index.html) statt aus einer eigenen Kopie hier: ein
 // Hell/Dunkel-Wechsel muss die ganze Akzent-/Neutral-/Datenpalette neu rechnen, nicht nur dataset.theme.
-function applyTheme(){const persisted=window.FullWorthTheme.readThemeState();const applied=window.FullWorthTheme.applyTheme({mode:state.theme,seed:persisted.seed,logoMode:persisted.logoMode});const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',applied.mode==='dark'?'#121416':'#f5f6f7');updateThemeToggle()}
-function updateThemeToggle(){const b=$('#theme-toggle');if(b)b.dataset.themePref=state.theme}
-async function loadSpaces(){
-  const spaces=await api('api/fullworth-spaces');state.spaces=spaces||[];
-  const saved=localStorage.getItem('finance.space');
-  state.space=state.spaces.find(s=>s.id===saved)||state.spaces[0]||null;
-  if(state.space)localStorage.setItem('finance.space',state.space.id);
-  renderUserBlock();
-  invalidateLayout(); // dashboard layout is per space
-}
-// Sidebar foot: current space name, currency and an avatar initial (§3.1 user block).
-function renderUserBlock(){
-  const sp=state.space;
-  $('#user-space-name').textContent=sp?.name||'';
-  $('#user-space-sub').textContent=sp?.baseCurrency||'';
-  $('#user-avatar').textContent=(sp?.name||'F').trim().charAt(0).toUpperCase()||'F';
-}
+// Dieselbe Abfrage wie auf einer Razor-Seite; was die Huelle zusaetzlich braucht, steht hier.
+async function loadSpaces(){await loadSpacesInto();shell.renderUserBlock();invalidateLayout()}
+const applyTheme=()=>shell.applyTheme();
+
 function bind(){
   bindIdentityIcons();
   $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
   $('#theme').addEventListener('change',e=>{state.theme=e.target.value;window.FullWorthTheme.writeThemeState({mode:state.theme});applyTheme()});
   // Sidebar theme toggle: cycles System -> Hell -> Dunkel (same behaviour as the login screen) and keeps the Settings select in sync.
-  $('#theme-toggle')?.addEventListener('click',()=>{const order=['system','light','dark'];state.theme=order[(order.indexOf(state.theme)+1)%order.length]||'system';window.FullWorthTheme.writeThemeState({mode:state.theme});applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
+  shell.bind();
   media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
   // Jeder Eintrag ist ein echter Link auf seine Adresse. Der Klick wird abgefangen, damit die Seite
   // nicht neu lädt - mit Strg/Cmd oder Mittelklick bleibt er ein Link und öffnet einen neuen Tab.
@@ -159,20 +135,15 @@ function bind(){
     if(e.metaKey||e.ctrlKey||e.shiftKey||e.button)return;
     e.preventDefault();showView(a.dataset.view,{query:''});
   }));
-  $$('.nav-group-head').forEach(head=>head.addEventListener('click',()=>toggleGroup(head)));
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true,path:location.pathname}));
-  $('#bottom-more').addEventListener('click',openMoreSheet);
   $('#nav-collapse').addEventListener('click',toggleSidebar);
-  $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
-  $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
   // preventDefault, weil ein Sprung auch ein echter Link sein darf: mit Strg oder Mittelklick
   // öffnet er einen neuen Tab, beim normalen Klick bleibt die Anwendung stehen und wechselt.
   $$('[data-view-jump]').forEach(b=>b.addEventListener('click',event=>{
     if(event.metaKey||event.ctrlKey||event.shiftKey)return;
     event.preventDefault();showView(b.dataset.viewJump);
   }));
-  $('#topbar-more').addEventListener('click',openTopbarMenu);
   bindAccounts(ctx,()=>openBankConnection(ctx));
   bindSettings(ctx);
   $('[data-action="new-budget"]').addEventListener('click',()=>newBudget(ctx));
@@ -195,44 +166,15 @@ function bind(){
   $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
-  // Desktop keyboard shortcut: "/" opens global search unless typing in a field (§19).
-  document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openSearch()}});
 }
-function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());
-  // Nur in der Leiste, solange er AN ist: ein ausgeschalteter Schalter sagt nichts, und genau
-  // dafür gibt es das Überlaufmenü. Das Attribut sitzt am <html>, weil app/boot.js es vor dem
-  // ersten Zeichnen setzt - ein hidden, das JavaScript später nachträgt, schiebt die Leiste.
-  root.dataset.privacy=isPrivate()?'on':'off';
-  $('#privacy-default').checked=privacyDefault()}
+const syncPrivacyToggle=()=>shell.syncPrivacyToggle();
 
-// The topbar's overflow menu. Same sheet the bottom-nav "more" uses, so there is one menu pattern in
-// the app rather than a second popover style.
-function openTopbarMenu(){
-  const entries=[
-    ['privacy',get('privacy.toggle'),'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',()=>togglePrivacy()],
-    ['refresh',get('common.refresh'),'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>',()=>loadCurrent()]
-  ];
-  const items=entries.map(([key,label,icon])=>`<button type="button" data-menu="${key}">${icon}<span>${esc(label)}</span></button>`).join('');
-  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
-  dlg.classList.add('more-sheet-dialog');
-  for(const [key,,,run] of entries){
-    dlg.querySelector(`[data-menu="${key}"]`)?.addEventListener('click',()=>{dlg.close();run()});
-  }
-  dlg.showModal();
-}
 function toggleSidebar(){
   const collapsed=!root.classList.contains('nav-collapsed');
   root.classList.toggle('nav-collapsed',collapsed);
   localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');
   if(collapsed)root.classList.remove('nav-auto-collapsed');
   syncResponsiveSidebar();
-}
-// Der Zustand steht im aria-expanded der Überschrift - eine zweite Klasse dafür wäre dieselbe
-// Aussage doppelt. app/nav-state.js liest ihn beim Parsen wieder ein, also vor dem ersten Bild.
-function toggleGroup(head){
-  head.setAttribute('aria-expanded',head.getAttribute('aria-expanded')==='false'?'true':'false');
-  const closed=$$('.nav-group-head[aria-expanded="false"]').map(h=>h.dataset.group);
-  localStorage.setItem('finance.navClosedGroups',closed.join(' '));
 }
 function sidebarEffectivelyCollapsed(){return root.classList.contains('nav-collapsed')||root.classList.contains('nav-auto-collapsed')}
 // Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
@@ -396,24 +338,6 @@ async function categoryOptions(selected){const categories=await api('api/categor
 // "Mehr" auf dem Handy zeigt denselben Baum wie die Seitenleiste - beide entstehen aus MENU. Die
 // Fassung davor las die Einträge aus dem Desktop-Markup aus, und genau deshalb fehlten dort Admin
 // und Insights, während Händler und Protokoll nur hier standen.
-function openMoreSheet(){
-  const visible=entry=>!entry.admin||state.capabilities?.admin;
-  const groups=MENU.map(group=>{
-    const items=group.items.filter(visible).map(entry=>{
-      const target=entry.href?`data-open="${entry.href}"`:`data-go="${entry.view}"`;
-      const active=state.view===entry.view?' class="active"':'';
-      return `<button type="button" ${target}${active}><svg viewBox="0 0 24 24" aria-hidden="true">${entry.icon}</svg><span>${esc(get(entry.label))}</span></button>`;
-    }).join('');
-    return `<h3 class="more-group">${esc(get(group.label))}</h3><div class="more-list">${items}</div>`;
-  }).join('');
-  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>&times;</button></div>${groups}</form>`,{mobileMode:'sheet'});
-  dlg.classList.add('more-sheet-dialog');
-  dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
-  dlg.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>{dlg.close();location.assign(b.dataset.open)}));
-  dlg.showModal();
-}
-
-installTopbarMetrics();
 installNavigation((view,options={})=>showView(view,options));
 onAppEvent('budget:open',detail=>{if(detail?.id)openBudgetDetail(ctx,detail.id)});
 onAppEvent('rules:new',()=>newRule(ctx));
@@ -429,6 +353,17 @@ const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,ca
   apiText:path=>apiClient.backendResponse(path).then(response=>response.text()),
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
   navScope:(view,query)=>navigate(view,{query:query||''}),showView:(view,opts)=>navigate(view,opts||{})};
+// Theme, Privatmodus, Ueberschrift, die beiden Ueberlaufmenues, die globale Suche und die
+// Sitzungssperre stehen seit #154 in app/shell.js - dieselbe Datei, die jede Razor-Seite benutzt.
+// Zwei Fassungen derselben Topbar waeren genau das Muster, das diese Migration aufraeumt. Was die
+// Huelle anders macht, steht in den vier Funktionen, die sie mitgibt.
+const shell=createShell({
+  navigate:(view,options)=>showView(view,options),
+  reload:()=>loadCurrent(),
+  context:ctx,
+  currentView:()=>state.view,
+  primaryAction:view=>PRIMARY_ACTION[view]??null
+});
 const accessSetup=createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,status,options));
 const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())

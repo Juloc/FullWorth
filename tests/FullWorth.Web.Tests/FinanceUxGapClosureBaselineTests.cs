@@ -77,9 +77,14 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task MobileMoreLabelsEveryEntryFromTheMenuDefinition()
     {
+        // Das Blatt zog mit #154 nach app/shell.js - dieselbe Datei, die auch jede Razor-Seite
+        // benutzt. Die Aussage bleibt dieselbe: die Beschriftung kommt aus der Menuedefinition,
+        // nicht aus einer Sonderregel im Blatt.
+        var shell = await GetAsync("/app/shell.js");
         var app = await GetAsync("/app.js");
 
-        Assert.Contains("get(entry.label)", app);
+        Assert.Contains("get(entry.label)", shell);
+        Assert.DoesNotContain("transactions.allTx", shell);
         Assert.DoesNotContain("transactions.allTx", app);
     }
 

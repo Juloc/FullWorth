@@ -1,22 +1,22 @@
 // Der Einstieg der Buchungsseite (#154 Phase B).
 //
-// Das ist alles, was eine echte Seite zusätzlich braucht: den gemeinsamen Kontext erzeugen, einmal
-// binden, einmal zeichnen. `page.js` selbst hat sich dafür nicht geändert — es bekommt denselben
-// Kontext wie vorher aus der Hülle, nur dass ihn jetzt die Seite erzeugt statt app.js für alle.
+// Das ist alles, was eine echte Seite zusätzlich braucht: die Hülle starten und zeichnen. Sprache,
+// Rechte, Raum, Navigation, Topbar und Sperre erledigt `startShellPage` — für jede Seite gleich.
+// `page.js` selbst hat sich dafür nicht geändert; es bekommt denselben Kontext wie vorher aus der
+// alten Hülle, nur dass ihn jetzt die Seite erzeugt statt app.js für alle.
 //
-// Dass es diese Datei gibt und nicht nur page.js, hat einen Grund: page.js exportiert `render` und
-// `bind` getrennt, weil die Hülle beides zu verschiedenen Zeitpunkten braucht. Diese Trennung bleibt
-// nützlich (ein Neuzeichnen darf nicht neu binden), und der Einstieg ist die Stelle, die sie kennt.
+// Dass es diese Datei gibt und nicht nur page.js, hat einen Grund: page.js trennt `bind` und
+// `render`, weil ein Neuzeichnen nicht neu binden darf. Der Einstieg ist die Stelle, die das weiß.
 
-import { startPage } from '../../app/page-context.js';
+import { startShellPage } from '../../app/shell.js';
 import { bindTransactions, renderTransactions } from './page.js';
 
 let bound = false;
 
-await startPage(context => {
+await startShellPage(async context => {
   if (!bound) {
     bindTransactions(context);
     bound = true;
   }
-  return renderTransactions(context);
+  await renderTransactions(context);
 });
