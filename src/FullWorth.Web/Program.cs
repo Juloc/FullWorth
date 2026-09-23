@@ -143,7 +143,9 @@ builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 // Razor Pages fuer das angemeldete Frontend (#154). Die Seiten liegen unter Pages/ und sind durch
 // die FallbackPolicy darunter automatisch angemeldet - eine eigene Autorisierungsregel je Seite gibt
 // es bewusst nicht, sonst haette jede Seite eine zweite Stelle, an der sie falsch sein kann.
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(options =>
+    options.Conventions.ConfigureFilter(new Microsoft.AspNetCore.Mvc.ServiceFilterAttribute(typeof(FullWorth.Web.Navigation.NavigationPageFilter))));
+builder.Services.AddScoped<FullWorth.Web.Navigation.NavigationPageFilter>();
 
 builder.Services.AddAuthorization(options =>
 {

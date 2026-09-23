@@ -88,6 +88,10 @@ public sealed class MenuParityTests
     /// Coach stand hier einmal namentlich als Ausnahme: es baute seine Ansicht selbst und war
     /// deshalb nicht im Dokument zu finden. Seit es eine gewöhnliche Seite ist, gibt es keine
     /// Ausnahme mehr — und dass es keine gibt, ist genau das, was dieser Test jetzt festhält.
+    ///
+    /// Seit #154 gibt es einen dritten Ort: eine Razor-Seite unter Pages/. Eine Ansicht, die dorthin
+    /// umgezogen ist, steht mit voller Absicht NICHT mehr im Dokument der alten Hülle — der Eintrag
+    /// führt trotzdem irgendwohin, nämlich an eine echte Adresse.
     /// </summary>
     [Fact]
     public void Every_entry_leads_somewhere()
@@ -100,8 +104,19 @@ public sealed class MenuParityTests
             var inDocument = html.Contains($"id=\"view-{entry}\"");
             var ownPage = sidebar.Contains($"data-entry=\"{entry}\"") && !sidebar.Contains($"data-view=\"{entry}\"");
 
-            Assert.True(inDocument || ownPage, $"Der Eintrag {entry} zeigt weder auf eine Ansicht noch auf eine eigene Seite.");
+            Assert.True(inDocument || ownPage || HasRazorPage(entry),
+                $"Der Eintrag {entry} zeigt weder auf eine Ansicht, noch auf eine eigene Seite, noch auf eine Razor-Seite.");
         }
+    }
+
+    /// <summary>Eine Razor-Seite, deren @@page-Adresse auf diese Ansicht zeigt (#154).</summary>
+    private static bool HasRazorPage(string entry)
+    {
+        var pages = new DirectoryInfo(Path.GetFullPath(Path.Combine(WebRoot, "..", "Pages")));
+        if (!pages.Exists) return false;
+        var address = "\"/" + entry + "\"";
+        return pages.EnumerateFiles("*.cshtml", SearchOption.AllDirectories)
+            .Any(file => File.ReadAllText(file.FullName).Contains("@page " + address, StringComparison.Ordinal));
     }
 
     /// <summary>

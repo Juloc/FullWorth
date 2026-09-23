@@ -14,6 +14,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path/posix';
 import { MENU, QUICK, ENTRIES } from '../src/FullWorth.Web/wwwroot/app/menu.js';
+import { MIGRATED } from '../src/FullWorth.Web/wwwroot/app/routes.js';
 
 const NL = String.fromCharCode(10);
 const root = new URL('../src/FullWorth.Web/wwwroot/', import.meta.url);
@@ -27,12 +28,15 @@ const svg = content => `<svg viewBox="0 0 24 24" aria-hidden="true">${content}</
 const label = entry => `<span data-i18n="${entry.label}">${text(entry.label)}</span>`;
 const href = entry => entry.href ?? (entry.view === 'dashboard' ? '/' : `/${entry.view}`);
 
+// data-view heißt: diese Hülle zeigt die Ansicht selbst, und der Klick darauf wird abgefangen.
+// Eine Seite, die nach Razor umgezogen ist (#154), trägt es deshalb nicht mehr — ihr Eintrag
+// bleibt ein gewöhnlicher Link, und genau das soll er sein.
 function item(entry, indent) {
   const attributes = [
     'class="nav-item"',
     `href="${href(entry)}"`,
     `data-entry="${entry.view}"`,
-    entry.href ? null : `data-view="${entry.view}"`,
+    entry.href || MIGRATED.has(entry.view) ? null : `data-view="${entry.view}"`,
     entry.admin ? 'hidden' : null
   ].filter(Boolean).join(' ');
 

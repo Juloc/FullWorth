@@ -5,7 +5,6 @@ import { setPrimaryAction, bindIdentityIcons } from './features/ux-kit.js';
 import { initLock } from './app/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
 import { renderCoach, bindCoach } from './pages/coach/page.js';
-import { renderTransactions, bindTransactions } from './pages/transactions/page.js';
 import { renderCategories, bindCategories, newCategory } from './pages/categories/page.js';
 import { renderCollections, bindCollections, newCollection } from './pages/collections/page.js';
 import { renderRules, bindRules, newRule } from './pages/rules/page.js';
@@ -38,6 +37,7 @@ import { createToast } from './components/toast.js';
 import { openGlobalSearch } from './app/global-search.js';
 import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
+import { SUBPAGES, MIGRATED, pathForView as canonicalPath } from './app/routes.js';
 import { renderAdmin } from './pages/admin/page.js';
 import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
 import { renderCompensation } from './pages/compensation/page.js';
@@ -53,18 +53,10 @@ import { emptyRow } from './components/empty.js';
 const get=path=>i18n.get(path);
 // Seiten, die unter einer anderen liegen. Sie stehen nicht im Menü — sonst wäre es wieder überfüllt —,
 // haben aber eine Adresse, die zeigt, wo sie hingehören, und markieren im Menü ihre Elternseite.
-const SUBPAGES={
-  passkeys:{path:'/settings/security/passkeys',parent:'settings'},
-  import:{path:'/settings/import',parent:'settings'},
-  'import-finanzguru-xlsx':{path:'/settings/import/finanzguru/xlsx',parent:'settings'},
-  'import-broker-pdf':{path:'/settings/import/broker-pdf',parent:'settings'},
-  intelligence:{path:'/settings/intelligence',parent:'settings'},
-  'bank-connections':{path:'/settings/bank-connections',parent:'settings'},
-  // Die Kontodetails liegen unter den Konten, nicht daneben: der Zurueckweg fuehrt in die Liste, und
-  // die Seitenleiste markiert weiter "Konten".
-  'account-detail':{path:'/accounts/detail',parent:'accounts'}
-};
-const ALL_VIEWS=[...VIEWS,...Object.keys(SUBPAGES)];
+// Eine Ansicht, die schon eine eigene Razor-Seite hat, gehoert dieser Huelle nicht mehr (#154): sie
+// steht nicht in ihrer Liste, ihr Link wird nicht abgefangen, und ein Wechsel dorthin ist eine echte
+// Navigation. So laeuft die Migration seitenweise, ohne zwei Router nebeneinander.
+const ALL_VIEWS=[...VIEWS,...Object.keys(SUBPAGES)].filter(view=>!MIGRATED.has(view));
 const SUBPAGE_PATHS=Object.fromEntries(Object.entries(SUBPAGES).map(([view,page])=>[view,page.path]));
 const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
@@ -181,7 +173,6 @@ function bind(){
     event.preventDefault();showView(b.dataset.viewJump);
   }));
   $('#topbar-more').addEventListener('click',openTopbarMenu);
-  bindTransactions(ctx);
   bindAccounts(ctx,()=>openBankConnection(ctx));
   bindSettings(ctx);
   $('[data-action="new-budget"]').addEventListener('click',()=>newBudget(ctx));
@@ -362,6 +353,13 @@ function initResizableSidebar(){
   onAppEvent('layout:clamp-sidebar',()=>apply(savedWidth()));
 }
 async function showView(view,opts={}){
+  // Die Seite gehoert nicht mehr hierher - hin fuehrt die Adresse, nicht ein Ansichtswechsel.
+  if(MIGRATED.has(view)){
+    const target=canonicalPath(view);
+    const query=opts.query!==undefined?String(opts.query).replace(/^\?/,''):'';
+    location.assign(query?`${target}?${query}`:target);
+    return;
+  }
   state.view=view;
   const base=opts.path||pathForView(view);
   const sameBase=location.pathname===base;
@@ -436,7 +434,6 @@ const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
   .register('insights',()=>mountInsights(ctx))
   .register('coach',()=>renderCoach())
-  .register('transactions',()=>renderTransactions(ctx))
   .register('accounts',()=>renderAccounts(ctx))
   .register('account-detail',()=>renderAccountDetail(ctx))
   .register('bank-connections',()=>renderBankConnections(ctx))

@@ -57,13 +57,13 @@ public sealed class NavigationCatalogParityTests
     [Fact]
     public void Both_definitions_agree_on_every_subpage_address()
     {
-        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
-        var start = app.IndexOf("const SUBPAGES={", StringComparison.Ordinal);
-        var end = app.IndexOf("const ALL_VIEWS=", StringComparison.Ordinal);
-        Assert.True(start >= 0 && end > start, "SUBPAGES steht nicht mehr in app.js.");
+        var routes = File.ReadAllText(Path.Combine(WwwRoot(), "app", "routes.js"));
+        var start = routes.IndexOf("export const SUBPAGES = {", StringComparison.Ordinal);
+        var end = routes.IndexOf("export function pathForView", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "SUBPAGES steht nicht mehr in app/routes.js.");
 
         var subPages = Regex.Matches(
-                app[start..end],
+                routes[start..end],
                 @"'?([\w-]+)'?\s*:\s*\{\s*path:\s*'([^']+)'\s*,\s*parent:\s*'([^']+)'")
             .Select(match => (View: match.Groups[1].Value, Path: match.Groups[2].Value, Parent: match.Groups[3].Value))
             .ToArray();

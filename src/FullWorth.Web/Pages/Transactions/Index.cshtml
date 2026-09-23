@@ -1,0 +1,27 @@
+@page "/transactions"
+@{
+    ViewData["Title"] = "Buchungen · FullWorth";
+    ViewData["ActiveView"] = "transactions";
+}
+
+@*
+    Die erste echte Seite (#154 Phase B).
+
+    Sie laedt ihr eigenes CSS und ihr eigenes JS - und sonst nichts. Kein Markup von Konten,
+    Budgets, Vermoegen oder Einstellungen, keine 97 vorgeladenen Module. Das Markup stand bis
+    hierher in wwwroot/pages/transactions/page.html, von wo ops/generate-shell.mjs es in das eine
+    grosse Dokument geschrieben hat; jetzt steht es dort, wo die Seite ist.
+
+    Die Ueberschrift kommt weiterhin aus den Sprachdateien und wird von entry.js gesetzt - eine
+    serverseitige Uebersetzung ist nicht Teil dieses Schnitts.
+*@
+
+<section id="view-transactions"><div class="toolbar tx-toolbar"><button id="tx-back" type="button" class="btn btn-secondary tx-back" hidden aria-label="Zurück">←</button><label class="tx-search"><svg class="tx-search-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="tx-query" type="search" data-i18n-placeholder="transactions.search" placeholder="Buchungen durchsuchen…"></label><button id="tx-filter" type="button" class="tx-filter-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7Z"/></svg><span data-i18n="common.filter">Filter</span></button></div><div id="tx-transfer-hint" class="tx-transfer-hint" hidden></div><div id="tx-daybar" class="tx-daybar"><span id="tx-daybar-date" class="tx-daybar-date"></span><span id="tx-daybar-balance" class="tx-daybar-balance"></span><button id="tx-daybar-today" type="button" class="btn btn-secondary tx-daybar-today" data-i18n="common.today">Heute</button></div><article class="panel table-panel"><div class="tx-list"><div class="tx-list-head" aria-hidden="true"><span data-i18n="transactions.date">Datum</span><span data-i18n="transactions.counterparty">Empfänger / Absender</span><span data-i18n="transactions.category">Kategorie</span><span data-i18n="transactions.account">Konto</span><span class="number" data-i18n="transactions.amount">Betrag</span><span></span></div><div id="transactions-body"></div></div></article><button id="tx-add" type="button" class="tx-fab" hidden aria-label="Buchung hinzufügen">+</button></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/transactions/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/transactions/entry.js"></script>
+}

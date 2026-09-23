@@ -11,7 +11,7 @@
 *@
 @{
     var activeView = ViewData["ActiveView"] as string ?? string.Empty;
-    var isAdmin = ViewData["IsAdmin"] as bool? ?? false;
+    var isAdmin = ViewContext.HttpContext.Items[NavigationPageFilter.IsAdminKey] as bool? ?? false;
 
     string ItemClass(string view) =>
         string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item";
