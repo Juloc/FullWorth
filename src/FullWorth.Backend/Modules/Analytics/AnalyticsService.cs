@@ -56,6 +56,7 @@ public sealed class AnalyticsService(
     FullWorthDbContext db,
     FullWorth.Backend.Modules.Fx.CurrencyConverter fx,
     FullWorth.Backend.Modules.Portfolio.InvestmentNetWorthService investments,
+    FullWorth.Backend.Modules.Portfolio.WealthOverviewService wealth,
     CashflowStore cashflow,
     FinancialReconciliationService reconciliation,
     ContractLinkStore contractLinks)
@@ -229,73 +230,23 @@ public sealed class AnalyticsService(
 
         var today = DateOnly.FromDateTime(DateTime.Today);
 
-        // Net worth is a cross-currency total (§18): convert every balance/value into the base currency
-        // at the latest available rate instead of the old `Currency == base` filter that silently
-        // dropped foreign holdings. A missing rate marks the total incomplete — never assumed 1:1.
-        var incomplete = false;
-        var rates = await fx.PrepareLatestAsync(currency, today, ct);
-        decimal SumInBase(IEnumerable<(decimal Amount, string Currency)> items)
-        {
-            var total = 0m;
-            foreach (var (amount, itemCurrency) in items)
-            {
-                var converted = rates.ToBaseOn(amount, itemCurrency, today);
-                if (converted is null) incomplete = true; else total += converted.Value;
-            }
-            return total;
-        }
+        // Das Nettovermoegen kommt aus EINER Rechnung (#174): derselben, die die Vermoegensseite
+        // zeigt und die der Verlauf als Tageswert festhaelt. Hier stand bis 2026-09-23 eine zweite,
+        // und aus ihr sind schon zwei Fehler entstanden - das Dashboard las nur "Liabilities" und
+        // nicht "Loans" (um jede Hypothek zu hoch), und spaeter zaehlte es die Depots gar nicht.
+        // Beide Male zeigte die Vermoegensseite daneben die richtige Zahl fuer dieselben Daten.
+        //
+        // Was die Umrechnung angeht, bleibt alles wie es war: die Vermoegensseite rechnet jeden
+        // Bestand einzeln in die Zielwaehrung um und markiert das Ergebnis als unvollstaendig, wenn
+        // ein Kurs fehlt - nie 1:1 angenommen.
+        var wealthOutcome = await wealth.GetOverviewForUserAsync(userId, fullWorthSpaceId, currency, ct);
+        if (wealthOutcome.Status != FullWorth.Backend.Modules.Portfolio.WealthRequestStatus.Success
+            || wealthOutcome.Overview is not { } wealthView) return null;
 
-        // A portfolio linked to a bank account replaces that account's balance in every aggregate, so
-        // the account has to be left out here too or the same money is counted twice.
-        var investment = await investments.CalculateAsync(fullWorthSpaceId, userId, today, ct);
-        if (investment.Incomplete) incomplete = true;
-
-        // Every currency the account holds, not one row per account: PayPal, Wise and Revolut report a
-        // wallet per currency, and reducing that to a single balance left the rest of the money out of
-        // this total entirely. Amount and currency always travel together - pairing an amount with the
-        // ACCOUNT's declared currency converted a foreign wallet at the wrong rate.
-        var accountIds = await AccessibleAccounts(userId, fullWorthSpaceId)
-            .Where(account => account.IsActive && account.IncludeInNetWorth)
-            .Select(account => account.Id)
-            .ToListAsync(ct);
-        var accountBalances = await Accounts.CurrentBalances.LoadAsync(db, accountIds, ct);
-        var accounts = SumInBase(accountBalances
-            .Where(row => !investment.ExcludedLinkedAccountIds.Contains(row.AccountId))
-            .Select(row => (row.Amount, row.Currency)));
-
-        // Ein Konto, das mitzaehlen soll, aber noch keinen Kontostand hat, liefert gar keine
-        // Balance-Zeile - es fiel hier lautlos als 0 in die Summe. Das ist derselbe Bruch wie ein
-        // fehlender Wechselkurs: kein Wert ist nicht null. Seit ein Import solche Konten anlegt, ist
-        // es der Normalfall direkt nach dem Import und nicht mehr der Randfall.
-        var balancedAccountIds = accountBalances.Select(row => row.AccountId).ToHashSet();
-        if (accountIds.Any(id => !balancedAccountIds.Contains(id)
-                                 && !investment.ExcludedLinkedAccountIds.Contains(id)))
-            incomplete = true;
-
-        var assetRows = await db.Assets.AsNoTracking()
-            .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
-            .Select(asset => new { asset.CurrentValue, asset.Currency })
-            .ToListAsync(ct);
-        var assets = SumInBase(assetRows.Select(a => (a.CurrentValue, a.Currency)))
-            // InvestmentNetWorthService has already converted every portfolio into the space base
-            // currency. Without this the home screen understated net worth by every depot while the
-            // Wealth page, which does read them, showed a different number for the same data.
-            + (investment.Amount == 0m ? 0m : SumInBase([(investment.Amount, investment.BaseCurrency)]));
-
-        var liabilityRows = await db.Liabilities.AsNoTracking()
-            .Where(liability => liability.FullWorthSpaceId == fullWorthSpaceId && liability.IncludeInNetWorth)
-            .Select(liability => new { liability.CurrentBalance, liability.Currency })
-            .ToListAsync(ct);
-        // Loans are liabilities too. This read only db.Liabilities, so the headline figure was
-        // overstated by every mortgage and consumer loan - while NetWorthSnapshotService, which feeds
-        // the net-worth history, has always added them.
-        var loanRows = await db.Loans.AsNoTracking()
-            .Where(loan => loan.FullWorthSpaceId == fullWorthSpaceId && loan.IsActive)
-            .Select(loan => new { loan.CurrentBalance, loan.Currency })
-            .ToListAsync(ct);
-        var liabilities = SumInBase(liabilityRows.Select(l => (l.CurrentBalance, l.Currency)))
-            + SumInBase(loanRows.Select(l => (l.CurrentBalance, l.Currency)));
-
+        var incomplete = !wealthView.IsComplete;
+        var accounts = wealthView.Accounts.Amount;
+        var assets = wealthView.TotalAssets;
+        var liabilities = wealthView.TotalLiabilities;
         // Current-month income vs expenses for the §8.4 widget, using the same rules as the analytics
         // overview: transfers and 'exclude from statistics' are dropped, a linked refund is not income
         // (it nets the original expense via the allocation builder), and expenses come from the
@@ -343,7 +294,7 @@ public sealed class AnalyticsService(
                     .Select(category => category.Icon != null && category.Icon != "" ? category.Icon : category.Key)
                     .FirstOrDefault()))
             .ToListAsync(ct);
-        return new(currency, accounts, assets, liabilities, accounts + assets - liabilities, income, expenses, incomplete, upcoming);
+        return new(currency, accounts, assets, liabilities, wealthView.NetWorth, income, expenses, incomplete, upcoming);
     }
 
     /// <summary>
