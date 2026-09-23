@@ -210,7 +210,12 @@ public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore tr
             // Zahlungsverknuepfung. Zwei einfache Abfragen statt einer verschachtelten - die liesse
             // sich nicht uebersetzen, und ein Ausdruck, den der Anbieter erst zur Laufzeit ablehnt,
             // ist eine Fehlermeldung statt einer Suche.
+            // Der Raum gehoert in diese Abfrage, obwohl die Haupttimeline ohnehin nur zugaengliche
+            // Buchungen enthaelt und ein fremder Treffer dort ins Leere liefe. Der Grund ist die
+            // Obergrenze darunter: ohne den Raumfilter fuellen Kaeufe aus FREMDEN Raeumen die 5000
+            // Plaetze, und der Benutzer bekommt weniger von seinen eigenen Treffern zu sehen.
             var matchingPurchases = db.Purchases.AsNoTracking().Where(p =>
+                (!fullWorthSpaceId.HasValue || p.FullWorthSpaceId == fullWorthSpaceId.Value) &&
                 (p.Visibility != "private" || p.CreatedByUserId == userId) &&
                 (EF.Functions.ILike(p.Merchant, pattern) || p.Items.Any(i => EF.Functions.ILike(i.Name, pattern))));
 
