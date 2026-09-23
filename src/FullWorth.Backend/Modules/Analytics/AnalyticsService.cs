@@ -355,17 +355,14 @@ public sealed class AnalyticsService(
     /// current calendar month (so a mid-cycle pay-cycle/weekly budget reports its true in-progress
     /// window), otherwise the 1st of the requested month.
     /// </summary>
-    public async Task<object?> BudgetStatusForUserAsync(Guid userId, Guid fullWorthSpaceId, int year, int month, string? currency, CancellationToken ct)
-    {
-        var result = await BudgetStatusItemsForUserAsync(userId, fullWorthSpaceId, year, month, currency, ct);
-        return result is null ? null : new { year, month, currency = result.Value.Currency, items = result.Value.Items, incomplete = result.Value.Incomplete };
-    }
-
     /// <summary>
-    /// Dieselbe Berechnung wie <see cref="BudgetStatusForUserAsync"/>, nur mit dem tatsaechlichen Typ
-    /// statt dem anonymen Rueckgabeobjekt - fuer die Zukunfts-Timeline (#139), die die einzelnen
-    /// <see cref="BudgetStatusItem"/>s braucht statt nur ihrer JSON-Form. Der oeffentliche Endpunkt
-    /// bleibt byte-identisch: er baut sein anonymes Objekt weiterhin aus genau diesen Werten.
+    /// Der Budgetstand, wie ihn die Zukunfts-Timeline braucht (#139): die einzelnen
+    /// <see cref="BudgetStatusItem"/>s und nicht nur ihre JSON-Form.
+    ///
+    /// Bis 2026-09-23 hing daran ausserdem ein oeffentlicher Endpunkt, <c>GET
+    /// /api/analytics/budget-status</c> - der aber nie lief, weil eine Middleware ihn abfing. Die
+    /// Route geht jetzt direkt an <c>BudgetReconciliationService</c>. Dass diese Rechnung hier
+    /// dieselbe Zahl liefert wie jene, haelt <c>BudgetStatusAgreementTests</c> fest.
     /// </summary>
     private async Task<(string Currency, List<BudgetStatusItem> Items, bool Incomplete)?> BudgetStatusItemsForUserAsync(Guid userId, Guid fullWorthSpaceId, int year, int month, string? currency, CancellationToken ct)
     {

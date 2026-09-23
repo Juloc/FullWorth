@@ -196,34 +196,6 @@ ON CONFLICT ("BudgetId") DO UPDATE SET "IncomeScheduleId"=EXCLUDED."IncomeSchedu
                                && (transaction.BookingDate ?? transaction.ValueDate) <= to)
             .ToListAsync(ct);
 
-    public async Task<Dictionary<Guid, List<TransactionAllocation>>> AllocationsByTransactionAsync(
-        Guid[] transactionIds, CancellationToken ct) =>
-        (await db.TransactionAllocations.AsNoTracking()
-            .Where(allocation => transactionIds.Contains(allocation.TransactionId))
-            .ToListAsync(ct))
-        .GroupBy(allocation => allocation.TransactionId)
-        .ToDictionary(group => group.Key, group => group.ToList());
-
-    public async Task<Dictionary<Guid, HashSet<Guid>>> TagsByTransactionAsync(
-        Guid[] transactionIds, CancellationToken ct)
-    {
-        var map = new Dictionary<Guid, HashSet<Guid>>();
-        if (transactionIds.Length == 0) return map;
-
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var cmd = RawSql.Command(connection,
-            "SELECT \"TransactionId\",\"TagId\" FROM \"TransactionTags\" WHERE \"TransactionId\"=ANY(@ids)",
-            ("@ids", transactionIds));
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            var id = RawSql.Guid(reader, "TransactionId");
-            if (!map.TryGetValue(id, out var set)) map[id] = set = [];
-            set.Add(RawSql.Guid(reader, "TagId"));
-        }
-        return map;
-    }
-
     public async Task<HashSet<Guid>> ExpandCategoryScopesAsync(
         Guid fullWorthSpaceId, IReadOnlyList<CategoryScopeWrite> scopes, CancellationToken ct)
     {

@@ -17,10 +17,9 @@ public static class BudgetEndpoints
             return budget is null ? Results.NotFound() : Results.Ok(budget);
         });
 
-        group.MapGet("/{id:guid}/status", async (Guid id, Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser, BudgetStore store, CancellationToken ct) =>
+        group.MapGet("/{id:guid}/status", async (Guid id, Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser, BudgetReconciliationService budgets, CancellationToken ct) =>
         {
-            var asOfDate = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
-            var status = await store.GetStatusForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, asOfDate, ct);
+            var status = await budgets.GetStatusAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, asOf, ct);
             return status is null ? Results.NotFound() : Results.Ok(status);
         });
 

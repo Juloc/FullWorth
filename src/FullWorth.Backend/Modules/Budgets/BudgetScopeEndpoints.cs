@@ -24,9 +24,6 @@ public sealed record BudgetGroupWrite(string Name, int SortOrder);
 /// </summary>
 public static class BudgetScopeEndpoints
 {
-    /// <summary>Mehr Belege als das schaut sich in einer Uebersicht niemand an.</summary>
-    private const int MaxContributions = 200;
-
     /// <summary>Ab drei gemeinsamen Dimensionen ist es eine echte Ueberschneidung und kein Zufall.</summary>
     private const int OverlapDimensions = 3;
 
@@ -99,120 +96,41 @@ public static class BudgetScopeEndpoints
         return Results.Ok(await RedactAsync(store, await store.LoadScopeAsync(budgetId, ct), visible, ct));
     }
 
+    /// <summary>
+    /// Derselbe Stand wie auf der Budgetseite - aus <see cref="BudgetReconciliationService"/>.
+    ///
+    /// Hier stand bis 2026-09-23 eine eigene Rechnung ueber 115 Zeilen: Fenster aufloesen, Buchungen
+    /// laden, Bereich anwenden, summieren, hochrechnen. Sie lief nie. Eine Middleware fing die Route
+    /// vor der Zuordnung ab und antwortete aus dem Dienst, der jetzt hier steht - und der kann
+    /// ausserdem, was diese Fassung nicht konnte: Erstattungen gegenrechnen, Fremdwaehrung als
+    /// unvollstaendig kennzeichnen und den Uebertrag aus der Vorperiode beruecksichtigen.
+    /// </summary>
     private static async Task<IResult> GetScopedStatus(
-        Guid budgetId, Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser, SpaceAccess space,
-        BudgetScopeStore store, CancellationToken ct)
+        Guid budgetId, Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser,
+        BudgetReconciliationService budgets, CancellationToken ct)
     {
-        var userId = currentUser.RequireUserId();
-        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
-
-        var budget = await store.FindBudgetAsync(fullWorthSpaceId, budgetId, ct);
-        if (budget is null) return Results.NotFound();
-
-        var scope = await store.LoadScopeAsync(budgetId, ct);
-        var visible = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
-        var visibleScope = await RedactAsync(store, scope, visible, ct);
-
-        var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var (windowStart, windowEnd) = await ResolveWindowAsync(
-            store, budget.Id, budget.Period, budget.StartDate, budget.EndDate, day, ct);
-
-        var transactions = await store.TransactionsInWindowAsync(visible, windowStart, windowEnd, ct);
-        var ids = transactions.Select(transaction => transaction.Id).ToArray();
-        var allocationByTransaction = await store.AllocationsByTransactionAsync(ids, ct);
-        var tagsByTransaction = await store.TagsByTransactionAsync(ids, ct);
-        var categoryIds = await store.ExpandCategoryScopesAsync(fullWorthSpaceId, scope.Categories, ct);
-
-        var contributions = new List<object>();
-        decimal spent = 0m;
-
-        foreach (var transaction in transactions)
-        {
-            if (scope.AccountIds.Count > 0 && !scope.AccountIds.Contains(transaction.AccountId)) continue;
-
-            var merchant = MerchantNormalization.Normalize(
-                transaction.NormalizedCounterparty ?? transaction.Counterparty);
-            if (scope.Merchants.Count > 0
-                && (merchant is null || !scope.Merchants.Contains(merchant, StringComparer.OrdinalIgnoreCase)))
-                continue;
-            if (scope.TagIds.Count > 0
-                && (!tagsByTransaction.TryGetValue(transaction.Id, out var transactionTags)
-                    || !transactionTags.Overlaps(scope.TagIds)))
-                continue;
-
-            if (transaction.Amount < 0)
-            {
-                // Eine aufgeteilte Buchung zaehlt je Zeile: nur der Teil, der in dieses Budget faellt.
-                if (allocationByTransaction.TryGetValue(transaction.Id, out var lines) && lines.Count > 0)
-                    foreach (var line in lines)
-                    {
-                        if (categoryIds.Count > 0 && (!line.CategoryId.HasValue || !categoryIds.Contains(line.CategoryId.Value))) continue;
-                        var amount = Math.Abs(line.Amount);
-                        spent += amount;
-                        contributions.Add(new
-                        {
-                            transactionId = transaction.Id,
-                            allocationId = line.Id,
-                            date = transaction.BookingDate ?? transaction.ValueDate,
-                            transaction.Counterparty,
-                            amount,
-                            categoryId = line.CategoryId
-                        });
-                    }
-                else
-                {
-                    if (categoryIds.Count > 0 && (!transaction.CategoryId.HasValue || !categoryIds.Contains(transaction.CategoryId.Value))) continue;
-                    spent += Math.Abs(transaction.Amount);
-                    contributions.Add(new
-                    {
-                        transactionId = transaction.Id,
-                        allocationId = (Guid?)null,
-                        date = transaction.BookingDate ?? transaction.ValueDate,
-                        transaction.Counterparty,
-                        amount = Math.Abs(transaction.Amount),
-                        categoryId = transaction.CategoryId
-                    });
-                }
-            }
-            // Eine Erstattung mindert das Budget - sie ist keine Einnahme, sondern eine zurueckgenommene Ausgabe.
-            else if (transaction.Amount > 0 && transaction.RefundOfTransactionId.HasValue)
-            {
-                spent -= transaction.Amount;
-                contributions.Add(new
-                {
-                    transactionId = transaction.Id,
-                    allocationId = (Guid?)null,
-                    date = transaction.BookingDate ?? transaction.ValueDate,
-                    transaction.Counterparty,
-                    amount = -transaction.Amount,
-                    categoryId = transaction.RefundCategoryId ?? transaction.CategoryId
-                });
-            }
-        }
-
-        // Mehr Erstattungen als Ausgaben ergeben kein negatives Budget - es ist dann schlicht unberuehrt.
-        spent = Math.Max(0, spent);
-        var percent = budget.Amount == 0 ? 0 : Math.Round(spent / budget.Amount * 100, 2);
-        var totalDays = windowEnd.DayNumber - windowStart.DayNumber + 1;
-        var elapsed = Math.Clamp(day.DayNumber - windowStart.DayNumber + 1, 1, totalDays);
-        var projected = Math.Round(spent / elapsed * totalDays, 2);
-
+        var status = await budgets.GetStatusAsync(currentUser.RequireUserId(), fullWorthSpaceId, budgetId, asOf, ct);
+        if (status is null) return Results.NotFound();
         return Results.Ok(new
         {
-            budgetId,
-            budget.Name,
-            budget.Amount,
-            budget.Currency,
-            periodStart = windowStart,
-            periodEnd = windowEnd,
-            spent,
-            remaining = budget.Amount - spent,
-            percentUsed = percent,
-            projectedEndSpend = projected,
-            projectedOverUnder = projected - budget.Amount,
-            scope = visibleScope,
-            partialAccess = visibleScope.PartialAccess,
-            contributing = contributions.Take(MaxContributions)
+            status.BudgetId,
+            status.Name,
+            amount = status.BudgetAmount,
+            status.Currency,
+            status.PeriodStart,
+            status.PeriodEnd,
+            status.Spent,
+            status.Remaining,
+            status.PercentUsed,
+            status.ProjectedEndSpend,
+            status.ProjectedOverUnder,
+            status.PartialAccess,
+            incompleteFx = status.IncompleteFx,
+            status.BaseBudgetAmount,
+            status.CarryIn,
+            status.CarryOver,
+            status.CarryOverOverspend,
+            status.Contributing
         });
     }
 
@@ -331,64 +249,6 @@ public static class BudgetScopeEndpoints
         }
         return scope with { AccountIds = visibleAccounts, IncomeScheduleId = income, PartialAccess = partial };
     }
-
-    /// <summary>
-    /// Welcher Zeitraum gerade gilt. Ein gehaltsgekoppeltes Budget laeuft von Gehalt zu Gehalt, nicht
-    /// von Monatsanfang zu Monatsende - das ist der Punkt dieser Betriebsart.
-    /// </summary>
-    private static async Task<(DateOnly Start, DateOnly End)> ResolveWindowAsync(
-        BudgetScopeStore store, Guid budgetId, string period, DateOnly? start, DateOnly? end, DateOnly asOf,
-        CancellationToken ct)
-    {
-        var normalized = (period ?? "monthly").ToLowerInvariant();
-
-        if (normalized.Contains("salary") && await store.IncomeRhythmAsync(budgetId, ct) is { NextExpectedDate: { } } rhythm)
-        {
-            var next = rhythm.NextExpectedDate!.Value;
-            var previous = Previous(next, rhythm.Cycle, rhythm.Interval);
-            while (next <= asOf)
-            {
-                previous = next;
-                next = Next(next, rhythm.Cycle, rhythm.Interval);
-            }
-            return (previous, next.AddDays(-1));
-        }
-
-        if (normalized.Contains("week"))
-        {
-            var monday = asOf.AddDays(-(((int)asOf.DayOfWeek + 6) % 7));
-            return (monday, monday.AddDays(6));
-        }
-        if (normalized.Contains("quarter"))
-        {
-            var quarterStart = new DateOnly(asOf.Year, ((asOf.Month - 1) / 3 * 3) + 1, 1);
-            return (quarterStart, quarterStart.AddMonths(3).AddDays(-1));
-        }
-        if (normalized.Contains("year"))
-            return (new DateOnly(asOf.Year, 1, 1), new DateOnly(asOf.Year, 12, 31));
-        if (normalized.Contains("custom") && start.HasValue)
-            return (start.Value, end ?? start.Value.AddMonths(1).AddDays(-1));
-
-        var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
-        return (monthStart, monthStart.AddMonths(1).AddDays(-1));
-    }
-
-    private static DateOnly Next(DateOnly date, string cycle, int interval) => cycle switch
-    {
-        "weekly" => date.AddDays(7 * interval),
-        "quarterly" => date.AddMonths(3 * interval),
-        "yearly" => date.AddYears(interval),
-        _ => date.AddMonths(interval)
-    };
-
-    private static DateOnly Previous(DateOnly date, string cycle, int interval) => cycle switch
-    {
-        "weekly" => date.AddDays(-7 * interval),
-        "quarterly" => date.AddMonths(-3 * interval),
-        "yearly" => date.AddYears(-interval),
-        _ => date.AddMonths(-interval)
-    };
-
     /// <summary>Eine leere Menge heisst "keine Einschraenkung" und trifft damit auf alles zu.</summary>
     private static bool IntersectsOrAll<T>(IEnumerable<T> left, IEnumerable<T> right, IEqualityComparer<T>? comparer = null)
     {

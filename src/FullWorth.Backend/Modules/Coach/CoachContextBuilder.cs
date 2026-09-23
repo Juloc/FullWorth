@@ -14,6 +14,7 @@ public sealed class CoachContextBuilder(
     SpendingReviewService reviews,
     CurrencyConverter fx,
     BudgetStore budgetStore,
+    BudgetReconciliationService budgetStatus,
     WealthOverviewService wealth,
     AccountStore accountStore,
     ContractStore contractStore)
@@ -278,7 +279,10 @@ public sealed class CoachContextBuilder(
         var result = new List<CoachBudgetFact>();
         foreach (var budget in visible.Where(x => x.IsActive && (!x.StartDate.HasValue || x.StartDate <= asOf) && (!x.EndDate.HasValue || x.EndDate >= asOf)).Take(20))
         {
-            var status = await budgetStore.GetStatusForUserAsync(userId, fullWorthSpaceId, budget.Id, asOf, ct);
+            // Derselbe Stand wie auf der Budgetseite. Der Coach hatte hier seinen eigenen Leser, und
+            // der kannte weder Erstattungen noch den Uebertrag - er haette dem Benutzer eine andere
+            // Zahl genannt als die, die vor ihm auf dem Bildschirm steht.
+            var status = await budgetStatus.GetStatusAsync(userId, fullWorthSpaceId, budget.Id, asOf, ct);
             if (status is null) continue;
             result.Add(new CoachBudgetFact(status.BudgetId, status.Name, status.CategoryId, FxSnapshot.Normalize(status.Currency),
                 status.BudgetAmount, status.Spent, status.Remaining, status.PercentUsed,

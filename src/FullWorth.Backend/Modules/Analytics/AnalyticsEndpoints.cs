@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Analytics;
@@ -29,10 +30,14 @@ public static class AnalyticsEndpoints
             return result is null ? Results.NotFound() : Results.Ok(result);
         });
 
-        group.MapGet("/budget-status", async (Guid fullWorthSpaceId, int? year, int? month, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
+        // Der Budgetstand kommt aus dem Budget-Modul, nicht aus einer zweiten Rechnung hier. Bis
+        // 2026-09-23 stand an dieser Stelle eine eigene, und sie lief trotzdem nie: eine Middleware
+        // fing die Route vorher ab und antwortete aus genau dem Dienst, der jetzt hier steht.
+        group.MapGet("/budget-status", async (Guid fullWorthSpaceId, int? year, int? month, string? currency, CurrentUserContext currentUser, BudgetReconciliationService budgets, CancellationToken ct) =>
         {
-            var now = DateTime.Today;
-            return ToResult(await service.BudgetStatusForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, year ?? now.Year, month ?? now.Month, currency, ct));
+            if (month is < 1 or > 12) return Results.BadRequest(new { error = "month must be between 1 and 12." });
+            if (year is < 1 or > 9999) return Results.BadRequest(new { error = "year is invalid." });
+            return ToResult(await budgets.GetListAsync(currentUser.RequireUserId(), fullWorthSpaceId, year, month, currency, ct));
         });
 
         group.MapGet("/forecast", async (Guid fullWorthSpaceId, int? months, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>

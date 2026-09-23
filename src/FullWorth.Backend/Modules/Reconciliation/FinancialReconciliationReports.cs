@@ -113,79 +113,6 @@ public sealed class FinancialReconciliationReportService(
         };
     }
 
-    public async Task<object?> BudgetStatusAsync(Guid userId, Guid fullWorthSpaceId, Guid budgetId, DateOnly? asOf, CancellationToken ct)
-    {
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
-        var budget = await db.Budgets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == budgetId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
-        if (budget is null) return null;
-
-        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
-        var allSpaceAccounts = await db.Accounts.AsNoTracking().Where(a => a.FullWorthSpaceId == fullWorthSpaceId && a.IsActive).Select(a => a.Id).ToListAsync(ct);
-        var scope = await LoadBudgetScope(budgetId, ct);
-        var effectiveAccounts = scope.AccountIds.Count == 0
-            ? visible.ToHashSet()
-            : scope.AccountIds.Where(visible.Contains).ToHashSet();
-        var partialAccess = scope.AccountIds.Count == 0
-            ? allSpaceAccounts.Any(id => !visible.Contains(id))
-            : scope.AccountIds.Any(id => !visible.Contains(id));
-
-        var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var period = BudgetCycleCalculator.CurrentPeriod(BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate), day);
-        var loaded = await reconciliation.LoadAsync(
-            userId, fullWorthSpaceId, period.Start, period.End, budget.Currency, effectiveAccounts,
-            includeTransfers: false, includePending: false, includeIgnored: false, refundMode: "reverse", ct);
-        if (loaded is null) return null;
-
-        var categoryIds = await ExpandCategories(fullWorthSpaceId, scope.Categories, ct);
-        var merchantScope = scope.Merchants.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var tagScope = scope.TagIds.ToHashSet();
-        var filtered = loaded.Items.Where(item =>
-            (categoryIds.Count == 0 || (item.CategoryId.HasValue && categoryIds.Contains(item.CategoryId.Value))) &&
-            (merchantScope.Count == 0 || merchantScope.Contains(item.Merchant)) &&
-            (tagScope.Count == 0 || item.TagIds.Overlaps(tagScope)) &&
-            item.Kind is ContributionKinds.Expense or ContributionKinds.Refund).ToList();
-
-        var spent = FinancialReconciliationService.Spend(filtered);
-        var remaining = budget.Amount - spent;
-        var percent = budget.Amount == 0 ? 0m : Math.Round(spent / budget.Amount * 100m, 2);
-        var totalDays = period.LengthInDays;
-        var elapsed = Math.Clamp(day.DayNumber - period.Start.DayNumber + 1, 1, totalDays);
-        var projected = Math.Round(spent / elapsed * totalDays, 2);
-        var contributions = filtered
-            .OrderByDescending(item => item.Date)
-            .Take(200)
-            .Select(item => new
-            {
-                transactionId = item.TransactionId,
-                allocationId = (Guid?)null,
-                date = item.Date,
-                counterparty = item.Merchant,
-                // Expenses are negative in the canonical ledger and therefore become positive spend rows;
-                // refunds are positive and therefore become negative reversal rows.
-                amount = -item.ReportingAmount,
-                categoryId = item.CategoryId,
-                kind = item.Kind
-            }).ToArray();
-
-        return new
-        {
-            budgetId,
-            budget.Name,
-            budget.Amount,
-            budget.Currency,
-            periodStart = period.Start,
-            periodEnd = period.End,
-            spent,
-            remaining,
-            percentUsed = percent,
-            projectedEndSpend = projected,
-            projectedOverUnder = projected - budget.Amount,
-            partialAccess,
-            incompleteFx = loaded.IncompleteFx,
-            contributing = contributions
-        };
-    }
-
     public async Task<object?> CashflowAvailableAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? asOf, CancellationToken ct)
     {
         if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
@@ -518,9 +445,13 @@ public sealed class FinancialReconciliationMiddleware(RequestDelegate next)
         var handlesAnalytics = HttpMethods.IsPost(context.Request.Method) &&
             (path.Equals("/api/analytics/query", StringComparison.OrdinalIgnoreCase) || path.Equals("/api/analytics/sankey", StringComparison.OrdinalIgnoreCase));
         var handlesCashflow = HttpMethods.IsGet(context.Request.Method) && path.Equals("/api/cashflow/available", StringComparison.OrdinalIgnoreCase);
-        var budgetId = Guid.Empty;
-        var handlesBudget = HttpMethods.IsGet(context.Request.Method) && TryBudgetStatusPath(path, out budgetId);
-        if (!handlesAnalytics && !handlesCashflow && !handlesBudget)
+        // Der Budgetstand stand hier einmal als dritter Weg. Er kam nie an: eine Middleware davor
+        // beantwortete dieselbe Route, und als die wegfiel, waere ploetzlich DIESE Fassung gelaufen -
+        // die den Bereich eines Budgets nicht kennt und deshalb bei einem Budget auf einer
+        // Oberkategorie auch alle Unterkategorien mitzaehlte. Gefangen hat das
+        // BudgetReconciliationCompatibilityTests. Die Budget-Routen gehen jetzt durch ihre eigenen
+        // Handler in Modules/Budgets.
+        if (!handlesAnalytics && !handlesCashflow)
         {
             await next(context);
             return;
@@ -541,11 +472,6 @@ public sealed class FinancialReconciliationMiddleware(RequestDelegate next)
             if (handlesCashflow)
             {
                 var result = await reports.CashflowAvailableAsync(userId, RequiredSpace(context), OptionalDate(context, "asOf"), ct);
-                await Write(context, result, ct); return;
-            }
-            if (handlesBudget)
-            {
-                var result = await reports.BudgetStatusAsync(userId, RequiredSpace(context), budgetId, OptionalDate(context, "asOf"), ct);
                 await Write(context, result, ct); return;
             }
         }
@@ -571,16 +497,6 @@ public sealed class FinancialReconciliationMiddleware(RequestDelegate next)
 
     private static DateOnly? OptionalDate(HttpContext context, string name) =>
         DateOnly.TryParse(context.Request.Query[name], out var date) ? date : null;
-
-    private static bool TryBudgetStatusPath(string path, out Guid budgetId)
-    {
-        budgetId = Guid.Empty;
-        const string prefix = "/api/budget-scopes/";
-        const string suffix = "/status";
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
-        var raw = path[prefix.Length..^suffix.Length].Trim('/');
-        return Guid.TryParse(raw, out budgetId);
-    }
 
     private static async Task Write(HttpContext context, object? result, CancellationToken ct)
     {

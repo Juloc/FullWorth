@@ -48,6 +48,18 @@ public sealed record ReconciledBudgetStatus(
     public bool CarryOverOverspend { get; init; }
 }
 
+/// <summary>
+/// Der Budgetstand - und zwar der einzige.
+///
+/// Die Datei hiess bis 2026-09-23 "BudgetReconciliationCompatibility" und enthielt neben diesem
+/// Dienst eine Middleware, die die drei oeffentlichen Status-Routen VOR der Zuordnung abfing und aus
+/// ihm beantwortete. Die eigentlich gemappten Handler liefen nie - und weil sie trotzdem dastanden,
+/// gruen getestet und mit Aufrufern im Frontend, sah nichts danach aus, als waere etwas falsch.
+/// Gezaehlt waren es fuenf Fassungen derselben Frage; vier davon kamen nie an.
+///
+/// Jetzt rufen die Handler hier direkt herein. Wer etwas am Budgetstand aendert, aendert es hier,
+/// und es erreicht die Budgetseite, die Buchungsseite und den Coach zugleich.
+/// </summary>
 public sealed class BudgetReconciliationService(
     FullWorthDbContext db,
     FinancialReconciliationService reconciliation)
@@ -338,133 +350,4 @@ public sealed class BudgetReconciliationService(
         List<Guid> AccountIds,
         List<Guid> TagIds,
         List<string> Merchants);
-}
-
-/// <summary>
-/// Keeps the original budget URLs/JSON contracts while routing every budget surface through one
-/// canonical reconciliation service. This covers the main budget list/detail and the newer scope view.
-/// </summary>
-public sealed class BudgetReconciliationCompatibilityMiddleware(RequestDelegate next)
-{
-    public async Task InvokeAsync(
-        HttpContext context,
-        CurrentUserContext currentUser,
-        BudgetReconciliationService budgets)
-    {
-        if (!HttpMethods.IsGet(context.Request.Method))
-        {
-            await next(context);
-            return;
-        }
-
-        var path = context.Request.Path.Value ?? string.Empty;
-        var isList = path.Equals("/api/analytics/budget-status", StringComparison.OrdinalIgnoreCase);
-        var isAdvanced = TryIdPath(path, "/api/budget-scopes/", "/status", out var advancedId);
-        var isLegacyDetail = TryIdPath(path, "/api/budgets/", "/status", out var legacyId);
-        if (!isList && !isAdvanced && !isLegacyDetail)
-        {
-            await next(context);
-            return;
-        }
-
-        var ct = context.RequestAborted;
-        try
-        {
-            var userId = currentUser.RequireUserId();
-            var fullWorthSpaceId = RequiredSpace(context);
-            if (isList)
-            {
-                var result = await budgets.GetListAsync(
-                    userId,
-                    fullWorthSpaceId,
-                    OptionalInt(context, "year"),
-                    OptionalInt(context, "month"),
-                    context.Request.Query["currency"].FirstOrDefault(),
-                    ct);
-                await Write(context, result, ct);
-                return;
-            }
-
-            var status = await budgets.GetStatusAsync(
-                userId,
-                fullWorthSpaceId,
-                isAdvanced ? advancedId : legacyId,
-                OptionalDate(context, "asOf"),
-                ct);
-            if (status is null)
-            {
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                return;
-            }
-
-            if (isAdvanced)
-            {
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    status.BudgetId,
-                    status.Name,
-                    amount = status.BudgetAmount,
-                    status.Currency,
-                    status.PeriodStart,
-                    status.PeriodEnd,
-                    status.Spent,
-                    status.Remaining,
-                    status.PercentUsed,
-                    status.ProjectedEndSpend,
-                    status.ProjectedOverUnder,
-                    status.PartialAccess,
-                    incompleteFx = status.IncompleteFx,
-                    status.BaseBudgetAmount,
-                    status.CarryIn,
-                    status.CarryOver,
-                    status.CarryOverOverspend,
-                    status.Contributing
-                }, cancellationToken: ct);
-                return;
-            }
-
-            await context.Response.WriteAsJsonAsync(status, cancellationToken: ct);
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(new { error = exception.Message }, cancellationToken: ct);
-        }
-        catch (ArgumentException exception)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { error = exception.Message }, cancellationToken: ct);
-        }
-    }
-
-    private static Guid RequiredSpace(HttpContext context)
-    {
-        if (Guid.TryParse(context.Request.Query["fullWorthSpaceId"], out var id)) return id;
-        throw new ArgumentException("fullWorthSpaceId is required.");
-    }
-
-    private static DateOnly? OptionalDate(HttpContext context, string name) =>
-        DateOnly.TryParse(context.Request.Query[name], out var value) ? value : null;
-
-    private static int? OptionalInt(HttpContext context, string name) =>
-        int.TryParse(context.Request.Query[name], out var value) ? value : null;
-
-    private static bool TryIdPath(string path, string prefix, string suffix, out Guid id)
-    {
-        id = Guid.Empty;
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-            !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
-        var raw = path[prefix.Length..^suffix.Length].Trim('/');
-        return Guid.TryParse(raw, out id);
-    }
-
-    private static async Task Write(HttpContext context, object? value, CancellationToken ct)
-    {
-        if (value is null)
-        {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            return;
-        }
-        await context.Response.WriteAsJsonAsync(value, cancellationToken: ct);
-    }
 }
