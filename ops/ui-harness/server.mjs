@@ -11,6 +11,7 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
+import { renderRazorPage } from './razor.mjs';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const ROOT = process.argv[3] || join(REPO_ROOT, 'src', 'FullWorth.Web', 'wwwroot');
@@ -47,6 +48,39 @@ const SW_REGISTRATION_STUB =
 // Literale samt ihrer Routen aus dem Quelltext - damit eine bearbeitete Seite hier auch bearbeitet
 // ankam. Seit sie unter pages/settings/import/ liegen, ist das nicht mehr nötig: sie werden
 // ausgeliefert wie jede andere Seite.
+
+/**
+ * Der Fixture-Stub muss VOR jedem Modul laufen. In der alten Hülle ist das app.js, auf einer
+ * Razor-Seite ihr eigener Einstieg - gesucht wird deshalb das erste Modul-Skript, nicht ein Name.
+ */
+function inject(html) {
+  return html.replace(/<script type="module"/, '<script src="/__fixtures.js"></' + 'script>\n  <script type="module"');
+}
+
+/** Die beiden Navigationsblöcke aus der erzeugten Hülle - dieselbe Quelle, nicht eine zweite. */
+async function shellNavigation() {
+  const html = await readFile(join(ROOT, 'index.html'), 'utf8');
+  const slice = (open, close) => {
+    const start = html.indexOf(open);
+    const end = html.indexOf(close, start);
+    if (start < 0 || end < 0) throw new Error(`ui-harness: ${open} steht nicht in index.html.`);
+    return html.slice(start, end + close.length);
+  };
+  return {
+    navigation: slice('<aside class="sidebar"', '</aside>'),
+    bottomNavigation: slice('<nav id="bottom-nav"', '</nav>')
+  };
+}
+
+async function renderRazor(path) {
+  try {
+    return renderRazorPage(path, await shellNavigation());
+  } catch (error) {
+    // Lieber laut als eine Seite, die anders aussieht als im Betrieb.
+    console.error(error);
+    return null;
+  }
+}
 
 async function serveFile(res, path, injectInto) {
   const body = await readFile(path);
@@ -263,6 +297,16 @@ createServer(async (req, res) => {
     if (path.startsWith('/bff/') || path.startsWith('/api/') || path.startsWith('/auth/')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end('[]');
+    }
+
+    // Eine Seite, die nach Razor umgezogen ist (#154), liegt nicht mehr unter wwwroot. Ohne diesen
+    // Zweig fiele die Werkstatt für sie auf die alte Hülle zurück, in der es sie nicht mehr gibt -
+    // eine leere Seite, die aussieht wie ein Fehler. Die Seitenleiste kommt dabei aus derselben
+    // index.html, die generate-shell.mjs schreibt: zwei Darstellungen, eine Quelle.
+    const razor = await renderRazor(path);
+    if (razor !== null) {
+      res.writeHead(200, { 'content-type': TYPES['.html'], 'x-harness-razor': path });
+      return res.end(inject(razor));
     }
 
     if (path === '/') path = '/index.html';

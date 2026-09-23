@@ -47,9 +47,31 @@ function bindTheme() {
   });
 }
 
+/**
+ * Überschrift und Unterzeile der Topbar.
+ *
+ * In der alten Hülle setzte das renderPageHeader() bei jedem Ansichtswechsel. Auf einer echten Seite
+ * gibt es keinen Wechsel — die Seite sagt am <body>, welche sie ist, und hier steht der Text dazu.
+ * Eine Seite ohne Untertitel hat keinen Schlüssel dafür; ein leerer Wert wäre eine vergessene
+ * Übersetzung und keine Absicht.
+ */
+function renderPageHeader() {
+  const view = document.body.dataset.view;
+  if (!view) return;
+  const page = state.messages.pages?.[view];
+  const title = $('#page-title');
+  const subtitle = $('#page-subtitle');
+  if (!title || !subtitle) return;
+  // Fällt der Schlüssel aus, steht immer noch der Name aus der Seitenleiste da statt gar nichts.
+  const fallback = document.querySelector(`.sidebar .nav-item[data-entry="${view}"] span`)?.textContent || '';
+  title.textContent = page?.title ?? fallback;
+  subtitle.textContent = page?.subtitle ?? '';
+}
+
 export async function startShell() {
   await i18n.load(state.lang);
   i18n.apply(document);
+  renderPageHeader();
 
   bindTheme();
   syncTheme();

@@ -12,9 +12,21 @@
     Die Reihenfolge der globalen Stile ist dieselbe wie bisher (tokens -> reset -> appearance ->
     shell -> components -> responsive -> design-depth -> dialogs). Sie ist keine Geschmacksfrage:
     spaetere Dateien ueberschreiben fruehere, und eine Seite, die ihr eigenes page.css DANACH laedt,
-    gewinnt genau dort, wo sie es soll. styles/app.css fehlt hier mit Absicht - das war der
-    Sammeltopf der alten Huelle, und was davon wirklich global ist, steht in den anderen.
+    gewinnt genau dort, wo sie es soll.
+
+    styles/app.css steht hier NOCH mit drin, und das ist der eine Punkt, an dem diese Seite ihr Ziel
+    noch nicht erreicht. Es ist der Sammeltopf der alten Huelle; das meiste daraus liegt laengst bei
+    seiner Seite, aber gemessen im Browser treffen zehn Selektoren daraus immer noch Elemente dieser
+    Seite - .tx-row, .tx-filter-btn, #toast, #bottom-nav und einige mehr. Sie wegzulassen hiesse,
+    diese Regeln stillschweigend fallenzulassen.
+
+    Sie aufzuteilen ist eine eigene Scheibe, weil eine Regel, die nach page.css wandert, dort SPAETER
+    in der Kaskade steht - hinter responsive, design-depth und dialogs - und damit gewinnen kann, wo
+    sie heute verliert. Das gehoert gemessen (Regelmenge und getComputedStyle vorher/nachher) und
+    nicht geschaetzt. Bis dahin laedt die Seite ein paar Regeln zu viel und sieht dafuer richtig aus.
 *@
+@inject FullWorth.Web.Navigation.PageHeadings Headings
+@{ var view = ViewData["ActiveView"] as string; }
 <!doctype html>
 <html lang="de" data-theme="light">
 <head>
@@ -43,21 +55,27 @@
     <link rel="stylesheet" href="/styles/appearance.css">
     <link rel="stylesheet" href="/styles/shell.css">
     <link rel="stylesheet" href="/styles/components.css">
+    <link rel="stylesheet" href="/styles/app.css">
     <link rel="stylesheet" href="/styles/responsive.css">
     <link rel="stylesheet" href="/styles/design-depth.css">
     <link rel="stylesheet" href="/styles/dialogs.css">
     @await RenderSectionAsync("Styles", required: false)
     <link rel="stylesheet" href="/styles/mobile-polish.css">
 </head>
-<body>
+@* Die Ansicht am <body>, damit die Shell sie ohne Inline-Skript lesen kann: die CSP erlaubt
+   script-src 'self', und ein Datenattribut ist kein Skript. *@
+<body data-view="@(view ?? string.Empty)">
 <a class="skip-link" href="#main" data-i18n="a11y.skipToContent">Zum Inhalt springen</a>
 <div class="shell">
     <partial name="_Navigation" />
     <main id="main" tabindex="-1">
         <header class="topbar">
             <div class="topbar-title">
-                <h1 id="page-title">@(ViewData["PageTitle"] as string ?? string.Empty)</h1>
-                <p id="page-subtitle">@(ViewData["PageSubtitle"] as string ?? string.Empty)</p>
+                @* Steht im Dokument, statt nachgetragen zu werden: eine Ueberschrift, die erst
+                   nach dem ersten Zeichnen erscheint, schiebt alles darunter nach unten - und
+                   LayoutStabilityTests hat genau das gemessen. *@
+                <h1 id="page-title">@(ViewData["PageTitle"] as string ?? Headings.Title(view))</h1>
+                <p id="page-subtitle">@(ViewData["PageSubtitle"] as string ?? Headings.Subtitle(view))</p>
             </div>
             <div class="topbar-actions">
                 <button id="global-search" class="icon-button" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">

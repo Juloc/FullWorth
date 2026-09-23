@@ -146,6 +146,9 @@ builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 builder.Services.AddRazorPages(options =>
     options.Conventions.ConfigureFilter(new Microsoft.AspNetCore.Mvc.ServiceFilterAttribute(typeof(FullWorth.Web.Navigation.NavigationPageFilter))));
 builder.Services.AddScoped<FullWorth.Web.Navigation.NavigationPageFilter>();
+// Einmal gelesen und dann gehalten: die Ueberschriften stehen in den Sprachdateien und aendern sich
+// nur mit einem neuen Abbild.
+builder.Services.AddSingleton<FullWorth.Web.Navigation.PageHeadings>();
 
 builder.Services.AddAuthorization(options =>
 {
