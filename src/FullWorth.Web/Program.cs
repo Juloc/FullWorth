@@ -140,6 +140,11 @@ builder.Services.AddScoped<AdminVaultBackendClient>();
 builder.Services.AddScoped<AdminVaultService>();
 builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 
+// Razor Pages fuer das angemeldete Frontend (#154). Die Seiten liegen unter Pages/ und sind durch
+// die FallbackPolicy darunter automatisch angemeldet - eine eigene Autorisierungsregel je Seite gibt
+// es bewusst nicht, sonst haette jede Seite eine zweite Stelle, an der sie falsch sein kann.
+builder.Services.AddRazorPages();
+
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
@@ -603,6 +608,11 @@ if (!unifiedHost)
     })
         .AllowAnonymous();
 }
+
+// Razor-Seiten VOR dem Rueckfall: die Migration laeuft seitenweise, und eine Adresse, fuer die es
+// schon eine Razor-Seite gibt, darf nicht mehr in der alten Huelle landen. Was noch keine hat, faellt
+// weiter auf index.html zurueck - bis die letzte Seite umgezogen ist und diese Zeile verschwindet.
+app.MapRazorPages();
 
 app.MapFallbackToFile("index.html").RequireAuthorization();
 app.Run();

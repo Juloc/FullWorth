@@ -1,0 +1,24 @@
+@*
+    Die untere Leiste am Telefon: vier Schnellziele und "Mehr". Dieselbe Liste wie die Seitenleiste,
+    nur anders dargestellt - die vier stehen in NavigationCatalog.Quick, alles Weitere hinter "Mehr",
+    und dort stehen diese vier ebenfalls. Eine Abkuerzung, keine Auswahl.
+*@
+@{
+    var activeView = ViewData["ActiveView"] as string ?? string.Empty;
+    var byView = NavigationCatalog.Entries.ToDictionary(entry => entry.View, StringComparer.Ordinal);
+}
+
+<nav id="bottom-nav" aria-label="Primary mobile">
+    @foreach (var view in NavigationCatalog.Quick)
+    {
+        var entry = byView[view];
+        <a class="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item")" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View">
+            <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
+            <span data-i18n="@entry.Label"></span>
+        </a>
+    }
+    <button id="bottom-more" class="nav-item" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        <span data-i18n="nav.more"></span>
+    </button>
+</nav>
