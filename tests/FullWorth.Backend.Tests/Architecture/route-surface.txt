@@ -419,6 +419,7 @@ POST             /api/import/finanzguru
 POST             /api/import/finanzguru/accounts/{importAccountId:guid}/link
 POST             /api/import/finanzguru/accounts/{targetAccountId:guid}/confirm-history
 POST             /api/import/finanzguru/jobs/{jobId:guid}/commit
+POST             /api/import/finanzguru/jobs/{jobId:guid}/targets
 POST             /api/import/finanzguru/stage
 POST             /api/import/wealth-backup/validate
 POST             /api/income-schedules/

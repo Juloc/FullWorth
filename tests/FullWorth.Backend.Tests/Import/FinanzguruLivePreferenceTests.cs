@@ -79,7 +79,8 @@ public sealed class FinanzguruLivePreferenceTests
                 new FinanzguruWorkbookReader(),
                 new AuditService(db),
                 FieldCipher.Null,
-                new AccountStore(db));
+                new AccountStore(db),
+                new ImportSourceAccountStore(db));
             var row = new FinanzguruRow(
                 2,
                 new DateOnly(2026, 8, 20),

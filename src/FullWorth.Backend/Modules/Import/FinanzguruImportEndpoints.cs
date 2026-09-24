@@ -3,7 +3,14 @@ using FullWorth.Backend.Security;
 namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>Welche Zeilen der Vorschau uebernommen werden sollen. Leer heisst: alle neuen.</summary>
-public sealed record FinanzguruStageCommitRequest(IReadOnlyList<Guid>? CandidateIds);
+/// <param name="AccountTargets">
+/// Quellkonto auf Zielkonto, wie in der Vorschau gewaehlt (#131, Abschnitt 4). Muss dasselbe sein, das
+/// die Vorschau zuletzt gerechnet hat - die Seite schickt beiden dieselbe Wahl.
+/// </param>
+public sealed record FinanzguruStageCommitRequest(
+    IReadOnlyList<Guid>? CandidateIds, IReadOnlyDictionary<string, Guid>? AccountTargets = null);
+
+public sealed record FinanzguruStageTargetsRequest(IReadOnlyDictionary<string, Guid>? AccountTargets);
 
 public static class FinanzguruImportEndpoints
 {
@@ -178,10 +185,37 @@ public static class FinanzguruImportEndpoints
             try
             {
                 var result = await staging.CommitAsync(
-                    currentUser.RequireUserId(), fullWorthSpaceId, jobId, body?.CandidateIds, ct);
+                    currentUser.RequireUserId(), fullWorthSpaceId, jobId, body?.CandidateIds, body?.AccountTargets, ct);
                 return result is null ? Results.NotFound() : Results.Ok(result);
             }
             catch (FinanzguruImportConflictException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+            catch (FinanzguruTargetRejectedException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        }).WithTags("Import");
+
+        // Ein Ziel fuer eine Quelle ohne Konto waehlen und die Vorschau neu rechnen (#131, Abschnitt 4).
+        // Eine leere Wahl ist erlaubt und heisst "wieder so wie eingelesen".
+        app.MapPost("/api/import/finanzguru/jobs/{jobId:guid}/targets", async (
+            Guid jobId,
+            Guid fullWorthSpaceId,
+            FinanzguruStageTargetsRequest? body,
+            CurrentUserContext currentUser,
+            FinanzguruStagingService staging,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var preview = await staging.RetargetAsync(
+                    currentUser.RequireUserId(), fullWorthSpaceId, jobId,
+                    body?.AccountTargets ?? new Dictionary<string, Guid>(), ct);
+                return preview is null ? Results.NotFound() : Results.Ok(preview);
+            }
+            catch (FinanzguruTargetRejectedException exception)
             {
                 return Results.Conflict(new { error = exception.Message });
             }

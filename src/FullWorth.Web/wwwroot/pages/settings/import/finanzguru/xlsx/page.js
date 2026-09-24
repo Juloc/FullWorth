@@ -23,6 +23,7 @@ const text={
     apply:'Übernehmen',previewNothing:'Nichts Neues in dieser Datei.',checking:'Datei wird gelesen …',
     selectAll:'Alle',selectedCount:'{n} von {total} ausgewählt',
     previewEnriched:'Davon ergänzt',enriched:'Vorhandene Buchungen ergänzt',
+    previewTarget:'Zielkonto',previewTargetNew:'Neues Konto anlegen',retargeting:'Vorschau wird neu gerechnet …',
     linkHeading:'Importkonten verbinden',
     linkHint:'Ordne importierte Historienkonten dem echten Bank- oder FullWorth-Konto zu. Hat das Ziel keinen Kontostand, trage den aktuellen Stand ein. Fehlende Buchungen kannst du danach unter „Buchungen“ ergänzen.',
     manageAccounts:'Bank/Konto verbinden oder anlegen',loadingLinks:'Konten werden geladen …',
@@ -60,6 +61,7 @@ const text={
     apply:'Import',previewNothing:'Nothing new in this file.',checking:'Reading the file …',
     selectAll:'All',selectedCount:'{n} of {total} selected',
     previewEnriched:'Of those, enriched',enriched:'Existing transactions enriched',
+    previewTarget:'Target account',previewTargetNew:'Create a new account',retargeting:'Recalculating the preview …',
     linkHeading:'Link imported accounts',
     linkHint:'Map imported history accounts to the real bank or FullWorth account. If the target has no balance, enter the current balance. Missing bookings can then be added under Transactions.',
     manageAccounts:'Connect or create bank/account',loadingLinks:'Loading accounts …',
@@ -442,6 +444,56 @@ try{
 // Die Zeilen holt die Auswahl aus /api/import-jobs/{id}/candidates - derselben Liste, aus der jeder
 // andere Import seine Vorschau nimmt. Der Auftrag liegt ja in denselben Tabellen.
 let staged=null;
+// Das Ziel, das der Nutzer fuer eine Quelle ohne Konto gewaehlt hat (#131, Abschnitt 4). Die Vorschau
+// wird damit neu gerechnet, und das Uebernehmen schickt dieselbe Wahl mit - so sagt die Vorschau, was
+// danach passiert, und nicht, was ohne die Wahl passiert waere.
+let targets={};
+// Quellen, die beim Einlesen noch kein Konto hatten. Nur sie bekommen "Neues Konto anlegen" als
+// Wahl: bei einer, die FullWorth selbst zugeordnet hat, hiesse eine leere Wahl nur "wieder die
+// Vermutung", und die Auswahl spraenge nach dem Neurechnen dorthin zurueck.
+let initiallyNew=new Set();
+
+// Ein Ziel in derselben Waehrung - eines in einer anderen wuerde die Zuordnung ohnehin nicht annehmen,
+// und es anzubieten hiesse, eine Wahl zu zeigen, die still verfaellt.
+function targetSelect(account){
+  const select=document.createElement('select');
+  select.className='import-preview-target';
+  select.setAttribute('aria-label',`${text.previewTarget}: ${account.displayName}`);
+  if(initiallyNew.has(account.sourceKey)){
+    const fresh=document.createElement('option');
+    fresh.value='';
+    fresh.textContent=text.previewTargetNew;
+    select.append(fresh);
+  }
+  for(const target of linkOptions.targetAccounts||[]){
+    if(target.currency&&account.currency&&target.currency!==account.currency)continue;
+    const option=document.createElement('option');
+    option.value=target.id;
+    option.textContent=target.displayName+(target.ibanLast4?` · ${target.ibanLast4}`:'');
+    select.append(option);
+  }
+  select.value=account.accountId&&account.status==='linked'?account.accountId:'';
+  select.addEventListener('change',()=>void retarget(account.sourceKey,select.value));
+  return select;
+}
+
+async function retarget(sourceKey,targetId){
+  if(targetId)targets[sourceKey]=targetId;else delete targets[sourceKey];
+  status.textContent=text.retargeting;
+  try{
+    staged=await sharedApi(
+      `api/import/finanzguru/jobs/${encodeURIComponent(staged.jobId)}/targets?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
+      jsonBody({accountTargets:targets}));
+    renderPreview(staged);
+    status.textContent='';
+  }catch(error){
+    // Eine abgelehnte Wahl nimmt die Seite zurueck, statt sie stehen zu lassen: sonst zeigte die
+    // Auswahl ein Ziel, das beim Uebernehmen nicht gilt.
+    delete targets[sourceKey];
+    renderPreview(staged);
+    console.error(error);status.textContent=`${text.error} ${error.message||''}`.trim();
+  }
+}
 
 function previewRow(label,value){
   const row=node('div','row');
@@ -475,6 +527,7 @@ function renderPreview(preview){
     const what=account.status==='new'?text.previewAccountNew
       :account.status==='linked'?text.previewAccountLinked:text.previewAccountImport;
     main.append(node('div','row-sub',`${what}${account.accountName?` · ${account.accountName}`:''}`));
+    if(account.retargetable&&(linkOptions.targetAccounts||[]).length)main.append(targetSelect(account));
     row.append(main,node('div','amount',String(account.rows)));
     result.append(row);
   }
@@ -531,7 +584,7 @@ async function commit(candidateIds){
   try{
     const data=await sharedApi(
       `api/import/finanzguru/jobs/${encodeURIComponent(staged.jobId)}/commit?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
-      jsonBody({candidateIds}));
+      jsonBody({candidateIds,accountTargets:targets}));
     renderResult(data);
     staged=null;
     await Promise.all([renderLinkOptions(),loadHistory()]);
@@ -562,6 +615,8 @@ form.addEventListener('submit',async event=>{
     const uploadFile=await snapshotUploadFile(file);
     const body=new FormData();body.append('file',uploadFile,uploadFile.name);
     staged=await sharedApi(`api/import/finanzguru/stage?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
+    targets={};
+    initiallyNew=new Set((staged.accounts||[]).filter(account=>account.status==='new').map(account=>account.sourceKey));
     renderPreview(staged);
     status.textContent='';
   }catch(error){

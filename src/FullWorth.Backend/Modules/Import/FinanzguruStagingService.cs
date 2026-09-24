@@ -9,8 +9,17 @@ using Microsoft.EntityFrameworkCore;
 namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>Was ein Quellkonto der Datei treffen wuerde.</summary>
+/// <param name="Retargetable">
+/// Ob das Ziel hier waehlbar ist (#131, Abschnitt 4): nur fuer eine Quelle ohne eigenes Importkonto.
+/// Fuehrt ein Importkonto sie schon, liegen dort Buchungen, und dann ist die Verknuepfung mit ihrem
+/// Abgleich der Weg - nicht ein Umleiten, das dieselben Buchungen ein zweites Mal ablegen wuerde.
+/// </param>
 public sealed record FinanzguruStagedAccount(
-    string SourceKey, string DisplayName, Guid? AccountId, string? AccountName, string Status, int Rows);
+    string SourceKey, string DisplayName, Guid? AccountId, string? AccountName, string Status, int Rows,
+    bool Retargetable, string Currency);
+
+/// <summary>Ein gewaehltes Ziel, das nicht angenommen werden kann - mit dem Grund, den die Seite zeigt.</summary>
+public sealed class FinanzguruTargetRejectedException(string message) : Exception(message);
 
 /// <summary>Die Vorschau eines Finanzguru-Imports, bevor irgendetwas geschrieben wurde.</summary>
 public sealed record FinanzguruStagePreview(
@@ -52,6 +61,7 @@ public sealed class FinanzguruStagingService(
     FullWorthDbContext db,
     FinanzguruWorkbookReader reader,
     FinanzguruImportService import,
+    ImportSourceAccountStore sourceAccounts,
     FieldCipher cipher)
 {
     private const string AdapterKey = "finanzguru_xlsx";
@@ -76,10 +86,46 @@ public sealed class FinanzguruStagingService(
         // Zwischenstand, den niemand zu Ende bringen kann.
         FinanzguruImportService.ValidateSplits(rows);
 
-        var parentRows = rows.Where(row => row.SplitType is null or "Original").ToList();
-        var matches = await import.MatchAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
-
         var jobId = Guid.NewGuid();
+        var (preview, candidates) = await PreviewAsync(userId, fullWorthSpaceId, jobId, rows, null, ct);
+        await WriteJobAsync(userId, fullWorthSpaceId, jobId, fileName, sha, rows, candidates, ct);
+        return preview;
+    }
+
+    /// <summary>
+    /// Waehlt fuer Quellen ohne Konto ein Ziel und rechnet die Vorschau neu (#131, Abschnitt 4).
+    ///
+    /// Neu gerechnet, nicht nur vorgemerkt: gegen ein echtes Konto werden aus "neu" Treffer, aus
+    /// Treffern Ergaenzungen, und die Zahlen, die der Nutzer gleich bestaetigt, waeren sonst die
+    /// eines Imports, der so nicht stattfindet. Die Kandidatenzeilen werden deshalb neu geschrieben.
+    /// </summary>
+    public async Task<FinanzguruStagePreview?> RetargetAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid jobId,
+        IReadOnlyDictionary<string, Guid> targets, CancellationToken ct)
+    {
+        var job = await ReadStagedJobAsync(userId, fullWorthSpaceId, jobId, ct);
+        if (job is null) return null;
+        var rows = JsonSerializer.Deserialize<List<FinanzguruRow>>(job.Payload, JsonSerializerOptions.Web) ?? [];
+
+        var (preview, candidates) = await PreviewAsync(userId, fullWorthSpaceId, jobId, rows, targets, ct);
+        await ReplaceCandidatesAsync(jobId, candidates, ct);
+        return preview;
+    }
+
+    /// <summary>
+    /// Was passieren wuerde - einmal gerechnet, fuer das Einlesen und fuer das Umwaehlen.
+    /// Ein gewaehltes Ziel, das nicht angenommen werden kann, bricht mit dem Grund ab, statt still
+    /// uebergangen zu werden: die Vorschau zeigte sonst "wird angelegt", und der Nutzer wuesste nicht,
+    /// warum seine Wahl nicht galt.
+    /// </summary>
+    private async Task<(FinanzguruStagePreview Preview, List<StagedCandidate> Candidates)> PreviewAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid jobId, IReadOnlyList<FinanzguruRow> rows,
+        IReadOnlyDictionary<string, Guid>? targets, CancellationToken ct)
+    {
+        var parentRows = rows.Where(row => row.SplitType is null or "Original").ToList();
+        if (targets is { Count: > 0 }) await ValidateTargetsAsync(userId, fullWorthSpaceId, parentRows, targets, ct);
+        var matches = await import.MatchAccountsAsync(userId, fullWorthSpaceId, parentRows, ct, targets);
+
         var candidates = new List<StagedCandidate>();
         var accountSummaries = new List<FinanzguruStagedAccount>();
 
@@ -100,12 +146,12 @@ public sealed class FinanzguruStagingService(
                 match.Account?.Id,
                 match.Account?.DisplayName,
                 match.WouldBeCreated ? "new" : match.MatchedLiveAccount ? "linked" : "import",
-                sourceRows.Count));
+                sourceRows.Count,
+                match.Retargetable,
+                sample.Currency));
         }
 
-        await WriteJobAsync(userId, fullWorthSpaceId, jobId, fileName, sha, rows, candidates, ct);
-
-        return new FinanzguruStagePreview(
+        var preview = new FinanzguruStagePreview(
             jobId,
             rows.Count,
             candidates.Count(candidate => candidate.Status == "new"),
@@ -115,6 +161,47 @@ public sealed class FinanzguruStagingService(
             parentRows.Count == 0 ? null : parentRows.Min(row => row.BookingDate),
             parentRows.Count == 0 ? null : parentRows.Max(row => row.BookingDate),
             accountSummaries);
+        return (preview, candidates);
+    }
+
+    /// <summary>
+    /// Die zwei Bedingungen, unter denen ein gewaehltes Ziel gilt.
+    ///
+    /// 1. Die Quelle hat kein eigenes Importkonto. Hat sie eines, liegen dort Buchungen, und ein
+    ///    Umleiten legte dieselben Buchungen ein zweites Mal ab - fuer diesen Fall gibt es die
+    ///    Verknuepfung, die vorher abgleicht.
+    /// 2. Keine Buchung dieser Quelle liegt schon in einem ANDEREN Konto. Sonst stuende sie nach dem
+    ///    Import zweimal im Vermoegen - einmal dort, einmal im gewaehlten Ziel.
+    ///
+    /// Ob das Ziel dem Nutzer gehoert und die Waehrung passt, prueft die Zuordnung selbst: ein Ziel,
+    /// das sie nicht findet, bleibt dort einfach unbesetzt.
+    /// </summary>
+    private async Task ValidateTargetsAsync(
+        Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> parentRows,
+        IReadOnlyDictionary<string, Guid> targets, CancellationToken ct)
+    {
+        var baseline = await import.MatchAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
+        foreach (var (sourceKey, targetId) in targets)
+        {
+            if (!baseline.TryGetValue(sourceKey, out var match))
+                throw new FinanzguruTargetRejectedException("This source account is not part of the file.");
+            if (!match.Retargetable)
+                throw new FinanzguruTargetRejectedException(
+                    "This source already has an import account. Link that account instead - it compares the history first.");
+
+            var keys = parentRows
+                .Where(row => FinanzguruImportService.AccountKeyOf(row) == sourceKey)
+                .Select(row => FinanzguruImportService.ExternalKeyOf(row.BookingId))
+                .ToArray();
+            var elsewhere = await db.Transactions.AsNoTracking()
+                .AnyAsync(item => keys.Contains(item.ExternalKey)
+                                  && item.AccountId != targetId
+                                  && db.Accounts.Any(account => account.Id == item.AccountId
+                                                                && account.FullWorthSpaceId == fullWorthSpaceId), ct);
+            if (elsewhere)
+                throw new FinanzguruTargetRejectedException(
+                    "Bookings of this source were already imported into another account. Choosing a different target would count them twice.");
+        }
     }
 
     /// <summary>
@@ -127,12 +214,17 @@ public sealed class FinanzguruStagingService(
     /// </summary>
     public async Task<FinanzguruImportResult?> CommitAsync(
         Guid userId, Guid fullWorthSpaceId, Guid jobId,
-        IReadOnlyList<Guid>? selectedCandidateIds, CancellationToken ct)
+        IReadOnlyList<Guid>? selectedCandidateIds, IReadOnlyDictionary<string, Guid>? targets, CancellationToken ct)
     {
         var job = await ReadStagedJobAsync(userId, fullWorthSpaceId, jobId, ct);
         if (job is null) return null;
 
         var rows = JsonSerializer.Deserialize<List<FinanzguruRow>>(job.Payload, JsonSerializerOptions.Web) ?? [];
+        // Dieselbe Pruefung wie beim Umwaehlen - ein Aufruf, der die Vorschau ueberspringt, bekommt
+        // keine Abkuerzung um sie herum.
+        if (targets is { Count: > 0 })
+            await ValidateTargetsAsync(userId, fullWorthSpaceId,
+                rows.Where(row => row.SplitType is null or "Original").ToList(), targets, ct);
         var selected = selectedCandidateIds?.ToHashSet();
         var dropped = await DeselectedBookingIdsAsync(jobId, selected, ct);
 
@@ -151,9 +243,16 @@ public sealed class FinanzguruStagingService(
                 : !dropped.Contains(row.BookingId))
             .ToList();
 
-        var result = await import.ImportRowsAsync(userId, fullWorthSpaceId, keep, ct, job.Sha, jobId);
+        var result = await import.ImportRowsAsync(userId, fullWorthSpaceId, keep, ct, job.Sha, jobId, targets);
         if (result is null) return null;
         await FinishJobAsync(jobId, result.AlreadyImported + result.MatchedExistingTransactions, ct);
+
+        // Gemerkt wird erst jetzt, nach dem Festschreiben - wie beim Spalten-Import. Beim naechsten
+        // Import derselben Quelle steht das Ziel dann schon da, ohne dass ein Importkonto dazwischen
+        // entstehen muss (#131, Abschnitt 4).
+        if (targets is { Count: > 0 })
+            await sourceAccounts.RememberAsync(
+                fullWorthSpaceId, targets.ToDictionary(entry => entry.Key, entry => (Guid?)entry.Value), ct);
 
         // Die Zeilenzahl der DATEI, nicht die der Auswahl: "312 Zeilen, 40 uebernommen" ist die
         // Auskunft, "40 von 40" waere eine andere und falsche.
@@ -267,6 +366,13 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'ready',@source,@ready,@duplicates,0
             ("@now", now), ("@payload", payload)))
             await command.ExecuteNonQueryAsync(ct);
 
+        await InsertCandidatesAsync(connection, null, jobId, candidates, ct);
+    }
+
+    private static async Task InsertCandidatesAsync(
+        System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction? transaction,
+        Guid jobId, IReadOnlyList<StagedCandidate> candidates, CancellationToken ct)
+    {
         foreach (var candidate in candidates)
         {
             await using var command = RawSql.Command(connection, """
@@ -284,8 +390,37 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
                 // Der Fingerabdruck ist hier die Buchungskennung selbst: Finanzguru vergibt sie, und
                 // sie ist genau das, woran das Festschreiben die Zeile wiederfindet.
                 ("@fingerprint", candidate.Row.BookingId), ("@status", candidate.Status));
+            command.Transaction = transaction;
             await command.ExecuteNonQueryAsync(ct);
         }
+    }
+
+    /// <summary>
+    /// Schreibt die Kandidaten eines Auftrags neu. Die Kennungen wechseln dabei - eine Zeilenauswahl
+    /// holt ihre Liste deshalb immer frisch, statt sich an alte zu erinnern.
+    /// </summary>
+    private async Task ReplaceCandidatesAsync(Guid jobId, IReadOnlyList<StagedCandidate> candidates, CancellationToken ct)
+    {
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using (var delete = RawSql.Command(connection,
+            "DELETE FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job", ("@job", jobId)))
+        {
+            delete.Transaction = transaction;
+            await delete.ExecuteNonQueryAsync(ct);
+        }
+        await InsertCandidatesAsync(connection, transaction, jobId, candidates, ct);
+        await using (var counts = RawSql.Command(connection, """
+UPDATE "ImportJobs" SET "ReadyCount"=@ready,"DuplicateCount"=@duplicates,"UpdatedAt"=@now WHERE "Id"=@id
+""",
+            ("@id", jobId), ("@ready", candidates.Count(candidate => candidate.Status == "new")),
+            ("@duplicates", candidates.Count(candidate => candidate.Status != "new")),
+            ("@now", DateTimeOffset.UtcNow)))
+        {
+            counts.Transaction = transaction;
+            await counts.ExecuteNonQueryAsync(ct);
+        }
+        await transaction.CommitAsync(ct);
     }
 
     private static string? Category(FinanzguruRow row) =>

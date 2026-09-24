@@ -22,6 +22,16 @@
       sourceCategories: []
     },
     [`import-jobs/${MAPPING_JOB}/candidates`]: [],
+    'import/finanzguru/accounts': {
+      importAccounts: [],
+      attachedHistory: [],
+      targetAccounts: [
+        { id: 'a1', displayName: 'Haushaltskonto', institutionName: 'Sparkasse', currency: 'EUR', ibanLast4: '2051', hasCurrentBalance: true, isActive: true, includeInNetWorth: true },
+        { id: 'a2', displayName: 'Tagesgeld mit langem Namen', institutionName: 'DKB', currency: 'EUR', ibanLast4: '5030', hasCurrentBalance: true, isActive: true, includeInNetWorth: true },
+        // In einer anderen Waehrung: die Vorschau darf es fuer ein Euro-Quellkonto gar nicht anbieten.
+        { id: 'a9', displayName: 'US-Konto', institutionName: 'Chase', currency: 'USD', ibanLast4: null, hasCurrentBalance: true, isActive: true, includeInNetWorth: true }
+      ]
+    },
     [`import-jobs/${FINANZGURU_STAGE_JOB}/candidates`]: [
       { id: '3a000000-0000-4000-8000-000000000001', bookingDate: iso('2026-09-12'), amount: '-42.19', currency: 'EUR', counterparty: 'REWE Markt GmbH', description: 'Einkauf', duplicateStatus: 'new' },
       { id: '3a000000-0000-4000-8000-000000000002', bookingDate: iso('2026-09-11'), amount: '-9.99', currency: 'EUR', counterparty: 'Spotify', description: 'Abo', duplicateStatus: 'new' },
@@ -1549,11 +1559,30 @@
       jobId: FINANZGURU_STAGE_JOB, sourceRows: 312, newRows: 3, alreadyImported: 268, matchedExisting: 41, enrichedExisting: 12,
       from: iso('2024-01-01'), to: iso('2026-09-13'),
       accounts: [
-        { sourceKey: 'DE02…2051', displayName: 'C24 Girokonto', accountId: 'a1', accountName: 'Girokonto', status: 'linked', rows: 212 },
-        { sourceKey: 'paypal', displayName: 'PayPal', accountId: 'a4', accountName: 'PayPal', status: 'import', rows: 74 },
-        { sourceKey: 'DE44…9912', displayName: 'DKB Girokonto', accountId: null, accountName: null, status: 'new', rows: 26 }
+        { sourceKey: 'DE02…2051', displayName: 'C24 Girokonto', accountId: 'a1', accountName: 'Girokonto', status: 'linked', rows: 212, retargetable: true, currency: 'EUR' },
+        { sourceKey: 'paypal', displayName: 'PayPal', accountId: 'a4', accountName: 'PayPal', status: 'import', rows: 74, retargetable: false, currency: 'EUR' },
+        { sourceKey: 'DE44…9912', displayName: 'DKB Girokonto', accountId: null, accountName: null, status: 'new', rows: 26, retargetable: true, currency: 'EUR' }
       ]
     } };
+    // Das Neurechnen nach einer Zielwahl (#131, Abschnitt 4). Mit einem Ziel fuer das DKB-Konto werden
+    // aus dessen neuen Zeilen Treffer - genau der Effekt, der zeigt, dass die Vorschau neu rechnet
+    // und nicht nur vormerkt.
+    if (/^import\/finanzguru\/jobs\/[^/]+\/targets/.test(after)) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
+      const dkb = body?.accountTargets?.['DE44…9912'] || null;
+      const names = { a1: 'Haushaltskonto', a2: 'Tagesgeld mit langem Namen' };
+      return { status: 200, body: {
+        jobId: FINANZGURU_STAGE_JOB, sourceRows: 312,
+        newRows: dkb ? 1 : 3, alreadyImported: 268, matchedExisting: dkb ? 43 : 41, enrichedExisting: dkb ? 13 : 12,
+        from: iso('2024-01-01'), to: iso('2026-09-13'),
+        accounts: [
+          { sourceKey: 'DE02…2051', displayName: 'C24 Girokonto', accountId: 'a1', accountName: 'Girokonto', status: 'linked', rows: 212, retargetable: true, currency: 'EUR' },
+          { sourceKey: 'paypal', displayName: 'PayPal', accountId: 'a4', accountName: 'PayPal', status: 'import', rows: 74, retargetable: false, currency: 'EUR' },
+          { sourceKey: 'DE44…9912', displayName: 'DKB Girokonto', accountId: dkb, accountName: dkb ? names[dkb] : null, status: dkb ? 'linked' : 'new', rows: 26, retargetable: true, currency: 'EUR' }
+        ]
+      } };
+    }
     if (/^import\/finanzguru\/jobs\/[^/]+\/commit/.test(after)) {
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }

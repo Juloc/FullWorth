@@ -53,7 +53,8 @@ public sealed class FinanzguruImportService(
     FinanzguruWorkbookReader reader,
     AuditService audit,
     FieldCipher cipher,
-    AccountStore accounts)
+    AccountStore accounts,
+    ImportSourceAccountStore sourceAccounts)
 {
     private const string Provider = "finanzguru-import";
 
@@ -132,9 +133,14 @@ WHERE "Id"=@id
     /// Festschreiben ein ZWEITER Auftrag fuer dieselbe Datei - und die Kandidatenzeilen, die der
     /// Nutzer gerade abgewaehlt hat, haengten am ersten.
     /// </param>
+    /// <param name="chosenTargets">
+    /// Quellkonto auf Zielkonto, so wie der Nutzer es in der Vorschau gewaehlt hat (#131, Abschnitt 4).
+    /// Gilt nur fuer Quellen ohne eigenes Importkonto - siehe <see cref="MatchAccountsAsync"/>.
+    /// </param>
     public async Task<FinanzguruImportResult?> ImportRowsAsync(
         Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct,
-        string? fileSha = null, Guid? existingJobId = null)
+        string? fileSha = null, Guid? existingJobId = null,
+        IReadOnlyDictionary<string, Guid>? chosenTargets = null)
     {
         var role = await db.FullWorthSpaceMembers.AsNoTracking()
             .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId)
@@ -163,7 +169,7 @@ WHERE "Id"=@id
         // abgeschlossen statt neu erfunden.
         if (existingJobId is null) await CreateImportJobAsync(userId, fullWorthSpaceId, jobId, fileSha, ct);
 
-        var accounts = await ResolveAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
+        var accounts = await ResolveAccountsAsync(userId, fullWorthSpaceId, parentRows, chosenTargets, ct);
         var categoryResolver = await CategoryResolver.CreateAsync(db, fullWorthSpaceId, role == FullWorthSpaceRoles.Owner, ct);
 
         var imported = 0;
@@ -392,7 +398,8 @@ WHERE "Id"=@id
     /// in der Vorschau steht dort "wird angelegt".
     /// </summary>
     internal async Task<Dictionary<string, MatchedAccount>> MatchAccountsAsync(
-        Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct)
+        Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct,
+        IReadOnlyDictionary<string, Guid>? chosenTargets = null)
     {
         var sourceGroups = rows.GroupBy(AccountKey, StringComparer.Ordinal).ToList();
         var hashes = sourceGroups.Select(group => IdentificationHash(group.Key)).ToArray();
@@ -405,6 +412,7 @@ WHERE "Id"=@id
                               && account.Provider != Provider
                               && account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
             .ToListAsync(ct);
+        var remembered = await sourceAccounts.ForSpaceAsync(fullWorthSpaceId, ct);
 
         var result = new Dictionary<string, MatchedAccount>(StringComparer.Ordinal);
         foreach (var group in sourceGroups)
@@ -425,6 +433,23 @@ WHERE "Id"=@id
                     // Waehrung erklaert (#112).
                     !ImportCurrency.Conflict(account.Currency, sample.Currency))
                 : null;
+            // Ohne Importkonto (#131, Abschnitt 4): was der Nutzer in der Vorschau gewaehlt hat, und
+            // sonst, was er beim letzten Mal gewaehlt hat. Beides ist eine Entscheidung und steht
+            // deshalb VOR der IBAN-Vermutung darunter. Hat die Quelle ein Importkonto, bleibt es bei
+            // dessen Verknuepfung - dort liegen schon Buchungen, und sie umzuleiten waere der Weg in
+            // eine Doppelzaehlung, den die Verknuepfung mit ihrem Abgleich gerade vermeidet.
+            if (liveMatch is null && importedAccount is null)
+            {
+                var decided = chosenTargets is not null && chosenTargets.TryGetValue(group.Key, out var chosen)
+                    ? chosen
+                    : ImportSourceAccountStore.Normalize(group.Key) is { } key && remembered.TryGetValue(key, out var kept)
+                        ? kept
+                        : (Guid?)null;
+                if (decided is { } targetId)
+                    liveMatch = ownedAccounts.SingleOrDefault(account =>
+                        account.Id == targetId && !ImportCurrency.Conflict(account.Currency, sample.Currency));
+            }
+
             if (liveMatch is null && ibanLast4 is not null)
             {
                 var candidates = ownedAccounts
@@ -434,17 +459,23 @@ WHERE "Id"=@id
                 if (candidates.Count == 1) liveMatch = candidates[0];
             }
 
+            var retargetable = importedAccount is null;
             result[group.Key] = liveMatch is not null
-                ? new MatchedAccount(liveMatch, true, false)
+                ? new MatchedAccount(liveMatch, true, false, retargetable)
                 : importedAccount is not null
-                    ? new MatchedAccount(importedAccount, false, false)
-                    : new MatchedAccount(null, false, true);
+                    ? new MatchedAccount(importedAccount, false, false, false)
+                    : new MatchedAccount(null, false, true, true);
         }
         return result;
     }
 
     /// <summary>Ein Konto, das eine Quellzeile meint - oder die Feststellung, dass es noch keines gibt.</summary>
-    internal sealed record MatchedAccount(FinanceAccount? Account, bool MatchedLiveAccount, bool WouldBeCreated);
+    /// <param name="Retargetable">
+    /// Ob der Nutzer das Ziel in der Vorschau waehlen darf - nur, wo kein Importkonto die Quelle
+    /// schon fuehrt (#131, Abschnitt 4).
+    /// </param>
+    internal sealed record MatchedAccount(
+        FinanceAccount? Account, bool MatchedLiveAccount, bool WouldBeCreated, bool Retargetable);
 
     /// <summary>
     /// Dasselbe wie <see cref="MatchAccountsAsync"/>, nur dass hier angelegt wird, wo nichts passt.
@@ -453,9 +484,11 @@ WHERE "Id"=@id
     /// anderen Regel zuordnet als das Festschreiben, zeigt etwas anderes, als danach passiert - und
     /// das waere schlimmer als gar keine Vorschau.
     /// </summary>
-    private async Task<AccountResolution> ResolveAccountsAsync(Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct)
+    private async Task<AccountResolution> ResolveAccountsAsync(
+        Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows,
+        IReadOnlyDictionary<string, Guid>? chosenTargets, CancellationToken ct)
     {
-        var matches = await MatchAccountsAsync(userId, fullWorthSpaceId, rows, ct);
+        var matches = await MatchAccountsAsync(userId, fullWorthSpaceId, rows, ct, chosenTargets);
         var sourceGroups = rows.GroupBy(AccountKey, StringComparer.Ordinal).ToList();
 
         // Die Zuordnung liest ohne Nachverfolgung - zum Schreiben braucht es die verfolgten Entitaeten,
