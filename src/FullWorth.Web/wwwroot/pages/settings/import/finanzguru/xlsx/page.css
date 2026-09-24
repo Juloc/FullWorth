@@ -37,4 +37,4 @@
 .import-link-match{gap:10px}
 /* Die Vorschau (#131): erst sehen, dann uebernehmen. Zwei Knoepfe in einer Reihe - das Waehlen
    einzelner Zeilen ist der Umweg und steht links, das Uebernehmen rechts. */
-.import-preview-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.import-preview-actions{display:flex;flex-wrap:wrap;gap:var(--space-3);justify-content:flex-end;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--line)}
