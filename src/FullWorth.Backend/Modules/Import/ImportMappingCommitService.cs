@@ -114,24 +114,14 @@ public sealed class ImportMappingCommitService(
                 if (categoryId.HasValue) categorySource = "import";
             }
 
-            var entity = new FinanceTransaction
-            {
-                AccountId = account.Id,
-                CategoryId = categoryId,
-                ExternalKey = classification.ExternalKey,
-                Status = "BOOK",
-                BookingDate = candidate.Date,
-                ValueDate = candidate.Date,
-                Amount = candidate.Amount,
-                Currency = candidate.Currency,
-                Counterparty = candidate.Counterparty,
-                NormalizedCounterparty = classification.NormalizedCounterparty,
-                Description = candidate.Description,
-                CategorizationSource = categorySource,
-                RawJson = cipher.Protect("{\"source\":\"mapped-import\"}") ?? "{}",
-                FirstSeenAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
+            // Dieselben Grundfelder wie beim anderen Weg (#131); was diesen ausmacht, kommt danach:
+            // die Kategorie aus der Datei und die Quelle, die sagt, woher sie stammt.
+            var entity = ImportCommitWrites.NewTransaction(
+                account.Id, classification.ExternalKey, candidate.Date, candidate.Amount,
+                candidate.Currency, candidate.Counterparty, classification.NormalizedCounterparty,
+                candidate.Description, cipher.Protect("{\"source\":\"mapped-import\"}") ?? "{}");
+            entity.CategoryId = categoryId;
+            entity.CategorizationSource = categorySource;
 
             // Die Regeln greifen nur, wo die Datei selbst nichts gesagt hat - eine Kategorie aus dem
             // Beleg ist genauer als eine geratene.
@@ -152,11 +142,7 @@ public sealed class ImportMappingCommitService(
         await db.SaveChangesAsync(ct);
         await ImportTransactionProvenance.LinkAsync(db, jobId, created.Select(entity => entity.Id).ToArray(), ct);
 
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using (var command = RawSql.Command(connection,
-            "UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",
-            ("@imported", imported), ("@duplicates", duplicates), ("@now", DateTimeOffset.UtcNow), ("@id", jobId)))
-            await command.ExecuteNonQueryAsync(ct);
+        await ImportCommitWrites.CompleteJobAsync(db, jobId, imported, duplicates, ct);
 
         audit.Record(fullWorthSpaceId, userId, "import.mapped.completed", "ImportJob", jobId);
         await db.SaveChangesAsync(ct);
@@ -165,12 +151,6 @@ public sealed class ImportMappingCommitService(
         return new ImportCommitOutcome(imported, duplicates, skipped, candidates.Count);
     }
 
-    private async Task MarkCandidateAsync(Guid candidateId, string state, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var cmd = RawSql.Command(connection,
-            "UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@state WHERE \"Id\"=@id",
-            ("@state", state), ("@id", candidateId));
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
+    private Task MarkCandidateAsync(Guid candidateId, string state, CancellationToken ct) =>
+        ImportCommitWrites.MarkCandidateAsync(db, candidateId, state, ct);
 }

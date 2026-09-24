@@ -281,23 +281,12 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
                 continue;
             }
 
-            var entity = new FinanceTransaction
-            {
-                AccountId = account.Id,
-                ExternalKey = external,
-                Status = "BOOK",
-                BookingDate = candidate.Date,
-                ValueDate = candidate.Date,
-                Amount = candidate.Amount,
-                Currency = candidate.Currency,
-                Counterparty = candidate.Counterparty,
-                NormalizedCounterparty = normalized,
-                Description = candidate.Description,
-                CategorizationSource = "none",
-                RawJson = cipher.Protect("{\"source\":\"generic-import\"}") ?? "{}",
-                FirstSeenAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
+            // Die Felder, die jede importierte Buchung traegt, stehen seit #131 an einer Stelle.
+            // Dieser Weg setzt danach nichts weiter: eine Kategorie kennt er nicht.
+            var entity = ImportCommitWrites.NewTransaction(
+                account.Id, external, candidate.Date, candidate.Amount, candidate.Currency,
+                candidate.Counterparty, normalized, candidate.Description,
+                cipher.Protect("{\"source\":\"generic-import\"}") ?? "{}");
             db.Transactions.Add(entity);
             created.Add(entity);
             imported++;
@@ -310,11 +299,7 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
 
         await ImportTransactionProvenance.LinkAsync(db, jobId, created.Select(entity => entity.Id).ToArray(), ct);
 
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using (var cmd = RawSql.Command(connection,
-            "UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",
-            ("@imported", imported), ("@duplicates", duplicates), ("@now", DateTimeOffset.UtcNow), ("@id", jobId)))
-            await cmd.ExecuteNonQueryAsync(ct);
+        await ImportCommitWrites.CompleteJobAsync(db, jobId, imported, duplicates, ct);
 
         audit.Record(fullWorthSpaceId, userId, "import.committed", "ImportJob", jobId);
         await db.SaveChangesAsync(ct);
@@ -417,14 +402,8 @@ WHERE j."Id"=@job
         return await cmd.ExecuteScalarAsync(ct) as string ?? string.Empty;
     }
 
-    private async Task MarkCandidateAsync(Guid candidateId, string status, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var cmd = RawSql.Command(connection,
-            "UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@status WHERE \"Id\"=@id",
-            ("@status", status), ("@id", candidateId));
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
+    private Task MarkCandidateAsync(Guid candidateId, string status, CancellationToken ct) =>
+        ImportCommitWrites.MarkCandidateAsync(db, candidateId, status, ct);
 
     /// <summary>
     /// Traegt den Schlusssaldo ein, den ein MT940/CAMT-Auszug genannt hat, sofern er noch das
