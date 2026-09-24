@@ -11,9 +11,12 @@ namespace FullWorth.Web.Tests;
 /// </summary>
 public static class WebSources
 {
-    /// <summary>Das Markup einer Seite, z. B. <c>Page("Pension")</c>.</summary>
+    /// <summary>
+    /// Das Markup einer Seite, z. B. <c>Page("Pension")</c> oder <c>Page("Settings/Intelligence")</c>.
+    /// </summary>
     public static string Page(string name) =>
-        File.ReadAllText(Path.Combine(Web(), "Pages", name, "Index.cshtml"));
+        File.ReadAllText(Path.Combine(
+            new[] { Web(), "Pages" }.Concat(name.Split('/')).Append("Index.cshtml").ToArray()));
 
     /// <summary>Eine Datei unter <c>wwwroot</c>, z. B. <c>Asset("pages", "pension", "entry.js")</c>.</summary>
     public static string Asset(params string[] parts) =>

@@ -21,7 +21,7 @@ public sealed class ImportSourceDetectionUiTests
         Root(), "src", "FullWorth.Web", "wwwroot", "pages", "settings", "import", "page.js"));
 
     private static string PageHtml() => File.ReadAllText(Path.Combine(
-        Root(), "src", "FullWorth.Web", "wwwroot", "pages", "settings", "import", "page.html"));
+        Root(), "src", "FullWorth.Web", "Pages", "Settings", "Import", "Index.cshtml"));
 
     /// <summary>
     /// Die Dateiauswahl steht VOR den Quellenkacheln. Umgekehrt hiess es: erst raten, welche von fuenf

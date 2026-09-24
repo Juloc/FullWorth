@@ -1,4 +1,18 @@
-    <section id="view-intelligence" class="view intel-view">
+@page "/settings/intelligence"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "AI & Intelligence · FullWorth";
+    ViewData["ActiveView"] = "intelligence";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/settings/intelligence/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-intelligence" class="intel-view">
       <div class="intel-state"><span id="intel-status" class="status-pill">Lädt…</span></div>
       <div id="intel-denied" class="panel intel-message" hidden>
         <h2>Nicht verfügbar</h2>
@@ -185,3 +199,11 @@
         </div>
       </div>
     </section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/settings/intelligence/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/settings/intelligence/entry.js"></script>
+}

@@ -122,7 +122,10 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         // Die Zahl am Telefon streut: über zehn Läufen 0,285, 0,411 und einmal 0,434, Letzteres unter
         // Last. Das Budget liegt bewusst über diesem Höchstwert - ein Wächter, der jeden zehnten Lauf
         // grundlos rot wird, wird abgeschaltet und schützt dann gar nichts mehr.
-        ("/coach",           0.055,  0.440), // 0.051 / 0.285-0.434   Unterhaltung + Review + Signale
+        // Der CI-Rechner misst am Schreibtisch 0,059, wo dieser hier 0,051 liest - dieselbe Seite,
+        // andere Maschine. Die Schranke steht ueber BEIDEN, sonst ist sie eine Eigenschaft des
+        // Rechners und nicht der Seite.
+        ("/coach",           0.065,  0.440), // 0.051-0.059 / 0.285-0.434   Unterhaltung + Review + Signale
         // Ab hier neu in Scheibe 14: erst mit echten Fixtures (ops/ui-harness/fixtures.js) gemessen,
         // vorher zeigte die Harness hier nur den Leerzustand und ein Sprung dort hätte nichts bedeutet.
         // admin: über 23 Läufen (13 davon vor dieser Zeile, 10 danach zur Gegenprobe) stabil bimodal -
@@ -158,6 +161,27 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         ("/collections",     0.0,    0.0),
         ("/analytics",       0.0,    0.0),
         ("/pension",         0.0,    0.0),
+        // Die Unterseiten der Einstellungen (#154). Sie standen nie in dieser Tabelle, weil sie als
+        // Ansicht in der Hülle keine eigene Adresse hatten, die man hätte laden können - gemessen
+        // wurde hier also nie etwas, nicht "gemessen und für gut befunden".
+        //
+        // Zwei sind bei 0,000. Die vier anderen teilen sich dieselbe Ursache: sie holen beim Laden
+        // einen Zustand vom Server - erkannte Dateien, Anbieterkacheln, bisherige Importe, angelegte
+        // Schlüssel - und füllen damit Flächen, die vorher leer sind. Die Höhe hängt daran, wie viel
+        // zurückkommt; dafür Platz zu reservieren hieße raten, wie viele Importe jemand hat.
+        //
+        // Über je drei Läufen stabil. Die Schranke liegt über dem beobachteten Höchstwert und lässt
+        // Luft für den CI-Rechner: der misst /coach am Schreibtisch 0,059, wo diese Maschine 0,051
+        // liest, und genau daran ist die vorige Fassung dieser Tabelle rot geworden.
+        ("/settings/security/passkeys",      0.025, 0.055), // 0.015-0.017 / 0.041-0.046
+        ("/settings/intelligence",           0.0,   0.0),   // 0.000 / 0.000   nichts
+        ("/settings/import",                 0.060, 0.090), // 0.051 / 0.081
+        ("/settings/import/broker-pdf",      0.010, 0.045), // 0.004 / 0.037
+        // Diese eine streut deutlich: dreimal 0,240, dann 0,270. Die Schranke steht entsprechend
+        // weiter oben - lieber grosszuegig auf einer Seite, deren Hoehe an der Zahl der bisherigen
+        // Importe haengt, als ein Waechter, der gelegentlich ohne Anlass rot wird.
+        ("/settings/import/finanzguru/xlsx", 0.095, 0.300), // 0.074-0.086 / 0.240-0.270
+        ("/settings/bank-connections",       0.0,   0.0),   // 0.000 / 0.000   nichts
         // compensation: kam mit 0,230 / 0,042 herein, jetzt 0,062 / 0,015 - über je drei Läufen auf
         // die dritte Stelle konstant, nicht bimodal wie /admin und /tax. Zwei echte Fehler steckten
         // darin und sind behoben (siehe Compensation/Index.cshtml): vier Module hängten ihren Reiter

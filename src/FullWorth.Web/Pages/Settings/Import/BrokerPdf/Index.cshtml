@@ -1,4 +1,18 @@
-    <section id="view-import-broker-pdf" class="view import-center-view">
+@page "/settings/import/broker-pdf"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Broker-PDF · FullWorth";
+    ViewData["ActiveView"] = "import-broker-pdf";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/settings/import/broker-pdf/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-import-broker-pdf" class="import-center-view">
 
       <div class="import-context panel"><div class="row"><div class="row-main"><div class="row-title" id="pdf-space-label">FullWorth Space</div><div class="row-sub" id="pdf-space">—</div></div></div></div>
       <article class="panel import-workflow">
@@ -24,3 +38,11 @@
         <div id="pdf-result" class="rows" hidden></div>
       </article>
     </section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/settings/import/broker-pdf/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/settings/import/broker-pdf/entry.js"></script>
+}

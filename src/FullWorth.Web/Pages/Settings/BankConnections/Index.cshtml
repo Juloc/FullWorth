@@ -1,0 +1,23 @@
+@page "/settings/bank-connections"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Bankverbindungen · FullWorth";
+    ViewData["ActiveView"] = "bank-connections";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/settings/bank-connections/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-bank-connections"><article class="panel"><div class="panel-head"><h2 data-i18n="accounts.connections">@Text.Get("accounts.connections", language)</h2><div class="panel-head-actions"><button id="add-bank-connection" data-i18n="bankingSetup.addConnection">@Text.Get("bankingSetup.addConnection", language)</button></div></div><div id="connections-list" class="rows"></div></article></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/settings/bank-connections/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/settings/bank-connections/entry.js"></script>
+}

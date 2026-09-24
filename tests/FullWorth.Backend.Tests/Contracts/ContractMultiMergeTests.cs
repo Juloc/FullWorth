@@ -228,9 +228,12 @@ public sealed class ContractMultiMergeTests
 
         // Das Stylesheet hing früher an contracts.js und wurde beim ersten Besuch der Seite per
         // JavaScript nachgeladen — die Ansicht zeichnete also einmal ungestylt und baute dann um.
-        // Jetzt steht es wie alle anderen als blockierender <link> im Dokument.
+        // Jetzt steht es als blockierender <link> im Markup.
+        //
+        // Seit #154 ist das nicht mehr index.html, sondern die Razor-Seite der Verträge: dort steht
+        // es im Abschnitt "Styles" und wird nur noch von DIESER Seite geladen, nicht von jeder.
         var html = File.ReadAllText(Path.Combine(
-            Root(), "src", "FullWorth.Web", "wwwroot", "index.html"));
+            Root(), "src", "FullWorth.Web", "Pages", "Contracts", "Index.cshtml"));
         Assert.Contains("/pages/contracts/page.css", html);
     }
 

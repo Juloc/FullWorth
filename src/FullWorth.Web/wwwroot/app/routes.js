@@ -40,5 +40,6 @@ export const MIGRATED = new Set([
   'transactions',
   'audit', 'notifications', 'merchants', 'rules', 'categories', 'collections',
   'analytics', 'tax', 'pension', 'admin', 'compensation',
-  'insights', 'coach', 'purchases', 'contracts', 'budgets'
+  'insights', 'coach', 'purchases', 'contracts', 'budgets',
+  'passkeys', 'intelligence', 'import', 'import-broker-pdf', 'import-finanzguru-xlsx', 'bank-connections'
 ]);

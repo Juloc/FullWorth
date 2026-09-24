@@ -25,7 +25,7 @@ public sealed class AiModuleAdminUiTests
     [Fact]
     public void The_seven_hardcoded_module_checkboxes_are_gone()
     {
-        var html = Read("page.html");
+        var html = WebSources.Page("Settings/Intelligence");
         var js = Read("page.js");
 
         foreach (var id in new[] { "ai-receipt", "ai-merchant", "ai-category", "ai-contract", "ai-product", "ai-logo", "ai-internet" })
@@ -52,7 +52,7 @@ public sealed class AiModuleAdminUiTests
         Assert.Contains("settings.modules", js);
         Assert.Contains("modules: selectedModules()", js);
         // Ein leerer Behaelter im Dokument, gefuellt beim Zeichnen - kein Nachladen (Frontend-Regel 2).
-        Assert.Contains("id=\"ai-modules\"", Read("page.html"));
+        Assert.Contains("id=\"ai-modules\"", WebSources.Page("Settings/Intelligence"));
     }
 
     /// <summary>

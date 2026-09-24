@@ -9,7 +9,7 @@ import { renderDashboardInsights } from './pages/insights/page.js';
 
 import { createAccessSetup } from './pages/settings/access-setup.js';
 import { bindAccounts, renderAccounts, renderAccountDetail, openAddAccount } from './pages/accounts/page.js';
-import { renderBankConnections, openBankConnection, openBankingSetup, renderBankingSettings } from './pages/settings/bank-connections/page.js';
+import { openBankConnection, openBankingSetup, renderBankingSettings } from './pages/settings/bank-connections/page.js';
 import { bindSettings, renderSettings } from './pages/settings/page.js';
 
 import { createDialog } from './components/dialog.js';
@@ -24,13 +24,8 @@ import { createShell } from './app/shell.js';
 import { loadSpaces as loadSpacesInto } from './app/page-context.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { SUBPAGES, MIGRATED, pathForView as canonicalPath } from './app/routes.js';
-import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
-import { renderImportCenter } from './pages/settings/import/page.js';
-import { renderIntelligence } from './pages/settings/intelligence/page.js';
-import { renderBrokerPdfImport } from './pages/settings/import/broker-pdf/page.js';
 // Der Finanzguru-Import ist nur Formular und Ereignisse - er hat nichts zu laden und deshalb auch
 // nichts zu zeichnen.
-import './pages/settings/import/finanzguru/xlsx/page.js';
 import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
@@ -340,14 +335,8 @@ const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
   .register('accounts',()=>renderAccounts(ctx))
   .register('account-detail',()=>renderAccountDetail(ctx))
-  .register('bank-connections',()=>renderBankConnections(ctx))
   .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
-  .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
-  .register('passkeys',()=>renderPasskeys(ctx))
-  .register('import',()=>renderImportCenter())
-  .register('intelligence',()=>renderIntelligence())
-  .register('import-broker-pdf',()=>renderBrokerPdfImport())
-  .register('import-finanzguru-xlsx',()=>{});
+  .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}));
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 initResizableSidebar();

@@ -202,8 +202,13 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
     // Datei wie jede andere — gelesen aus der Quelle, weil die Adresse die ganze Hülle liefert.
     private string PageMarkup(params string[] folder)
     {
-        var root = factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
-        var parts = new[] { root, "pages", "settings", "import" }.Concat(folder).Append("page.html").ToArray();
-        return File.ReadAllText(Path.Combine(parts));
+        // Seit #154 liegt das Markup als Razor-Seite unter Pages/ statt als page.html neben page.js.
+        // Aus "broker-pdf" wird dabei "BrokerPdf" - derselbe Ordner, andere Schreibweise.
+        var page = string.Join('/', new[] { "Settings", "Import" }.Concat(folder.Select(Pascal)));
+        return WebSources.Page(page);
+
+        static string Pascal(string segment) => string.Concat(segment
+            .Split('-', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
     }
 }

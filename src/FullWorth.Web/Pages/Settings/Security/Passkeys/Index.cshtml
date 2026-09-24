@@ -1,4 +1,18 @@
-    <section id="view-passkeys" class="view">
+@page "/settings/security/passkeys"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Passkeys · FullWorth";
+    ViewData["ActiveView"] = "passkeys";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/settings/security/passkeys/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-passkeys">
       <article class="panel">
         <div class="panel-head"><h2 data-i18n="passkeys.add"></h2></div>
         <p class="row-sub panel-intro" data-i18n="passkeys.explanation"></p>
@@ -20,3 +34,11 @@
         <div id="passkey-list" class="passkey-list rows" aria-live="polite"></div>
       </article>
     </section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/settings/security/passkeys/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/settings/security/passkeys/entry.js"></script>
+}

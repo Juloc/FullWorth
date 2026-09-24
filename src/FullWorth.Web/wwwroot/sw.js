@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v144';
+const VERSION = 'v145';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -25,6 +25,9 @@ const APP_SHELL = [
   // Der Einstieg jeder eigenen Seite (#154). Eine Razor-Seite laedt genau eine Moduldatei, und
   // ohne sie im Vorrat oeffnet die Seite offline zwar, bleibt aber leer - schlimmer als gar
   // nicht zu oeffnen, weil es nach einem Fehler aussieht statt nach fehlendem Netz.
+  //
+  // PwaOfflineShellCoverageTests laeuft den Importgraphen jeder Seite ab und haelt die Liste
+  // darunter vollstaendig; diese Zeilen sind die Wurzeln, an denen er beginnt.
   '/pages/admin/entry.js',
   '/pages/analytics/entry.js',
   '/pages/audit/entry.js',
@@ -40,6 +43,12 @@ const APP_SHELL = [
   '/pages/pension/entry.js',
   '/pages/purchases/entry.js',
   '/pages/rules/entry.js',
+  '/pages/settings/bank-connections/entry.js',
+  '/pages/settings/import/broker-pdf/entry.js',
+  '/pages/settings/import/entry.js',
+  '/pages/settings/import/finanzguru/xlsx/entry.js',
+  '/pages/settings/intelligence/entry.js',
+  '/pages/settings/security/passkeys/entry.js',
   '/pages/tax/entry.js',
   '/pages/transactions/entry.js',
   '/pages/dashboard/page.js',

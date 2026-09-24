@@ -67,6 +67,32 @@ export const PAGES = {
   budgets: {
     folder: 'budgets', page: 'Budgets', route: '/budgets',
     render: 'renderBudgets', action: ['budgets.new', 'newBudget']
+  },
+  // Unterseiten: sie stehen nicht in der Seitenleiste, ihr Elterneintrag schon. Welcher, sagt
+  // NavigationCatalog.SubPages - _Navigation.cshtml markiert ihn von dort aus.
+  passkeys: {
+    folder: 'settings/security/passkeys', page: 'Settings/Security/Passkeys',
+    route: '/settings/security/passkeys', render: 'renderPasskeys'
+  },
+  intelligence: {
+    folder: 'settings/intelligence', page: 'Settings/Intelligence',
+    route: '/settings/intelligence', render: 'renderIntelligence'
+  },
+  import: {
+    folder: 'settings/import', page: 'Settings/Import',
+    route: '/settings/import', render: 'renderImportCenter'
+  },
+  'import-finanzguru-xlsx': {
+    folder: 'settings/import/finanzguru/xlsx', page: 'Settings/Import/Finanzguru/Xlsx',
+    route: '/settings/import/finanzguru/xlsx', render: null
+  },
+  'bank-connections': {
+    folder: 'settings/bank-connections', page: 'Settings/BankConnections',
+    route: '/settings/bank-connections', render: 'renderBankConnections'
+  },
+  'import-broker-pdf': {
+    folder: 'settings/import/broker-pdf', page: 'Settings/Import/BrokerPdf',
+    route: '/settings/import/broker-pdf', render: 'renderBrokerPdfImport'
   }
 };
 
@@ -81,6 +107,10 @@ function title(view) {
 export function migrate(view) {
   const spec = PAGES[view];
   if (!spec) throw new Error(`Kein Bauplan für ${view}.`);
+  // Eine Seite ohne Zeichenfunktion gibt es: das Modul baut sich beim Laden selbst auf. Der
+  // erzeugte Einstieg passt dann aber nicht, und aus 'render: null' wurde einmal wortwoertlich
+  // 'await null(context)'. Solche Seiten bekommen ihren Einstieg von Hand.
+  if (!spec.render) throw new Error(`${view} hat keine Zeichenfunktion - entry.js bitte von Hand schreiben.`);
 
   const htmlPath = new URL(`pages/${spec.folder}/page.html`, wwwroot);
   if (!existsSync(htmlPath)) throw new Error(`pages/${spec.folder}/page.html gibt es nicht (schon umgezogen?).`);

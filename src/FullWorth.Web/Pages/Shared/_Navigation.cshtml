@@ -15,8 +15,17 @@
     var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
     var isAdmin = ViewContext.HttpContext.Items[NavigationPageFilter.IsAdminKey] as bool? ?? false;
 
+    // Eine Unterseite markiert ihren Elterneintrag: "Passkeys" steht nicht in der Seitenleiste, aber
+    // "Einstellungen" darueber, und genau der gehoert hervorgehoben. Ohne diese Zeile ist auf jeder
+    // Unterseite gar nichts markiert - der Benutzer sieht nicht, wo er ist, und der Zurueckweg ist
+    // nicht mehr zu erraten. Dieselbe Zuordnung haelt app/routes.js im Browser (SUBPAGES.parent),
+    // und NavigationCatalogParityTests haelt beide zusammen.
+    var activeEntry = NavigationCatalog.SubPages
+        .FirstOrDefault(page => string.Equals(page.View, activeView, StringComparison.Ordinal))?.Parent
+        ?? activeView;
+
     string ItemClass(string view) =>
-        string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item";
+        string.Equals(view, activeEntry, StringComparison.Ordinal) ? "nav-item active" : "nav-item";
 }
 
 <aside class="sidebar" aria-label="Primary">

@@ -357,11 +357,11 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
             await PageStyleAsync());
     }
 
-    // Die Seite liegt unter pages/settings/security/passkeys/, und ihr Markup steht im einen Dokument.
-    // Gelesen wird es hier aus der Quelle statt über die Adresse geholt: /settings/security/passkeys
-    // liefert die ganze Hülle, und darin stünde jede Zusicherung auch dann, wenn sie mit dieser Seite
-    // gar nichts zu tun hat.
-    private Task<string> PageMarkupAsync() => PageFileAsync("page.html");
+    // Gelesen wird aus der Quelle statt über die Adresse geholt: /settings/security/passkeys lieferte
+    // bis #154 die ganze Hülle, und darin stünde jede Zusicherung auch dann, wenn sie mit dieser Seite
+    // gar nichts zu tun hat. Das Markup liegt seitdem als Razor-Seite bei der Seite, page.js und
+    // page.css weiterhin unter wwwroot.
+    private Task<string> PageMarkupAsync() => Task.FromResult(WebSources.Page("Settings/Security/Passkeys"));
     private Task<string> PageScriptAsync() => PageFileAsync("page.js");
     private Task<string> PageStyleAsync() => PageFileAsync("page.css");
 

@@ -13,7 +13,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Intelligence_page_exposes_one_reciprocal_cloud_choice_without_download_only_mode()
     {
-        var html = Read("pages", "settings", "intelligence", "page.html");
+        var html = WebSources.Page("Settings/Intelligence");
         var script = Read("pages", "settings", "intelligence", "cloud.js");
 
         Assert.Contains("FullWorth Cloud Intelligence", html);
@@ -31,7 +31,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Cloud_opt_in_requires_explicit_checkbox_and_current_policy_version()
     {
-        var html = Read("pages", "settings", "intelligence", "page.html");
+        var html = WebSources.Page("Settings/Intelligence");
         var script = Read("pages", "settings", "intelligence", "cloud.js");
 
         Assert.Contains("cloud-consent", html);
@@ -44,7 +44,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Minimal_cloud_client_has_no_contribution_sync_or_outbox_ui()
     {
-        var html = Read("pages", "settings", "intelligence", "page.html");
+        var html = WebSources.Page("Settings/Intelligence");
         var script = Read("pages", "settings", "intelligence", "cloud.js");
 
         // The self-hosted app ships only the minimal consent/connection client; the contribution
@@ -86,7 +86,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Intelligence_page_exposes_local_custom_brand_pack_management()
     {
-        var html = Read("pages", "settings", "intelligence", "page.html");
+        var html = WebSources.Page("Settings/Intelligence");
         var script = Read("pages", "settings", "intelligence", "brand-packs.js");
 
         Assert.Contains("Eigene Brand-Packs", html);
@@ -104,7 +104,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Cloud_setup_uses_dedicated_responsive_styles()
     {
-        var html = Read("pages", "settings", "intelligence", "page.html");
+        var html = WebSources.Page("Settings/Intelligence");
         var css = Read("pages", "settings", "intelligence", "page.css");
 
         // Das Stylesheet und das Modul stehen nicht mehr im Markup der Seite: sie kommt als Ausschnitt

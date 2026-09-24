@@ -1,4 +1,18 @@
-    <section id="view-import-finanzguru-xlsx" class="view">
+@page "/settings/import/finanzguru/xlsx"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Finanzguru-Import · FullWorth";
+    ViewData["ActiveView"] = "import-finanzguru-xlsx";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/settings/import/finanzguru/xlsx/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-import-finanzguru-xlsx">
 
       <article class="panel import-card">
         <div class="panel-head"><h2 id="import-heading">Alle Buchungen importieren</h2></div>
@@ -28,3 +42,11 @@
         <div id="import-history" class="rows"></div>
       </article>
     </section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/settings/import/finanzguru/xlsx/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/settings/import/finanzguru/xlsx/entry.js"></script>
+}

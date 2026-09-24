@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 using System.Text.RegularExpressions;
 
 namespace FullWorth.Web.Tests;
@@ -15,6 +16,33 @@ namespace FullWorth.Web.Tests;
 /// </summary>
 public sealed class MpaShellGuardTests
 {
+    /// <summary>
+    /// Eine Unterseite markiert den Eintrag, unter dem sie hängt.
+    ///
+    /// „Passkeys" steht nicht in der Seitenleiste, „Einstellungen" darüber schon — und genau der
+    /// gehört hervorgehoben, sonst ist auf jeder Unterseite gar nichts markiert und der Benutzer
+    /// sieht nicht, wo er ist. Die Zuordnung steht in NavigationCatalog.SubPages, im Browser in
+    /// app/routes.js und in der Werkstatt in ops/ui-harness/razor.mjs; alle drei müssen dieselbe
+    /// Regel befolgen, sonst misst die Werkstatt eine Navigation, die es im Betrieb nicht gibt.
+    /// </summary>
+    [Fact]
+    public void A_subpage_marks_its_parent_entry()
+    {
+        var navigation = Read("Pages", "Shared", "_Navigation.cshtml");
+        Assert.Contains("NavigationCatalog.SubPages", navigation);
+        Assert.Contains(".Parent", navigation);
+
+        var harness = File.ReadAllText(Path.Combine(Root(), "ops", "ui-harness", "razor.mjs"));
+        Assert.Contains("PARENTS", harness);
+
+        // Jede Unterseite hängt an einem Eintrag, den es wirklich gibt — ein Tippfehler im Elternteil
+        // markiert sonst lautlos gar nichts.
+        var views = NavigationCatalog.Entries.Select(entry => entry.View).ToHashSet(StringComparer.Ordinal);
+        foreach (var page in NavigationCatalog.SubPages)
+            Assert.True(views.Contains(page.Parent),
+                $"Die Unterseite {page.View} hängt an {page.Parent}, das es in der Navigation nicht gibt.");
+    }
+
     [Fact]
     public void The_layout_links_no_page_specific_asset()
     {
@@ -79,12 +107,15 @@ public sealed class MpaShellGuardTests
             "auch Adressen, fuer die es laengst eine eigene Seite gibt.");
     }
 
-    private static string Read(params string[] parts)
+    private static string Read(params string[] parts) =>
+        File.ReadAllText(Path.Combine(
+            new[] { Root(), "src", "FullWorth.Web" }.Concat(parts).ToArray()));
+
+    private static string Root()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(
-            new[] { dir!.FullName, "src", "FullWorth.Web" }.Concat(parts).ToArray()));
+        return dir!.FullName;
     }
 }

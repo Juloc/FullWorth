@@ -41,6 +41,19 @@ export function languageOf(headers = {}) {
 }
 
 const WEB = new URL('../../src/FullWorth.Web/', import.meta.url);
+
+/**
+ * Welche Unterseite zu welchem Eintrag der Seitenleiste gehoert - aus app/routes.js gelesen, weil
+ * dort die Liste steht, die auch der Browser benutzt (und die NavigationCatalogParityTests mit der
+ * serverseitigen zusammenhaelt).
+ *
+ * Ohne das markiert die Werkstatt auf jeder Unterseite gar nichts, waehrend der Betrieb
+ * "Einstellungen" hervorhebt - und dann misst sie eine Navigation, die es so nicht gibt.
+ */
+const PARENTS = Object.fromEntries(
+  [...readFileSync(new URL('app/routes.js', WWWROOT), 'utf8')
+    .matchAll(/'?([\w-]+)'?:\s*\{[^}]*parent:\s*'([\w-]+)'/g)]
+    .map(match => [match[1], match[2]]));
 const PAGES = new URL('Pages/', WEB);
 
 function read(url) {
@@ -134,10 +147,12 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
 
   // Die Seitenleiste kommt aus index.html und weiss deshalb nicht, welche Seite gerade offen ist -
   // serverseitig setzt Razor das. Ohne diese Zeile misst die Werkstatt eine Navigation ohne
-  // Markierung und damit etwas anderes als den Betrieb.
-  if (data.ActiveView) {
+  // Markierung und damit etwas anderes als den Betrieb. Eine Unterseite markiert dabei ihren
+  // Elterneintrag - dieselbe Regel wie in _Navigation.cshtml.
+  const activeEntry = PARENTS[data.ActiveView] ?? data.ActiveView;
+  if (activeEntry) {
     html = html.replace(
-      new RegExp('class="nav-item"([^>]*data-entry="' + data.ActiveView + '")', 'g'),
+      new RegExp('class="nav-item"([^>]*data-entry="' + activeEntry + '")', 'g'),
       'class="nav-item active"$1');
   }
 
