@@ -19,13 +19,13 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task Theme_SystemLightAndDark_AreRepresented()
     {
         var html = await GetAsync("/");
-        var js = await GetAsync("/app.js");
+        var js = await GetAsync("/app/shell.js");
         var css = await GetAsync("/styles/tokens.css");
 
         Assert.Contains("data-theme-icon=\"system\"", html);
         Assert.Contains("data-theme-icon=\"light\"", html);
         Assert.Contains("data-theme-icon=\"dark\"", html);
-        Assert.Contains("state.theme==='system'", js);
+        Assert.Contains("state.theme === 'system'", js);
         Assert.Contains("prefers-color-scheme: dark", js);
         Assert.Contains("html[data-theme=\"dark\"]", css);
     }
@@ -36,13 +36,13 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
         // The literal /bff/backend/ and /bff/banking/ URLs used to be built inline in app.js. The
         // architecture cleanup moved URL construction into the single shared BFF client in
         // core/api.js, which only ever builds /bff/<service>/... for the two known services.
-        var appJs = await GetAsync("/app.js");
+        var appJs = await GetAsync("/app/shell.js");
         var apiJs = await GetAsync("/core/api.js");
 
         Assert.Contains("`/bff/${service}/", apiJs);
         Assert.Contains("service !== 'backend' && service !== 'banking'", apiJs);
         AssertNoInternalServiceUrl(apiJs, "core/api.js");
-        AssertNoInternalServiceUrl(appJs, "app.js");
+        AssertNoInternalServiceUrl(appJs, "app/shell.js");
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task PublicResponses_DoNotExposeConfiguredSecretsOrInternalUrls()
     {
-        foreach (var path in new[] { "/", "/app.js", "/styles/app.css", "/styles/dialogs.css", "/locales/de.json", "/locales/en.json", "/health" })
+        foreach (var path in new[] { "/", "/app/shell.js", "/styles/app.css", "/styles/dialogs.css", "/locales/de.json", "/locales/en.json", "/health" })
         {
             var content = await GetAsync(path);
             AssertDoesNotContain(content, FullWorthWebFactory.BackendSecret, path);

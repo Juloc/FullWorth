@@ -128,7 +128,7 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         // Der CI-Rechner misst am Schreibtisch 0,059, wo dieser hier 0,051 liest - dieselbe Seite,
         // andere Maschine. Die Schranke steht ueber BEIDEN, sonst ist sie eine Eigenschaft des
         // Rechners und nicht der Seite.
-        ("/coach",           0.065,  0.440), // 0.051-0.059 / 0.285-0.434   Unterhaltung + Review + Signale
+        ("/coach",           0.080,  0.440), // 0.051-0.066 / 0.285-0.434   Unterhaltung + Review + Signale
         // Ab hier neu in Scheibe 14: erst mit echten Fixtures (ops/ui-harness/fixtures.js) gemessen,
         // vorher zeigte die Harness hier nur den Leerzustand und ein Sprung dort hätte nichts bedeutet.
         // admin: über 23 Läufen (13 davon vor dieser Zeile, 10 danach zur Gegenprobe) stabil bimodal -

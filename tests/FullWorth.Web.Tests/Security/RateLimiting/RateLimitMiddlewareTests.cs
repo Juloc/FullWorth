@@ -204,7 +204,7 @@ public sealed class RateLimitMiddlewareTests
         _ = await client.GetAsync("/bff/backend/test");
         _ = await client.GetAsync("/bff/backend/test");
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/app.js")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/app/shell.js")).StatusCode);
     }
 
     [Fact]
@@ -323,7 +323,7 @@ public sealed class RateLimitMiddlewareTests
                     endpoints.MapPost("/receipts/upload", () => Results.Ok())
                         .RequireRateLimiting(RateLimitPolicies.ReceiptUpload);
                     endpoints.MapGet("/health", () => Results.Ok());
-                    endpoints.MapGet("/app.js", () => Results.Text("app"));
+                    endpoints.MapGet("/app/shell.js", () => Results.Text("app"));
                 });
             });
 

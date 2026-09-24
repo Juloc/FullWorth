@@ -452,25 +452,12 @@ foreach (var route in new[]
     }).AllowAnonymous();
 }
 
-// Admin ist eine Seite der Anwendung, kein eigenes Dokument mehr: /admin liefert dieselbe Hülle wie
-// jede andere Adresse, und die Seitenleiste ist dort da, wo sie überall ist. Die Prüfung bleibt: wer
-// kein Admin ist, bekommt die Seite gar nicht erst. Dass der Menüpunkt für alle anderen verborgen
-// ist, ist Höflichkeit — die Berechtigung liegt hier und an jedem /auth/admin-Endpunkt.
-var appShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
-app.MapGet("/admin", async (
-    HttpContext context,
-    InstanceAdminService admin,
-    CancellationToken ct) =>
-{
-    if (await admin.GetCurrentAdminAsync(context.User, ct) is null)
-    {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        return;
-    }
-
-    context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(appShellPath, ct);
-}).RequireAuthorization();
+// Admin ist seit #154 eine gewöhnliche Razor-Seite. Hier stand bis dahin eine eigene Route, die die
+// alte Hülle auslieferte und dabei die Rechte prüfte; sie hätte die Seite verdeckt und eine Datei
+// geschickt, die es nicht mehr gibt. Die Prüfung ist geblieben und liegt jetzt in
+// NavigationPageFilter - an der Seite statt an der Adresse, und für jeden AdminOnly-Eintrag des
+// Katalogs, nicht nur für diesen einen. Dass der Menüpunkt für alle anderen verborgen ist, bleibt
+// Höflichkeit: die Berechtigung liegt dort und an jedem /auth/admin-Endpunkt.
 
 var accountDeletionShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "account-deletion", "index.html");
 app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct) =>
@@ -490,32 +477,13 @@ app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct
 // landet auf der neuen.
 app.MapGet("/intelligence", () => Results.Redirect("/settings/intelligence", permanent: true)).AllowAnonymous();
 app.MapGet("/intelligence/index.html", () => Results.Redirect("/settings/intelligence", permanent: true)).AllowAnonymous();
-app.MapGet("/settings/intelligence", async (HttpContext context, CancellationToken ct) =>
-{
-    context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(appShellPath, ct);
-}).RequireAuthorization();
 
-foreach (var importRoute in new[]
-         {
-             "/settings/import", "/settings/import/finanzguru",
-             "/settings/import/finanzguru/xlsx", "/settings/import/broker-pdf"
-         })
-{
-    app.MapGet(importRoute, async (HttpContext context, CancellationToken ct) =>
-    {
-        context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.SendFileAsync(appShellPath, ct);
-    }).RequireAuthorization();
-}
+// /settings/import/finanzguru hat keine eigene Seite - nur die XLSX-Unterseite darunter. Wer die
+// Adresse aufruft, soll dort landen und nicht auf einem Rueckfall.
+app.MapGet("/settings/import/finanzguru", () => Results.Redirect("/settings/import/finanzguru/xlsx", permanent: true)).RequireAuthorization();
 
 app.MapGet("/compensation.html", () => Results.Redirect("/compensation", permanent: true)).AllowAnonymous();
 
-app.MapGet("/settings/security/passkeys", async (HttpContext context, CancellationToken ct) =>
-{
-    context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(appShellPath, ct);
-}).RequireAuthorization();
 
 app.MapAuthEndpoints();
 app.MapTwoFactorEndpoints();
@@ -615,12 +583,17 @@ if (!unifiedHost)
         .AllowAnonymous();
 }
 
-// Razor-Seiten VOR dem Rueckfall: die Migration laeuft seitenweise, und eine Adresse, fuer die es
-// schon eine Razor-Seite gibt, darf nicht mehr in der alten Huelle landen. Was noch keine hat, faellt
-// weiter auf index.html zurueck - bis die letzte Seite umgezogen ist und diese Zeile verschwindet.
 app.MapRazorPages();
 
-app.MapFallbackToFile("index.html").RequireAuthorization();
+// Kein Rueckfall mehr. Jede Adresse der angemeldeten Anwendung IST eine Razor-Seite (#154 ist damit
+// fertig), also sagt eine unbekannte Adresse jetzt, dass es sie nicht gibt, statt wortlos die
+// Uebersicht zu zeigen.
+//
+// Der Rueckfall gab es, weil die alte Huelle ihre Adressen selbst im Browser aufloeste - das Dokument
+// musste unter jeder von ihnen ausgeliefert werden. Mit einer Seite je Adresse faellt der Grund weg.
+// MapFallbackToPage waere ausserdem nicht dasselbe gewesen wie MapFallbackToFile: es hat einen PUT
+// auf eine unbekannte Adresse mitgenommen und mit 200 und einer fertigen HTML-Seite beantwortet.
+
 app.Run();
 
 static async Task ValidateFinancePrincipalAsync(CookieValidatePrincipalContext context)

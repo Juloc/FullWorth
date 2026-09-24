@@ -24,7 +24,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         var init = await GetAsync("/app/boot.js");
         var themeEngine = await GetAsync("/app/theme.js");
         // From disk: an unauthenticated request for /index.html gets the auth shell, not the app shell.
-        var head = File.ReadAllText(Path.Combine(WwwrootDir(), "index.html"));
+        var head = WebSources.Layout();
 
         // boot.js no longer carries the colour math itself - it calls into the one shared engine, which
         // it can only do synchronously because that engine is loaded as a classic (non-module) <script>
@@ -135,7 +135,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public async Task AppearanceSettings_KeepColorModeAndTheSeedIndependent()
     {
-        var app = await GetAsync("/app.js");
+        var app = await GetAsync("/app/shell.js");
         var appearance = await GetAsync("/app/appearance.js");
         var themeEngine = await GetAsync("/app/theme.js");
 

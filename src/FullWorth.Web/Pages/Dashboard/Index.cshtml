@@ -1,0 +1,23 @@
+@page "/"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Übersicht · FullWorth";
+    ViewData["ActiveView"] = "dashboard";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/dashboard/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-dashboard"><div id="dashboard-insights" hidden></div><div id="dashboard-editbar" class="dashboard-editbar" hidden><button id="dash-add" data-i18n="dashboard.addWidget">@Text.Get("dashboard.addWidget", language)</button><button id="dash-reset" data-i18n="dashboard.reset">@Text.Get("dashboard.reset", language)</button><button id="dash-done" class="btn btn-primary" data-i18n="dashboard.done">@Text.Get("dashboard.done", language)</button></div><div id="dashboard-grid" class="dashboard-grid"></div></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/dashboard/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/dashboard/entry.js"></script>
+}

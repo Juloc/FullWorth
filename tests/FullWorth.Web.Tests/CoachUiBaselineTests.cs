@@ -45,7 +45,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task CoachShellExposesEvidenceAndDeterministicModeWithoutMandatoryAi()
     {
         var shell = await GetAsync("/pages/coach/page.js");
-        var coachCss = await GetAsync("/pages/coach/page.css");
+        var coachCss = await GetAsync("/styles/coach.css");
         // Seit #154 liegt das Markup der Seite bei der Seite, nicht mehr in dem einen Dokument.
         var markup = WebSources.Page("Coach");
         // Die Beschriftungen stehen jetzt im Markup und in den Sprachdateien, nicht mehr zweisprachig
@@ -70,9 +70,9 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         // was vor dem ersten Zeichnen da ist, kann nichts mehr verschieben.
         // Der schwebende Starter gehoert der Huelle und ist auf jeder Seite da; das Bedienfeld
         // gehoert der Coach-Seite. Zwei Orte, und das ist richtig so.
-        Assert.Contains("id=\"coach-launcher\"", ReadSource("index.html"));
+        Assert.Contains("id=\"coach-launcher\"", WebSources.Layout());
         // Auch der Andockbereich gehoert der Huelle - er schwebt ueber jeder Seite.
-        Assert.Contains("id=\"coach-dock\"", ReadSource("index.html"));
+        Assert.Contains("id=\"coach-dock\"", WebSources.Layout());
         Assert.Contains("finance.coach.quickAccess", shell);
         Assert.Contains("restartConversation", shell);
         Assert.Contains("api/coach/conversations?limit=1", shell);
@@ -113,8 +113,8 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task CoachUxIntegratesWithFinanceObjectsAndResponsiveLayout()
     {
-        var app = await GetAsync("/app.js");
-        var html = ReadSource("index.html");
+        var app = await GetAsync("/app/shell.js");
+        var html = WebSources.Layout();
         var transactions = await GetAsync("/pages/transactions/page.js");
         var contracts = await GetAsync("/pages/contracts/page.js");
         var networth = await GetAsync("/pages/networth/page.js");
@@ -127,7 +127,11 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         // Der pro Breite getrennte Schluessel steht seit #154 in app/shell.js: Coach und
         // Seitenleiste teilen sich den Platz, und beide muessen dieselbe Zahl lesen.
         Assert.Contains("finance.sidebar.width.", await GetAsync("/app/shell.js"));
-        Assert.Contains("fullworth:view-change", app);
+        // Ein Ansichtswechsel ist seit #154 eine echte Navigation: das Dokument wird neu gebaut, also
+        // braucht es kein Ereignis mehr. Was der Benutzer ueber die Seite hinaus behaelt, muss die
+        // neue Seite von sich aus wiederherstellen - ein angehefteter Coach geht sonst bei jedem
+        // Wechsel zu, und das Anheften waere wirkungslos.
+        Assert.Contains("if (isPinned() && quickAccessEnabled()) openDock();", coach);
         // "Budget oeffnen" fuehrt auf eine andere Seite. Solange beide dasselbe Dokument waren,
         // ging das als Ereignis nach dem Wechsel; seit #154 ist der Wechsel eine echte Navigation
         // und das Ereignis kaeme nirgends an - die Kennung reist deshalb in der Adresse mit, und

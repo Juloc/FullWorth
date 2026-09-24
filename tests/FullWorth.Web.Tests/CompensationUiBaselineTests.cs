@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -67,7 +68,7 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
     {
         // "/" is served by MapFallbackToFile("index.html").RequireAuthorization(), so an unauthenticated
         // client is redirected to the auth login shell. Read the shipped index.html shell directly.
-        var html = ReadWebAsset("index.html");
+        var html = WebSources.Navigation();
         var menu = ReadWebAsset(Path.Combine("app", "menu.js"));
 
         // Gehalt ist ein gewöhnlicher Eintrag aus app/menu.js und eine gewöhnliche Ansicht.
@@ -78,7 +79,11 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         // es jetzt eine Menüquelle, und diese Datei ist gelöscht.
         Assert.Contains("{ view: 'compensation'", menu);
         Assert.DoesNotContain("href: '/compensation.html'", menu);
-        Assert.Contains("data-entry=\"compensation\"", html);
+        // Der Eintrag steht seit #154 nicht mehr woertlich im Markup - die Partial schreibt ihn aus
+        // NavigationCatalog. Geprueft wird deshalb der Katalog, und dass die Partial ihn ueberhaupt
+        // von dort nimmt.
+        Assert.Contains("data-entry=\"@entry.View\"", html);
+        Assert.Contains(NavigationCatalog.Entries, entry => entry.View == "compensation");
         // Das Markup der Seite liegt seit #154 nicht mehr in der Hülle, sondern bei der Seite.
         Assert.Contains("id=\"view-compensation\"", await MarkupAsync());
         Assert.False(File.Exists(Path.Combine(

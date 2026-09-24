@@ -84,7 +84,7 @@ public sealed class PwaAssetsTests
     [Fact]
     public void IndexStaticAssetReferencesExistOnDisk()
     {
-        var index = File.ReadAllText(Asset("index.html"));
+        var index = WebSources.Layout();
         var references = Regex.Matches(
                 index,
                 @"(?:src|href)=""(?<path>/[^""?#]+\.(?:js|mjs|css|json|svg|png|woff2?))(?:[?#][^""]*)?""",
@@ -107,7 +107,7 @@ public sealed class PwaAssetsTests
     [Fact]
     public void IndexRegistersServiceWorkerAndManifest()
     {
-        var index = File.ReadAllText(Asset("index.html"));
+        var index = WebSources.Layout();
         Assert.Contains("rel=\"manifest\"", index);
         // Registration is an external script (CSP-safe), not inline.
         Assert.Contains("/pwa/register-sw.js", index);

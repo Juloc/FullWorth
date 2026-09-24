@@ -191,6 +191,13 @@ export function createShell({
       const select = $('#theme');
       if (select) select.value = state.theme;
     });
+    // Stellt das System auf Dunkel um, waehrend die Seite offen ist, soll sie folgen - aber nur,
+    // wenn der Benutzer "System" gewaehlt hat. Dieser Zuhoerer stand bis zum Ende von #154 in
+    // app.js; ohne ihn bliebe eine offene Seite im alten Farbschema stehen, bis man sie neu laedt.
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (state.theme === 'system') applyTheme();
+    });
+
     // Der Einklapp-Knopf stand im Markup jeder Seite, verdrahtet wurde er aber nur in app.js -
     // auf einer Razor-Seite war er da und tat nichts. Hier gilt er fuer beide.
     $('#nav-collapse')?.addEventListener('click', toggleSidebar);
@@ -198,6 +205,9 @@ export function createShell({
     $('#layout-reset')?.addEventListener('click', resetLayout);
     initResizableSidebar();
     syncResponsiveSidebar();
+    // "Zeichne neu" kam bis #154 bei der alten Huelle an. Ohne diesen Zuhoerer bliebe die Seite nach
+    // einer Aenderung stehen, ohne dass irgendwo ein Fehler auftaucht.
+    onAppEvent('surface:reload', () => reload());
     $('#privacy-toggle')?.addEventListener('click', () => togglePrivacy());
     $('#global-search')?.addEventListener('click', () => openGlobalSearch(ctx));
     $('#topbar-more')?.addEventListener('click', openTopbarMenu);

@@ -134,8 +134,11 @@ public sealed class ContractPaymentLinkUiTests
         // Keine eigene fetch-Runde an der Api vorbei.
         Assert.DoesNotContain("fetch(", js);
 
-        var appJs = Asset("app.js");
-        Assert.Contains("apiText:path=>apiClient.backendResponse(path).then(response=>response.text())", appJs);
+        // ctx.apiText gehoert zum Seitenkontext, nicht zur Huelle - seit #154 steht es dort, wo jede
+        // Seite ihren Kontext herbekommt.
+        Assert.Contains(
+            "apiText: path => apiClient.backendResponse(path).then(response => response.text())",
+            WebSources.Asset("app", "page-context.js"));
     }
 
     /// <summary>

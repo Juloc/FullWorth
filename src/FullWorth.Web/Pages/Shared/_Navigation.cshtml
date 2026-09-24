@@ -24,8 +24,13 @@
         .FirstOrDefault(page => string.Equals(page.View, activeView, StringComparison.Ordinal))?.Parent
         ?? activeView;
 
-    string ItemClass(string view) =>
-        string.Equals(view, activeEntry, StringComparison.Ordinal) ? "nav-item active" : "nav-item";
+    bool IsActive(string view) => string.Equals(view, activeEntry, StringComparison.Ordinal);
+    string ItemClass(string view) => IsActive(view) ? "nav-item active" : "nav-item";
+
+    // aria-current setzte bis zum Ende von #154 app.js zur Laufzeit. Mit der alten Hülle wäre es
+    // ersatzlos verschwunden — UI_UX_SPEC §25 verlangt es auf BEIDEN Leisten. Serverseitig steht es
+    // ausserdem schon im ersten Bild statt einen Wimpernschlag später.
+    string AriaCurrent(string view) => IsActive(view) ? "page" : null;
 }
 
 <aside class="sidebar" aria-label="Primary">
@@ -45,7 +50,7 @@
                 <div class="nav-group-items">
                     @foreach (var entry in group.Items)
                     {
-                        <a class="@ItemClass(entry.View)" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View" hidden="@(entry.AdminOnly && !isAdmin)">
+                        <a class="@ItemClass(entry.View)" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View" aria-current="@AriaCurrent(entry.View)" hidden="@(entry.AdminOnly && !isAdmin)">
                             <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
                             <span data-i18n="@entry.Label">@Text.Get(entry.Label, language)</span>
                         </a>

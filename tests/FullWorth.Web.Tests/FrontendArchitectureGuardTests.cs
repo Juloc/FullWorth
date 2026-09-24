@@ -139,7 +139,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void MainShellDoesNotLoadDeletedPatchModules()
     {
-        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
+        var html = WebSources.Layout();
         Assert.DoesNotContain("/features/accounts-ux.js", html);
         Assert.DoesNotContain("/features/compensation-nav.js", html);
         Assert.DoesNotContain("/parity-completion.css", html);
@@ -148,7 +148,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void SharedCssLayersAreExplicitAndOrdered()
     {
-        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
+        var html = WebSources.Layout();
         var tokens = html.IndexOf("/styles/tokens.css", StringComparison.Ordinal);
         var reset = html.IndexOf("/styles/reset.css", StringComparison.Ordinal);
         var appearance = html.IndexOf("/styles/appearance.css", StringComparison.Ordinal);
@@ -167,7 +167,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void SettingsWorkflowsStayOutOfAppBootstrap()
     {
-        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var app = WebSources.Asset("app", "shell.js");
         var settings = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "settings", "page.js"));
 
         Assert.DoesNotContain("openDeleteAccountDialog", app);
@@ -190,7 +190,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void BootstrapLivesInApp_NotInFeatureOwners()
     {
-        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var app = WebSources.Asset("app", "shell.js");
         var shell = File.ReadAllText(Path.Combine(WwwRoot(), "app", "shell.js"));
         var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "accounts", "page.js"));
 
@@ -200,11 +200,13 @@ public sealed class FrontendArchitectureGuardTests
         // Huelle" jetzt beide Dateien.
         Assert.Contains("initResizableSidebar();", shell);
         Assert.Contains("syncResponsiveSidebar();", shell);
-        Assert.Contains("boot();", app);
+        // Gestartet wird seit #154 ueber den Einstieg der jeweiligen Seite - startShellPage ist das
+        // boot() von frueher, nur je Seite statt einmal fuer alle.
+        Assert.Contains("export async function startShellPage", shell);
 
         Assert.DoesNotContain("initResizableSidebar();", accounts);
         Assert.DoesNotContain("syncResponsiveSidebar();", accounts);
-        Assert.DoesNotContain("boot();", accounts);
+        Assert.DoesNotContain("startShellPage", accounts);
     }
 
     [Fact]
@@ -231,7 +233,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void NoGlobalFeatureNavigationBridgeReturns()
     {
-        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var app = WebSources.Asset("app", "shell.js");
         Assert.DoesNotContain("window.fwNavScope", app);
         Assert.DoesNotContain("window.fwOpenBudget", app);
         Assert.DoesNotContain("window.fwSyncResponsiveSidebar", app);

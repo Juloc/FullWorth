@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -34,22 +35,17 @@ public sealed class MenuParityTests
         Regex.Match(Read("app/menu.js"), @"export const QUICK = \[([^\]]+)\]").Groups[1].Value
             .Split(',').Select(part => part.Trim().Trim('\'')).ToArray();
 
-    private static string Section(string html, string id)
-    {
-        var match = Regex.Match(html, $"<!-- {id}:generiert -->(.*?)<!-- /{id} -->", RegexOptions.Singleline);
-        Assert.True(match.Success, $"index.html hat keine erzeugte {id}-Sektion mehr.");
-        return match.Groups[1].Value;
-    }
-
-    private static string[] EntriesIn(string markup) =>
-        Regex.Matches(markup, @"data-entry=""([a-z]+)""").Select(match => match.Groups[1].Value).ToArray();
+    // Bis zum Ende von #154 standen beide Leisten als erzeugte Abschnitte in index.html, und dieser
+    // Test las sie von dort. Jetzt schreibt sie Razor aus NavigationCatalog - also wird gegen den
+    // Katalog selbst geprueft statt gegen abgeschriebenes Markup. Das ist naeher an der Wahrheit:
+    // vorher konnte die Datei stimmen und der Katalog trotzdem etwas anderes sagen.
 
     /// <summary>
     /// Der eigentliche Punkt: die Seitenleiste ist die Definition, vollständig und in ihrer Reihenfolge.
     /// </summary>
     [Fact]
     public void The_sidebar_is_the_definition()
-        => Assert.Equal(DefinedEntries(), EntriesIn(Section(Read("index.html"), "nav")));
+        => Assert.Equal(DefinedEntries(), NavigationCatalog.Entries.Select(entry => entry.View).ToArray());
 
     /// <summary>
     /// Die untere Leiste zeigt eine Auswahl — aber keine eigene. Jedes ihrer Ziele ist ein Eintrag der
@@ -59,7 +55,7 @@ public sealed class MenuParityTests
     [Fact]
     public void The_phone_bar_shows_defined_entries_only()
     {
-        var bottom = EntriesIn(Section(Read("index.html"), "bottom-nav"));
+        var bottom = NavigationCatalog.Quick.ToArray();
 
         Assert.Equal(QuickEntries(), bottom);
         Assert.All(bottom, entry => Assert.Contains(entry, DefinedEntries()));
@@ -73,17 +69,21 @@ public sealed class MenuParityTests
     [Fact]
     public void Nothing_is_reachable_on_only_one_of_the_two()
     {
-        var appJs = Read("app.js");
         // Das „Mehr"-Blatt zog mit #154 nach app/shell.js — dieselbe Datei, die auch jede
         // Razor-Seite benutzt. Die Aussage bleibt: es entsteht aus der Definition und nicht aus
         // dem, was gerade in der Seitenleiste steht.
         var shellJs = Read(Path.Combine("app", "shell.js"));
 
-        Assert.Contains("const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));", appJs);
         Assert.Contains("MENU.map(group =>", shellJs);
         // Das Handy-Blatt las früher die Seitenleiste aus. Diese Abfrage darf es nicht mehr geben.
-        Assert.DoesNotContain(".sidebar button[data-view=", appJs);
         Assert.DoesNotContain(".sidebar button[data-view=", shellJs);
+
+        // Und was nicht unten steht, muss hinter „Mehr" auftauchen: beides zusammen ist die Definition.
+        var behindMore = NavigationCatalog.Entries.Select(entry => entry.View)
+            .Where(view => !NavigationCatalog.Quick.Contains(view, StringComparer.Ordinal));
+        Assert.Equal(
+            DefinedEntries().Order(StringComparer.Ordinal),
+            NavigationCatalog.Quick.Concat(behindMore).Order(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -101,17 +101,24 @@ public sealed class MenuParityTests
     [Fact]
     public void Every_entry_leads_somewhere()
     {
-        var html = Read("index.html");
-        var sidebar = Section(html, "nav");
-
-        foreach (var entry in DefinedEntries())
+        foreach (var entry in NavigationCatalog.Entries)
         {
-            var inDocument = html.Contains($"id=\"view-{entry}\"");
-            var ownPage = sidebar.Contains($"data-entry=\"{entry}\"") && !sidebar.Contains($"data-view=\"{entry}\"");
+            // Ein aeusserer Verweis fuehrt woandershin und braucht keine Seite in diesem Haus.
+            if (entry.Path.StartsWith("http", StringComparison.Ordinal)) continue;
 
-            Assert.True(inDocument || ownPage || HasRazorPage(entry),
-                $"Der Eintrag {entry} zeigt weder auf eine Ansicht, noch auf eine eigene Seite, noch auf eine Razor-Seite.");
+            Assert.True(HasRazorPage(entry.View) || HasRazorPageAt(entry.Path),
+                $"Der Eintrag {entry.View} ({entry.Path}) fuehrt auf keine Razor-Seite.");
         }
+    }
+
+    /// <summary>Eine Razor-Seite unter genau dieser Adresse (#154).</summary>
+    private static bool HasRazorPageAt(string path)
+    {
+        var pages = new DirectoryInfo(Path.GetFullPath(Path.Combine(WebRoot, "..", "Pages")));
+        if (!pages.Exists) return false;
+        return pages.EnumerateFiles("*.cshtml", SearchOption.AllDirectories)
+            .Any(file => File.ReadAllText(file.FullName)
+                .Contains("@page \"" + path + "\"", StringComparison.Ordinal));
     }
 
     /// <summary>Eine Razor-Seite, deren @@page-Adresse auf diese Ansicht zeigt (#154).</summary>

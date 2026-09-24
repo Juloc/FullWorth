@@ -35,7 +35,7 @@ public sealed class WebSmokeTests : IClassFixture<FullWorthWebFactory>
 
         foreach (var path in new[]
         {
-            "/app.js", "/styles/app.css", "/styles/dialogs.css", "/auth/auth.js", "/auth/auth.css", "/locales/de.json", "/locales/en.json"
+            "/app/shell.js", "/styles/app.css", "/styles/dialogs.css", "/auth/auth.js", "/auth/auth.css", "/locales/de.json", "/locales/en.json"
         })
         {
             var content = await GetSuccessAsync(path);

@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,7 +25,6 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
         // ihn führen, sonst fängt die alte Hülle seine Links weiter ab.
         var page = WebSources.Page("Pension");
         var entry = ReadAsset("pages", "pension", "entry.js");
-        var routes = ReadAsset("app", "routes.js");
         var sw = ReadAsset("sw.js");
 
         Assert.Contains("@page \"/pension\"", page);
@@ -36,7 +36,9 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("bindPension(context)", entry);
         Assert.Contains("renderPension(context)", entry);
 
-        Assert.Contains("'pension'", routes);
+        // "Erreichbar" hiess bis #154: die Huelle kennt die Ansicht. Jetzt heisst es: der Katalog
+        // kennt sie, und es gibt eine Razor-Seite dafuer.
+        Assert.Contains(NavigationCatalog.Entries, entry => entry.View == "pension");
 
         Assert.Contains("/pages/pension/page.js", sw);
         Assert.Contains("/pages/pension/page.css", sw);

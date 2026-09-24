@@ -38,14 +38,17 @@ public sealed class TransactionsRazorPageTests(FullWorthWebFactory factory) : IC
     [Fact]
     public void The_old_shell_gave_the_page_up()
     {
-        var shell = ReadWwwRoot("index.html");
+        var shell = WebSources.Layout();
 
         Assert.DoesNotContain("view-transactions", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("/pages/transactions/page.css", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("/pages/transactions/page.js", shell, StringComparison.Ordinal);
 
-        var app = ReadWwwRoot("app.js");
-        Assert.DoesNotContain("pages/transactions/page.js", app, StringComparison.Ordinal);
+        // Sie hat sie nicht nur aufgegeben - es gibt sie nicht mehr. Mit der letzten Seite (#154) sind
+        // index.html und app.js verschwunden; das ist die staerkere Aussage und die, die nicht
+        // versehentlich zurueckkommen kann.
+        Assert.False(File.Exists(WwwRootPath("index.html")), "Die alte Huelle ist zurueck.");
+        Assert.False(File.Exists(WwwRootPath("app.js")), "Das Startskript der alten Huelle ist zurueck.");
     }
 
     [Fact]
@@ -69,14 +72,19 @@ public sealed class TransactionsRazorPageTests(FullWorthWebFactory factory) : IC
     [Fact]
     public void The_shell_no_longer_claims_the_view_so_its_link_navigates_for_real()
     {
-        var routes = ReadWwwRoot("app", "routes.js");
-        Assert.Contains("'transactions'", routes, StringComparison.Ordinal);
+        // Der Eintrag ist ein gewoehnlicher Link auf eine echte Adresse - es gibt niemanden mehr, der
+        // den Klick abfangen koennte. Frueher brauchte es dafuer eine Ausnahmeliste (MIGRATED) in der
+        // Huelle; mit ihr ist auch die Liste verschwunden.
+        Assert.DoesNotContain("MIGRATED", ReadWwwRoot("app", "routes.js"), StringComparison.Ordinal);
+        Assert.Contains("@page \"/transactions\"", WebSources.Page("Transactions"), StringComparison.Ordinal);
+    }
 
-        // Ohne diesen Filter faenge die alte Huelle den Klick weiter ab und zeigte eine Ansicht, die
-        // es in ihrem Dokument gar nicht mehr gibt - eine leere Seite ohne Fehlermeldung.
-        var app = ReadWwwRoot("app.js");
-        Assert.Contains("filter(view=>!MIGRATED.has(view))", app, StringComparison.Ordinal);
-        Assert.Contains("if(MIGRATED.has(view))", app, StringComparison.Ordinal);
+    private static string WwwRootPath(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return Path.Combine(new[] { dir!.FullName, "src", "FullWorth.Web", "wwwroot" }.Concat(parts).ToArray());
     }
 
     private static string ReadWwwRoot(params string[] parts) =>

@@ -14,7 +14,7 @@
     @foreach (var view in NavigationCatalog.Quick)
     {
         var entry = byView[view];
-        <a class="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item")" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View">
+        <a class="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item")" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View" aria-current="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "page" : null)">
             <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
             <span data-i18n="@entry.Label">@Text.Get(entry.Label, language)</span>
         </a>

@@ -25,4 +25,34 @@ await startShellPage(async context => {
     bound = true;
   }
   await renderAccounts(context);
+  reportBankReturn(context);
 }, { primaryAction: () => ['accounts.add', () => openAddAccount(pageContext)] });
+
+// Die Rueckkehr von der Bank. BankingApplication leitet auf "/?bankConnected=…" bzw. "/?bankError=…"
+// um; die Startseite reicht beides hierher weiter, weil die Nachricht zu den Konten gehoert und der
+// Benutzer sie dort lesen soll, wo er gleich nachsieht.
+//
+// Bis #154 stand das in app.js: dort war der Ansichtswechsel nach "accounts" ein Schritt im selben
+// Dokument, und der Hinweis ueberlebte ihn. Seit die Konten eine eigene Adresse haben, ueberlebt
+// nichts einen Wechsel ausser dem, was in der Adresse steht - deshalb reisen die Werte mit.
+function reportBankReturn(context) {
+  const params = new URLSearchParams(location.search);
+  const connected = params.get('bankConnected');
+  const error = params.get('bankError');
+  if (!connected && !error) return;
+
+  history.replaceState(null, '', location.pathname);
+  if (connected) {
+    context.toast(context.get('accounts.connected').replace('{name}', () => connected), 6000);
+    return;
+  }
+
+  const known = {
+    access_denied: 'accounts.connectCancelled',
+    app_invalid_callback: 'accounts.connectExpired',
+    app_not_configured: 'accounts.notConfigured',
+    app_missing_parameters: 'accounts.connectFailed',
+    reauthorization_required: 'accounts.connectReauth'
+  };
+  context.toast(context.get(known[error] || 'accounts.connectFailed'), 8000);
+}

@@ -32,7 +32,7 @@ public sealed class SpacingRatchetTests
         ["pages/audit/page.css"] = 2,
         ["pages/budgets/page.css"] = 5,
         ["pages/categories/page.css"] = 3,
-        ["pages/coach/page.css"] = 60,
+        ["styles/coach.css"] = 60,
         ["pages/collections/page.css"] = 2,
         ["pages/compensation/page.css"] = 228,
         ["pages/contracts/page.css"] = 103,

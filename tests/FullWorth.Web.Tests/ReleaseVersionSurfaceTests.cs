@@ -7,7 +7,9 @@ public sealed class ReleaseVersionSurfaceTests
     {
         var root = FindRepositoryRoot();
         var dockerfile = File.ReadAllText(Path.Combine(root, "src", "FullWorth.Web", "Dockerfile"));
-        var shell = File.ReadAllText(Path.Combine(root, "src", "FullWorth.Web", "wwwroot", "index.html"));
+        // Das Abzeichen steht seit #154 in der Seitenleisten-Partial, nicht mehr in index.html - und der
+        // Dockerfile stempelt es dort VOR dem Publish, weil Razor danach uebersetzt ist.
+        var shell = WebSources.Navigation();
 
         Assert.Contains("ARG FULLWORTH_VERSION=0.0.0-dev", dockerfile, StringComparison.Ordinal);
         Assert.Contains("-p:Version=\"$FULLWORTH_VERSION\"", dockerfile, StringComparison.Ordinal);

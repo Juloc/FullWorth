@@ -1,4 +1,5 @@
 using FullWorth.Web.Modules.Admin;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace FullWorth.Web.Navigation;
@@ -25,8 +26,28 @@ public sealed class NavigationPageFilter(InstanceAdminService admins) : IAsyncPa
     public async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
     {
         var user = context.HttpContext.User;
-        context.HttpContext.Items[IsAdminKey] = user.Identity?.IsAuthenticated == true
+        var isAdmin = user.Identity?.IsAuthenticated == true
             && await admins.GetCurrentAdminAsync(user, context.HttpContext.RequestAborted) is not null;
+        context.HttpContext.Items[IsAdminKey] = isAdmin;
+
+        // Und dieselbe Antwort schuetzt die Seite auch, statt sie nur aus dem Menue zu nehmen.
+        //
+        // /admin war bis #154 eine eigene Route, die die Huelle auslieferte UND die Rechte pruefte.
+        // Als die Verwaltung eine Razor-Seite wurde, blieb die Route stehen, verdeckte die Seite und
+        // schickte eine Datei, die es nicht mehr gibt - die Seite antwortete mit 500. Die Pruefung
+        // gehoert nicht an eine Adresse, sondern an die Seiten, die sie brauchen.
+        //
+        // Welche das sind, sagt der Katalog: ein Eintrag mit AdminOnly. Kommt eine zweite
+        // Verwaltungsseite dazu, ist sie damit geschuetzt, ohne dass jemand daran denken muss.
+        var path = context.HttpContext.Request.Path.Value ?? string.Empty;
+        var adminOnly = NavigationCatalog.Entries.Any(entry =>
+            entry.AdminOnly && string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+
+        if (adminOnly && !isAdmin)
+        {
+            context.Result = new StatusCodeResult(StatusCodes.Status403Forbidden);
+            return;
+        }
 
         await next();
     }

@@ -31,16 +31,3 @@ export const VIEW_PATHS = Object.fromEntries(
   ENTRIES.map(entry => [entry.view, pathForView(entry.view)])
     .concat(Object.entries(SUBPAGES).map(([view, page]) => [view, page.path])));
 
-// Welche Ansichten bereits eine eigene Razor-Seite haben (#154).
-//
-// Die alte Hülle nimmt sie aus ihrer Liste: dann fängt sie deren Links nicht mehr ab, und ein Klick
-// auf „Buchungen" ist wieder das, was er im Markup schon immer war — eine echte Navigation. Die
-// Menge wächst mit jeder migrierten Seite und ist leer, wenn die Hülle verschwindet.
-export const MIGRATED = new Set([
-  'transactions',
-  'audit', 'notifications', 'merchants', 'rules', 'categories', 'collections',
-  'analytics', 'tax', 'pension', 'admin', 'compensation',
-  'insights', 'coach', 'purchases', 'contracts', 'budgets',
-  'passkeys', 'intelligence', 'import', 'import-broker-pdf', 'import-finanzguru-xlsx', 'bank-connections',
-  'accounts', 'account-detail', 'networth', 'settings'
-]);

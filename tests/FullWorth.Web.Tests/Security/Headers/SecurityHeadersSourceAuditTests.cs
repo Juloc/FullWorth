@@ -102,7 +102,7 @@ public sealed class SecurityHeadersSourceAuditTests : IClassFixture<FullWorthWeb
 
     [Theory]
     [InlineData("/app/boot.js", "javascript")]
-    [InlineData("/app.js", "javascript")]
+    [InlineData("/app/shell.js", "javascript")]
     [InlineData("/auth/auth.js", "javascript")]
     [InlineData("/styles/app.css", "text/css")]
     [InlineData("/auth/auth.css", "text/css")]

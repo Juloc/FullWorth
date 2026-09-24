@@ -96,13 +96,16 @@ export function bindCoach() {
     if (event.key === quickAccessKey) syncQuickAccess();
     if (event.key === pinnedKey) syncPinButton();
   });
-  window.addEventListener('fullworth:view-change', () => {
-    currentObjectContext = null; excludedContext.clear();
-    syncQuickAccess();
-    if (!dockOpen) return;
-    if (isPinned()) { renderPageContext(); renderStarters(); }
-    else closeDock();
-  });
+  // "Angeheftet" heisst: der Coach bleibt offen, waehrend man durch die Anwendung geht.
+  //
+  // Bis #154 ergab sich das von selbst - ein Ansichtswechsel liess das Dokument stehen. Seit jede
+  // Seite ein eigenes Dokument ist, faengt der Bereich bei jedem Wechsel geschlossen an, und das
+  // Anheften waere damit wirkungslos geworden. Also wird er beim Laden wieder geoeffnet, wenn er
+  // angeheftet ist.
+  //
+  // Der Zuhoerer auf 'fullworth:view-change', der hier stand, war seit der letzten migrierten Seite
+  // tot: das Ereignis schickte die alte Huelle, und die gibt es nicht mehr.
+  if (isPinned() && quickAccessEnabled()) openDock();
   window.addEventListener('fullworth:coach-open', event => {
     setObjectContext(event.detail || null);
     if (!dockOpen) openDock(); else { renderPageContext(); renderStarters(); $('#coach-dock-input')?.focus(); }
@@ -118,12 +121,12 @@ export function bindCoach() {
   // Der Seitenkontext wird auf der Seite festgehalten, die man verlässt - auf der Coach-Seite ist
   // die einzige Ansicht ja Coach selbst. Deshalb hier, nicht erst beim Wechsel.
   const track = event => {
-    if (state.view === 'coach' || !event.target.closest('.view.active')) return;
+    if (document.body.dataset.view === 'coach' || !event.target.closest('section[id^="view-"]')) return;
     if (dockOpen) renderPageContext(); else capturePageContext();
   };
   document.addEventListener('change', track);
   document.addEventListener('input', event => { if (event.target.id === 'tx-query') track(event); });
-  onAppEvent('surface:rendered', detail => { if (detail.view !== 'coach') capturePageContext(); });
+  if (document.body.dataset.view !== 'coach') capturePageContext();
   syncQuickAccess();
 }
 
@@ -330,7 +333,7 @@ function setObjectContext(value){
   renderPageContext();renderStarters();
 }
 function capturePageContext() {
-  const activeView = all('.view.active').find(view => view.id !== 'view-coach');
+  const activeView = all('section[id^="view-"]').find(view => view.id !== 'view-coach');
   let base=null;
   if (!activeView) {
     try { base=JSON.parse(sessionStorage.getItem(pageContextKey) || 'null'); } catch { base=null; }

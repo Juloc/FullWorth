@@ -22,6 +22,27 @@ public static class WebSources
     public static string Asset(params string[] parts) =>
         File.ReadAllText(Path.Combine(new[] { Web(), "wwwroot" }.Concat(parts).ToArray()));
 
+    /// <summary>
+    /// Der Rahmen, den jede Seite teilt: Kopf, Stilkette, Topbar, Coach-Dock, Toast.
+    ///
+    /// Das stand bis zum Ende von #154 in <c>wwwroot/index.html</c>. Das Dokument gibt es nicht mehr —
+    /// was darin für ALLE Seiten galt, steht jetzt hier, und was nur eine Seite betraf, bei ihr.
+    /// </summary>
+    public static string Layout() => Shared("_Layout.cshtml");
+
+    /// <summary>Die Seitenleiste. Trug in der alten Hülle die erzeugte <c>nav</c>-Sektion.</summary>
+    public static string Navigation() => Shared("_Navigation.cshtml");
+
+    /// <summary>Die untere Leiste am Telefon.</summary>
+    public static string BottomNavigation() => Shared("_BottomNavigation.cshtml");
+
+    /// <summary>Eine Quelldatei des Web-Projekts, z. B. <c>Source("Navigation", "PageHeadings.cs")</c>.</summary>
+    public static string Source(params string[] parts) =>
+        File.ReadAllText(Path.Combine(new[] { Web() }.Concat(parts).ToArray()));
+
+    private static string Shared(string name) =>
+        File.ReadAllText(Path.Combine(Web(), "Pages", "Shared", name));
+
     private static string Web() => Path.Combine(Root(), "src", "FullWorth.Web");
 
     private static string Root()

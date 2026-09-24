@@ -22,14 +22,21 @@ COPY src/FullWorth.Compensation.Core/ src/FullWorth.Compensation.Core/
 COPY src/FullWorth.Banking/ src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
-RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app --no-restore /p:UseAppHost=false
 
-# The same build version that is compiled into the assemblies is also visible in the existing
-# sidebar badge. Keep the source shell generic ("Alpha") and stamp only the published artifact so
-# there is still one version source: FULLWORTH_VERSION -> MSBuild + visible badge.
+# The same build version that is compiled into the assemblies is also visible in the sidebar badge.
+# Keep the source generic ("Alpha") and stamp only the build, so there is still one version source:
+# FULLWORTH_VERSION -> MSBuild + visible badge.
+#
+# Das geschieht VOR dem Publish, nicht danach: seit #154 steht das Abzeichen in einer Razor-Partial,
+# und die wird beim Publish zu Code uebersetzt - im Ergebnis gibt es keine Datei mehr, die man
+# nachtraeglich aendern koennte. Vorher stand es in wwwroot/index.html, und genau darauf zeigte
+# dieses sed. Das grep darunter haette den Bau angehalten; es bleibt aus demselben Grund stehen.
 RUN version_label="v${FULLWORTH_VERSION}" \
- && sed -i "s|<span class=\"brand-beta\">Alpha</span>|<span class=\"brand-beta\">${version_label}</span>|" /app/wwwroot/index.html \
- && grep -Fq "<span class=\"brand-beta\">${version_label}</span>" /app/wwwroot/index.html
+ && badge=src/FullWorth.Web/Pages/Shared/_Navigation.cshtml \
+ && sed -i "s|<span class=\"brand-beta\">Alpha</span>|<span class=\"brand-beta\">${version_label}</span>|" "$badge" \
+ && grep -Fq "<span class=\"brand-beta\">${version_label}</span>" "$badge"
+
+RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app --no-restore /p:UseAppHost=false
 
 # Codex and the Node runtime it needs. Built here rather than relied upon in the base image:
 # mcr.microsoft.com/playwright/dotnet makes no promise about shipping Node, and it has changed which

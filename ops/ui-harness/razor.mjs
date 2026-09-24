@@ -111,7 +111,7 @@ function viewData(source) {
 
 /**
  * Setzt den Rahmen zusammen. `navigation` und `bottomNavigation` kommen von aussen, weil sie aus
- * app/menu.js entstehen und dieselbe Quelle sind, aus der auch index.html gebaut wird.
+ * app/menu.js entstehen - derselben Liste, aus der auch NavigationCatalog entsteht.
  */
 /** Ersetzt die serverseitigen Textaufrufe der Seite durch den deutschen Text. */
 function localiseBody(markup, language) {
@@ -145,7 +145,7 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
     .replace(/@\(ViewData\["(\w+)"\] as string \?\? "([^"]*)"\)/g, (_, key, fallback) => data[key] ?? fallback)
     .replace(/@\(ViewData\["(\w+)"\] as string \?\? string\.Empty\)/g, (_, key) => data[key] ?? '');
 
-  // Die Seitenleiste kommt aus index.html und weiss deshalb nicht, welche Seite gerade offen ist -
+  // Die Seitenleiste entsteht in navigation.mjs und weiss deshalb nicht, welche Seite offen ist -
   // serverseitig setzt Razor das. Ohne diese Zeile misst die Werkstatt eine Navigation ohne
   // Markierung und damit etwas anderes als den Betrieb. Eine Unterseite markiert dabei ihren
   // Elterneintrag - dieselbe Regel wie in _Navigation.cshtml.
@@ -153,7 +153,8 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
   if (activeEntry) {
     html = html.replace(
       new RegExp('class="nav-item"([^>]*data-entry="' + activeEntry + '")', 'g'),
-      'class="nav-item active"$1');
+      // aria-current gehoert dazu: die Partials setzen beides, und UI_UX_SPEC §25 verlangt es.
+      'class="nav-item active"$1 aria-current="page"');
   }
 
   const leftover = html.match(/@[A-Za-z(]/);

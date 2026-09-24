@@ -81,7 +81,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
         // benutzt. Die Aussage bleibt dieselbe: die Beschriftung kommt aus der Menuedefinition,
         // nicht aus einer Sonderregel im Blatt.
         var shell = await GetAsync("/app/shell.js");
-        var app = await GetAsync("/app.js");
+        var app = await GetAsync("/app/shell.js");
 
         Assert.Contains("get(entry.label)", shell);
         Assert.DoesNotContain("transactions.allTx", shell);

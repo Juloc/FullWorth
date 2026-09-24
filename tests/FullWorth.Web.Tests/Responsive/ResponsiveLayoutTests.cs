@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 namespace FullWorth.Web.Tests.Responsive;
 
 /// <summary>
@@ -132,16 +133,15 @@ public sealed class ResponsiveLayoutTests
     [Fact]
     public void BottomNavHasExactlyFivePrimaryDestinations()
     {
-        var root = RepoRoot();
-        var html = File.ReadAllText(Path.Combine(root, "src", "FullWorth.Web", "wwwroot", "index.html"));
-        var nav = html[html.IndexOf("id=\"bottom-nav\"", StringComparison.Ordinal)..];
-        nav = nav[..nav.IndexOf("</nav>", StringComparison.Ordinal)];
-        // UI_UX_SPEC §3.2: genau fünf sichtbare Ziele (vier Bereiche + Mehr). Die vier sind Links auf
-        // ihre eigene Adresse, "Mehr" ist ein Knopf — beide tragen .nav-item, weil sie dasselbe sind.
-        // Welche vier es sind, steht in app/menu.js und prüft MenuParityTests.
-        var entries = System.Text.RegularExpressions.Regex.Matches(nav, "class=\"nav-item\"").Count;
-        Assert.Equal(5, entries);
+        var nav = WebSources.BottomNavigation();
+        // UI_UX_SPEC §3.2: genau fünf sichtbare Ziele — vier Bereiche und "Mehr".
+        //
+        // Die vier stehen seit #154 nicht mehr als Markup da, sondern entstehen aus
+        // NavigationCatalog.Quick; gezaehlt wird deshalb dort. "Mehr" ist der einzige, der
+        // woertlich in der Partial steht, weil er zu keinem Eintrag gehoert.
+        Assert.Equal(4, NavigationCatalog.Quick.Count);
         Assert.Contains("id=\"bottom-more\"", nav);
+        Assert.Contains("NavigationCatalog.Quick", nav);
     }
 
     [Fact]
@@ -149,8 +149,8 @@ public sealed class ResponsiveLayoutTests
     {
         var root = RepoRoot();
         var wwwroot = Path.Combine(root, "src", "FullWorth.Web", "wwwroot");
-        var html = File.ReadAllText(Path.Combine(wwwroot, "index.html"));
-        var appJs = File.ReadAllText(Path.Combine(wwwroot, "app.js"));
+        var html = WebSources.Layout();
+        var appJs = WebSources.Asset("app", "shell.js");
         // The frontend is a set of ES modules: app.js orchestrates, feature/ui modules own their screens.
         // A data-action may be wired in app.js OR in the module that owns that screen (e.g. pages/rules/page.js).
         var allJs = appJs + string.Concat(Directory
@@ -178,14 +178,9 @@ public sealed class ResponsiveLayoutTests
 
         // Every nav view must be routed. loadCurrent (in app.js) used to dispatch through a switch/case;
         // the architecture cleanup replaced that with the shared core/feature-registry.js, so each view
-        // is now wired via a `.register('view', ...)` call in app.js. Dead nav entries are still caught.
-        // Coach ist die eine Ansicht, die sich noch selbst baut und deshalb auch selbst aktiviert;
-        // MenuParityTests hält diese Ausnahme namentlich fest.
-        var views = System.Text.RegularExpressions.Regex.Matches(html, "data-view=\"([^\"]+)\"")
-            .Select(match => match.Groups[1].Value).Distinct().Where(view => view != "coach").ToList();
-        Assert.NotEmpty(views);
-        foreach (var view in views)
-            Assert.Contains($".register('{view}'", appJs);
+        // war: jede Ansicht ist in app.js registriert. Seit #154 ist jede Ansicht eine eigene Seite,
+        // also lautet dieselbe Frage: gibt es zu jedem Menueeintrag eine Razor-Seite? Genau das prueft
+        // MenuParityTests.Every_entry_leads_somewhere - hier bliebe nur eine zweite, schwaechere Kopie.
     }
 
     private static string RepoRoot()

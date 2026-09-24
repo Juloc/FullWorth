@@ -41,7 +41,7 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
     public void Every_stylesheet_the_shell_links_is_precached()
     {
         var precached = PrecachedPaths();
-        var index = File.ReadAllText(AssetPath("index.html"));
+        var index = WebSources.Layout();
 
         var missing = Regex.Matches(index, """<link[^>]+rel="stylesheet"[^>]+href="(?<path>/[^"?#]+)""")
             .Select(match => match.Groups["path"].Value)
@@ -98,7 +98,7 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
     /// Walks the real import graph from the modules index.html loads. Both static and dynamic import
     /// specifiers count: a dynamically imported module is still needed the moment that code path runs.
     /// </summary>
-    private HashSet<string> ReachableFromIndex() => ReachableFrom("index.html");
+    private HashSet<string> ReachableFromIndex() => ReachableFromMarkup(WebSources.Layout());
 
     private HashSet<string> ReachableFrom(string pageFile) =>
         ReachableFromMarkup(File.ReadAllText(AssetPath(pageFile)));

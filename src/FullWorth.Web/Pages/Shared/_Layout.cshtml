@@ -59,8 +59,18 @@
     <link rel="stylesheet" href="/styles/responsive.css">
     <link rel="stylesheet" href="/styles/design-depth.css">
     <link rel="stylesheet" href="/styles/dialogs.css">
+    @* Der Coach-Andockbereich schwebt ueber JEDER Seite, also gehoert sein Stylesheet hierher und
+       nicht zu einer Seite. Es lag bis zum Ende von #154 unter pages/coach/, und als das Markup in
+       den Rahmen zog, war es auf allen anderen Seiten unformatiert: der Starter stand als nackter
+       Knopf im Fluss statt als schwebender Kreis. Gemessen hat das /transactions 0,001 gekostet.
+
+       Die Stelle ist bewusst diese: genau dort stand es vorher als Seiten-CSS, also gewinnt und
+       verliert es gegen dieselben Blaetter wie zuvor. *@
+    <link rel="stylesheet" href="/styles/coach.css">
     @await RenderSectionAsync("Styles", required: false)
-    <link rel="stylesheet" href="/styles/mobile-polish.css">
+    @* Meldet den Service Worker an. Stand bis zum Ende von #154 nur in index.html - ohne diese
+       Zeile wuerde die Anwendung nie wieder als PWA installiert oder offline verfuegbar sein. *@
+    <script src="/pwa/register-sw.js"></script>
 </head>
 @* Die Ansicht am <body>, damit die Shell sie ohne Inline-Skript lesen kann: die CSP erlaubt
    script-src 'self', und ein Datenattribut ist kein Skript. *@
@@ -97,6 +107,41 @@
     </main>
 </div>
 <partial name="_BottomNavigation" />
+@* Coach-Starter und Coach-Andockbereich.
+
+   Beides stand bis zum Ende von #154 nur in index.html - also in der alten Huelle. Mit ihr waere es
+   ersatzlos verschwunden: der Coach haette auf KEINER Seite mehr eine Sprechblase gehabt. Hier
+   gehoert es hin, denn es schwebt ueber jeder Seite, nicht nur ueber einer. *@
+<button id="coach-launcher" class="coach-launcher" type="button" data-i18n-title="coach.open" title="Coach öffnen" aria-label="Coach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg></button>
+<aside id="coach-dock" class="coach-dock" aria-label="FullWorth Coach" hidden>
+  <div id="coach-dock-resizer" class="coach-dock-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Coach" tabindex="0"></div>
+  <header class="coach-dock-header">
+    <div class="coach-dock-title"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt="" width="335" height="180"><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
+    <div class="coach-dock-actions">
+      <button id="coach-dock-pin" type="button" class="icon-button coach-dock-pin" data-i18n-title="coach.pin" title="Coach anheften" aria-label="Pin" aria-pressed="false">⌖</button>
+      <button id="coach-dock-new" type="button" class="icon-button" data-i18n-title="coach.newChat" title="Neu starten" aria-label="New chat">↻</button>
+      <button id="coach-dock-page" type="button" class="icon-button" data-i18n-title="coach.openPage" title="Coach-Seite öffnen" aria-label="Open Coach page">↗</button>
+      <button id="coach-dock-close" type="button" class="icon-button coach-dock-close" data-i18n-title="common.close" title="Schließen" aria-label="Close">×</button>
+    </div>
+  </header>
+  <div class="coach-dock-chat">
+    <div id="coach-dock-context" class="coach-context"></div>
+    <div id="coach-dock-starters" class="coach-starters"></div>
+    <div id="coach-dock-messages" class="coach-messages" aria-live="polite"></div>
+    <form id="coach-dock-form" class="coach-composer">
+      <label class="sr-only" for="coach-dock-input" data-i18n="coach.question">Frage an FullWorth</label>
+      <textarea id="coach-dock-input" rows="2" maxlength="2000" data-i18n-placeholder="coach.dockPlaceholder" placeholder="Frag FullWorth …"></textarea>
+      <div class="coach-composer-footer">
+        <label class="coach-model-picker" for="coach-dock-model">
+          <span class="sr-only" data-i18n="coach.model">KI-Modell</span>
+          <select id="coach-dock-model"><option value="" data-i18n="coach.automatic">Automatisch</option></select>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"/></svg>
+        </label>
+        <button id="coach-dock-send" type="submit" class="btn btn-primary coach-send" data-i18n-title="coach.send" title="Senden" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg></button>
+      </div>
+    </form>
+  </div>
+</aside>
 <div id="toast" role="status" aria-live="polite"></div>
 @* Kein globales Shell-Skript: die Seite startet die Huelle selbst, damit es genau EINEN Einstieg
    je Dokument gibt und nicht zwei Module, die sich um die Reihenfolge streiten. *@

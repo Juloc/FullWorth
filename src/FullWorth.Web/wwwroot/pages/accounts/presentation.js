@@ -84,12 +84,12 @@ export function bindAccountsPresentation(nextActions = {}) {
   bound = true;
   route();
 
-  window.addEventListener('fullworth:view-change', event => {
-    route();
-    const view = event.detail?.view;
-    if (view === 'transactions') markSeen().catch(console.error);
-    else unread().catch(console.error);
-  });
+  // Bis #154 kam hier ein Ereignis, wenn die Huelle die Ansicht wechselte. Ein Wechsel ist jetzt eine
+  // echte Navigation: dieses Modul laeuft dabei ohnehin neu, und was zu tun ist, haengt nur noch
+  // daran, welche Seite gerade offen ist. Der Zuhoerer war seit der letzten migrierten Seite tot -
+  // es gab niemanden mehr, der das Ereignis abschickt.
+  if (document.body.dataset.view === 'transactions') markSeen().catch(console.error);
+  else unread().catch(console.error);
 }
 
 // Das Kontosymbol auch ausserhalb der Liste - auf der Kontodetailseite steht dieselbe Sache und

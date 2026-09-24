@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,14 +26,15 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
         // Markup steht dort, der Einstieg in entry.js, und app/routes.js führt ihn als migriert.
         var html = WebSources.Page("Tax");
         var entry = ReadWebAsset(Path.Combine("pages", "tax", "entry.js"));
-        var routes = ReadWebAsset(Path.Combine("app", "routes.js"));
         var tax = await GetAsync("/pages/tax/page.js");
         var review = await GetAsync("/pages/tax/review-extra.js");
 
         Assert.Contains("@page \"/tax\"", html);
         Assert.Contains("id=\"view-tax\"", html);
         Assert.Contains("./page.js", entry);
-        Assert.Contains("'tax'", routes);
+        // "Erreichbar" hiess bis #154: die Huelle kennt die Ansicht. Jetzt heisst es: der Katalog
+        // kennt sie, und es gibt eine Razor-Seite dafuer.
+        Assert.Contains(NavigationCatalog.Entries, entry => entry.View == "tax");
         Assert.Contains("/tax/review", tax);
         Assert.Contains("api/tax/candidates", tax);
         Assert.Contains("api/tax/years/", review);

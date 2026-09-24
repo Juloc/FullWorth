@@ -1,3 +1,4 @@
+using FullWorth.Web.Navigation;
 namespace FullWorth.Web.Tests;
 
 public sealed class AutopilotFrontendGuardTests
@@ -5,9 +6,9 @@ public sealed class AutopilotFrontendGuardTests
     [Fact]
     public void AutopilotMustNotAddPrimaryOrBottomNavigationItem()
     {
-        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
-        var primary = Slice(html, "<nav id=\"nav\"", "</nav>");
-        var mobile = Slice(html, "<nav id=\"bottom-nav\"", "</nav>");
+        // Beide Leisten entstehen seit #154 aus NavigationCatalog, nicht mehr aus einem Dokument -
+        // also wird der Katalog gefragt statt abgeschriebenes Markup.
+        var views = NavigationCatalog.Entries.Select(entry => entry.View).ToArray();
 
         // Autopilot selbst bekommt keinen Menüpunkt: eine KI-Funktion darf sich nicht in die
         // Navigation schieben, das war und bleibt die Regel.
@@ -17,12 +18,8 @@ public sealed class AutopilotFrontendGuardTests
         // Eintrag in der Gruppe Übersicht, weil eine Seite, die man nirgends anklicken kann, in der
         // Praxis eine Seite ist, die niemand findet. Es bleibt lesend, und der Rest dieser Klasse
         // prüft das weiter.
-        foreach (var nav in new[] { primary, mobile })
-        {
-            Assert.DoesNotContain("data-view=\"autopilot\"", nav, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("data-view=\"intelligence\"", nav, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("data-view=\"ai\"", nav, StringComparison.OrdinalIgnoreCase);
-        }
+        foreach (var forbidden in new[] { "autopilot", "intelligence", "ai" })
+            Assert.DoesNotContain(forbidden, views, StringComparer.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -50,8 +47,7 @@ public sealed class AutopilotFrontendGuardTests
     [Fact]
     public void Deploy5InsightsAreSecondaryReadOnlyFeatureSurface()
     {
-        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
-        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var html = WebSources.Layout();
         var feature = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "page.js"));
         var serviceWorker = File.ReadAllText(Path.Combine(WwwRoot(), "sw.js"));
         var appCss = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "app.css"));
@@ -62,7 +58,7 @@ public sealed class AutopilotFrontendGuardTests
         var page = WebSources.Page("Insights");
         var entry = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "entry.js"));
 
-        Assert.Contains("id=\"dashboard-insights\"", html);
+        Assert.Contains("id=\"dashboard-insights\"", WebSources.Page("Dashboard"));
         Assert.Contains("id=\"view-insights\"", page);
         Assert.Contains("id=\"insights-root\"", page);
 
@@ -70,7 +66,10 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("/pages/insights/page.css", page);
         Assert.DoesNotContain("Autopilot Deploy 5: read-only financial insights", appCss, StringComparison.Ordinal);
         Assert.Contains("mountInsights", entry);
-        Assert.Contains("renderDashboardInsights", app);
+        // Der Block auf der Startseite wird von deren Einstieg gezeichnet, seit es app.js nicht mehr
+        // gibt - dieselbe Funktion, nur an dem Ort, der die Startseite heute besitzt.
+        Assert.Contains("renderDashboardInsights", File.ReadAllText(Path.Combine(
+            WwwRoot(), "pages", "dashboard", "entry.js")));
 
         Assert.Contains("api/insights?view=", feature);
         Assert.Contains("load(ctx, 'current', 3", feature);
@@ -149,11 +148,11 @@ public sealed class AutopilotFrontendGuardTests
     public void InsightsIsAnOrdinaryMenuEntry()
     {
         var menu = File.ReadAllText(Path.Combine(WwwRoot(), "app", "menu.js"));
-        var routes = File.ReadAllText(Path.Combine(WwwRoot(), "app", "routes.js"));
 
         Assert.Contains("{ view: 'insights'", menu);
-        // Seit #154 eine eigene Seite: die Huelle fuehrt sie als migriert, statt sie zu registrieren.
-        Assert.Contains("'insights'", routes);
+        // "Erreichbar" hiess bis #154: die Huelle kennt die Ansicht. Jetzt heisst es: der Katalog
+        // kennt sie, und es gibt eine Razor-Seite dafuer.
+        Assert.Contains(NavigationCatalog.Entries, entry => entry.View == "insights");
     }
 
     private static string Slice(string text, string startMarker, string endMarker)

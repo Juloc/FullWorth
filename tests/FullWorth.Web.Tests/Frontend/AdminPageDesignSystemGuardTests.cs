@@ -37,10 +37,12 @@ public sealed class AdminPageDesignSystemGuardTests
         Assert.Contains("id=\"view-admin\"", html);
         Assert.Contains("/pages/admin/page.css", html);
 
-        // Der Eintrag steht im Menü und wird nur eingeblendet, wenn die Sitzung Adminrechte hat.
-        // Die Berechtigung selbst liegt am Server, nicht an diesem Attribut.
-        var app = File.ReadAllText(WwwRoot("app.js"));
-        Assert.Contains("[data-entry=\"admin\"]", app);
+        // Der Eintrag steht im Menü und wird nur eingeblendet, wenn die Sitzung Adminrechte hat -
+        // seit #154 entscheidet das der Server, bevor das Markup entsteht, statt JavaScript nach dem
+        // ersten Bild. Die Berechtigung haengt ohnehin nicht an diesem Attribut: die Seite selbst wird
+        // von NavigationPageFilter geschuetzt, und zwar fuer jeden AdminOnly-Eintrag des Katalogs.
+        Assert.Contains("AdminOnly", WebSources.Navigation());
+        Assert.Contains("entry.AdminOnly", WebSources.Source("Navigation", "NavigationPageFilter.cs"));
     }
 
     /// <summary>

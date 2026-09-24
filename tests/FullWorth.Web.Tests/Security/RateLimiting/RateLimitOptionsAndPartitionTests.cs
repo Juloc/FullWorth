@@ -191,7 +191,7 @@ public sealed class RateLimitOptionsAndPartitionTests
     [InlineData("GET", "/auth/login")]
     [InlineData("GET", "/auth/reset-password")]
     [InlineData("GET", "/health")]
-    [InlineData("GET", "/app.js")]
+    [InlineData("GET", "/app/shell.js")]
     public void Policy_selection_leaves_pages_health_and_static_assets_unlimited(string method, string path)
     {
         Assert.Null(RateLimitPolicySelection.ForRequest(method, new PathString(path)));

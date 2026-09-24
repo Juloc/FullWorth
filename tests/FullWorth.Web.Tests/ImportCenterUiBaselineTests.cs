@@ -42,23 +42,18 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void ImportPages_AreRegisteredAsProtectedWebRoutes()
     {
-        var endpoints = factory.Services.GetServices<EndpointDataSource>()
-            .SelectMany(source => source.Endpoints)
-            .OfType<RouteEndpoint>()
-            .Where(endpoint => endpoint.RoutePattern.RawText is not null)
-            .ToLookup(endpoint => endpoint.RoutePattern.RawText!, StringComparer.OrdinalIgnoreCase);
+        // Bis #154 hatte jede Import-Adresse eine eigene Route, die die Huelle auslieferte und dabei
+        // RequireAuthorization trug. Die Routen sind weg - sie haben die Razor-Seiten verdeckt. Der
+        // Schutz ist geblieben und gilt jetzt fuer ALLE Seiten auf einmal: die FallbackPolicy in
+        // Program.cs verlangt eine angemeldete Sitzung von jedem Endpunkt ohne eigene Regel.
+        Assert.Contains("options.FallbackPolicy", WebSources.Source("Program.cs"));
+        Assert.Contains("RequireAuthenticatedUser()", WebSources.Source("Program.cs"));
 
-        foreach (var route in new[]
+        foreach (var page in new[]
                  {
-                     "/settings/import",
-                     "/settings/import/finanzguru",
-                     "/settings/import/finanzguru/xlsx",
-                     "/settings/import/broker-pdf"
+                     "Settings/Import", "Settings/Import/Finanzguru/Xlsx", "Settings/Import/BrokerPdf"
                  })
-        {
-            var endpoint = Assert.Single(endpoints[route]);
-            Assert.NotNull(endpoint.Metadata.GetMetadata<IAuthorizeData>());
-        }
+            Assert.Contains("@page", WebSources.Page(page));
     }
 
     [Fact]

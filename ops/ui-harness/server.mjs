@@ -12,6 +12,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { languageOf, renderRazorPage } from './razor.mjs';
+import { shellNavigation } from './navigation.mjs';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const ROOT = process.argv[3] || join(REPO_ROOT, 'src', 'FullWorth.Web', 'wwwroot');
@@ -58,23 +59,11 @@ function inject(html) {
 }
 
 /** Die beiden Navigationsblöcke aus der erzeugten Hülle - dieselbe Quelle, nicht eine zweite. */
-async function shellNavigation() {
-  const html = await readFile(join(ROOT, 'index.html'), 'utf8');
-  const slice = (open, close) => {
-    const start = html.indexOf(open);
-    const end = html.indexOf(close, start);
-    if (start < 0 || end < 0) throw new Error(`ui-harness: ${open} steht nicht in index.html.`);
-    return html.slice(start, end + close.length);
-  };
-  return {
-    navigation: slice('<aside class="sidebar"', '</aside>'),
-    bottomNavigation: slice('<nav id="bottom-nav"', '</nav>')
-  };
-}
 
 async function renderRazor(path, headers) {
   try {
-    return { html: renderRazorPage(path, await shellNavigation(), languageOf(headers)) };
+    const language = languageOf(headers);
+    return { html: renderRazorPage(path, shellNavigation(language), language) };
   } catch (error) {
     // Lieber laut als eine Seite, die anders aussieht als im Betrieb - und NICHT still auf die alte
     // Hülle zurückfallen: dann sähe ein kaputter Renderer aus wie eine funktionierende Seite, und
@@ -302,10 +291,9 @@ createServer(async (req, res) => {
       return res.end('[]');
     }
 
-    // Eine Seite, die nach Razor umgezogen ist (#154), liegt nicht mehr unter wwwroot. Ohne diesen
-    // Zweig fiele die Werkstatt für sie auf die alte Hülle zurück, in der es sie nicht mehr gibt -
-    // eine leere Seite, die aussieht wie ein Fehler. Die Seitenleiste kommt dabei aus derselben
-    // index.html, die generate-shell.mjs schreibt: zwei Darstellungen, eine Quelle.
+    // Jede Adresse der angemeldeten Anwendung ist eine Razor-Seite (#154). Die Seitenleiste kommt
+    // aus derselben Liste in app/menu.js, aus der auch NavigationCatalog entsteht: zwei
+    // Darstellungen, eine Quelle.
     const razor = await renderRazor(path, req.headers);
     if (razor.error) {
       res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8', 'x-harness-razor': path });
@@ -316,22 +304,27 @@ createServer(async (req, res) => {
       return res.end(inject(razor.html));
     }
 
-    if (path === '/') path = '/index.html';
-    if (path.endsWith('/')) path += 'index.html';
     const full = normalize(join(ROOT, path));
     if (!full.startsWith(normalize(ROOT))) { res.writeHead(403); return res.end('no'); }
 
     try {
       const info = await stat(full);
-      if (info.isFile()) return serveFile(res, full, path === '/index.html');
-    } catch { /* fall through to the SPA shell */ }
+      if (info.isFile()) return serveFile(res, full, false);
+    } catch { /* keine Datei - dann der Rueckfall unten */ }
 
-    // SPA fallback, and it announces itself. A silent fallback once made a perfectly reachable page
-    // (the import centre, whose HTML lives in C#) look broken, and the harness itself was then used
-    // as evidence that the product was broken. The header lets an audit tell "this is the SPA shell"
-    // from "this is the real page" - never remove it.
+    // Rueckfall auf die Startseite, genau wie MapFallbackToPage("/Dashboard/Index") im Betrieb -
+    // und er meldet sich. Ein stiller Rueckfall hat einmal eine voellig erreichbare Seite kaputt
+    // aussehen lassen, und die Werkstatt wurde dann als Beweis dafuer benutzt, dass das Produkt
+    // kaputt sei. Der Kopf laesst eine Pruefung "das ist der Rueckfall" von "das ist die echte
+    // Seite" unterscheiden - niemals entfernen.
     res.setHeader('X-Harness-Fallback', path);
-    return serveFile(res, join(ROOT, 'index.html'), true);
+    const home = await renderRazor('/', req.headers);
+    if (home.error || home.html === null) {
+      res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+      return res.end('ui-harness: die Startseite laesst sich nicht zeichnen.');
+    }
+    res.writeHead(200, { 'content-type': TYPES['.html'] });
+    return res.end(inject(home.html));
   } catch (error) {
     res.writeHead(500, { 'content-type': 'text/plain' });
     res.end(String(error));

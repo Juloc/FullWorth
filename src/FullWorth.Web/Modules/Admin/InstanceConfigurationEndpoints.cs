@@ -22,7 +22,7 @@ public static class InstanceConfigurationEndpoints
     {
         var group = endpoints.MapGroup("/auth/admin/instance-settings").RequireAuthorization();
 
-        group.MapGet("/", async (
+        group.MapGet("", async (
             HttpContext context,
             InstanceAdminService admin,
             InstanceConfigurationService settings,
@@ -34,7 +34,7 @@ public static class InstanceConfigurationEndpoints
                 : Results.Ok(await settings.ListAsync(ct));
         });
 
-        group.MapPut("/", async (
+        group.MapPut("", async (
             InstanceSettingWrite request,
             HttpContext context,
             InstanceAdminService admin,

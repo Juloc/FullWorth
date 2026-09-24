@@ -58,16 +58,15 @@ public sealed class MpaShellGuardTests
     public void The_sidebar_furniture_is_wired_by_the_shared_shell()
     {
         var shell = Read("wwwroot", "app", "shell.js");
-        var app = Read("wwwroot", "app.js");
 
         foreach (var wiring in new[] { "'#nav-collapse'", "'#layout-reset'", "initResizableSidebar()" })
             Assert.True(shell.Contains(wiring, StringComparison.Ordinal),
                 $"app/shell.js verdrahtet {wiring} nicht - dann gilt es nur in der alten Hülle.");
 
-        foreach (var wiring in new[] { "'#nav-collapse'", "'#layout-reset'" })
-            Assert.False(app.Contains($"$({wiring})", StringComparison.Ordinal),
-                $"app.js verdrahtet {wiring} selbst. Auf einer Razor-Seite läuft app.js nicht, also "
-                + "wäre die Schaltfläche dort tot - genau der Fehler, den dieser Test festhält.");
+        // Die alte Huelle, in der diese Verdrahtung einmal allein stand, gibt es seit #154 nicht mehr.
+        // Das ist die staerkere Fassung derselben Aussage: es gibt keinen zweiten Ort.
+        Assert.False(File.Exists(Path.Combine(Root(), "src", "FullWorth.Web", "wwwroot", "app.js")),
+            "app.js ist zurueck - dann gibt es wieder zwei Huellen und eine davon laeuft nur auf einer Seite.");
     }
 
     [Fact]
@@ -122,16 +121,21 @@ public sealed class MpaShellGuardTests
     }
 
     [Fact]
-    public void Razor_pages_are_mapped_before_the_old_shell_catches_the_request()
+    public void Every_address_is_a_razor_page_and_there_is_no_fallback()
     {
         var program = Read("Program.cs");
-        var razor = program.IndexOf("app.MapRazorPages()", StringComparison.Ordinal);
-        var fallback = program.IndexOf("app.MapFallbackToFile(\"index.html\")", StringComparison.Ordinal);
 
-        Assert.True(razor >= 0, "Razor Pages werden nicht gemappt - keine der neuen Seiten waere erreichbar.");
-        Assert.True(fallback < 0 || razor < fallback,
-            "Der Rueckfall auf index.html steht vor den Razor-Seiten. Dann beantwortet die alte Huelle " +
-            "auch Adressen, fuer die es laengst eine eigene Seite gibt.");
+        Assert.Contains("app.MapRazorPages()", program, StringComparison.Ordinal);
+
+        // Gar kein Rueckfall mehr: jede Adresse ist eine Seite, also darf eine unbekannte Adresse 404
+        // sagen statt wortlos die Uebersicht zu zeigen. Der Rueckfall gab es nur, weil die alte Huelle
+        // ihre Adressen im Browser aufloeste und das Dokument unter jeder von ihnen brauchte.
+        //
+        // MapFallbackToPage ist kein Ersatz: es hat einen PUT auf eine unbekannte Adresse mitgenommen
+        // und mit 200 und einer fertigen HTML-Seite beantwortet - der Aufrufer haelt seinen
+        // Schreibzugriff dann fuer gelungen.
+        // Gesucht ist der AUFRUF, nicht das Wort - im Kommentar darueber steht beides zu Recht.
+        Assert.DoesNotContain("app.MapFallbackTo", program, StringComparison.Ordinal);
     }
 
     private static string Read(params string[] parts) =>

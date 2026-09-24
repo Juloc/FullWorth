@@ -260,7 +260,7 @@ public sealed class FrontendStructureGuardTests
     [Fact]
     public void A_synthetic_click_has_a_target()
     {
-        var markup = File.ReadAllText(Path.Combine(WebRoot, "index.html"));
+        var markup = WebSources.Layout();
         var offenders = new List<string>();
 
         foreach (var path in Scripts("app", "components", "core", "features", "pages"))
@@ -282,7 +282,7 @@ public sealed class FrontendStructureGuardTests
         var pages = Path.Combine(WebRoot, "pages");
         Assert.True(Directory.Exists(pages));
 
-        var html = File.ReadAllText(Path.Combine(WebRoot, "index.html"));
+        var html = WebSources.Layout();
         foreach (var folder in Directory.EnumerateDirectories(pages, "*", SearchOption.AllDirectories))
         {
             var page = Path.Combine(folder, "page.html");

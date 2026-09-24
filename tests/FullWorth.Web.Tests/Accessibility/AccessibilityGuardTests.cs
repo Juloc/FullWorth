@@ -21,7 +21,7 @@ public sealed class AccessibilityGuardTests
     [Fact]
     public void SkipLinkAndLandmarksExist()
     {
-        var html = Www("index.html");
+        var html = WebSources.Layout();
         Assert.Contains("class=\"skip-link\"", html);
         Assert.Contains("href=\"#main\"", html);
         Assert.Contains("id=\"main\"", html);
@@ -33,7 +33,7 @@ public sealed class AccessibilityGuardTests
         // Checked against every stylesheet the app shell actually loads, not a hand-picked four: the
         // reduced-motion handling lives in appearance.css, design-depth.css and styles/responsive.css,
         // so naming individual files made the guard depend on where the rules happen to sit today.
-        var html = Www("index.html");
+        var html = WebSources.Layout();
         var hrefs = System.Text.RegularExpressions.Regex
             .Matches(html, "<link[^>]+rel=\"stylesheet\"[^>]+href=\"/([^\"]+\\.css)\"")
             .Select(match => match.Groups[1].Value)
@@ -50,20 +50,16 @@ public sealed class AccessibilityGuardTests
     [Fact]
     public void BothNavsSetAriaCurrent()
     {
-        var js = Www("app.js");
-        // Seitenleiste und untere Leiste markieren beide das aktive Ziel. Sie tun es inzwischen in
-        // derselben Schleife, weil beide dieselben .nav-item-Elemente aus app/menu.js sind — vorher
-        // waren es zwei Schleifen über zwei getrennte Markup-Bäume, und genau daher kam der
-        // Auseinanderlauf, den MenuParityTests jetzt verhindert.
-        Assert.Contains("aria-current", js);
-        Assert.Contains(".nav-item[data-entry]", js);
+        // Seitenleiste und untere Leiste markieren beide das aktive Ziel. Seit #154 tut das der
+        // Server, bevor das Markup entsteht - vorher setzte app.js es nach dem ersten Bild, und mit
+        // der alten Huelle waere es ersatzlos verschwunden (UI_UX_SPEC §25).
+        Assert.Contains("aria-current", WebSources.Navigation());
+        Assert.Contains("aria-current", WebSources.BottomNavigation());
 
-        var html = Www("index.html");
-        foreach (var marker in new[] { "nav:generiert", "bottom-nav:generiert" })
-        {
-            var section = html[html.IndexOf(marker, StringComparison.Ordinal)..];
-            Assert.Contains("class=\"nav-item\"", section[..section.IndexOf("<!-- /", StringComparison.Ordinal)]);
-        }
+        // Und beide zeichnen ueberhaupt Eintraege - die erzeugten Abschnitte in index.html, an denen
+        // das frueher haftete, gibt es nicht mehr.
+        Assert.Contains("nav-item", WebSources.Navigation());
+        Assert.Contains("nav-item", WebSources.BottomNavigation());
 
         // <html lang> tracking now lives in the shared i18n module (core/i18n.js) rather than app.js
         // directly; the architecture cleanup extracted locale handling out of app.js.
