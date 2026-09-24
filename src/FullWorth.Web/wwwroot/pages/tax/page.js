@@ -210,7 +210,6 @@ function wireControls(host, settings, profile) {
   host.querySelector('#tax-year').addEventListener('change', e => { year = Number(e.target.value); renderTax(ctx); });
   host.querySelector('#tax-analyze').addEventListener('click', () => analyze(host));
   host.querySelector('[data-tax-settings]').addEventListener('click', () => openSettingsDialog(settings, profile));
-  void renderProfiles(host);
 }
 
 // Die Steuerprofile des Haushalts (#177).
@@ -221,13 +220,9 @@ function wireControls(host, settings, profile) {
 //
 // Der Abschnitt erscheint nur, wenn es mehr als eines GIBT. Eine Liste, in der man sich selbst
 // einmal sieht, ordnet nichts und nimmt einer Seite Platz weg, auf der es um Betraege geht.
-async function renderProfiles(host) {
+function renderProfiles(host, rows) {
   const panel = host.querySelector('#tax-profiles');
   if (!panel) return;
-
-  let rows;
-  try { rows = await ctx.api('api/tax/profiles'); }
-  catch { return; }
   if (!Array.isArray(rows) || rows.length < 2) return;
 
   const list = panel.querySelector('#tax-profile-list');
@@ -260,11 +255,20 @@ function switchTab(tab) {
 async function loadData(host, reviewOnly) {
   const list = host.querySelector('#tax-candidate-list');
   try {
-    const [summary, rows, review] = await Promise.all([
+    // Die Profile liegen im SELBEN Promise.all wie der Rest (#178-Nachzieher zu #177).
+    //
+    // Als eigener Abruf daneben kamen sie garantiert einen Schritt zu spaet - und genau das hat diese
+    // Seite schon einmal gekostet: renderTaxYearPanel() holte seinen Block nachtraeglich, und
+    // LayoutStabilityTests mass dafuer eine Stufe von 0,057. Behoben wurde es damals, indem der
+    // dritte Abruf hierher wanderte. Mein vierter hat denselben Fehler wiederholt, nur groesser
+    // (0,487 statt 0,395), weil er die Zeit, zu der die Seite fertig ist, unberechenbar macht.
+    const [summary, rows, review, profiles] = await Promise.all([
       ctx.api(`api/tax/years/${year}/summary`),
       ctx.api(`api/tax/candidates?year=${year}`),
-      ctx.api(`api/tax/years/${year}/review`).catch(() => null)
+      ctx.api(`api/tax/years/${year}/review`).catch(() => null),
+      ctx.api('api/tax/profiles').catch(() => null)
     ]);
+    renderProfiles(host, profiles);
     candidates = rows || [];
     const currency = candidates[0]?.currency || 'EUR';
     const confirmedAmount = Number(summary.confirmedAmount || 0);
