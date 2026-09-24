@@ -3,8 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.FullWorthSpaces;
+using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FullWorth.Backend.Tests.Api;
 
@@ -41,10 +43,10 @@ public sealed class FinTsDepotSnapshotValueTests
         });
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
 
-        var contribution = await ContributionAsync(client, owner, today);
+        var contribution = await ContributionAsync(factory, owner, today);
 
-        Assert.Equal(40000m, contribution.GetProperty("total").GetDecimal());
-        Assert.False(contribution.GetProperty("incomplete").GetBoolean());
+        Assert.Equal(40000m, contribution.Amount);
+        Assert.False(contribution.Incomplete);
     }
 
     [Fact]
@@ -75,9 +77,9 @@ public sealed class FinTsDepotSnapshotValueTests
         });
         Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
 
-        var contribution = await ContributionAsync(client, owner, today);
+        var contribution = await ContributionAsync(factory, owner, today);
 
-        Assert.Equal(1000m, contribution.GetProperty("total").GetDecimal());
+        Assert.Equal(1000m, contribution.Amount);
     }
 
     [Fact]
@@ -106,11 +108,11 @@ public sealed class FinTsDepotSnapshotValueTests
         });
         Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
 
-        var contribution = await ContributionAsync(client, owner, today);
+        var contribution = await ContributionAsync(factory, owner, today);
 
-        Assert.Equal(0m, contribution.GetProperty("total").GetDecimal());
+        Assert.Equal(0m, contribution.Amount);
         // Nothing is known about this position, and the answer says so rather than claiming a value.
-        Assert.True(contribution.GetProperty("incomplete").GetBoolean());
+        Assert.True(contribution.Incomplete);
     }
 
     private static async Task SeedConnectionAsync(
@@ -162,16 +164,24 @@ public sealed class FinTsDepotSnapshotValueTests
         return await client.SendAsync(request);
     }
 
-    private static async Task<JsonElement> ContributionAsync(HttpClient client, Guid owner, DateOnly asOf)
+    /// <summary>
+    /// Der Beitrag der Depots zum Nettovermoegen, direkt aus <see cref="InvestmentNetWorthService"/>.
+    ///
+    /// Bis #177 ging das ueber <c>GET /api/investments/net-worth-contribution</c>. Diese Route war das
+    /// FENSTER dieser Tests und sonst nichts: kein Aufrufer im Frontend, und in der Anwendung liest
+    /// den Dienst laengst jemand anderes - die Vermoegensuebersicht, die Schnappschuesse und
+    /// Analytics. Sie ist deshalb geloescht, und diese Tests fragen den Dienst jetzt direkt.
+    ///
+    /// Das ist ausserdem ehrlicher benannt: die Tests hier heissen nach einer RECHNUNG ("ohne
+    /// Stueckpreis aus dem gemeldeten Marktwert", "weder noch heisst unvollstaendig, nicht null"),
+    /// nicht nach einer Adresse. Ueber HTTP zu gehen hat daran nie etwas geprueft, was der direkte
+    /// Aufruf nicht auch prueft.
+    /// </summary>
+    private static async Task<InvestmentNetWorthContribution> ContributionAsync(
+        BackendWebApplicationFactory factory, Guid owner, DateOnly asOf)
     {
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"/api/investments/net-worth-contribution?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={asOf:yyyy-MM-dd}");
-        request.Headers.Add("X-FullWorth-Internal-Key", BackendWebApplicationFactory.InternalKey);
-        request.Headers.Add("X-FullWorth-User-Id", owner.ToString("D"));
-        using var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.Clone();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<InvestmentNetWorthService>();
+        return await service.CalculateAsync(FullWorthSpaceDefaults.LegacyId, owner, asOf, CancellationToken.None);
     }
 }

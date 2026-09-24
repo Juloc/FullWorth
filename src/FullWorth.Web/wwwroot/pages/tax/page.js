@@ -186,18 +186,22 @@ function viewHtml(reviewOnly) {
       <div id="tax-breakdown" class="rows tax-breakdown-list"></div>
     </article>
     <div data-tax-year-panel class="panel tax-year-review" hidden></div>
-    <article class="panel tax-profiles" id="tax-profiles" hidden>
-      <div class="panel-head"><h2>${esc(tr().profiles)}</h2></div>
-      <p class="row-sub panel-intro">${esc(tr().profilesHint)}</p>
-      <div id="tax-profile-list" class="rows"></div>
-    </article>
     <article class="panel tax-cases">
       <div class="panel-head"><h2 id="tax-list-title">${esc(reviewOnly ? tr().openCases : tr().allCases)}</h2></div>
       <div id="tax-candidate-list" class="tax-review-list">
         <div class="tax-loading shimmer"></div><div class="tax-loading shimmer"></div><div class="tax-loading shimmer"></div>
       </div>
     </article>
-    <p class="tax-disclaimer">${esc(tr().disclaimer)}</p>`;
+    <p class="tax-disclaimer">${esc(tr().disclaimer)}</p>
+    <!-- Die Steuerprofile stehen ganz unten, und zwar wegen Frontend-Regel 1: der Abschnitt
+         erscheint erst, wenn die Antwort da ist, und alles unter ihm wuerde dabei wandern.
+         LayoutStabilityTests hat genau das gemessen - 0,429 statt 0,395 auf /tax -, als er noch
+         ueber der Hinweisliste stand. Als letztes Element schiebt er nichts mehr. -->
+    <article class="panel tax-profiles" id="tax-profiles" hidden>
+      <div class="panel-head"><h2>${esc(tr().profiles)}</h2></div>
+      <p class="row-sub panel-intro">${esc(tr().profilesHint)}</p>
+      <div id="tax-profile-list" class="rows"></div>
+    </article>`;
 }
 
 function wireControls(host, settings, profile) {
