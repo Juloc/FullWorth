@@ -25,7 +25,8 @@ const strings = {
     lineType: 'Typ', warranty: 'Garantie bis', returnUntil: 'Rückgabe bis', serial: 'Seriennummer',
     chooseProduct: 'Produkt zuordnen', newProduct: 'Neues Produkt', purchaseCount: 'Käufe', lastPrice: 'Letzter Preis',
     history: 'Preisverlauf', noData: 'Keine Daten.', overview: 'Übersicht', spend: 'Ausgaben', needsReview: 'Zu prüfen',
-    topCategories: 'Kategorien', topProducts: 'Produkte', topBrands: 'Marken', priceChanges: 'Preisänderungen',
+    topCategories: 'Kategorien', topProducts: 'Produkte', topBrands: 'Marken', topMerchants: 'Händler', priceChanges: 'Preisänderungen',
+    learned: 'Gelernte Kategorien', learnedHint: 'Artikeltexte, die du mehrfach selbst derselben Kategorie zugeordnet hast', learnedAccept: 'Übernehmen',
     shrinkflation: 'Mögliche Shrinkflation', error: 'Fehler', saved: 'Gespeichert.', processing: 'Lade…',
     manualPurchase: 'Manuellen Kauf anlegen', create: 'Anlegen', source: 'Quelle', deletePurchase: 'Kauf löschen',
     deleteConfirm: 'Kauf wirklich löschen? Die Bankbuchung bleibt bestehen.', readonly: 'Nur Lesen',
@@ -50,7 +51,8 @@ const strings = {
     lineType: 'Type', warranty: 'Warranty until', returnUntil: 'Return until', serial: 'Serial number',
     chooseProduct: 'Assign product', newProduct: 'New product', purchaseCount: 'Purchases', lastPrice: 'Last price',
     history: 'Price history', noData: 'No data.', overview: 'Overview', spend: 'Spend', needsReview: 'Needs review',
-    topCategories: 'Categories', topProducts: 'Products', topBrands: 'Brands', priceChanges: 'Price changes',
+    topCategories: 'Categories', topProducts: 'Products', topBrands: 'Brands', topMerchants: 'Merchants', priceChanges: 'Price changes',
+    learned: 'Learned categories', learnedHint: 'Article texts you assigned to the same category more than once', learnedAccept: 'Apply',
     shrinkflation: 'Possible shrinkflation', error: 'Error', saved: 'Saved.', processing: 'Loading…',
     manualPurchase: 'Create manual purchase', create: 'Create', source: 'Source', deletePurchase: 'Delete purchase',
     deleteConfirm: 'Delete this purchase? The bank transaction remains.', readonly: 'Read only',
@@ -518,6 +520,66 @@ async function renderProducts() {
   advancedPanel.querySelector('[data-product-query]').addEventListener('keydown', event => { if (event.key === 'Enter') load(); });
   advancedPanel.querySelector('[data-new-product]').onclick = () => openProductCreate(load);
   await load();
+  await renderLearningSuggestions();
+}
+
+// Was das System aus den Kategorien lernt, die ein Mensch selbst vergeben hat (#177).
+//
+// GET /api/product-learning/category-suggestions und das zugehoerige /accept standen fertig im Baum
+// und hatten keinen Aufrufer. Die Schwellen sind die Aussage der Route und werden hier NICHT noch
+// einmal aufgeschrieben: mindestens drei gleiche Zuordnungen, ein eindeutiger Gewinner, und was
+// schon so hinterlegt ist, ist gar kein Vorschlag mehr. Der Server entscheidet das; diese Ansicht
+// zeigt das Ergebnis und schickt eine Annahme zurueck.
+//
+// Der Block haengt UNTER der Produktliste, und das ist hier unbedenklich: er entsteht nach ihr und
+// schiebt deshalb nichts, was schon steht.
+async function renderLearningSuggestions() {
+  const box = document.createElement('div');
+  box.className = 'pa-learned';
+  advancedPanel.appendChild(box);
+
+  const draw = async () => {
+    let rows;
+    try { rows = await api('api/product-learning/category-suggestions'); }
+    catch { box.remove(); return; }
+    if (!Array.isArray(rows) || !rows.length) { box.remove(); return; }
+
+    box.innerHTML = `<div class="panel-head"><div><h3>${esc(t('learned'))}</h3><div class="row-sub">${esc(t('learnedHint'))}</div></div></div>`;
+    for (const row of rows.slice(0, 12)) {
+      const line = document.createElement('div');
+      line.className = 'pa-analytics-row pa-learned-row';
+      const main = document.createElement('div');
+      const name = document.createElement('strong');
+      name.textContent = row.text;
+      const detail = document.createElement('span');
+      // Die Zahl gehoert dazu: "5 von 6 mal Lebensmittel" ist eine andere Aussage als "Lebensmittel".
+      detail.textContent = `${row.category} · ${row.count}/${row.totalOccurrences}`;
+      main.append(name, detail);
+      const accept = document.createElement('button');
+      accept.type = 'button';
+      accept.className = buttonClass(ButtonRole.Secondary);
+      accept.textContent = t('learnedAccept');
+      accept.onclick = async () => {
+        accept.disabled = true;
+        try {
+          await api('api/product-learning/category-suggestions/accept', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: row.text,
+              categoryId: row.categoryId,
+              productIdentityId: row.productIdentityId || null
+            })
+          });
+          await draw();
+        } catch { accept.disabled = false; }
+      };
+      line.append(main, accept);
+      box.appendChild(line);
+    }
+  };
+
+  await draw();
 }
 
 async function openProductCreate(onSaved) {
@@ -553,17 +615,22 @@ export async function openProduct(id) {
   notifyPurchaseUiChanged({dialog:dlg,productId:id,kind:'product'});
 }
 
+// by-merchant fehlte hier bis #177, und das war der ganze Grund, warum die Route keinen Aufrufer
+// hatte: vier von fuenf gleichartigen Gruppierungen standen laengst da, die fuenfte war gebaut und
+// vergessen. Sie beantwortet die Frage, die die anderen vier nicht beantworten - WO das Geld
+// ausgegeben wurde, nicht wofuer.
 async function renderAnalytics() {
-  const [overview, categories, products, brands, changes] = await Promise.all([
+  const [overview, categories, products, brands, merchants, changes] = await Promise.all([
     api('api/purchase-analytics/overview'),
     api('api/purchase-analytics/by-category'),
     api('api/purchase-analytics/by-product'),
     api('api/purchase-analytics/by-brand'),
+    api('api/purchase-analytics/by-merchant'),
     api('api/purchase-analytics/price-changes')
   ]);
   advancedPanel.innerHTML = `<div class="panel-head"><div><h2>${esc(t('analytics'))}</h2><div class="row-sub">Artikel-, Produkt- und Händlerdaten aus bestätigten Käufen</div></div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-refresh-analytics>${esc(t('refresh'))}</button></div>
     <div class="pa-metrics"><div><span>${esc(t('spend'))}</span><strong>${esc(money(overview.totalSpend, overview.baseCurrency))}</strong></div><div><span>${esc(t('purchaseCount'))}</span><strong>${overview.purchaseCount}</strong></div><div><span>${esc(t('articles'))}</span><strong>${overview.itemCount}</strong></div><div class="${overview.needsReview ? 'warn' : ''}"><span>${esc(t('needsReview'))}</span><strong>${overview.needsReview}</strong></div></div>
-    <div class="pa-analytics-grid">${analyticsCard(t('topCategories'), categories.items, categories.currency)}${analyticsCard(t('topProducts'), products.items, products.currency)}${analyticsCard(t('topBrands'), brands.items, brands.currency)}<div class="pa-card"><div class="pa-card-head"><h3>${esc(t('priceChanges'))}</h3></div>${(changes.items || []).slice(0, 12).map(row => `<div class="pa-analytics-row"><div><strong>${esc(row.productName)}</strong><span>${esc(row.current?.merchant || '')}</span></div><div>${row.comparison?.basePriceChangePercent == null ? '—' : `${row.comparison.basePriceChangePercent}%`}${row.comparison?.possibleShrinkflation ? `<span class="warn-text"> ${esc(t('shrinkflation'))}</span>` : ''}</div></div>`).join('') || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>`;
+    <div class="pa-analytics-grid">${analyticsCard(t('topCategories'), categories.items, categories.currency)}${analyticsCard(t('topProducts'), products.items, products.currency)}${analyticsCard(t('topBrands'), brands.items, brands.currency)}${analyticsCard(t('topMerchants'), merchants.items, merchants.currency)}<div class="pa-card"><div class="pa-card-head"><h3>${esc(t('priceChanges'))}</h3></div>${(changes.items || []).slice(0, 12).map(row => `<div class="pa-analytics-row"><div><strong>${esc(row.productName)}</strong><span>${esc(row.current?.merchant || '')}</span></div><div>${row.comparison?.basePriceChangePercent == null ? '—' : `${row.comparison.basePriceChangePercent}%`}${row.comparison?.possibleShrinkflation ? `<span class="warn-text"> ${esc(t('shrinkflation'))}</span>` : ''}</div></div>`).join('') || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>`;
   advancedPanel.querySelector('[data-refresh-analytics]').onclick = renderAnalytics;
 }
 

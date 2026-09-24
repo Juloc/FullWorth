@@ -35,7 +35,12 @@ public sealed class PurchaseDiscountAnalyticsCategoryRow
     public decimal Amount { get; set; }
 }
 
-public sealed record PurchaseDiscountAnalyticsBreakdown(string Name, decimal Amount);
+/// <summary>
+/// Ein Posten der Aufschluesselung. <c>Count</c> kam mit #177 dazu: die Ansicht, die diese Antwort
+/// jetzt benutzt, zeigte die Zahl bisher aus /purchase-analytics/savings - und die Route ist mit dem
+/// Umzug weg. Ohne das Feld haette der Umzug "7 x Coupon" stillschweigend verloren.
+/// </summary>
+public sealed record PurchaseDiscountAnalyticsBreakdown(string Name, decimal Amount, int Count);
 
 public sealed record PurchaseDiscountAnalyticsView(
     DateOnly? From,
@@ -145,19 +150,19 @@ public sealed class PurchaseDiscountAnalyticsService(
             lineTotal,
             convertedPurchases.Where(x => x.OriginalDiscount > 0m)
                 .GroupBy(x => x.Merchant, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount)))
+                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount), group.Count()))
                 .OrderByDescending(x => x.Amount).ThenBy(x => x.Name).Take(20).ToList(),
             convertedTypes
                 .GroupBy(x => x.Type, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount)))
+                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount), group.Count()))
                 .OrderByDescending(x => x.Amount).ThenBy(x => x.Name).ToList(),
             convertedProducts
                 .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount)))
+                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount), group.Count()))
                 .OrderByDescending(x => x.Amount).ThenBy(x => x.Name).Take(30).ToList(),
             convertedCategories
                 .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount)))
+                .Select(group => new PurchaseDiscountAnalyticsBreakdown(group.Key, group.Sum(x => x.Amount), group.Count()))
                 .OrderByDescending(x => x.Amount).ThenBy(x => x.Name).Take(30).ToList());
     }
 

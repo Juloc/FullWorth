@@ -250,7 +250,6 @@ GET              /api/purchase-analytics/personal-inflation
 GET              /api/purchase-analytics/price-changes
 GET              /api/purchase-analytics/products/{productId:guid}/merchants
 GET              /api/purchase-analytics/restock-forecast
-GET              /api/purchase-analytics/savings
 GET              /api/purchases/
 GET              /api/purchases/amazon/status
 GET              /api/purchases/amazon/sync-runs

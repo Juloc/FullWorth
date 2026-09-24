@@ -26,6 +26,7 @@ const T = {
     analyze: 'Neu analysieren', analyzing: 'Analysiert…',
     possible: 'Möglicherweise relevant', confirmed: 'Bestätigt', needsReview: 'Zu prüfen', missingDocs: 'Beleg fehlt',
     openCases: 'Offene Hinweise', allCases: 'Alle Hinweise', none: 'Keine offenen Steuerhinweise.',
+    profiles: 'Steuerprofile', profilesHint: 'Wer in diesem Haushalt ein Steuerprofil hat - und ob der Assistent dafür an ist.', profileOn: 'Assistent an', profileOff: 'Assistent aus',
     confirm: 'Bestätigen', reject: 'Nicht relevant', edit: 'Anteil ändern', eligible: 'Berücksichtigter Anteil', document: 'Beleg vorhanden',
     confidenceHigh: 'Starker Hinweis', confidenceMedium: 'Prüfen', confidenceLow: 'Unsicher',
     disclaimer: 'Hinweise sind eine Vorprüfung und keine Steuerberatung.', breakdown: 'Nach Kategorie',
@@ -43,6 +44,7 @@ const T = {
     analyze: 'Analyze again', analyzing: 'Analyzing…',
     possible: 'Potentially relevant', confirmed: 'Confirmed', needsReview: 'Needs review', missingDocs: 'Receipt missing',
     openCases: 'Open suggestions', allCases: 'All suggestions', none: 'No open tax suggestions.',
+    profiles: 'Tax profiles', profilesHint: 'Who in this household has a tax profile - and whether the assistant is on for it.', profileOn: 'Assistant on', profileOff: 'Assistant off',
     confirm: 'Confirm', reject: 'Not relevant', edit: 'Change share', eligible: 'Eligible share', document: 'Receipt available',
     confidenceHigh: 'Strong suggestion', confidenceMedium: 'Review', confidenceLow: 'Uncertain',
     disclaimer: 'Suggestions are a preliminary review and are not tax advice.', breakdown: 'By category',
@@ -184,6 +186,11 @@ function viewHtml(reviewOnly) {
       <div id="tax-breakdown" class="rows tax-breakdown-list"></div>
     </article>
     <div data-tax-year-panel class="panel tax-year-review" hidden></div>
+    <article class="panel tax-profiles" id="tax-profiles" hidden>
+      <div class="panel-head"><h2>${esc(tr().profiles)}</h2></div>
+      <p class="row-sub panel-intro">${esc(tr().profilesHint)}</p>
+      <div id="tax-profile-list" class="rows"></div>
+    </article>
     <article class="panel tax-cases">
       <div class="panel-head"><h2 id="tax-list-title">${esc(reviewOnly ? tr().openCases : tr().allCases)}</h2></div>
       <div id="tax-candidate-list" class="tax-review-list">
@@ -199,6 +206,45 @@ function wireControls(host, settings, profile) {
   host.querySelector('#tax-year').addEventListener('change', e => { year = Number(e.target.value); renderTax(ctx); });
   host.querySelector('#tax-analyze').addEventListener('click', () => analyze(host));
   host.querySelector('[data-tax-settings]').addEventListener('click', () => openSettingsDialog(settings, profile));
+  void renderProfiles(host);
+}
+
+// Die Steuerprofile des Haushalts (#177).
+//
+// GET /api/tax/profiles stand fertig im Baum und hatte keinen Aufrufer: die Seite las und schrieb
+// nur das EIGENE Profil. Der Server entscheidet dabei schon, wer was sieht - ein Eigentuemer alle
+// Profile des Bereichs, alle anderen nur ihr eigenes.
+//
+// Der Abschnitt erscheint nur, wenn es mehr als eines GIBT. Eine Liste, in der man sich selbst
+// einmal sieht, ordnet nichts und nimmt einer Seite Platz weg, auf der es um Betraege geht.
+async function renderProfiles(host) {
+  const panel = host.querySelector('#tax-profiles');
+  if (!panel) return;
+
+  let rows;
+  try { rows = await ctx.api('api/tax/profiles'); }
+  catch { return; }
+  if (!Array.isArray(rows) || rows.length < 2) return;
+
+  const list = panel.querySelector('#tax-profile-list');
+  list.replaceChildren(...rows.map(row => {
+    const line = document.createElement('div');
+    line.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'row-main';
+    const title = document.createElement('div');
+    title.className = 'row-title';
+    title.textContent = row.displayName || '—';
+    const sub = document.createElement('div');
+    sub.className = 'row-sub';
+    // Der Schalter des Assistenten ist die einzige Angabe, die hier etwas erklaert: wessen Profil
+    // ihn aus hat, taucht in keiner Auswertung auf - und genau das fragt man sich sonst.
+    sub.textContent = row.assistantEnabled ? tr().profileOn : tr().profileOff;
+    main.append(title, sub);
+    line.append(main);
+    return line;
+  }));
+  panel.hidden = false;
 }
 
 function switchTab(tab) {

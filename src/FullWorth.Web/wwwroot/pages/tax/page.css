@@ -393,3 +393,7 @@
   }
 
 }
+
+/* Steuerprofile (#177). Sie stehen unter den Kennzahlen, weil sie erklaeren, WESSEN Zahlen das sind -
+   und sie erscheinen nur, wenn es mehr als eines gibt. */
+.tax-profiles{margin-top:var(--space-4)}

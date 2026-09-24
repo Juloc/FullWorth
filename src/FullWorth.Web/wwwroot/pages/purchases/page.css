@@ -1037,3 +1037,9 @@ form.purchase-detail .reconcile {
 .receipt-set-single-thumb img{width:100%;height:100%;object-fit:cover}
 .receipt-set-single-main{display:grid;gap:.2rem;min-width:0}
 .receipt-set-single-main strong{overflow-wrap:anywhere}
+
+/* Gelernte Kategorien (#177). Kein eigener Kasten: es ist ein Nachtrag unter der Produktliste, kein
+   zweiter Bereich - und er entsteht nach ihr, schiebt also nichts, was schon steht. */
+.pa-learned{margin-top:var(--space-4)}
+.pa-learned-row{gap:var(--space-3)}
+.pa-learned-row > div{display:flex;flex-direction:column;min-width:0}

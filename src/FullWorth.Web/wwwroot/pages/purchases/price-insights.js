@@ -112,13 +112,32 @@ async function decorateAnalytics(panel) {
   if (!grid) return;
   analyticsBusy = true;
   try {
-    const savings = await api('api/purchase-analytics/savings');
+    // /purchase-analytics/discount-analytics statt /savings (#177).
+    //
+    // Es waren zwei Maschinen fuer dieselbe Frage, und die genutzte war die aermere: sie kannte
+    // Gesamtbetrag, Artikel- und Warenkorbanteil und eine Aufschluesselung nach Art. Die andere
+    // stand fertig und ohne Aufrufer daneben und kann zusaetzlich nach HAENDLER, Produkt und
+    // Kategorie aufschluesseln und sagt, wie viele Kaeufe ueberhaupt einen Rabatt hatten. /savings
+    // ist mit diesem Umzug geloescht; die Zahl je Art ("7 x Coupon") hat die andere dafuer bekommen.
+    const savings = await api('api/purchase-analytics/discount-analytics');
     if (!savings) return;
     const card = document.createElement('div');
     card.className = 'pa-card pa-savings-card';
     card.dataset.savingsCard = '';
-    const rows = (savings.byType || []).slice(0, 8).map(row => `<div class="pa-analytics-row"><div><strong>${esc(row.type || 'other')}</strong><span>${Number(row.count || 0)}×</span></div><strong class="pa-saving">${esc(money(row.amount, savings.currency || 'EUR'))}</strong></div>`).join('');
-    card.innerHTML = `<div class="pa-card-head"><h3>${esc(text('Erkannte Ersparnis', 'Recognized savings'))}</h3><strong class="pa-saving">${esc(money(savings.totalSavings, savings.currency || 'EUR'))}</strong></div><div class="pa-metrics"><div><span>${esc(text('Artikelrabatte', 'Item discounts'))}</span><strong>${esc(money(savings.itemLinkedSavings, savings.currency || 'EUR'))}</strong></div><div><span>${esc(text('Warenkorb', 'Basket'))}</span><strong>${esc(money(savings.basketSavings, savings.currency || 'EUR'))}</strong></div></div>${rows || `<div class="state-empty">${esc(text('Keine bestätigten Rabatte im Zeitraum.', 'No confirmed discounts in this period.'))}</div>`}${savings.incompleteFx ? `<div class="warn-text">${esc(text('Einige Fremdwährungswerte konnten noch nicht umgerechnet werden.', 'Some foreign-currency values could not yet be converted.'))}</div>` : ''}`;
+    const currency = savings.baseCurrency || 'EUR';
+    const breakdown = (items, limit = 8) => (items || []).slice(0, limit).map(row =>
+      `<div class="pa-analytics-row"><div><strong>${esc(row.name || 'other')}</strong><span>${Number(row.count || 0)}×</span></div><strong class="pa-saving">${esc(money(row.amount, currency))}</strong></div>`).join('');
+    const rows = breakdown(savings.byType);
+    // Nach Haendler ist die Aufschluesselung, die die alte Antwort gar nicht hatte - und die
+    // interessanteste: sie sagt, WO es die Rabatte gibt.
+    const merchantRows = breakdown(savings.byMerchant, 5);
+    card.innerHTML = `<div class="pa-card-head"><h3>${esc(text('Erkannte Ersparnis', 'Recognized savings'))}</h3><strong class="pa-saving">${esc(money(savings.totalDiscountAmount, currency))}</strong></div>`
+      + `<div class="pa-metrics"><div><span>${esc(text('Artikelrabatte', 'Item discounts'))}</span><strong>${esc(money(savings.itemDiscountAmount, currency))}</strong></div>`
+      + `<div><span>${esc(text('Warenkorb', 'Basket'))}</span><strong>${esc(money(savings.basketOrUnallocatedDiscountAmount, currency))}</strong></div>`
+      + `<div><span>${esc(text('Käufe mit Rabatt', 'Purchases with a discount'))}</span><strong>${Number(savings.purchasesWithDiscount || 0)} / ${Number(savings.purchaseCount || 0)}</strong></div></div>`
+      + (rows || `<div class="state-empty">${esc(text('Keine bestätigten Rabatte im Zeitraum.', 'No confirmed discounts in this period.'))}</div>`)
+      + (merchantRows ? `<div class="pa-card-head"><h3>${esc(text('Nach Händler', 'By merchant'))}</h3></div>${merchantRows}` : '')
+      + (savings.incomplete ? `<div class="warn-text">${esc(text('Einige Fremdwährungswerte konnten noch nicht umgerechnet werden.', 'Some foreign-currency values could not yet be converted.'))}</div>` : '');
     grid.prepend(card);
   } catch { /* supplementary UI only */ }
   finally { analyticsBusy = false; }

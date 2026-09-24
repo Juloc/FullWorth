@@ -20,6 +20,13 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Kaeufe + Steuern    Vier Leser auf einmal, und drei davon lagen direkt neben ihren Geschwistern:
+#                       by-merchant war die fuenfte von fuenf gleichartigen Gruppierungen und als
+#                       einzige nicht eingebunden; die gelernten Kategorien hatten Vorschlag UND
+#                       Annahme fertig; die Steuerprofile las nur das eigene. Die Rabattanalyse war
+#                       ein Doppel: die aermere /purchase-analytics/savings war eingebunden, die
+#                       reichere nicht - jetzt umgekehrt, und die aermere ist geloescht.
+#
 #   Haendler-Probe      Einen Alias anzulegen war leicht; nachzusehen, ob er wirklich greift, ging
 #                       nur ueber "warten, bis die naechste Buchung kommt". Die Haendlerseite fragt
 #                       jetzt den Server - die Regel "laengster passender Alias gewinnt" in JS
@@ -83,10 +90,6 @@
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #
 GET /api/intelligence/brand-assets/{contentSha256}
-GET /api/product-learning/category-suggestions
-GET /api/purchase-analytics/by-merchant
-GET /api/purchases/discount-analytics
-GET /api/tax/profiles
 POST /api/bootstrap/accept-invite
 POST /api/bootstrap/deactivate-user
 POST /api/bootstrap/first-admin

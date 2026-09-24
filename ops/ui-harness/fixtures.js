@@ -80,6 +80,37 @@
     // the bare "+ Alias" affordance are on screen at once.
     // Die Zuordnungsprobe (#177). Die Fixture antwortet fuer JEDEN Text dasselbe - das reicht, um
     // den Weg anzusehen; welche Regel dahinter gilt, entscheidet der Server und nicht die Harness.
+    // Rabattanalyse (#177). Loest die aermere /savings ab: dieselben drei Kennzahlen plus
+    // Aufschluesselung nach Haendler und die Zahl der Kaeufe MIT Rabatt.
+    'purchase-analytics/discount-analytics': {
+      from: '2026-08-24', to: '2026-09-24', baseCurrency: 'EUR', incomplete: false,
+      purchaseCount: 14, purchasesWithDiscount: 6,
+      totalDiscountAmount: 23.40, itemDiscountAmount: 15.90,
+      basketOrUnallocatedDiscountAmount: 7.50, discountLineAmount: 23.40,
+      byMerchant: [{ name: 'REWE', amount: 14.20, count: 4 }, { name: 'dm', amount: 9.20, count: 2 }],
+      byType: [{ name: 'coupon', amount: 12.30, count: 3 }, { name: 'promo', amount: 11.10, count: 3 }],
+      byProduct: [{ name: 'Bio-Milch 1l', amount: 4.50, count: 3 }],
+      byCategory: [{ name: 'Lebensmittel', amount: 18.70, count: 5 }]
+    },
+    // Gelernte Kategorien (#177). Zwei Vorschlaege - einer mit eindeutigem Gewinner ueber alle
+    // Vorkommen, einer knapper: die Zahl 'count/totalOccurrences' ist genau der Unterschied, den
+    // die Ansicht zeigen muss.
+    // Steuerprofile (#177). ZWEI, denn bei einem erscheint der Abschnitt bewusst gar nicht - eine
+    // Liste, in der man sich selbst einmal sieht, ordnet nichts.
+    'tax/profiles': [
+      { id: 'tp1', fullWorthSpaceId: SPACE, userId: null, displayName: 'Juli', countryCode: 'DE', assistantEnabled: true, active: true },
+      { id: 'tp2', fullWorthSpaceId: SPACE, userId: null, displayName: 'Partner', countryCode: 'DE', assistantEnabled: false, active: true }
+    ],
+    'product-learning/category-suggestions': [
+      { text: 'Bio-Milch 1l', normalizedText: 'bio milch 1l', categoryId: 'c1', category: 'Lebensmittel',
+        count: 6, totalOccurrences: 6, productIdentityId: null, productName: null, currentDefaultCategoryId: null },
+      { text: 'Spülmaschinentabs', normalizedText: 'spulmaschinentabs', categoryId: 'c1', category: 'Lebensmittel',
+        count: 3, totalOccurrences: 5, productIdentityId: null, productName: null, currentDefaultCategoryId: null }
+    ],
+    'purchase-analytics/by-merchant': {
+      currency: 'EUR',
+      items: [{ label: 'REWE', amount: 412.80, count: 9 }, { label: 'dm', amount: 96.40, count: 3 }]
+    },
     'merchants/resolve': { normalizedCounterparty: 'paypal spotify', merchantId: 'm1', merchantName: 'REWE' },
     'merchants': [
       { id: 'm1', name: 'REWE', logoAssetPath: null, aliases: [

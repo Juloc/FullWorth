@@ -64,76 +64,11 @@ public sealed class PurchaseAnalyticsService(FullWorthDbContext db, CurrencyConv
     public Task<object?> ByProductAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CancellationToken ct) => GroupSpendAsync(userId, fullWorthSpaceId, from, to, "product", ct);
     public Task<object?> ByBrandAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CancellationToken ct) => GroupSpendAsync(userId, fullWorthSpaceId, from, to, "brand", ct);
 
-    public async Task<object?> SavingsAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CancellationToken ct)
-    {
-        if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
-        var start = from ?? DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-1));
-        var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var baseCurrency = await db.FullWorthSpaces.AsNoTracking().Where(x => x.Id == fullWorthSpaceId).Select(x => x.BaseCurrency).SingleAsync(ct);
-        var purchases = await VisiblePurchases(userId, fullWorthSpaceId)
-            .Where(x => x.ReviewState == "confirmed" && x.PurchaseDate >= start && x.PurchaseDate <= end)
-            .Select(x => new { x.Id, Date = x.PurchaseDate!.Value, x.Currency, x.DiscountAmount })
-            .ToListAsync(ct);
-        var ids = purchases.Select(x => x.Id).ToArray();
-        var discountRows = ids.Length == 0
-            ? []
-            : await db.Set<PurchaseDiscount>().AsNoTracking()
-                .Where(x => ids.Contains(x.PurchaseId))
-                .Select(x => new { x.PurchaseId, x.Type, x.Amount, itemLinked = x.PurchaseItemId.HasValue })
-                .ToListAsync(ct);
-        var byPurchase = discountRows.GroupBy(x => x.PurchaseId).ToDictionary(x => x.Key, x => x.ToList());
-        var snapshot = await currencyConverter.PrepareAsync(baseCurrency, start, end, ct);
-        var acc = new FxAccumulator(snapshot);
-        var byType = new Dictionary<string, (decimal Amount, int Count)>(StringComparer.OrdinalIgnoreCase);
-        decimal total = 0m;
-        decimal itemLinked = 0m;
-        decimal basket = 0m;
-
-        foreach (var purchase in purchases)
-        {
-            if (!byPurchase.TryGetValue(purchase.Id, out var rows) || rows.Count == 0)
-            {
-                var legacy = Math.Max(0m, purchase.DiscountAmount ?? 0m);
-                if (legacy <= 0m) continue;
-                var convertedLegacy = acc.Convert(legacy, purchase.Currency, purchase.Date);
-                if (!convertedLegacy.HasValue) continue;
-                total += convertedLegacy.Value;
-                basket += convertedLegacy.Value;
-                var currentLegacy = byType.GetValueOrDefault("other");
-                byType["other"] = (currentLegacy.Amount + convertedLegacy.Value, currentLegacy.Count + 1);
-                continue;
-            }
-
-            foreach (var row in rows)
-            {
-                if (row.Amount <= 0m) continue;
-                var converted = acc.Convert(row.Amount, purchase.Currency, purchase.Date);
-                if (!converted.HasValue) continue;
-                total += converted.Value;
-                if (row.itemLinked) itemLinked += converted.Value; else basket += converted.Value;
-                var type = string.IsNullOrWhiteSpace(row.Type) ? "other" : row.Type;
-                var current = byType.GetValueOrDefault(type);
-                byType[type] = (current.Amount + converted.Value, current.Count + 1);
-            }
-        }
-
-        return new
-        {
-            from = start,
-            to = end,
-            currency = baseCurrency,
-            totalSavings = Math.Round(total, 2, MidpointRounding.AwayFromZero),
-            itemLinkedSavings = Math.Round(itemLinked, 2, MidpointRounding.AwayFromZero),
-            basketSavings = Math.Round(basket, 2, MidpointRounding.AwayFromZero),
-            incompleteFx = acc.Incomplete,
-            byType = byType.OrderByDescending(x => x.Value.Amount).Select(x => new
-            {
-                type = x.Key,
-                amount = Math.Round(x.Value.Amount, 2, MidpointRounding.AwayFromZero),
-                count = x.Value.Count
-            }).ToList()
-        };
-    }
+    // SavingsAsync stand hier bis #177 und beantwortete dieselbe Frage wie
+    // PurchaseDiscountAnalyticsService - nur aermer: Gesamtbetrag, Artikel- und Warenkorbanteil und
+    // eine Aufschluesselung nach Art. Die andere Fassung stand fertig und OHNE Aufrufer daneben und
+    // kann zusaetzlich nach Haendler, Produkt und Kategorie aufschluesseln. Die Ansicht benutzt
+    // jetzt die andere; diese hier und ihre Route /purchase-analytics/savings sind weg.
 
     public async Task<object?> PriceChangesAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CancellationToken ct)
     {
