@@ -20,6 +20,14 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Haendler-Probe      Einen Alias anzulegen war leicht; nachzusehen, ob er wirklich greift, ging
+#                       nur ueber "warten, bis die naechste Buchung kommt". Die Haendlerseite fragt
+#                       jetzt den Server - die Regel "laengster passender Alias gewinnt" in JS
+#                       nachzubauen waere eine zweite Fassung davon.
+#   Depot-Beitrag      Geloescht. InvestmentNetWorthService rechnet ihn laengst, und drei Leser
+#                       benutzen ihn schon (Vermoegensuebersicht, Schnappschuesse, Analytics) - die
+#                       Route lieferte dieselbe Zahl ein viertes Mal, isoliert und ohne Anzeigeort.
+#
 #   Zusammenfassungen   Die geplanten Laeufe schreiben seit Monaten je Woche und je Monat eine
 #                       Zusammenfassung - mit den AI-Kosten darin -, und niemand konnte sie sehen.
 #                       Der Detailabruf daneben ist geloescht: er lieferte dieselbe Ansicht wie die
@@ -75,8 +83,6 @@
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #
 GET /api/intelligence/brand-assets/{contentSha256}
-GET /api/investments/net-worth-contribution
-GET /api/merchants/resolve
 GET /api/product-learning/category-suggestions
 GET /api/purchase-analytics/by-merchant
 GET /api/purchases/discount-analytics

@@ -620,7 +620,6 @@ public static class BackendApplication
         endpoints.MapInvestmentTradeEndpoints();
         endpoints.MapInvestmentPriceEndpoints();
         endpoints.MapInvestmentPerformanceEndpoints();
-        endpoints.MapInvestmentNetWorthEndpoints();
         endpoints.MapInvestmentImportEndpoints();
         endpoints.MapInvestmentPdfImportEndpoints();
         endpoints.MapInvestmentPdfOcrImportEndpoints();

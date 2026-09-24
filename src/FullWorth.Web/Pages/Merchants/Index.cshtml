@@ -12,7 +12,14 @@
     ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
 *@
 
-<section id="view-merchants"><article class="panel"><div class="panel-head"><h2 data-i18n="merchants.title">@Text.Get("merchants.title", language)</h2><button data-action="new-merchant" data-i18n="common.add">@Text.Get("common.add", language)</button></div><p class="row-sub panel-intro" data-i18n="merchants.intro">@Text.Get("merchants.intro", language)</p><div id="merchants-list" class="rows"></div></article></section>
+@* Die Zuordnungsprobe steht VOR der Liste, und das ist keine Geschmacksfrage (#177): die
+   Haendlerliste kennt ihre Hoehe erst nach dem Laden - ein Skelett aus vier Zeilen, dann so viele
+   Zeilen wie es Haendler gibt -, und alles darunter wandert mit. LayoutStabilityTests hat genau das
+   gemessen: 0,112 am Schreibtisch und 0,375 am Telefon, beides an einer Seite, die vorher bei 0,000
+   stand. Ueber der Liste ist die Probe unbewegt, und die Liste selbst schiebt am Ende des Dokuments
+   nichts mehr. *@
+
+<section id="view-merchants"><article class="panel merchant-probe-panel"><div class="panel-head"><h2 data-i18n="merchants.probeTitle">@Text.Get("merchants.probeTitle", language)</h2></div><p class="row-sub panel-intro" data-i18n="merchants.probeHint">@Text.Get("merchants.probeHint", language)</p><form id="merchant-probe" class="merchant-probe"><label class="field"><span data-i18n="merchants.probeLabel">@Text.Get("merchants.probeLabel", language)</span><input name="counterparty" maxlength="250" autocomplete="off" placeholder="PAYPAL *SPOTIFY"></label><button type="submit" class="btn btn-secondary" data-i18n="merchants.probeRun">@Text.Get("merchants.probeRun", language)</button></form><div id="merchant-probe-result" class="rows"></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="merchants.title">@Text.Get("merchants.title", language)</h2><button data-action="new-merchant" data-i18n="common.add">@Text.Get("common.add", language)</button></div><p class="row-sub panel-intro" data-i18n="merchants.intro">@Text.Get("merchants.intro", language)</p><div id="merchants-list" class="rows"></div></article></section>
 
 @section Styles {
     <link rel="stylesheet" href="/pages/merchants/page.css">

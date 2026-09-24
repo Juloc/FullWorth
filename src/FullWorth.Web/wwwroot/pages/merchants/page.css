@@ -9,3 +9,15 @@
    sie gewinnen, wo sie vorher verloren haben. */
 
 .merchant-skeleton{pointer-events:none}
+
+/* Zuordnung pruefen (#177). Eine Zeile aus Feld und Knopf - keine eigene Kachel, keine eigene
+   Farbe: es ist ein Werkzeug fuer die Liste darueber, nicht ein zweiter Bereich. */
+.merchant-probe{
+  display:flex;
+  gap:var(--space-3);
+  align-items:flex-end;
+  flex-wrap:wrap;
+  margin-bottom:var(--space-3);
+}
+
+.merchant-probe .field{flex:1 1 260px;min-width:0}

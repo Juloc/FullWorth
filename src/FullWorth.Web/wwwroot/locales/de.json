@@ -1067,7 +1067,13 @@
     "mergeTarget": "Zielhändler",
     "merge": "Zusammenführen",
     "mergeConfirm": "„{name}\" mit dem ausgewählten Händler zusammenführen? „{name}\" wird entfernt.",
-    "mergeNone": "Kein anderer Händler zum Zusammenführen vorhanden."
+    "mergeNone": "Kein anderer Händler zum Zusammenführen vorhanden.",
+    "probeTitle": "Zuordnung prüfen",
+    "probeHint": "Text so eingeben, wie er auf dem Kontoauszug steht. Zugeordnet wird immer der längste passende Alias - dieselbe Regel, die auch die Buchungen benutzen.",
+    "probeLabel": "Text vom Kontoauszug",
+    "probeRun": "Prüfen",
+    "probeNoMatch": "Kein Händler passt darauf.",
+    "probeNormalized": "Normalisiert"
   },
   "audit": {
     "title": "Aktivitätsprotokoll",

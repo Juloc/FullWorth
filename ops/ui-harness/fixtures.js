@@ -78,6 +78,9 @@
     // Merchant registry (#157/Scheibe 14 gap - the page rendered only its empty state here before).
     // One merchant with two aliases (the everyday case) and one with none, so both the chip row and
     // the bare "+ Alias" affordance are on screen at once.
+    // Die Zuordnungsprobe (#177). Die Fixture antwortet fuer JEDEN Text dasselbe - das reicht, um
+    // den Weg anzusehen; welche Regel dahinter gilt, entscheidet der Server und nicht die Harness.
+    'merchants/resolve': { normalizedCounterparty: 'paypal spotify', merchantId: 'm1', merchantName: 'REWE' },
     'merchants': [
       { id: 'm1', name: 'REWE', logoAssetPath: null, aliases: [
         { id: 'ma1', normalizedAlias: 'rewe markt gmbh' }, { id: 'ma2', normalizedAlias: 'rewe sagt danke' }

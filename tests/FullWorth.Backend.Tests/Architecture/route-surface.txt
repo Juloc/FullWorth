@@ -206,7 +206,6 @@ GET              /api/investment-import/jobs/{jobId:guid}
 GET              /api/investment-import/jobs/{jobId:guid}/summary
 GET              /api/investment-import/portfolios/{portfolioId:guid}/reconciliation
 GET              /api/investments/benchmarks
-GET              /api/investments/net-worth-contribution
 GET              /api/investments/portfolios
 GET              /api/investments/portfolios/{portfolioId:guid}/dividends
 GET              /api/investments/portfolios/{portfolioId:guid}/overview

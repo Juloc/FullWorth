@@ -32,6 +32,57 @@ function emptyState() {
 export function bindMerchants(context) {
   ctx = context;
   ctx.$('[data-action="new-merchant"]')?.addEventListener('click', () => openMerchantDialog());
+  bindProbe();
+}
+
+// Zuordnung pruefen (#177).
+//
+// GET /api/merchants/resolve stand fertig im Baum und hatte keinen Aufrufer - dabei ist es genau das
+// Werkzeug, das beim Pflegen von Aliassen fehlt: einen Alias anzulegen ist leicht, nachzusehen, ob er
+// wirklich greift, ging bisher nur ueber "warten, bis die naechste Buchung kommt".
+//
+// Gefragt wird der SERVER, und das ist der Punkt. Die Regel "der laengste passende Alias gewinnt"
+// hier in JavaScript nachzubauen hiesse, eine zweite Fassung davon zu pflegen - und eine Probe, die
+// nach einer anderen Regel antwortet als die Buchungen, ist schlimmer als keine.
+function bindProbe() {
+  const form = ctx.$('#merchant-probe');
+  if (!form || form.dataset.bound) return;
+  form.dataset.bound = '1';
+  const host = ctx.$('#merchant-probe-result');
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const text = String(new FormData(form).get('counterparty') || '').trim();
+    if (!text) { host.replaceChildren(); return; }
+    try {
+      const result = await ctx.api('api/merchants/resolve?counterparty=' + encodeURIComponent(text));
+      host.replaceChildren(...probeRows(result));
+    } catch (error) { host.replaceChildren(line(error.message || ctx.get('common.error'))); }
+  });
+}
+
+function probeRows(result) {
+  const rows = [];
+  if (result?.merchantName) rows.push(line(result.merchantName));
+  else rows.push(line(ctx.get('merchants.probeNoMatch')));
+  // Die normalisierte Form gehoert dazu: sie erklaert, WARUM etwas passt oder nicht - Gross- und
+  // Kleinschreibung, Satzzeichen und Rechtsformen fallen dabei weg.
+  if (result?.normalizedCounterparty)
+    rows.push(line(ctx.get('merchants.probeNormalized') + ': ' + result.normalizedCounterparty, 'row-sub'));
+  return rows;
+}
+
+function line(text, className = 'row-title') {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const main = document.createElement('div');
+  main.className = 'row-main';
+  const inner = document.createElement('div');
+  inner.className = className;
+  inner.textContent = text;
+  main.append(inner);
+  row.append(main);
+  return row;
 }
 
 // Used by the page-header primary action.

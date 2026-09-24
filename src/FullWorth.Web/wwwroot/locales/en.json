@@ -1067,7 +1067,13 @@
     "mergeTarget": "Target merchant",
     "merge": "Merge",
     "mergeConfirm": "Merge “{name}” into the selected merchant? “{name}” will be removed.",
-    "mergeNone": "No other merchant to merge into."
+    "mergeNone": "No other merchant to merge into.",
+    "probeTitle": "Check a match",
+    "probeHint": "Type the text as it appears on the statement. The longest matching alias wins - the same rule the bookings use.",
+    "probeLabel": "Text from the statement",
+    "probeRun": "Check",
+    "probeNoMatch": "No merchant matches it.",
+    "probeNormalized": "Normalised"
   },
   "audit": {
     "title": "Activity log",
