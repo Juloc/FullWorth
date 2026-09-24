@@ -72,6 +72,7 @@ const APP_SHELL = [
   '/pages/audit/page.css',
   '/pages/categories/page.js',
   '/pages/categories/arrange.js',
+  '/pages/categories/merge.js',
   '/pages/collections/page.js',
   '/pages/collections/page.css',
   '/pages/categories/page.css',

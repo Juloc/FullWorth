@@ -20,6 +20,11 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Zusammenfuehren     Wer zwei Kategorien fuer dieselbe Sache hatte - nach jedem Import der
+#                       Normalfall -, konnte sie nur an jeder Buchung einzeln umhaengen. Der Dialog
+#                       zeigt jetzt die Vorschau des Servers, und die ist keine Zierde: es aendert
+#                       rueckwirkend jede Auswertung, die an der Quelle hing.
+#
 #   Auswertungen        Volles CRUD ohne Aufrufer, waehrend die Seite ihre Merkzettel in einen
 #                       Einstellungs-Blob legte. Ein Blob ist ein Feld: Loeschen hiess die ganze
 #                       Liste lesen, eine Zeile herausfiltern und alles zurueckschreiben - in zwei
@@ -54,10 +59,8 @@
 # Der Rest ist fertig gebaut und unerreichbar, und die groessten Brocken darunter sind:
 #
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
-#   /api/category-merge             Kategorien zusammenfuehren
 #
 GET /api/bank-capabilities
-GET /api/category-merge/{sourceCategoryId:guid}/preview
 GET /api/intelligence/brand-assets/{contentSha256}
 GET /api/intelligence/digests/
 GET /api/intelligence/digests/{id:guid}
@@ -74,5 +77,4 @@ POST /api/bootstrap/purge-user
 POST /api/bootstrap/reactivate-user
 POST /api/category-intelligence/bulk
 POST /api/category-intelligence/learn
-POST /api/category-merge/{sourceCategoryId:guid}
 POST /api/coach/ask

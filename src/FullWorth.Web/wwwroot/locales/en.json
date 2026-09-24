@@ -974,7 +974,17 @@
     "expand": "Expand",
     "collapse": "Collapse",
     "arrange": "Order",
-    "colour": "Colour"
+    "colour": "Colour",
+    "merge": "Merge",
+    "mergeHint": "Move into another category",
+    "mergeTarget": "Target category",
+    "mergeDeleteSource": "Delete the source afterwards",
+    "mergeTransactions": "transactions",
+    "mergeRules": "rules",
+    "mergeBudgets": "budgets",
+    "mergeContracts": "contracts",
+    "mergeSplits": "splits",
+    "mergePurchaseItems": "items"
   },
   "notifications": {
     "title": "Notifications",

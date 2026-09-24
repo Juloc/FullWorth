@@ -80,3 +80,9 @@
 /* Das Farbfeld des Bearbeiten-Dialogs. Der Wert IST die Farbe - deshalb steht sie am Element und
    nicht in einer Regel: eine vom Benutzer gewaehlte Farbe ist Inhalt, kein Entwurf. */
 .cat-colour-field input[type="color"]{width:100%;min-height:42px;padding:var(--space-1);border-radius:var(--radius-sm)}
+
+/* Zusammenfuehren (#177). Die Vorschau ist eine Liste von Zahlen, und die zwei Gruende, warum es
+   nicht geht, sind keine Fehlermeldung, sondern eine Aufgabe - deshalb stehen sie in derselben
+   Liste und nicht in einem Kasten darueber. */
+.cat-merge-preview{margin:var(--space-3) 0}
+.cat-merge-bad{border-inline-start:3px solid var(--danger);padding-inline-start:var(--space-3)}

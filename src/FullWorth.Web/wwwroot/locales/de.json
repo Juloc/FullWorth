@@ -974,7 +974,17 @@
     "expand": "Ausklappen",
     "collapse": "Einklappen",
     "arrange": "Reihenfolge",
-    "colour": "Farbe"
+    "colour": "Farbe",
+    "merge": "Zusammenführen",
+    "mergeHint": "In eine andere Kategorie überführen",
+    "mergeTarget": "Zielkategorie",
+    "mergeDeleteSource": "Quelle danach löschen",
+    "mergeTransactions": "Buchungen",
+    "mergeRules": "Regeln",
+    "mergeBudgets": "Budgets",
+    "mergeContracts": "Verträge",
+    "mergeSplits": "Aufteilungen",
+    "mergePurchaseItems": "Artikel"
   },
   "notifications": {
     "title": "Benachrichtigungen",

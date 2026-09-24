@@ -2,6 +2,7 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { emptyRow } from '../../components/empty.js';
 import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
 import { renderCategoryArrange } from './arrange.js';
+import { openCategoryMerge } from './merge.js';
 // Der "Übergeordnet"-Select trägt hier denselben Baum wie überall sonst (#157) - ohne Suche musste man
 // ihn beim Anlegen/Verschieben einer Unterkategorie in einem tief verschachtelten Baum durchscrollen.
 import { attachCombobox } from '../../components/combobox.js';
@@ -215,6 +216,7 @@ function openEdit(node, all) {
     <label>${ctx.esc(ctx.get('categories.icon'))}<span data-icon-picker></span></label>
     <label>${ctx.esc(ctx.get('categories.parent'))}<select name="parent"><option value="">${ctx.esc(ctx.get('categories.topLevel'))}</option>${parentOptions(node, all, node.parentId)}</select></label>
     <label class="cat-colour-field">${ctx.esc(ctx.get('categories.colour'))}<input name="colour" type="color" value="${ctx.esc(appearance.get(String(node.id)) || '#64748B')}"></label>
+    <button type="button" class="row settings-link" data-merge><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('categories.merge'))}</div><div class="row-sub">${ctx.esc(ctx.get('categories.mergeHint'))}</div></div><span aria-hidden="true">›</span></button>
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
   const iconPicker = categoryIconPicker(node.icon, { none: ctx.get('categories.iconNone') });
   dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
@@ -225,6 +227,7 @@ function openEdit(node, all) {
   });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('[data-merge]').onclick = () => { dlg.close(); openCategoryMerge(ctx, node, all, () => renderCategories(ctx)); };
   dlg.querySelector('form').onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
