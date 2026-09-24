@@ -28,15 +28,40 @@ public sealed class PageHeadings
         if (!File.Exists(file)) return;
 
         using var document = JsonDocument.Parse(File.ReadAllText(file));
-        if (!document.RootElement.TryGetProperty("pages", out var pages)) return;
 
-        foreach (var page in pages.EnumerateObject())
+        // Erst die Ueberschriften, die es gibt.
+        if (document.RootElement.TryGetProperty("pages", out var pages))
         {
-            var title = page.Value.TryGetProperty("title", out var t) ? t.GetString() : null;
-            if (title is null) continue;
-            var subtitle = page.Value.TryGetProperty("subtitle", out var s) ? s.GetString() : null;
-            headings[page.Name] = (title, subtitle ?? string.Empty);
+            foreach (var page in pages.EnumerateObject())
+            {
+                var title = page.Value.TryGetProperty("title", out var t) ? t.GetString() : null;
+                if (title is null) continue;
+                var subtitle = page.Value.TryGetProperty("subtitle", out var s) ? s.GetString() : null;
+                headings[page.Name] = (title, subtitle ?? string.Empty);
+            }
         }
+
+        // Dann die, die keine haben: "Sammlungen" und "Altersvorsorge" tragen ihren Namen nur in der
+        // Navigation. Denselben Rueckfall macht die alte Huelle im Browser - er steht jetzt hier,
+        // damit die Ueberschrift VOR dem ersten Zeichnen im Dokument ist und nichts springt.
+        foreach (var entry in NavigationCatalog.Entries)
+        {
+            if (headings.ContainsKey(entry.View)) continue;
+            var label = Lookup(document.RootElement, entry.Label);
+            if (label is not null) headings[entry.View] = (label, string.Empty);
+        }
+    }
+
+    /// <summary>Ein Schluessel wie "nav.collections" im verschachtelten Sprachdokument.</summary>
+    private static string? Lookup(JsonElement root, string key)
+    {
+        var current = root;
+        foreach (var part in key.Split('.'))
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(part, out current))
+                return null;
+        }
+        return current.ValueKind == JsonValueKind.String ? current.GetString() : null;
     }
 
     public string Title(string? view) =>

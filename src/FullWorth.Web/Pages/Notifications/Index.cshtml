@@ -1,0 +1,23 @@
+@page "/notifications"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Benachrichtigungen · FullWorth";
+    ViewData["ActiveView"] = "notifications";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/notifications/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-notifications"><article class="panel"><div class="panel-head"><h2 data-i18n="notifications.title">@Text.Get("notifications.title", language)</h2></div><div id="notifications-body"></div></article></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/notifications/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/notifications/entry.js"></script>
+}

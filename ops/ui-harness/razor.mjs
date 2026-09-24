@@ -16,6 +16,29 @@ import { readFileSync, readdirSync } from 'node:fs';
 const WWWROOT = new URL('../../src/FullWorth.Web/wwwroot/', import.meta.url);
 /** Dieselben Ueberschriften, die PageHeadings serverseitig liest. */
 const HEADINGS = JSON.parse(readFileSync(new URL('locales/de.json', WWWROOT), 'utf8')).pages ?? {};
+const LOCALES = {
+  de: JSON.parse(readFileSync(new URL('locales/de.json', WWWROOT), 'utf8')),
+  en: JSON.parse(readFileSync(new URL('locales/en.json', WWWROOT), 'utf8')),
+};
+/** @Text.Get("a.b", language) - derselbe Nachschlag, den LocaleText serverseitig macht. */
+const localeText = (key, language) =>
+  key.split('.').reduce((node, part) => node?.[part], LOCALES[language] ?? LOCALES.de) ?? '';
+
+/**
+ * Dieselbe Regel wie LocaleText.Language und core/state.js: gespeicherte Wahl, sonst die Sprache des
+ * Browsers, sonst Deutsch. Waehlte die Werkstatt hier anders als der Betrieb, wuerde sie genau den
+ * Sprung verstecken, den sie messen soll - einmal passiert: sie lieferte immer Deutsch, der
+ * Testbrowser meldete Englisch, und jede Beschriftung sprang nach dem ersten Bild um.
+ */
+export function languageOf(headers = {}) {
+  const cookie = String(headers.cookie ?? '')
+    .split('; ').find(part => part.startsWith('fw.lang='))?.slice('fw.lang='.length);
+  if (cookie === 'de' || cookie === 'en') return cookie;
+
+  const preferred = String(headers['accept-language'] ?? '').split(',')[0].split(';')[0].trim();
+  if (!preferred) return 'de';
+  return preferred.toLowerCase().startsWith('de') ? 'de' : 'en';
+}
 
 const WEB = new URL('../../src/FullWorth.Web/', import.meta.url);
 const PAGES = new URL('Pages/', WEB);
@@ -53,6 +76,7 @@ function section(source, name) {
 function body(source) {
   let rest = source
     .replace(/^@page\s+"[^"]+"\s*/m, '')
+    .replace(/^@inject .*$/gm, '')
     .replace(/@\{[^]*?\n\}/, '')
     .replace(/@\*[^]*?\*@/g, '');
   for (const name of ['Styles', 'Scripts']) {
@@ -76,14 +100,21 @@ function viewData(source) {
  * Setzt den Rahmen zusammen. `navigation` und `bottomNavigation` kommen von aussen, weil sie aus
  * app/menu.js entstehen und dieselbe Quelle sind, aus der auch index.html gebaut wird.
  */
-export function renderRazorPage(route, { navigation, bottomNavigation }) {
+/** Ersetzt die serverseitigen Textaufrufe der Seite durch den deutschen Text. */
+function localiseBody(markup, language) {
+  return markup.replace(/@Text\.Get\("([\w.]+)", language\)/g, (_, key) => localeText(key, language));
+}
+
+export function renderRazorPage(route, { navigation, bottomNavigation }, language = 'de') {
   const page = findPages().find(candidate => candidate.route === route);
   if (!page) return null;
 
   const data = viewData(page.source);
   const layout = read(new URL('Shared/_Layout.cshtml', PAGES));
 
-  const heading = HEADINGS[data.ActiveView] ?? {};
+  // Dieselbe Regel wie PageHeadings: Seitentitel, sonst der Name aus der Navigation.
+  const NAV = JSON.parse(readFileSync(new URL('locales/de.json', WWWROOT), 'utf8')).nav ?? {};
+  const heading = HEADINGS[data.ActiveView] ?? (NAV[data.ActiveView] ? { title: NAV[data.ActiveView] } : {});
 
   let html = layout
     .replace(/@\*[^]*?\*@/g, '')
@@ -95,7 +126,7 @@ export function renderRazorPage(route, { navigation, bottomNavigation }) {
     .replace('@(view ?? string.Empty)', data.ActiveView ?? '')
     .replace('<partial name="_Navigation" />', navigation)
     .replace('<partial name="_BottomNavigation" />', bottomNavigation)
-    .replace('@RenderBody()', body(page.source))
+    .replace('@RenderBody()', localiseBody(body(page.source), language))
     .replace(/@await RenderSectionAsync\("Styles", required: false\)/, section(page.source, 'Styles'))
     .replace(/@await RenderSectionAsync\("Scripts", required: false\)/, section(page.source, 'Scripts'))
     .replace(/@\(ViewData\["(\w+)"\] as string \?\? "([^"]*)"\)/g, (_, key, fallback) => data[key] ?? fallback)

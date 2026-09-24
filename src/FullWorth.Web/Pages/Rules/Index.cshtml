@@ -1,0 +1,23 @@
+@page "/rules"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Kategorisierung · FullWorth";
+    ViewData["ActiveView"] = "rules";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/rules/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-rules"><article class="panel"><div class="panel-head"><h2 data-i18n="rules.title">@Text.Get("rules.title", language)</h2><div class="panel-head-actions"><button id="rules-reapply" class="btn btn-secondary" data-i18n="rules.reapply">@Text.Get("rules.reapply", language)</button><button data-action="new-rule" data-i18n="common.add">@Text.Get("common.add", language)</button></div></div><div id="rules-list" class="rows"></div></article></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/rules/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/rules/entry.js"></script>
+}

@@ -148,6 +148,7 @@ builder.Services.AddRazorPages(options =>
 builder.Services.AddScoped<FullWorth.Web.Navigation.NavigationPageFilter>();
 // Einmal gelesen und dann gehalten: die Ueberschriften stehen in den Sprachdateien und aendern sich
 // nur mit einem neuen Abbild.
+builder.Services.AddSingleton<FullWorth.Web.Navigation.LocaleText>();
 builder.Services.AddSingleton<FullWorth.Web.Navigation.PageHeadings>();
 
 builder.Services.AddAuthorization(options =>

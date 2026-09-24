@@ -833,7 +833,9 @@ function renderContextActions(){
   const openView=view=>navigate(view,{query:''});
   if(context.entityType==='transaction'&&context.entityId){
     add(tr('Kategorie ändern','Change category'),()=>window.dispatchEvent(new CustomEvent('fullworth:open-transaction',{detail:{id:context.entityId}})));
-    add(tr('Regel erstellen','Create rule'),()=>openView('rules').then(()=>emitAppEvent('rules:new')));
+    // Die Absicht steht in der Adresse und nicht in einem Ereignis: /rules ist seit #154 ein
+    // eigenes Dokument, und ein Ereignis ueberlebt keinen Seitenwechsel.
+    add(tr('Regel erstellen','Create rule'),()=>navigate('rules',{query:'new=1'}));
   }else if(context.entityType==='contract'&&context.entityId){
     add(tr('Vertrag öffnen','Open contract'),()=>window.dispatchEvent(new CustomEvent('fullworth:open-contract',{detail:{id:context.entityId}})));
   }else if(context.entityType==='account'&&context.entityId){

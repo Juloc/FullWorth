@@ -39,3 +39,11 @@
 #audit-list .audit-empty-icon{width:32px;height:32px;color:var(--k4)}
 
 #audit-list .audit-empty .row-sub{margin-top:0}
+
+/* Die beiden Auswahlfelder stehen leer im Markup und werden beim Binden gefüllt (ACTIONS und
+   ENTITY_TYPES in page.js). Ohne feste Breite wächst die Leiste genau in diesem Moment — in der
+   alten Hülle fiel das nicht auf, weil dort JEDE Seite beim Start gebunden wurde, lange bevor
+   jemand diese Ansicht sah. Seit die Seite ein eigenes Dokument ist, passiert es vor den Augen des
+   Benutzers, und das ist der Sprung, den Frontend-Regel 1 verbietet. */
+#audit-action,
+#audit-entity-type{width:14rem;max-width:100%}

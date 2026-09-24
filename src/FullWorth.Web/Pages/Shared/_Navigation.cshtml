@@ -9,8 +9,10 @@
     erst nach dem ersten Zeichnen ihre Markierung bekommt, ist genau der Sprung, den Frontend-Regel 1
     verbietet.
 *@
+@inject FullWorth.Web.Navigation.LocaleText Text
 @{
     var activeView = ViewData["ActiveView"] as string ?? string.Empty;
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
     var isAdmin = ViewContext.HttpContext.Items[NavigationPageFilter.IsAdminKey] as bool? ?? false;
 
     string ItemClass(string view) =>
@@ -28,7 +30,7 @@
         {
             <div class="nav-group" data-group="@group.Id">
                 <button class="nav-group-head" type="button" data-group="@group.Id" aria-expanded="true">
-                    <span data-i18n="@group.Label"></span>
+                    <span data-i18n="@group.Label">@Text.Get(group.Label, language)</span>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
                 </button>
                 <div class="nav-group-items">
@@ -36,7 +38,7 @@
                     {
                         <a class="@ItemClass(entry.View)" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View" hidden="@(entry.AdminOnly && !isAdmin)">
                             <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
-                            <span data-i18n="@entry.Label"></span>
+                            <span data-i18n="@entry.Label">@Text.Get(entry.Label, language)</span>
                         </a>
                     }
                 </div>

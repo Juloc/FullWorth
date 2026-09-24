@@ -4,19 +4,13 @@ import { confirmDialog } from './components/confirm.js';
 import { bindIdentityIcons } from './features/ux-kit.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
 import { renderCoach, bindCoach } from './pages/coach/page.js';
-import { renderCategories, bindCategories, newCategory } from './pages/categories/page.js';
-import { renderCollections, bindCollections, newCollection } from './pages/collections/page.js';
-import { renderRules, bindRules, newRule } from './pages/rules/page.js';
 import { renderContracts, bindContracts, newContract } from './pages/contracts/page.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './pages/networth/page.js';
-import { renderNotifications } from './pages/notifications/page.js';
 import { renderLoans, bindLoans } from './pages/networth/loans.js';
 import { renderAnalytics, bindAnalytics } from './pages/analytics/page.js';
 import { renderPurchases, bindPurchases } from './pages/purchases/page.js';
 import { renderTax, bindTax } from './pages/tax/page.js';
 import { renderPension, bindPension } from './pages/pension/page.js';
-import { renderMerchants, bindMerchants, newMerchant } from './pages/merchants/page.js';
-import { renderAudit, bindAudit } from './pages/audit/page.js';
 import { renderDashboardInsights, mountInsights } from './pages/insights/page.js';
 
 import { createAccessSetup } from './pages/settings/access-setup.js';
@@ -68,7 +62,9 @@ const viewFromPath=router.viewFromPath;
 // in-page add control so there is a single code path.
 // [messageKey, handler, kind]. `kind` drives the mobile glyph; it used to be guessed by matching a
 // regex against the rendered label from a MutationObserver, which a new label or language broke.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],collections:['collections.new',()=>newCollection(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+// Nur noch die Ansichten, die diese Huelle selbst zeigt. Eine umgezogene Seite bringt ihre
+// Hauptaktion in ihrem eigenen entry.js mit - sie gehoert zur Seite und nicht in eine Tabelle.
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const root=document.documentElement;
@@ -151,16 +147,9 @@ function bind(){
   bindNetWorth(ctx);
   bindLoans(ctx);
   bindAnalytics(ctx);
-  $('[data-action="new-category"]').addEventListener('click',()=>newCategory(ctx));
-  $('[data-action="new-collection"]').addEventListener('click',()=>newCollection(ctx));
-  bindCategories(ctx);
-  bindCollections(ctx);
-  bindRules(ctx);
   bindPurchases(ctx);
   bindTax(ctx);
   bindPension(ctx);
-  bindMerchants(ctx);
-  bindAudit(ctx);
   bindDashboard(ctx);
   bindCoach();
   $('#layout-reset')?.addEventListener('click',resetLayout);
@@ -340,7 +329,6 @@ async function categoryOptions(selected){const categories=await api('api/categor
 // und Insights, während Händler und Protokoll nur hier standen.
 installNavigation((view,options={})=>showView(view,options));
 onAppEvent('budget:open',detail=>{if(detail?.id)openBudgetDetail(ctx,detail.id)});
-onAppEvent('rules:new',()=>newRule(ctx));
 onAppEvent('surface:reload',()=>loadCurrent());
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
@@ -379,12 +367,6 @@ const featureRegistry=createFeatureRegistry()
   .register('purchases',()=>renderPurchases(ctx))
   .register('tax',()=>renderTax(ctx))
   .register('pension',()=>renderPension(ctx))
-  .register('categories',()=>renderCategories(ctx))
-  .register('collections',()=>renderCollections(ctx))
-  .register('rules',()=>renderRules(ctx))
-  .register('notifications',()=>renderNotifications(ctx))
-  .register('merchants',()=>renderMerchants(ctx))
-  .register('audit',()=>renderAudit(ctx))
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
   .register('admin',()=>renderAdmin())
   .register('passkeys',()=>renderPasskeys(ctx))

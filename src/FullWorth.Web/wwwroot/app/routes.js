@@ -36,4 +36,7 @@ export const VIEW_PATHS = Object.fromEntries(
 // Die alte Hülle nimmt sie aus ihrer Liste: dann fängt sie deren Links nicht mehr ab, und ein Klick
 // auf „Buchungen" ist wieder das, was er im Markup schon immer war — eine echte Navigation. Die
 // Menge wächst mit jeder migrierten Seite und ist leer, wenn die Hülle verschwindet.
-export const MIGRATED = new Set(['transactions']);
+export const MIGRATED = new Set([
+  'transactions',
+  'audit', 'notifications', 'merchants', 'rules', 'categories', 'collections'
+]);

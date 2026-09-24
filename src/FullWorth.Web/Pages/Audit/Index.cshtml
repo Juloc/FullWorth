@@ -1,0 +1,23 @@
+@page "/audit"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Aktivitätsprotokoll · FullWorth";
+    ViewData["ActiveView"] = "audit";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/audit/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-audit"><div class="toolbar an-toolbar"><label class="field"><span data-i18n="audit.action">@Text.Get("audit.action", language)</span><select id="audit-action"></select></label><label class="field"><span data-i18n="audit.entityType">@Text.Get("audit.entityType", language)</span><select id="audit-entity-type"></select></label><label class="field"><span data-i18n="audit.limit">@Text.Get("audit.limit", language)</span><select id="audit-limit"><option value="100">100</option><option value="250">250</option><option value="500">500</option></select></label></div><article class="panel"><div class="panel-head"><h2 data-i18n="audit.title">@Text.Get("audit.title", language)</h2></div><p class="row-sub panel-intro" data-i18n="audit.intro">@Text.Get("audit.intro", language)</p><div id="audit-list" class="rows"></div><button id="audit-more" class="btn btn-secondary" data-i18n="audit.loadOlder" hidden>@Text.Get("audit.loadOlder", language)</button></article></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/audit/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/audit/entry.js"></script>
+}

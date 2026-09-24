@@ -55,3 +55,20 @@ window.addEventListener('DOMContentLoaded', async () => {
   appearance.initAppearance();
   mobileInteractions.initMobileInteractions();
 });
+
+// Die gewählte Sprache in ein Cookie spiegeln (#154).
+//
+// Der Server muss sie kennen, sonst liefert er deutsches Markup an eine englische Sitzung, und
+// JavaScript tauscht nach dem ersten Bild jede Beschriftung aus - "Hinzufügen" wird "Add", und die
+// halbe Seite rutscht. In der alten Hülle fiel das nicht auf, weil dort ALLES beim Start übersetzt
+// wurde, während noch keine Ansicht zu sehen war.
+//
+// localStorage kann der Server nicht lesen, ein Cookie schon. Es trägt keine Kennung und keinen
+// Inhalt - nur "de" oder "en" - und wird hier gesetzt, weil dieses Skript ohnehin vor dem ersten
+// Bild läuft.
+try {
+  const stored = localStorage.getItem('finance.language');
+  const language = stored || ((navigator.language || 'de').startsWith('de') ? 'de' : 'en');
+  if (document.cookie.split('; ').every(part => part !== `fw.lang=${language}`))
+    document.cookie = `fw.lang=${language}; path=/; max-age=31536000; SameSite=Lax`;
+} catch { /* Ohne localStorage bleibt es beim serverseitigen Standard. */ }

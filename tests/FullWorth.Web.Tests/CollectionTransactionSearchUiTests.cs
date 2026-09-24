@@ -27,6 +27,9 @@ public sealed class CollectionTransactionSearchUiTests
 
     private static string PageJs() => Asset("pages", "collections", "page.js");
 
+    private static string Markup(string page) =>
+        File.ReadAllText(Path.Combine(Root(), "src", "FullWorth.Web", "Pages", page, "Index.cshtml"));
+
     private static string SearchBody()
     {
         var js = PageJs();
@@ -47,7 +50,8 @@ public sealed class CollectionTransactionSearchUiTests
     [Fact]
     public void The_collection_detail_offers_a_search_next_to_the_suggestions()
     {
-        Assert.Contains("id=\"col-search-transactions\"", Asset("pages", "collections", "page.html"));
+        // Das Markup steht seit #154 in der Razor-Seite und nicht mehr unter wwwroot.
+        Assert.Contains("id=\"col-search-transactions\"", Markup("Collections"));
         var js = PageJs();
         Assert.Contains("openTransactionSearch(row, detail.transactionIds || [])", js);
         // Die Vorschlagsliste bleibt daneben bestehen - zwei Fragen, zwei Wege.

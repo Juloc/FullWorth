@@ -3,8 +3,10 @@
     nur anders dargestellt - die vier stehen in NavigationCatalog.Quick, alles Weitere hinter "Mehr",
     und dort stehen diese vier ebenfalls. Eine Abkuerzung, keine Auswahl.
 *@
+@inject FullWorth.Web.Navigation.LocaleText Text
 @{
     var activeView = ViewData["ActiveView"] as string ?? string.Empty;
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
     var byView = NavigationCatalog.Entries.ToDictionary(entry => entry.View, StringComparer.Ordinal);
 }
 
@@ -14,11 +16,11 @@
         var entry = byView[view];
         <a class="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item")" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View">
             <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
-            <span data-i18n="@entry.Label"></span>
+            <span data-i18n="@entry.Label">@Text.Get(entry.Label, language)</span>
         </a>
     }
     <button id="bottom-more" class="nav-item" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-        <span data-i18n="nav.more"></span>
+        <span data-i18n="nav.more">@Text.Get("nav.more", language)</span>
     </button>
 </nav>

@@ -11,7 +11,7 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
-import { renderRazorPage } from './razor.mjs';
+import { languageOf, renderRazorPage } from './razor.mjs';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const ROOT = process.argv[3] || join(REPO_ROOT, 'src', 'FullWorth.Web', 'wwwroot');
@@ -72,13 +72,16 @@ async function shellNavigation() {
   };
 }
 
-async function renderRazor(path) {
+async function renderRazor(path, headers) {
   try {
-    return renderRazorPage(path, await shellNavigation());
+    return { html: renderRazorPage(path, await shellNavigation(), languageOf(headers)) };
   } catch (error) {
-    // Lieber laut als eine Seite, die anders aussieht als im Betrieb.
+    // Lieber laut als eine Seite, die anders aussieht als im Betrieb - und NICHT still auf die alte
+    // Hülle zurückfallen: dann sähe ein kaputter Renderer aus wie eine funktionierende Seite, und
+    // ein Layout-Test würde die falsche Sache messen und grün werden. Genau das ist hier einmal
+    // passiert.
     console.error(error);
-    return null;
+    return { error };
   }
 }
 
@@ -303,10 +306,14 @@ createServer(async (req, res) => {
     // Zweig fiele die Werkstatt für sie auf die alte Hülle zurück, in der es sie nicht mehr gibt -
     // eine leere Seite, die aussieht wie ein Fehler. Die Seitenleiste kommt dabei aus derselben
     // index.html, die generate-shell.mjs schreibt: zwei Darstellungen, eine Quelle.
-    const razor = await renderRazor(path);
-    if (razor !== null) {
+    const razor = await renderRazor(path, req.headers);
+    if (razor.error) {
+      res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8', 'x-harness-razor': path });
+      return res.end(String(razor.error.message ?? razor.error));
+    }
+    if (razor.html !== null) {
       res.writeHead(200, { 'content-type': TYPES['.html'], 'x-harness-razor': path });
-      return res.end(inject(razor));
+      return res.end(inject(razor.html));
     }
 
     if (path === '/') path = '/index.html';
