@@ -4,6 +4,11 @@
 # RouteReachabilityTests haelt beides fest - eine neue unerreichbare Route laesst den Test rot werden,
 # und eine Route, die inzwischen einen Aufrufer hat, muss hier heraus.
 #
+# Seit 2026-09-24 stehen hier NUR noch die drei absichtlichen Faelle. Die Liste begann mit 39
+# Routen; 30 davon waren nach dem Schliessen des blinden Flecks unten sichtbar, und jede einzelne
+# hat inzwischen entweder eine Oberflaeche bekommen oder ist geloescht worden, weil sie eine zweite
+# Fassung von etwas war, das es schon gab. Eine neue Zeile hier ist ab jetzt immer eine Entscheidung.
+#
 # Nicht jede Zeile ist ein Fehler. Manches ist absichtlich ohne Oberflaeche:
 #
 #   /api/bootstrap/*                bedient der Auth-Host (FullWorth.Web), nicht die Anwendung
