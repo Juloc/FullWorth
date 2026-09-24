@@ -189,6 +189,23 @@
     ],
     // Seit #125 hat jeder Bereich eine Standardgruppe; Konten ohne eigene Gruppe stehen darin.
     'account-groups': [{ id: 'g0', name: 'Allgemein', sortOrder: 0, isDefault: true }, { id: 'g1', name: 'Alltag', sortOrder: 1, isDefault: false }],
+    // Aussehen und Ungelesen-Stand der Konten (#177). Seit die Kontenseite sie nicht mehr aus drei
+    // Einstellungs-Blobs liest, ist DAS die Quelle fuer Symbol, Farben und den blauen Punkt - ohne
+    // Fixture saehe die Harness jedes Konto mit der Vorgabe und nie einen Punkt.
+    //
+    // a1 traegt ein eigenes Symbol UND zwei ungelesene Buchungen, a2 gar nichts: beide Faelle stehen
+    // damit gleichzeitig auf dem Schirm.
+    'account-experience/group-appearances': [
+      { groupId: 'g0', icon: 'home', color: '#334155', backgroundColor: '#EEF2F7' }
+    ],
+    'account-experience': [
+      { accountId: 'a1', displayName: 'Haushaltskonto', institutionName: 'Sparkasse', provider: 'test',
+        accountType: 'checking', product: null, icon: 'wallet', iconColor: '#334155', backgroundColor: '#EEF2F7',
+        unseenTransactions: 2, lastSeenAt: '2026-09-08T06:00:00Z' },
+      { accountId: 'a2', displayName: 'Tagesgeld', institutionName: 'ING', provider: 'test',
+        accountType: 'savings', product: null, icon: null, iconColor: null, backgroundColor: null,
+        unseenTransactions: 0, lastSeenAt: null }
+    ],
     // Was die Bank beim Verbinden gemeldet hat - die Liste, aus der ausgewaehlt wird. Absichtlich
     // unbequem: ein Name, der die Zeile sprengt, ein Depot ohne IBAN, eine Fremdwaehrung und ein
     // Konto, das schon einmal abgewaehlt wurde (visible:false) und das Haekchen leer zeigen muss.

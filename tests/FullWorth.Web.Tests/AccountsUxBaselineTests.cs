@@ -48,10 +48,17 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("apiClient.banking", js);
         Assert.Contains("api/accounts", js);
         Assert.Contains("api/account-groups", js);
-        Assert.Contains("api/preferences/", js);
-        Assert.Contains("accounts.visuals", js);
-        Assert.Contains("account-groups.visuals", js);
-        Assert.Contains("transactions.seenAt", js);
+        // Aussehen und Gesehen-Stand kommen aus /api/account-experience, nicht mehr aus drei
+        // Einstellungs-Blobs (#177). Was hier steht, ist die Grenze zwischen den beiden Systemen:
+        // die Blobs sind weg, die Schluessel stehen auch serverseitig nicht mehr in der Erlaubnisliste.
+        Assert.Contains("api/account-experience", js);
+        Assert.Contains("api/account-experience/group-appearances", js);
+        Assert.DoesNotContain("api/preferences/", js);
+        Assert.DoesNotContain("accounts.visuals", js);
+        Assert.DoesNotContain("account-groups.visuals", js);
+        Assert.DoesNotContain("transactions.seenAt", js);
+        // Und die 500 Buchungen, die nur fuer den blauen Punkt geholt wurden, sind es auch.
+        Assert.DoesNotContain("api/transactions?limit=500", js);
 
         Assert.DoesNotContain("http://fullworth-backend:8080", js, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("http://fullworth-banking:8080", js, StringComparison.OrdinalIgnoreCase);
@@ -72,7 +79,9 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("bankForAccount", js);
         Assert.Contains("hasVisualOverride", js);
         Assert.Contains("restoreDefault", js);
-        Assert.Contains("delete S.prefs.accounts[a.id]", js);
+        // Zuruecksetzen heisst jetzt: alle drei Werte auf null schreiben. Ein geloeschter
+        // Blob-Eintrag war dasselbe, nur an einem Ort, den nur diese Seite kannte.
+        Assert.Contains("{icon:null,iconColor:null,backgroundColor:null}", js);
         Assert.DoesNotContain("data-acct", js);
         Assert.Contains("bankDefault=!!a.bankConnectionId||!!lg", js);
     }

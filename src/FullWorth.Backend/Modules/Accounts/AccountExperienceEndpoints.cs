@@ -5,7 +5,12 @@ namespace FullWorth.Backend.Modules.Accounts;
 public sealed record AccountOrderItem(Guid AccountId, Guid? GroupId, int SortOrder);
 public sealed record GroupOrderItem(Guid GroupId, int SortOrder);
 public sealed record AccountOrderWrite(IReadOnlyList<GroupOrderItem>? Groups, IReadOnlyList<AccountOrderItem>? Accounts);
-public sealed record AccountGroupAppearanceWrite(string? Icon, string? Color);
+/// <summary>
+/// Drei Werte, genau wie beim Konto. Die Hintergrundfarbe kam mit dem Umzug aus den
+/// Benutzereinstellungen dazu (#177): dort hatte eine Gruppe sie seit jeher, hier fehlte sie - der
+/// Umzug haette sie sonst stillschweigend verloren.
+/// </summary>
+public sealed record AccountGroupAppearanceWrite(string? Icon, string? Color, string? BackgroundColor);
 
 public static class AccountExperienceEndpoints
 {
@@ -55,7 +60,10 @@ public static class AccountExperienceEndpoints
             return Results.NotFound();
 
         var rows = await store.AppearancesAsync(fullWorthSpaceId, ct);
-        return Results.Ok(rows.Select(row => new { groupId = row.GroupId, icon = row.Icon, color = row.Color }));
+        return Results.Ok(rows.Select(row => new
+        {
+            groupId = row.GroupId, icon = row.Icon, color = row.Color, backgroundColor = row.BackgroundColor
+        }));
     }
 
     private static async Task<IResult> PutGroupAppearance(
@@ -67,15 +75,19 @@ public static class AccountExperienceEndpoints
         if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "banking.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!await store.GroupExistsAsync(fullWorthSpaceId, groupId, ct)) return Results.NotFound();
-        if (!ValidColor(request.Color)) return Results.BadRequest(new { error = "Color must be #RRGGBB or #RRGGBBAA." });
+        if (!ValidColor(request.Color) || !ValidColor(request.BackgroundColor))
+            return Results.BadRequest(new { error = "Colors must be #RRGGBB or #RRGGBBAA." });
 
         await store.SetAppearanceAsync(userId, fullWorthSpaceId, groupId,
             string.IsNullOrWhiteSpace(request.Icon) ? null : request.Icon.Trim(),
-            string.IsNullOrWhiteSpace(request.Color) ? null : request.Color.Trim().ToUpperInvariant(),
+            NormalizeColor(request.Color),
+            NormalizeColor(request.BackgroundColor),
             ct);
         return Results.NoContent();
     }
 
     private static bool ValidColor(string? value) => string.IsNullOrWhiteSpace(value) ||
         (value.StartsWith('#') && (value.Length == 7 || value.Length == 9) && value.Skip(1).All(Uri.IsHexDigit));
+    private static string? NormalizeColor(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
 }

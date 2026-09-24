@@ -63,7 +63,13 @@ public sealed class RouteReachabilityTests
         return Routes()
             .Where(route =>
             {
-                var stem = route.Path.Split("/{")[0].TrimStart('/');
+                // TrimEnd('/') ist nicht Kosmetik. Eine Gruppenwurzel steht als "/api/budget-groups/"
+                // in der Routenflaeche; ohne das Abschneiden war das letzte Segment die LEERE
+                // Zeichenkette, und der Wortvergleich unten traf damit jedes "/" im Frontend. Alle 91
+                // Routen mit abschliessendem Schraegstrich galten dadurch als erreichbar, ohne dass je
+                // jemand nachgesehen haette - darunter GET und POST /api/budget-groups/, die es auf
+                // keiner Seite gibt.
+                var stem = route.Path.Split("/{")[0].Trim('/');
                 if (frontend.Contains(stem, StringComparison.Ordinal)) return false;
                 var last = stem.Split('/')[^1];
                 return !Regex.IsMatch(frontend, "['`/\"]" + Regex.Escape(last) + "['`?/\"]");

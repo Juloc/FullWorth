@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FullWorth.Backend.Modules.Accounts;
 
 /// <summary>Wie eine Kontogruppe aussieht - Symbol und Farbe, beides optional.</summary>
-public sealed record AccountGroupAppearance(Guid GroupId, string? Icon, string? Color);
+public sealed record AccountGroupAppearance(Guid GroupId, string? Icon, string? Color, string? BackgroundColor);
 
 /// <summary>
 /// Die Kontogruppen eines Space: ihre Reihenfolge, die Zuordnung der Konten und ihr Aussehen.
@@ -56,7 +56,7 @@ public sealed class AccountGroupStore(FullWorthDbContext db, AuditService audit)
     {
         var connection = await RawSql.OpenAsync(db, ct);
         await using var cmd = RawSql.Command(connection, """
-SELECT a."GroupId",a."Icon",a."Color" FROM "AccountGroupAppearances" a
+SELECT a."GroupId",a."Icon",a."Color",a."BackgroundColor" FROM "AccountGroupAppearances" a
 JOIN "AccountGroups" g ON g."Id"=a."GroupId" WHERE g."FullWorthSpaceId"=@space
 """, ("@space", fullWorthSpaceId));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -66,18 +66,23 @@ JOIN "AccountGroups" g ON g."Id"=a."GroupId" WHERE g."FullWorthSpaceId"=@space
             rows.Add(new AccountGroupAppearance(
                 RawSql.Guid(reader, "GroupId"),
                 RawSql.NullableString(reader, "Icon"),
-                RawSql.NullableString(reader, "Color")));
+                RawSql.NullableString(reader, "Color"),
+                RawSql.NullableString(reader, "BackgroundColor")));
         return rows;
     }
 
     public async Task SetAppearanceAsync(
-        Guid userId, Guid fullWorthSpaceId, Guid groupId, string? icon, string? color, CancellationToken ct)
+        Guid userId, Guid fullWorthSpaceId, Guid groupId, string? icon, string? color, string? background,
+        CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
         await using var cmd = RawSql.Command(connection, """
-INSERT INTO "AccountGroupAppearances" ("GroupId","Icon","Color","UpdatedAt") VALUES (@id,@icon,@color,@now)
-ON CONFLICT ("GroupId") DO UPDATE SET "Icon"=EXCLUDED."Icon","Color"=EXCLUDED."Color","UpdatedAt"=EXCLUDED."UpdatedAt"
-""", ("@id", groupId), ("@icon", icon), ("@color", color), ("@now", DateTimeOffset.UtcNow));
+INSERT INTO "AccountGroupAppearances" ("GroupId","Icon","Color","BackgroundColor","UpdatedAt")
+VALUES (@id,@icon,@color,@background,@now)
+ON CONFLICT ("GroupId") DO UPDATE SET "Icon"=EXCLUDED."Icon","Color"=EXCLUDED."Color",
+  "BackgroundColor"=EXCLUDED."BackgroundColor","UpdatedAt"=EXCLUDED."UpdatedAt"
+""", ("@id", groupId), ("@icon", icon), ("@color", color), ("@background", background),
+   ("@now", DateTimeOffset.UtcNow));
         await cmd.ExecuteNonQueryAsync(ct);
 
         audit.Record(fullWorthSpaceId, userId, "account_group.appearance.updated", "AccountGroup", groupId);
