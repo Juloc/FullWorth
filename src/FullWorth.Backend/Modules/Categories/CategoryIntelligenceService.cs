@@ -13,7 +13,6 @@ public sealed record CategoryOverviewView(
     int Total, int Reviewed, int NeedsReview, IReadOnlyList<CategoryOverviewItem> Items);
 
 /// <summary>Wie viele Buchungen eine Massenaenderung getroffen hat.</summary>
-public sealed record BulkResult(int Changed);
 
 /// <summary>Wie viele Buchungen umkategorisiert wurden, und welche Regel dabei entstand.</summary>
 public sealed record LearnResult(int Changed, Guid? RuleId);
@@ -116,38 +115,6 @@ public sealed class CategoryIntelligenceService(
         return true;
     }
 
-    public async Task<BulkResult?> BulkAsync(
-        Guid userId, Guid space, BulkCategoryAction request, CancellationToken ct)
-    {
-        var ids = CleanIds(request.TransactionIds);
-        if (ids.Count == 0) return new BulkResult(0);
-        if (ids.Count > BulkLimit) throw new ArgumentException($"At most {BulkLimit} transactions can be changed at once.");
-
-        var transactions = await store.WritableAsync(userId, space, ids, ct);
-        if (transactions.Count != ids.Count) return null;
-
-        if (request.UpdateCategory && request.CategoryId.HasValue
-            && !await store.CategoryUsableAsync(space, request.CategoryId.Value, ct))
-            throw new ArgumentException("Category must belong to the active FullWorth Space.");
-
-        var addTags = CleanIds(request.AddTagIds);
-        var removeTags = CleanIds(request.RemoveTagIds);
-        await EnsureTagsBelongToSpaceAsync(space, addTags.Concat(removeTags).Distinct().ToList(), ct);
-
-        await store.ApplyAsync(transactions, request.UpdateCategory, request.CategoryId, "manual",
-            request.IsIgnored, ct);
-
-        // Wer eine Kategorie setzt, hat damit geprueft - ausser er sagt ausdruecklich etwas anderes.
-        var reviewed = request.IsReviewed ?? (request.UpdateCategory ? true : null);
-        foreach (var id in ids)
-        {
-            if (reviewed.HasValue) await store.SetReviewedAsync(space, id, reviewed.Value, ct);
-            foreach (var tagId in addTags) await store.AddTagAsync(id, tagId, ct);
-            foreach (var tagId in removeTags) await store.RemoveTagAsync(id, tagId, ct);
-        }
-        return new BulkResult(transactions.Count);
-    }
-
     public async Task<LearnResult?> LearnAsync(
         Guid userId, Guid space, LearnCategoryWrite request, CancellationToken ct)
     {
@@ -215,13 +182,6 @@ public sealed class CategoryIntelligenceService(
 
         await store.SetAppearanceAsync(space, categoryId, ValidateColor(request.Color), ct);
         return true;
-    }
-
-    private async Task EnsureTagsBelongToSpaceAsync(Guid space, IReadOnlyList<Guid> tagIds, CancellationToken ct)
-    {
-        if (tagIds.Count == 0) return;
-        var known = (await store.TagsAsync(space, ct)).Select(tag => tag.Id).ToHashSet();
-        if (!tagIds.All(known.Contains)) throw new ArgumentException("Tag must belong to the FullWorth Space.");
     }
 
     private static List<Guid> CleanIds(IEnumerable<Guid>? ids) =>

@@ -379,7 +379,6 @@ POST             /api/categories/{id:guid}/restore
 POST             /api/categorization-rules/
 POST             /api/categorization-rules/preview
 POST             /api/categorization-rules/reapply
-POST             /api/category-intelligence/bulk
 POST             /api/category-intelligence/learn
 POST             /api/category-intelligence/review
 POST             /api/category-merge/{sourceCategoryId:guid}

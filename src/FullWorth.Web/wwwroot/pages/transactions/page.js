@@ -13,6 +13,7 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { createWizard } from '../../components/wizard.js';
 import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 import { openBulkEdit } from './bulk-edit.js';
+import { openLearnCategory, canLearnFrom } from './learn-category.js';
 import { registerRowSelection } from '../../components/mobile-interactions.js';
 import { state } from '../../core/state.js';
 
@@ -1594,6 +1595,7 @@ async function openDetail(listItem) {
     ${statusHistoryHtml}
     ${t.hasProviderDetails ? `<div class="tx-provider-details"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
+    ${canLearnFrom(t) ? `<button type="button" class="row settings-link tx-learn-row" data-learn hidden><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.learnTitle'))}</div><div class="row-sub">${ctx.esc(ctx.get('transactions.learnHint'))}</div></div><span aria-hidden="true">›</span></button>` : ''}
     ${collectionsRow}
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</span><span class="fw-toggle"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
@@ -1722,6 +1724,19 @@ async function openDetail(listItem) {
   const sel = dlg.querySelector('select[name="category"]');
   if (t.categoryId) sel.value = t.categoryId;
   attachCategoryPicker(ctx, sel);
+  // Lernen geht nur mit einer Kategorie - ohne eine waere die Frage "immer WAS?". Die Zeile erscheint
+  // deshalb erst, wenn eine dasteht, statt ausgegraut Platz zu halten.
+  const learnRow = dlg.querySelector('[data-learn]');
+  if (learnRow) {
+    const paintLearn = () => { learnRow.hidden = !sel.value; };
+    paintLearn();
+    sel.addEventListener('change', paintLearn);
+    learnRow.addEventListener('click', () => {
+      const name = sel.options[sel.selectedIndex]?.textContent?.trim() || '';
+      dlg.close();
+      openLearnCategory(ctx, t, sel.value, name, () => refreshList(t.id));
+    });
+  }
   const transferBox = dlg.querySelector('[name="transfer"]');
   const transferSection = dlg.querySelector('.tx-transfer');
   // The transfer options (purpose select + "Gegenbuchung wählen" / the Von→An counter-booking) appear

@@ -267,7 +267,12 @@
     "review": "Prüfen",
     "noHits": "Keine Treffer für diese Suche",
     "noneWithFilters": "Keine Buchungen mit diesen Filtern",
-    "nonePeriod": "Keine Buchungen in diesem Zeitraum"
+    "nonePeriod": "Keine Buchungen in diesem Zeitraum",
+    "learnTitle": "Immer so kategorisieren",
+    "learnHint": "Für diesen Händler übernehmen",
+    "learnScope": "Umfang",
+    "learnFuture": "Künftige und bisherige, mit Regel",
+    "learnExisting": "Nur die bisherigen"
   },
   "purchases": {
     "title": "Käufe",

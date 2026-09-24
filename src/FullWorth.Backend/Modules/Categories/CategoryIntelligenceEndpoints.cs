@@ -5,14 +5,6 @@ namespace FullWorth.Backend.Modules.Categories;
 
 public sealed record CategoryExplanation(decimal Confidence, string ReasonCode, string? Detail);
 public sealed record ReviewWrite(IReadOnlyList<Guid>? TransactionIds, bool IsReviewed);
-public sealed record BulkCategoryAction(
-    IReadOnlyList<Guid>? TransactionIds,
-    bool UpdateCategory = false,
-    Guid? CategoryId = null,
-    bool? IsIgnored = null,
-    bool? IsReviewed = null,
-    IReadOnlyList<Guid>? AddTagIds = null,
-    IReadOnlyList<Guid>? RemoveTagIds = null);
 public sealed record LearnCategoryWrite(Guid TransactionId, Guid CategoryId, string Scope);
 public sealed record CategoryAppearanceWrite(string? Color);
 public sealed record IntelligenceTag(Guid Id, string Name, string? Color);
@@ -89,17 +81,13 @@ public static class CategoryIntelligenceEndpoints
             catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
         });
 
-        group.MapPost("/bulk", async (
-            Guid fullWorthSpaceId, BulkCategoryAction request, CurrentUserContext currentUser,
-            CategoryIntelligenceService service, CancellationToken ct) =>
-        {
-            try
-            {
-                var result = await service.BulkAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
-                return result is null ? Results.NotFound() : Results.Ok(result);
-            }
-            catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
-        });
+        // Hier stand bis #177 eine DRITTE Massenaenderung fuer Buchungen. Sie hatte keinen Aufrufer
+        // und konnte weniger als die, die geblieben ist (/api/transaction-bulk/apply): kein Filter,
+        // keine Sicherung ueber ExpectedCount, kein Vertrag, keine Notiz, kein Ueberweisungspaar -
+        // nur Kategorie, Ignorieren, Geprueft und Stichworte, und all das kann die andere auch.
+        //
+        // Zwei davon waren schon einmal Thema: von den zwei Maschinen unter /api/transaction-bulk ist
+        // die aeltere in derselben Runde geloescht worden. Das hier war die dritte.
 
         group.MapPost("/learn", async (
             Guid fullWorthSpaceId, LearnCategoryWrite request, CurrentUserContext currentUser,

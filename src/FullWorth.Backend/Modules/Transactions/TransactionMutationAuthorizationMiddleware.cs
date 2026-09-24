@@ -76,19 +76,14 @@ public sealed class TransactionMutationAuthorizationMiddleware(RequestDelegate n
         return "transactions.write";
     }
 
-    private static async Task<string> RequiredIntelligenceCapabilityAsync(HttpContext context)
-    {
-        var path = context.Request.Path.Value ?? string.Empty;
-        if (path.EndsWith("/bulk", StringComparison.OrdinalIgnoreCase) && HttpMethods.IsPost(context.Request.Method))
-        {
-            var request = await ReadJsonBodyAsync<BulkCategoryAction>(context);
-            // Ignore/unignore changes analytics/ledger semantics. Category, review and tag changes are
-            // categorization metadata and use the narrower capability.
-            return request?.IsIgnored is not null ? "transactions.write" : "transactions.categorize";
-        }
-
-        return "transactions.categorize";
-    }
+    /// <summary>
+    /// Hier stand bis #177 eine Fallunterscheidung fuer POST /bulk: bei einem gesetzten IsIgnored die
+    /// breitere Berechtigung, sonst die schmalere. Die Route gibt es nicht mehr - sie war die dritte
+    /// Massenaenderung fuer Buchungen und hatte keinen Aufrufer. Uebrig bleibt, was fuer die
+    /// verbliebenen Intelligence-Routen (review, learn) ohnehin galt.
+    /// </summary>
+    private static Task<string> RequiredIntelligenceCapabilityAsync(HttpContext context) =>
+        Task.FromResult("transactions.categorize");
 
     private static async Task<string> ClassificationCapabilityAsync(HttpContext context, FullWorthDbContext db, Guid fullWorthSpaceId)
     {

@@ -226,14 +226,9 @@ public sealed class CategoryIntelligenceStore(FullWorthDbContext db)
         await ExecuteAsync("DELETE FROM \"FinanceTags\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space",
             ct, ("id", tagId), ("space", space)) > 0;
 
-    public Task AddTagAsync(Guid transactionId, Guid tagId, CancellationToken ct) =>
-        ExecuteAsync(
-            "INSERT INTO \"TransactionTags\" (\"TransactionId\", \"TagId\", \"CreatedAt\") VALUES (@transaction, @tag, @now) ON CONFLICT (\"TransactionId\", \"TagId\") DO NOTHING",
-            ct, ("transaction", transactionId), ("tag", tagId), ("now", DateTimeOffset.UtcNow));
-
-    public Task RemoveTagAsync(Guid transactionId, Guid tagId, CancellationToken ct) =>
-        ExecuteAsync("DELETE FROM \"TransactionTags\" WHERE \"TransactionId\"=@transaction AND \"TagId\"=@tag",
-            ct, ("transaction", transactionId), ("tag", tagId));
+    // AddTagAsync und RemoveTagAsync standen hier bis #177 und hatten nach dem Loeschen der
+    // dritten Massenaenderung keinen Aufrufer mehr. Stichworte an Buchungen setzt seither nur noch
+    // /api/transaction-bulk/apply, und das benutzt seinen eigenen Store.
 
     public Task ClearTagsAsync(Guid transactionId, CancellationToken ct) =>
         ExecuteAsync("DELETE FROM \"TransactionTags\" WHERE \"TransactionId\"=@transaction",

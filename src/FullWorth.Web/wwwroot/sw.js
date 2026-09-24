@@ -60,6 +60,7 @@ const APP_SHELL = [
   '/app/lock.js',
   '/components/privacy.js',
   '/pages/transactions/bulk-edit.js',
+  '/pages/transactions/learn-category.js',
   '/pages/transactions/category-picker.js',
   '/components/combobox.js',
   '/components/category-combobox.js',

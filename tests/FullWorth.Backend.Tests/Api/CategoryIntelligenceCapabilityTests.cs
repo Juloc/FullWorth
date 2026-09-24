@@ -41,6 +41,17 @@ public sealed class CategoryIntelligenceCapabilityTests
         Assert.Equal(HttpStatusCode.Forbidden, deniedResponse.StatusCode);
     }
 
+    /// <summary>
+    /// Kategorisieren ist die schmalere Berechtigung, Ignorieren die breitere - und das gilt auch in
+    /// einer Massenaenderung.
+    ///
+    /// Der Test stand bis #177 auf <c>POST /api/category-intelligence/bulk</c>. Diese Route war die
+    /// DRITTE Massenaenderung fuer Buchungen, hatte keinen Aufrufer und konnte weniger als die
+    /// verbliebene; sie ist geloescht. Die Invariante bleibt und wandert mit auf die Maschine, die es
+    /// noch gibt - dort steht die Unterscheidung im Endpunkt statt in der Middleware, was genau der
+    /// Grund ist, sie hier zu pruefen: sie steht jetzt woanders und koennte beim naechsten Umbau
+    /// still verschwinden.
+    /// </summary>
     [Fact]
     public async Task BulkCategoryNeedsCategorizeButIgnoreNeedsTransactionWrite()
     {
@@ -55,10 +66,12 @@ public sealed class CategoryIntelligenceCapabilityTests
         await SeedAccountAndTransaction(factory, editor, account, transaction, category);
 
         using var categorize = UserRequest(HttpMethod.Post,
-            $"/api/category-intelligence/bulk?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", editor);
+            $"/api/transaction-bulk/apply?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", editor);
         categorize.Content = JsonContent.Create(new
         {
             transactionIds = new[] { transaction },
+            expectedCount = 1,
+            confirmSelection = true,
             updateCategory = true,
             categoryId = category
         });
@@ -66,10 +79,12 @@ public sealed class CategoryIntelligenceCapabilityTests
         Assert.Equal(HttpStatusCode.OK, categorized.StatusCode);
 
         using var ignore = UserRequest(HttpMethod.Post,
-            $"/api/category-intelligence/bulk?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", editor);
+            $"/api/transaction-bulk/apply?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", editor);
         ignore.Content = JsonContent.Create(new
         {
             transactionIds = new[] { transaction },
+            expectedCount = 1,
+            confirmSelection = true,
             isIgnored = true
         });
         using var ignored = await client.SendAsync(ignore);

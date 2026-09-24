@@ -267,7 +267,12 @@
     "review": "Review",
     "noHits": "No results for this search",
     "noneWithFilters": "No transactions with these filters",
-    "nonePeriod": "No transactions in this period"
+    "nonePeriod": "No transactions in this period",
+    "learnTitle": "Always categorise like this",
+    "learnHint": "Apply to this merchant",
+    "learnScope": "Scope",
+    "learnFuture": "Future and past, with a rule",
+    "learnExisting": "Past ones only"
   },
   "purchases": {
     "title": "Purchases",
