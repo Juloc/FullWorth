@@ -117,6 +117,7 @@ const APP_SHELL = [
   '/features/ux-kit.js',
   '/pages/budgets/page.js',
   '/pages/budgets/page.css',
+  '/pages/budgets/groups.js',
   '/pages/contracts/page.js',
   '/pages/contracts/page.css',
   '/pages/insights/page.js',

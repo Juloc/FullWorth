@@ -393,11 +393,11 @@
     // above the list is the honest case.
     'analytics/budget-status': {
       items: [
-        { id: 'b1', name: 'Lebensmittel', categoryId: 'c1', period: 'monthly',
+        { id: 'b1', name: 'Lebensmittel', categoryId: 'c1', period: 'monthly', groupId: 'bg1',
           periodStart: '2026-09-01', periodEnd: '2026-09-30',
           amount: 450, spent: 318.4, remaining: 131.6, percent: 70.8,
           baseAmount: 450, carryIn: 0, carryOver: false, carryOverOverspend: false },
-        { id: 'b2', name: 'Wocheneinkauf', categoryId: 'c1', period: 'monthly',
+        { id: 'b2', name: 'Wocheneinkauf', categoryId: 'c1', period: 'monthly', groupId: 'bg1',
           periodStart: '2026-09-01', periodEnd: '2026-09-30',
           amount: 90, spent: 84.2, remaining: 5.8, percent: 93.6,
           baseAmount: 80, carryIn: 10, carryOver: true, carryOverOverspend: false },
@@ -407,6 +407,13 @@
           baseAmount: 1200, carryIn: 0, carryOver: true, carryOverOverspend: true }
       ]
     },
+    // Budget-Gruppen (#177). Vier Routen ohne Aufrufer, und ein groupId im Geltungsbereich, das
+    // niemand setzen konnte. Zwei Gruppen, damit die Auswahl im Dialog mehr als einen Eintrag hat;
+    // b3 bleibt ohne Gruppe, damit die Ueberschrift 'Ohne Gruppe' gleichzeitig auf dem Schirm steht.
+    'budget-groups': [
+      { id: 'bg1', name: 'Alltag', sortOrder: 100, isArchived: false },
+      { id: 'bg2', name: 'Sparen', sortOrder: 200, isArchived: false }
+    ],
     // #115: der Geltungsbereich eines Budgets. b1 hat einen gesetzten (zwei Kategorien, Unterkategorien
     // mitgezaehlt) - damit ist im Dialog der Zustand "Geltungsbereich ueberschreibt die Einzelkategorie"
     // erreichbar. b2 hat einen leeren, also den Normalfall. Eigene Schluessel, weil 'budgets' ein
@@ -418,7 +425,7 @@
     'budget-scopes/b1': {
       categories: [{ categoryId: 'c1', includeDescendants: true }, { categoryId: 'c2', includeDescendants: true }],
       accountIds: ['a1'], tagIds: [], merchants: [], incomeScheduleId: null,
-      alertNearPercent: 80, alertCriticalPercent: 100, groupId: null, partialAccess: false
+      alertNearPercent: 80, alertCriticalPercent: 100, groupId: 'bg1', partialAccess: false
     },
     'budget-scopes/b2': {
       categories: [], accountIds: [], tagIds: [], merchants: [], incomeScheduleId: null,

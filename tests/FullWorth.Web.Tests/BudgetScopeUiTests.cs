@@ -86,8 +86,13 @@ public sealed class BudgetScopeUiTests
         var body = DialogBody();
 
         foreach (var field in new[] { "accountIds:", "tagIds:", "merchants:", "incomeScheduleId:",
-                                      "alertNearPercent:", "alertCriticalPercent:", "groupId:" })
+                                      "alertNearPercent:", "alertCriticalPercent:" })
             Assert.Contains(field, body);
+
+        // Die Gruppe stand bis #177 in derselben Liste: unveraendert mitgeschickt, weil niemand sie
+        // setzen konnte. Seit es ein Feld dafuer gibt, wird sie GEWAEHLT und nicht durchgereicht -
+        // deshalb hier die Kurzschreibweise und nicht mehr "groupId: scope?.groupId".
+        Assert.Contains("          groupId", body);
     }
 
     /// <summary>
@@ -102,7 +107,7 @@ public sealed class BudgetScopeUiTests
         var body = DialogBody();
 
         Assert.Contains("const scopeEditable = !scope?.partialAccess;", body);
-        Assert.Contains("scopeEditable && scopeChanged()", body);
+        Assert.Contains("scopeEditable && (scopeChanged() || groupChanged)", body);
         // Und der Knopf laesst sich gar nicht erst oeffnen.
         Assert.Contains("if (scopeEditable) scopeRow?.addEventListener('click'", body);
     }

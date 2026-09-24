@@ -20,6 +20,10 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Budget-Gruppen      Vier Routen ohne Aufrufer - und dazu ein groupId im Geltungsbereich eines
+#                       Budgets, das der Dialog treu hin- und herschickte und niemand setzen konnte.
+#                       Die Budgetliste gruppiert jetzt danach, ein eigenes Blatt verwaltet sie.
+#
 #   Konten-Darstellung  Auch hier zwei Maschinen: /api/account-experience/* war fertig und ohne
 #                       Aufrufer, waehrend die Kontenseite Symbol, Farben und den Gesehen-Stand in
 #                       drei Einstellungs-Blobs hielt. Der dritte enthielt bis zu 500 Buchungs-Ids,
@@ -37,10 +41,8 @@
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #   /api/category-merge             Kategorien zusammenfuehren
 #
-DELETE /api/budget-groups/{id:guid}
 DELETE /api/saved-analyses/{id:guid}
 GET /api/bank-capabilities
-GET /api/budget-groups/
 GET /api/category-intelligence/category-appearances
 GET /api/category-merge/{sourceCategoryId:guid}/preview
 GET /api/intelligence/brand-assets/{contentSha256}
@@ -58,14 +60,12 @@ POST /api/bootstrap/deactivate-user
 POST /api/bootstrap/first-admin
 POST /api/bootstrap/purge-user
 POST /api/bootstrap/reactivate-user
-POST /api/budget-groups/
 POST /api/category-intelligence/bulk
 POST /api/category-intelligence/learn
 POST /api/category-merge/{sourceCategoryId:guid}
 POST /api/coach/ask
 POST /api/import/wealth-backup/validate
 POST /api/saved-analyses/
-PUT /api/budget-groups/{id:guid}
 PUT /api/category-intelligence/category-appearances/{categoryId:guid}
 PUT /api/category-order
 PUT /api/saved-analyses/{id:guid}

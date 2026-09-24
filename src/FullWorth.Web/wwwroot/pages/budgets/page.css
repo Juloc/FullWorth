@@ -80,3 +80,17 @@
 .fw-field.is-overridden{opacity:.6}
 
 .budget-scope-note{color:var(--muted)}
+
+/* Budget-Gruppen (#177). Eine Ueberschrift je Gruppe, und zwar nur, wenn es Gruppen GIBT - ueber
+   einer einzigen Liste waere sie Zierde. Kein eigener Rahmen, keine eigene Farbe: die Ueberschrift
+   ordnet, sie soll nicht mit den Karten darunter um Aufmerksamkeit ringen. */
+.budget-group-heading{
+  margin:var(--space-4) 0 var(--space-2);
+  font-size:var(--font-size-sm);
+  font-weight:600;
+  color:var(--muted);
+}
+.budget-group-heading:first-child{margin-top:0}
+
+.budget-group-list{display:flex;flex-direction:column;gap:var(--space-2)}
+.budget-group-row-actions{display:flex;gap:var(--space-2)}

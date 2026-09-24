@@ -239,6 +239,22 @@ public sealed class BudgetReconciliationService(
             .Select(budget => new { budget.Id })
             .ToListAsync(ct);
 
+        // Zu welcher Gruppe ein Budget gehoert, steht in BudgetAdvancedSettings. Eine Abfrage fuer
+        // alle, nicht eine je Budget: die Schleife darunter ruft ohnehin schon GetStatusAsync je
+        // Budget auf, und noch eine Runde je Budget waere genau die Art N+1, die in diesem Haus
+        // schon fuenfmal gefunden wurde.
+        var groupOfBudget = new Dictionary<Guid, Guid>();
+        if (budgets.Count > 0)
+        {
+            var connection = await RawSql.OpenAsync(db, ct);
+            await using var command = RawSql.Command(connection,
+                "SELECT \"BudgetId\",\"GroupId\" FROM \"BudgetAdvancedSettings\" WHERE \"BudgetId\"=ANY(@ids) AND \"GroupId\" IS NOT NULL",
+                ("@ids", budgets.Select(budget => budget.Id).ToArray()));
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                groupOfBudget[RawSql.Guid(reader, "BudgetId")] = RawSql.Guid(reader, "GroupId");
+        }
+
         var items = new List<object>(budgets.Count);
         var incomplete = false;
         foreach (var budget in budgets)
@@ -250,6 +266,7 @@ public sealed class BudgetReconciliationService(
             {
                 id = status.BudgetId,
                 status.Name,
+                groupId = groupOfBudget.TryGetValue(status.BudgetId, out var group) ? group : (Guid?)null,
                 status.CategoryId,
                 status.Period,
                 status.PeriodStart,

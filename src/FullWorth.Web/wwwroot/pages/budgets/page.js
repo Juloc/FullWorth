@@ -5,6 +5,7 @@ import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { emptyRow } from '../../components/empty.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
 import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
+import { loadBudgetGroups, budgetGroupOptions, openBudgetGroupManager } from './groups.js';
 
 // The disclosure label is new with the form-dialog conversion and has no i18n key yet.
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
@@ -53,7 +54,23 @@ export async function renderBudgets(context) {
     return;
   }
 
-  for (const item of items) {
+  // Gruppiert, sobald es Gruppen GIBT. Wer keine angelegt hat, sieht die Liste wie zuvor: eine
+  // Ueberschrift ueber allem, was es gibt, ordnet nichts.
+  const groups = await loadBudgetGroups(ctx);
+  const grouped = groups.filter(group => items.some(item => String(item.groupId || '') === String(group.id)));
+  const buckets = grouped.length
+    ? [...grouped.map(group => ({ name: group.name, items: items.filter(item => String(item.groupId || '') === String(group.id)) })),
+       { name: ctx.get('accounts.ungrouped'), items: items.filter(item => !grouped.some(group => String(group.id) === String(item.groupId || ''))) }]
+      .filter(bucket => bucket.items.length)
+    : [{ name: null, items }];
+
+  for (const bucket of buckets) {
+    if (bucket.name) root.insertAdjacentHTML('beforeend',
+      `<h3 class="budget-group-heading">${ctx.esc(bucket.name)}</h3>`);
+    for (const item of bucket.items) paintCard(item);
+  }
+
+  function paintCard(item) {
     const percent = Math.max(0, Number(item.percent || 0));
     const clamped = Math.min(100, percent);
     const statusKey = percent > 100 ? 'over' : percent >= 85 ? 'near' : 'ontrack';
@@ -239,14 +256,15 @@ export async function newBudget(context) {
 
 async function openBudgetDialog(existing) {
   const currency = existing?.currency || state.space?.baseCurrency || 'EUR';
-  let options, categories, scope;
+  let options, categories, scope, groups;
   try {
-    [options, categories, scope] = await Promise.all([
+    [options, categories, scope, groups] = await Promise.all([
       ctx.categoryOptions(existing?.categoryId || undefined),
       ctx.api('api/categories'),
       // #115: der Geltungsbereich eines Budgets. Ein neues hat noch keinen, und ein bestehendes darf
       // daran nicht scheitern - deshalb beides auf die leere Auswahl.
-      existing ? ctx.api(`api/budget-scopes/${existing.id}`).catch(() => null) : null
+      existing ? ctx.api(`api/budget-scopes/${existing.id}`).catch(() => null) : null,
+      loadBudgetGroups(ctx)
     ]);
   } catch (error) {
     ctx.toast(error.message || ctx.get('common.error'));
@@ -331,7 +349,13 @@ async function openBudgetDialog(existing) {
       { name: 'carryStart', kind: FieldKind.Select, label: ctx.get('budgets.carryStart'), advanced: true,
         group: 'carry', emptyValue: 'as-far-back-as-possible',
         rawOptions: carryStartOptions, hint: ctx.get('budgets.carryStartHint') },
-      { name: 'carryFrom', kind: FieldKind.Date, label: ctx.get('budgets.carryFrom'), advanced: true, group: 'carry' }
+      { name: 'carryFrom', kind: FieldKind.Date, label: ctx.get('budgets.carryFrom'), advanced: true, group: 'carry' },
+      // Die Gruppe. Das Feld gab es bis #177 nicht, die Zuordnung dahinter schon: der
+      // Geltungsbereich trug groupId, dieser Dialog schickte es unveraendert zurueck, und setzen
+      // konnte es niemand. Angelegt werden Gruppen nicht hier, sondern dort, wo sie verwaltet
+      // werden - sonst entstuenden sie nebenbei in einem Dialog, der von etwas anderem handelt.
+      { name: 'group', kind: FieldKind.Select, label: ctx.get('accounts.group'), advanced: true,
+        rawOptions: budgetGroupOptions(ctx, groups, scope?.groupId) }
     ],
     // #115 verlangt "eine ganze Kategorie, mehrere, einzelne Unterkategorien oder Kombinationen
     // daraus". Das Backend kann das seit jeher (BudgetCategories + IncludeDescendants), nur gab es
@@ -349,7 +373,8 @@ async function openBudgetDialog(existing) {
       endDate: existing?.endDate || '',
       rollover,
       carryStart,
-      carryFrom: existing?.carryOverFrom || ''
+      carryFrom: existing?.carryOverFrom || '',
+      group: scope?.groupId || ''
     },
     actions: [
       ...(existing ? [{ name: 'delete', label: ctx.get('common.delete'), role: 'danger', onClick: () => remove() }] : []),
@@ -608,7 +633,9 @@ async function openBudgetDialog(existing) {
       // geloescht. Konten, Tags, Haendler, Schwellen und Gruppe werden deshalb unveraendert
       // mitgeschickt, obwohl dieser Dialog sie nicht bearbeitet.
       const budgetId = existing?.id || saved?.id;
-      if (budgetId && scopeEditable && scopeChanged())
+      const groupId = String(values.group || '') || null;
+      const groupChanged = String(scope?.groupId || '') !== String(groupId || '');
+      if (budgetId && scopeEditable && (scopeChanged() || groupChanged))
         await ctx.api(`api/budget-scopes/${budgetId}`, ctx.jsonBody({
           categories: scopeCategories,
           accountIds: scope?.accountIds || [],
@@ -617,7 +644,7 @@ async function openBudgetDialog(existing) {
           incomeScheduleId: scope?.incomeScheduleId ?? null,
           alertNearPercent: scope?.alertNearPercent ?? 80,
           alertCriticalPercent: scope?.alertCriticalPercent ?? 100,
-          groupId: scope?.groupId ?? null
+          groupId
         }, 'PUT'));
       close('saved');
       ctx.toast(ctx.get('common.saved'));

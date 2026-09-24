@@ -6,6 +6,7 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './page.js';
+import { openBudgetGroupManager } from './groups.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite. Der Kontext steht erst fest, wenn
 // gezeichnet wird - der Knopf wird aber vorher beschriftet, also merkt ihn sich der
@@ -20,6 +21,10 @@ await startShellPage(async context => {
     // Der "Hinzufuegen"-Knopf der Kopfzeile. Er haengte bis #154 in app.js, weil das Markup dort
     // lag; jetzt gehoert beides der Seite. page.js hat kein bind*, also bindet der Einstieg.
     context.$('[data-action="new-budget"]')?.addEventListener('click', () => newBudget(pageContext));
+    // Budget-Gruppen (#177). Hier und nur hier entstehen und vergehen sie; die Liste gruppiert
+    // danach, der Budget-Dialog waehlt daraus.
+    context.$('[data-action="budget-groups"]')?.addEventListener('click',
+      () => openBudgetGroupManager(pageContext, () => renderBudgets(pageContext)));
     bound = true;
   }
   await renderBudgets(context);
