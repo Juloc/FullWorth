@@ -22,6 +22,14 @@ internal static class ImportTransactionProvenance
     // must not block the import's own rollback. Only an allocation whose CreatedByImportJobId
     // disagrees with this link's job (NULL, from a manual split, or a different job entirely) still
     // blocks, exactly as before.
+    //
+    // "ImportTransactionEnrichments" is deliberately absent from the list and cascades away with the
+    // transaction: it is not the user's work but a second import's note that it contributed a
+    // category or a split to this row (#131, Abschnitt 6). Undoing the job that CREATED the
+    // transaction removes the transaction, and a note about a row that no longer exists describes
+    // nothing. Undoing the job that merely contributed is the other direction entirely - see
+    // ImportTransactionEnrichment.RevertAsync, which takes back exactly its own contribution and
+    // leaves the transaction standing.
     internal const string DeleteImportedTransactionsSql = """
 DELETE FROM "Transactions" t
 USING "ImportTransactionLinks" l

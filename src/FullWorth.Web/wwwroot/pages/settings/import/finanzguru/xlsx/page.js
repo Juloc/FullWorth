@@ -22,6 +22,7 @@ const text={
     chooseRows:'Zeilen auswählen …',chooseRowsTitle:'Welche Zeilen sollen übernommen werden?',
     apply:'Übernehmen',previewNothing:'Nichts Neues in dieser Datei.',checking:'Datei wird gelesen …',
     selectAll:'Alle',selectedCount:'{n} von {total} ausgewählt',
+    previewEnriched:'Davon ergänzt',enriched:'Vorhandene Buchungen ergänzt',
     linkHeading:'Importkonten verbinden',
     linkHint:'Ordne importierte Historienkonten dem echten Bank- oder FullWorth-Konto zu. Hat das Ziel keinen Kontostand, trage den aktuellen Stand ein. Fehlende Buchungen kannst du danach unter „Buchungen“ ergänzen.',
     manageAccounts:'Bank/Konto verbinden oder anlegen',loadingLinks:'Konten werden geladen …',
@@ -58,6 +59,7 @@ const text={
     chooseRows:'Choose rows …',chooseRowsTitle:'Which rows should be imported?',
     apply:'Import',previewNothing:'Nothing new in this file.',checking:'Reading the file …',
     selectAll:'All',selectedCount:'{n} of {total} selected',
+    previewEnriched:'Of those, enriched',enriched:'Existing transactions enriched',
     linkHeading:'Link imported accounts',
     linkHint:'Map imported history accounts to the real bank or FullWorth account. If the target has no balance, enter the current balance. Missing bookings can then be added under Transactions.',
     manageAccounts:'Connect or create bank/account',loadingLinks:'Loading accounts …',
@@ -455,6 +457,9 @@ function renderPreview(preview){
   result.append(previewRow(text.previewNew,preview.newRows));
   result.append(previewRow(text.previewExisting,preview.alreadyImported));
   result.append(previewRow(text.previewMatched,preview.matchedExisting));
+  // Was an den Treffern noch dazukommt - Kategorie, Aufteilung, Umbuchung. Nur zeigen, wenn es
+  // etwas ist: eine Zeile "Davon ergänzt: 0" beantwortet eine Frage, die niemand gestellt hat.
+  if(preview.enrichedExisting>0) result.append(previewRow(text.previewEnriched,preview.enrichedExisting));
   if(preview.from&&preview.to){
     const period=node('div','row');
     const main=node('div','row-main');
@@ -542,6 +547,7 @@ function renderResult(data){
     [text.rows,data.sourceRows],[text.imported,data.transactionsImported],[text.existing,data.alreadyImported],
     [text.matched,data.matchedExistingTransactions],[text.accounts,data.accountsMatched],[text.createdAccounts,data.accountsCreated],[text.splits,data.splitTransactions]
   ];
+  if(data.enrichedExistingTransactions>0) rows.splice(4,0,[text.enriched,data.enrichedExistingTransactions]);
   result.innerHTML='';
   for(const [label,value] of rows) result.appendChild(previewRow(label,value));
   result.hidden=false;status.textContent=text.done;

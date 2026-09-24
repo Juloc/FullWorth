@@ -18,6 +18,12 @@ public sealed record FinanzguruImportResult(
     int TransactionsImported,
     int AlreadyImported,
     int MatchedExistingTransactions,
+    /// <summary>
+    /// Vorhandene Buchungen, denen dieser Import Kategorie, Aufteilung oder Umbuchungskennzeichnung
+    /// nachgetragen hat (#131, Abschnitt 6/7). Teilmenge von <paramref name="MatchedExistingTransactions"/>:
+    /// ein Treffer, an dem schon jemand gearbeitet hat, bleibt unberuehrt.
+    /// </summary>
+    int EnrichedExistingTransactions,
     int AccountsMatched,
     int AccountsCreated,
     int CategoriesCreated,
@@ -163,7 +169,9 @@ WHERE "Id"=@id
         var imported = 0;
         var alreadyImported = 0;
         var matchedExisting = 0;
+        var enrichedExisting = 0;
         var splitTransactions = 0;
+        var enrichments = new List<ImportedEnrichment>();
         var now = DateTimeOffset.UtcNow;
 
         foreach (var accountGroup in parentRows.GroupBy(row => AccountKey(row), StringComparer.Ordinal))
@@ -176,6 +184,7 @@ WHERE "Id"=@id
                 .ToDictionaryAsync(item => item.ExternalKey, StringComparer.Ordinal, ct);
 
             Dictionary<TransactionSignature, Queue<FinanceTransaction>> semanticMatches = [];
+            HashSet<Guid> allocatedTransactions = [];
             if (resolved.MatchedLiveAccount)
             {
                 var minDate = sourceRows.Min(row => row.BookingDate);
@@ -189,6 +198,18 @@ WHERE "Id"=@id
                 semanticMatches = existingRows
                     .GroupBy(Signature)
                     .ToDictionary(group => group.Key, group => new Queue<FinanceTransaction>(group.OrderBy(item => item.Id)));
+
+                // Eine Buchung mit Aufteilungen hat jemand geteilt - das ist eine Entscheidung, und
+                // sie steht nicht an der Buchung selbst, sondern in einer zweiten Tabelle. Ohne diese
+                // Abfrage waere "noch nichts entschieden" eine Behauptung ueber etwas Ungelesenes.
+                var existingIds = existingRows.Select(item => item.Id).ToArray();
+                allocatedTransactions = existingIds.Length == 0
+                    ? []
+                    : (await db.TransactionAllocations
+                        .Where(item => existingIds.Contains(item.TransactionId))
+                        .Select(item => item.TransactionId)
+                        .Distinct()
+                        .ToListAsync(ct)).ToHashSet();
             }
 
             foreach (var row in sourceRows)
@@ -204,8 +225,18 @@ WHERE "Id"=@id
                     && semanticMatches.TryGetValue(Signature(row), out var queue)
                     && queue.Count > 0)
                 {
-                    queue.Dequeue();
+                    // Die Bank hat diese Buchung schon geliefert. Was Finanzguru zusaetzlich weiss -
+                    // Kategorie, Aufteilung, Umbuchung - war bis hierher gezaehlt und weggeworfen
+                    // (#131, Abschnitt 6/7). Jetzt kommt es an der vorhandenen Buchung an, aber nur
+                    // dort, wo noch niemand etwas entschieden hat.
+                    var existing = queue.Dequeue();
                     matchedExisting++;
+                    if (EnrichExisting(existing, row, splitChildren, categoryResolver,
+                            allocatedTransactions, jobId, now, enrichments))
+                    {
+                        enrichedExisting++;
+                        if (splitChildren.ContainsKey(row.BookingId)) splitTransactions++;
+                    }
                     continue;
                 }
 
@@ -277,6 +308,7 @@ WHERE "Id"=@id
         // vorhanden. Die Verknuepfung braucht ausserdem die Kennungen der eben geschriebenen Buchungen.
         await FinalizeImportJobCountsAsync(jobId, rows.Count, imported, alreadyImported, ct);
         await ImportTransactionProvenance.LinkAsync(db, jobId, createdTransactionIds, ct);
+        await ImportTransactionEnrichment.RecordAsync(db, jobId, enrichments, ct);
         await ImportJobAccountProvenance.LinkCreatedAccountsAsync(db, jobId, accounts.CreatedAccountIds, ct);
 
         await transaction.CommitAsync(ct);
@@ -286,12 +318,67 @@ WHERE "Id"=@id
             imported,
             alreadyImported,
             matchedExisting,
+            enrichedExisting,
             accounts.Matched,
             accounts.Created,
             categoryResolver.Created,
             categoryResolver.Matched,
             categoryResolver.Unmapped,
             splitTransactions);
+    }
+
+    /// <summary>
+    /// Traegt an einer vorhandenen Buchung nach, was die Quelle zusaetzlich weiss (#131, Abschnitt 6/7).
+    ///
+    /// Ergaenzt wird als Paket oder gar nicht: eine Buchung, an der schon irgendetwas entschieden
+    /// ist, bleibt unberuehrt. Damit gibt es hier keinen Fall, in dem etwas ueberschrieben wird -
+    /// die Regel dafuer steht in <see cref="ImportTransactionEnrichment.MayEnrich"/> und gilt auch
+    /// fuer die Vorschau.
+    /// </summary>
+    /// <returns>Ob tatsaechlich etwas nachgetragen wurde.</returns>
+    private bool EnrichExisting(
+        FinanceTransaction existing,
+        FinanzguruRow row,
+        IReadOnlyDictionary<string, List<FinanzguruRow>> splitChildren,
+        CategoryResolver categoryResolver,
+        HashSet<Guid> allocatedTransactions,
+        Guid jobId,
+        DateTimeOffset now,
+        List<ImportedEnrichment> enrichments)
+    {
+        if (!ImportTransactionEnrichment.MayEnrich(
+                existing.CategoryId, existing.CategorizationSource, existing.IsTransfer,
+                allocatedTransactions.Contains(existing.Id)))
+            return false;
+
+        var children = splitChildren.GetValueOrDefault(row.BookingId) ?? [];
+        var categoryId = children.Count == 0
+            ? categoryResolver.Resolve(row.MainCategory, row.SubCategory)
+            : null;
+        // Ohne Kategorie, ohne Aufteilung und ohne Umbuchung hat die Quelle nichts beizutragen. Eine
+        // Notiz darueber waere eine ueber nichts.
+        if (categoryId is null && children.Count == 0 && !row.IsTransfer) return false;
+
+        existing.CategoryId = categoryId;
+        existing.CategorizationSource = categoryId.HasValue || children.Count > 0 ? "finanzguru" : "none";
+        if (row.IsTransfer) existing.IsTransfer = true;
+        existing.UpdatedAt = now;
+
+        foreach (var child in children)
+        {
+            db.TransactionAllocations.Add(new TransactionAllocation
+            {
+                TransactionId = existing.Id,
+                CategoryId = categoryResolver.Resolve(child.MainCategory, child.SubCategory),
+                Amount = child.Amount,
+                CreatedByImportJobId = jobId,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        enrichments.Add(new ImportedEnrichment(existing.Id, categoryId, row.IsTransfer));
+        return true;
     }
 
     /// <summary>

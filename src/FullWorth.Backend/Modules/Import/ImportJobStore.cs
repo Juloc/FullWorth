@@ -345,6 +345,12 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
             ImportTransactionProvenance.DeleteImportedTransactionsSql, ("@job", jobId), ("@space", fullWorthSpaceId)))
             removed = await delete.ExecuteNonQueryAsync(ct);
 
+        // Was dieser Import an FREMDEN Buchungen ergaenzt hat, geht auch zurueck - die Buchungen
+        // selbst bleiben stehen, sie gehoeren ihm nicht (#131, Abschnitt 6/7). Nach dem Loeschen
+        // oben, weil eine Buchung, die dieser Import selbst erzeugt hat, gar nicht mehr da ist und
+        // ihre Notiz mit ihr verschwunden ist.
+        await ImportTransactionEnrichment.RevertAsync(db, jobId, ct);
+
         // Hat der Import sein Zielkonto selbst angelegt und steht danach nichts mehr darin, geht es
         // mit: der Nutzer nimmt den Import zurueck, um ihn ungeschehen zu machen, und ein leeres
         // Konto, das er nie bestellt hat, waere das Gegenteil davon. Ein Konto mit Buchungen oder
@@ -393,6 +399,10 @@ WHERE j."Id"=@job
     /// <summary>Wie viele Buchungen dieser Import nachweislich erzeugt hat.</summary>
     public Task<int> LinkCountAsync(Guid jobId, CancellationToken ct) =>
         ImportTransactionProvenance.LinkCountAsync(db, jobId, ct);
+
+    /// <summary>Wie viele fremde Buchungen dieser Import nachweislich ergaenzt hat (#131).</summary>
+    public Task<int> EnrichmentCountAsync(Guid jobId, CancellationToken ct) =>
+        ImportTransactionEnrichment.CountAsync(db, jobId, ct);
 
     private async Task<string> JobFileNameAsync(Guid jobId, CancellationToken ct)
     {

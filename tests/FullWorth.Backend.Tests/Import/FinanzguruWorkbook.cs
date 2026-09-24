@@ -32,6 +32,7 @@ internal static class FinanzguruWorkbook
         string bookingId,
         string? originalId = null,
         string? splitType = null,
+        bool isTransfer = false,
         string reference = "DE65500105175456601426",
         string referenceName = "Girokonto") => new(StringComparer.Ordinal)
     {
@@ -45,7 +46,7 @@ internal static class FinanzguruWorkbook
         ["E-Ref"] = null,
         ["Analyse-Hauptkategorie"] = mainCategory,
         ["Analyse-Unterkategorie"] = subCategory,
-        ["Analyse-Umbuchung"] = "nein",
+        ["Analyse-Umbuchung"] = isTransfer ? "ja" : "nein",
         ["Buchungs-ID"] = bookingId,
         ["Referenz-Original-ID"] = originalId,
         ["Split-Typ"] = splitType

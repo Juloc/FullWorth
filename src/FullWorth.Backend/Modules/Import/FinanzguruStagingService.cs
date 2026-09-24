@@ -19,6 +19,12 @@ public sealed record FinanzguruStagePreview(
     int NewRows,
     int AlreadyImported,
     int MatchedExisting,
+    /// <summary>
+    /// Wie viele der Treffer die Quelle noch ergaenzen wuerde - Kategorie, Aufteilung oder
+    /// Umbuchungskennzeichnung an einer Buchung, an der noch niemand etwas entschieden hat
+    /// (#131, Abschnitt 6/7). Teilmenge von <paramref name="MatchedExisting"/>.
+    /// </summary>
+    int EnrichedExisting,
     DateOnly? From,
     DateOnly? To,
     IReadOnlyList<FinanzguruStagedAccount> Accounts);
@@ -85,7 +91,8 @@ public sealed class FinanzguruStagingService(
             var statuses = await ClassifyAsync(match, sourceRows, ct);
 
             for (var index = 0; index < sourceRows.Count; index++)
-                candidates.Add(new StagedCandidate(sourceRows[index], statuses[index], group.Key));
+                candidates.Add(new StagedCandidate(
+                    sourceRows[index], statuses[index].Status, group.Key, statuses[index].WouldEnrich));
 
             accountSummaries.Add(new FinanzguruStagedAccount(
                 group.Key,
@@ -104,17 +111,19 @@ public sealed class FinanzguruStagingService(
             candidates.Count(candidate => candidate.Status == "new"),
             candidates.Count(candidate => candidate.Status == "duplicate"),
             candidates.Count(candidate => candidate.Status == "matched"),
+            candidates.Count(candidate => candidate.WouldEnrich),
             parentRows.Count == 0 ? null : parentRows.Min(row => row.BookingDate),
             parentRows.Count == 0 ? null : parentRows.Max(row => row.BookingDate),
             accountSummaries);
     }
 
     /// <summary>
-    /// Schreibt die gewaehlten Zeilen fest - ueber denselben Weg wie vor dem Zwischenschritt.
+    /// Schreibt die Datei fest - ueber denselben Weg wie vor dem Zwischenschritt, nur ohne die
+    /// Zeilen, die der Nutzer abgewaehlt hat.
     ///
-    /// <paramref name="selectedCandidateIds"/> leer heisst "alles, was neu ist". Eine Zeile, die die
-    /// Vorschau schon als vorhanden gemeldet hat, kommt gar nicht erst mit: sie abzuwaehlen waere
-    /// eine Entscheidung ueber etwas, das ohnehin nicht passiert.
+    /// <paramref name="selectedCandidateIds"/> <c>null</c> heisst "nichts abgewaehlt". Waehlbar sind
+    /// nur die neuen Zeilen: eine abzuwaehlen, die ohnehin keine Buchung erzeugt, waere eine
+    /// Entscheidung ueber nichts.
     /// </summary>
     public async Task<FinanzguruImportResult?> CommitAsync(
         Guid userId, Guid fullWorthSpaceId, Guid jobId,
@@ -125,30 +134,30 @@ public sealed class FinanzguruStagingService(
 
         var rows = JsonSerializer.Deserialize<List<FinanzguruRow>>(job.Payload, JsonSerializerOptions.Web) ?? [];
         var selected = selectedCandidateIds?.ToHashSet();
-        var staged = await ReadCandidatesAsync(jobId, selected, ct);
+        var dropped = await DeselectedBookingIdsAsync(jobId, selected, ct);
 
+        // Weggelassen wird nur, was der Nutzer ABGEWAEHLT hat - nicht alles ausser dem Gewaehlten.
+        // Eine Zeile, die die Vorschau als vorhanden oder als Treffer gemeldet hat, geht weiter mit:
+        // das Festschreiben erkennt sie noch einmal selbst, zaehlt sie richtig und traegt an einem
+        // Treffer nach, was die Quelle zusaetzlich weiss (#131, Abschnitt 6/7). Sie hier
+        // herauszufiltern hiesse, dem Festschreiben einen anderen Sachverhalt vorzulegen als den,
+        // ueber den die Vorschau berichtet hat.
+        //
         // Die Aufteilungen folgen ihrer Elternzeile. Sie einzeln waehlbar zu machen hiesse, eine
         // Buchung zuzulassen, deren Teile nicht mehr zusammen ergeben, was auf dem Konto steht.
         var keep = rows
             .Where(row => row.SplitType is "Teilbuchung" or "Restbetrag"
-                ? row.OriginalReferenceId is not null && staged.Wanted.Contains(row.OriginalReferenceId)
-                : staged.Wanted.Contains(row.BookingId))
+                ? row.OriginalReferenceId is null || !dropped.Contains(row.OriginalReferenceId)
+                : !dropped.Contains(row.BookingId))
             .ToList();
 
         var result = await import.ImportRowsAsync(userId, fullWorthSpaceId, keep, ct, job.Sha, jobId);
         if (result is null) return null;
-        await FinishJobAsync(jobId, staged.Duplicate + staged.Matched, ct);
+        await FinishJobAsync(jobId, result.AlreadyImported + result.MatchedExistingTransactions, ct);
 
-        // Die Zahlen der DATEI, nicht die der Auswahl. ImportRowsAsync bekommt nur die Zeilen, die es
-        // schreiben soll, und wuesste von den uebrigen nichts - "312 Zeilen, 40 uebernommen, 260
-        // bereits vorhanden" waere sonst zu "40 Zeilen, 40 uebernommen, 0 vorhanden" geworden, was
-        // dasselbe Ereignis anders und falsch beschreibt.
-        return result with
-        {
-            SourceRows = rows.Count,
-            AlreadyImported = staged.Duplicate,
-            MatchedExistingTransactions = staged.Matched
-        };
+        // Die Zeilenzahl der DATEI, nicht die der Auswahl: "312 Zeilen, 40 uebernommen" ist die
+        // Auskunft, "40 von 40" waere eine andere und falsche.
+        return result with { SourceRows = rows.Count };
     }
 
     /// <summary>
@@ -158,11 +167,11 @@ public sealed class FinanzguruStagingService(
     /// Beides sind genau die zwei Regeln, nach denen das Festschreiben entscheidet - hier nur ohne
     /// zu schreiben.
     /// </summary>
-    private async Task<List<string>> ClassifyAsync(
+    private async Task<List<(string Status, bool WouldEnrich)>> ClassifyAsync(
         FinanzguruImportService.MatchedAccount match, List<FinanzguruRow> sourceRows, CancellationToken ct)
     {
         // Ein Konto, das es noch nicht gibt, hat nichts, wogegen sich vergleichen liesse.
-        if (match.Account is null) return [.. sourceRows.Select(_ => "new")];
+        if (match.Account is null) return [.. sourceRows.Select(_ => ("new", false))];
 
         var accountId = match.Account.Id;
         var keys = sourceRows.Select(row => FinanzguruImportService.ExternalKeyOf(row.BookingId))
@@ -174,6 +183,9 @@ public sealed class FinanzguruStagingService(
         var known = existingKeys.ToHashSet(StringComparer.Ordinal);
 
         Dictionary<FinanzguruImportService.TransactionSignature, Queue<Guid>> semantic = [];
+        // Welche der Treffer noch zu ergaenzen waeren. Dieselbe Frage wie beim Festschreiben, mit
+        // derselben Antwort - MayEnrich steht einmal, nicht hier ein zweites Mal.
+        var enrichable = new HashSet<Guid>();
         if (match.MatchedLiveAccount)
         {
             var minDate = sourceRows.Min(row => row.BookingDate);
@@ -183,32 +195,55 @@ public sealed class FinanzguruStagingService(
                                && item.BookingDate >= minDate && item.BookingDate <= maxDate
                                && item.Status != "PDNG"
                                && !item.ExternalKey.StartsWith("finanzguru:"))
-                .Select(item => new { item.Id, item.BookingDate, item.Amount, item.Currency, item.NormalizedCounterparty })
+                .Select(item => new
+                {
+                    item.Id, item.BookingDate, item.Amount, item.Currency, item.NormalizedCounterparty,
+                    item.CategoryId, item.CategorizationSource, item.IsTransfer,
+                    HasAllocations = db.TransactionAllocations.Any(allocation => allocation.TransactionId == item.Id)
+                })
                 .ToListAsync(ct);
             semantic = existing
                 .GroupBy(item => new FinanzguruImportService.TransactionSignature(
                     item.BookingDate, item.Amount, item.Currency, item.NormalizedCounterparty))
                 .ToDictionary(group => group.Key, group => new Queue<Guid>(group.OrderBy(item => item.Id).Select(item => item.Id)));
+            foreach (var item in existing)
+            {
+                if (ImportTransactionEnrichment.MayEnrich(
+                        item.CategoryId, item.CategorizationSource, item.IsTransfer, item.HasAllocations))
+                    enrichable.Add(item.Id);
+            }
         }
 
-        var result = new List<string>(sourceRows.Count);
+        var splitParents = sourceRows
+            .Where(row => row.SplitType is "Original")
+            .Select(row => row.BookingId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var result = new List<(string Status, bool WouldEnrich)>(sourceRows.Count);
         foreach (var row in sourceRows)
         {
-            if (known.Contains(FinanzguruImportService.ExternalKeyOf(row.BookingId))) { result.Add("duplicate"); continue; }
+            if (known.Contains(FinanzguruImportService.ExternalKeyOf(row.BookingId))) { result.Add(("duplicate", false)); continue; }
             var signature = new FinanzguruImportService.TransactionSignature(
                 row.BookingDate, row.Amount, row.Currency, MerchantNormalization.Normalize(row.Counterparty));
             if (match.MatchedLiveAccount && semantic.TryGetValue(signature, out var queue) && queue.Count > 0)
             {
-                queue.Dequeue();
-                result.Add("matched");
+                var existingId = queue.Dequeue();
+                // Beizutragen gibt es etwas, wenn die Quelle eine Kategorie, eine Aufteilung oder die
+                // Umbuchungskennzeichnung mitbringt. Die Kategorie wird hier NICHT aufgeloest: das
+                // Aufloesen legt fehlende Kategorien an, und eine Vorschau, die etwas anlegt, ist
+                // keine.
+                var brings = splitParents.Contains(row.BookingId)
+                    || row.IsTransfer
+                    || !string.IsNullOrWhiteSpace(row.MainCategory);
+                result.Add(("matched", enrichable.Contains(existingId) && brings));
                 continue;
             }
-            result.Add("new");
+            result.Add(("new", false));
         }
         return result;
     }
 
-    private sealed record StagedCandidate(FinanzguruRow Row, string Status, string SourceKey);
+    private sealed record StagedCandidate(FinanzguruRow Row, string Status, string SourceKey, bool WouldEnrich);
     private sealed record StagedJob(string Payload, string Sha);
 
     private async Task WriteJobAsync(
@@ -272,32 +307,29 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "UserId"=@uid AND "AdapterKey"=
     }
 
     /// <summary>
-    /// Welche Buchungskennungen festgeschrieben werden sollen - und wie viele Zeilen aus einem
-    /// anderen Grund als der Abwahl des Nutzers draussen bleiben.
+    /// Welche Buchungskennungen der Nutzer abgewaehlt hat. Nur neue Zeilen sind ueberhaupt
+    /// waehlbar - eine Zeile abzuwaehlen, die ohnehin keine Buchung erzeugt, waere eine
+    /// Entscheidung ueber nichts.
     /// </summary>
-    private async Task<(HashSet<string> Wanted, int Duplicate, int Matched)> ReadCandidatesAsync(
+    private async Task<HashSet<string>> DeselectedBookingIdsAsync(
         Guid jobId, HashSet<Guid>? selected, CancellationToken ct)
     {
+        if (selected is null) return [];
         var connection = await RawSql.OpenAsync(db, ct);
         await using var command = RawSql.Command(connection,
             "SELECT \"Id\",\"RowFingerprint\",\"DuplicateStatus\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job",
             ("@job", jobId));
         await using var reader = await command.ExecuteReaderAsync(ct);
 
-        var wanted = new HashSet<string>(StringComparer.Ordinal);
-        var duplicate = 0;
-        var matched = 0;
+        var dropped = new HashSet<string>(StringComparer.Ordinal);
         while (await reader.ReadAsync(ct))
         {
             var id = reader.GetGuid(0);
             var bookingId = reader.GetString(1);
             var status = reader.GetString(2);
-            if (status == "duplicate") { duplicate++; continue; }
-            if (status == "matched") { matched++; continue; }
-            if (selected is not null && !selected.Contains(id)) continue;
-            wanted.Add(bookingId);
+            if (status == "new" && !selected.Contains(id)) dropped.Add(bookingId);
         }
-        return (wanted, duplicate, matched);
+        return dropped;
     }
 
     /// <summary>

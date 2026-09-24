@@ -221,11 +221,16 @@ public static class ImportJobEndpoints
             return Results.BadRequest(new { error = "Only a completed import can be rolled back." });
 
         var linked = await store.LinkCountAsync(id, ct);
-        if (linked == 0)
-            return Results.BadRequest(new { error = "This import predates exact provenance tracking or created no transactions, so automatic rollback is not available." });
+        // Ein Import kann auch dann etwas getan haben, wenn er keine Buchung erzeugt hat: er kann an
+        // vorhandenen Buchungen Kategorie, Aufteilung oder Umbuchung nachgetragen haben (#131,
+        // Abschnitt 6/7). Diese Pruefung hiess vorher "nichts erzeugt heisst nichts zu tun" - seit es
+        // Ergaenzungen gibt, waere das ein Import, den der Nutzer nicht mehr zuruecknehmen kann.
+        var enriched = await store.EnrichmentCountAsync(id, ct);
+        if (linked == 0 && enriched == 0)
+            return Results.BadRequest(new { error = "This import predates exact provenance tracking or changed nothing, so automatic rollback is not available." });
 
         var removed = await store.RollbackAsync(uid, fullWorthSpaceId, id, ct);
-        return Results.Ok(new { jobId = id, removed, kept = linked - removed });
+        return Results.Ok(new { jobId = id, removed, kept = linked - removed, reverted = enriched });
     }
 
     private static string? Clean(string? v)=>string.IsNullOrWhiteSpace(v)?null:v.Trim();

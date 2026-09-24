@@ -1530,7 +1530,7 @@
     // undefined - der Weg Datei -> Vorschau -> Zeilenauswahl -> Uebernehmen liesse sich also nirgends
     // am Stueck ansehen, und genau er ist das Neue an dieser Seite.
     if (after.startsWith('import/finanzguru/stage')) return { status: 200, body: {
-      jobId: FINANZGURU_STAGE_JOB, sourceRows: 312, newRows: 3, alreadyImported: 268, matchedExisting: 41,
+      jobId: FINANZGURU_STAGE_JOB, sourceRows: 312, newRows: 3, alreadyImported: 268, matchedExisting: 41, enrichedExisting: 12,
       from: iso('2024-01-01'), to: iso('2026-09-13'),
       accounts: [
         { sourceKey: 'DE02…2051', displayName: 'C24 Girokonto', accountId: 'a1', accountName: 'Girokonto', status: 'linked', rows: 212 },
@@ -1546,7 +1546,7 @@
       // nicht zu pruefen.
       const chosen = Array.isArray(body?.candidateIds) ? body.candidateIds.length : 3;
       return { status: 200, body: {
-        sourceRows: 312, transactionsImported: chosen, alreadyImported: 268, matchedExistingTransactions: 41,
+        sourceRows: 312, transactionsImported: chosen, alreadyImported: 268, matchedExistingTransactions: 41, enrichedExistingTransactions: 12,
         accountsMatched: 2, accountsCreated: 1, categoriesCreated: 0, categoriesMatched: 3,
         categoriesUnmapped: 0, splitTransactions: 1
       } };
