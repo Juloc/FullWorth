@@ -889,41 +889,79 @@ function donutChart(series, fmt) {
   return `<div class="donut-wrap"><svg viewBox="0 0 180 180" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${arcs}</svg><div class="donut-legend">${legend}</div></div>`;
 }
 
+// Gemerkte Auswertungen liegen in /api/saved-analyses - einer Tabelle, nicht mehr in einem
+// Einstellungs-Blob (#177).
+//
+// Der Blob war ein Feld: Loeschen hiess die ganze Liste lesen, eine Zeile herausfiltern und alles
+// zurueckschreiben. Wer das in zwei Fenstern gleichzeitig tat, verlor einen Eintrag, ohne dass etwas
+// fehlschlug. Das volle CRUD dafuer stand die ganze Zeit fertig da und hatte keinen Aufrufer.
+//
+// Die Antwort traegt je Eintrag { id, name, config:{ query, chartType, period } }. "period" ist der
+// Grund, warum die Oberflaeche ihre relative Wahl behaelt: der Server kennt nur von-bis, und ohne
+// dieses Feld waere eine gemerkte Auswertung auf ihre zwoelf Monate von damals eingefroren.
+function savedConfig(entry) {
+  const config = entry?.config || {};
+  const query = config.query || {};
+  return {
+    measure: query.measure || 'spend',
+    dimension: query.dimension || 'month',
+    period: config.period || '1y',
+    chartType: config.chartType || 'bar'
+  };
+}
+
+async function fetchSaved() {
+  try { return (await ctx.api('api/saved-analyses')) || []; }
+  catch { return []; }
+}
+
 async function loadSavedAnalyses(context) {
   if (context) ctx = context;
   const el = ctx.$('#an-saved');
   if (!el) return;
-  let items;
-  try { const pref = await ctx.api('api/preferences/analytics.savedAnalyses'); items = pref?.value?.items || []; }
-  catch { items = []; }
+  const items = await fetchSaved();
   if (!items.length) { el.innerHTML = `<div class="row-sub">${esc(ctx.get('analytics.builder.empty'))}</div>`; return; }
   el.innerHTML = `<div class="row-group">${esc(ctx.get('analytics.builder.saved'))}</div>`;
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = `<button type="button" class="${buttonClass(ButtonRole.Secondary, 'saved-open')}" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
-    row.querySelector('.saved-open').addEventListener('click', () => { applyBuilderConfig(it.config || {}); runBuilder(ctx); });
+    row.innerHTML = `<button type="button" class="${buttonClass(ButtonRole.Secondary, 'saved-open')}" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="${buttonClass(ButtonRole.Icon)}" data-rename="${esc(it.id)}" title="${esc(ctx.get('analytics.builder.rename'))}" aria-label="${esc(ctx.get('analytics.builder.rename'))}">✎</button><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
+    row.querySelector('.saved-open').addEventListener('click', () => { applyBuilderConfig(savedConfig(it)); runBuilder(ctx); });
+    row.querySelector('[data-rename]').addEventListener('click', () => nameDialog(it.name, async name => {
+      // Umbenennen laesst die Auswertung selbst in Ruhe: PUT ersetzt den ganzen Eintrag, also geht
+      // das GESPEICHERTE zurueck und nicht das, was der Baukasten gerade zeigt.
+      await ctx.api(`api/saved-analyses/${it.id}`, ctx.jsonBody(body(name, savedConfig(it)), 'PUT'));
+    }));
     row.querySelector('[data-del]').addEventListener('click', () => deleteSaved(it.id));
     el.appendChild(row);
   }
 }
 
-async function persistSaved(items) {
-  await ctx.api('api/preferences/analytics.savedAnalyses', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+/** Was der Server erwartet: eine vollstaendige Abfrage, die Darstellung und der relative Zeitraum. */
+function body(name, config) {
+  const window = config.period === 'all' ? null : range(config.period);
+  return {
+    name,
+    query: {
+      measure: config.measure,
+      dimension: config.dimension,
+      from: window?.from || null,
+      to: window?.to || null
+    },
+    chartType: config.chartType,
+    period: config.period
+  };
 }
-async function fetchSaved() {
-  try { const pref = await ctx.api('api/preferences/analytics.savedAnalyses'); return pref?.value?.items || []; }
-  catch { return []; }
-}
+
 async function deleteSaved(id) {
-  try { await persistSaved((await fetchSaved()).filter(x => x.id !== id)); await loadSavedAnalyses(ctx); }
+  try { await ctx.api(`api/saved-analyses/${id}`, { method: 'DELETE' }); await loadSavedAnalyses(ctx); }
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
 }
 
-function saveAnalysis(context) {
-  if (context) ctx = context;
+/** Ein Name, zweimal gebraucht: beim Merken und beim Umbenennen. */
+function nameDialog(value, submit) {
   const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(ctx.get('analytics.builder.save'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
-    <label>${esc(ctx.get('analytics.builder.saveName'))}<input name="name" required maxlength="80" autocomplete="off"></label>
+    <label>${esc(ctx.get('analytics.builder.saveName'))}<input name="name" required maxlength="80" autocomplete="off" value="${esc(value || '')}"></label>
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(ctx.get('common.save'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -932,13 +970,16 @@ function saveAnalysis(context) {
     const name = (new FormData(e.currentTarget).get('name') || '').trim();
     if (!name) return;
     try {
-      const items = await fetchSaved();
-      items.push({ id: (crypto.randomUUID ? crypto.randomUUID() : 's' + Date.now().toString(36)), name, config: readBuilderConfig() });
-      await persistSaved(items);
+      await submit(name);
       dlg.close(); ctx.toast(ctx.get('common.saved')); await loadSavedAnalyses(ctx);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
   dlg.showModal();
+}
+
+function saveAnalysis(context) {
+  if (context) ctx = context;
+  nameDialog('', name => ctx.api('api/saved-analyses', ctx.jsonBody(body(name, readBuilderConfig()))));
 }
 
 export { PERIODS };

@@ -79,4 +79,4 @@
 
 /* Das Farbfeld des Bearbeiten-Dialogs. Der Wert IST die Farbe - deshalb steht sie am Element und
    nicht in einer Regel: eine vom Benutzer gewaehlte Farbe ist Inhalt, kein Entwurf. */
-.cat-colour-field input[type="color"]{width:100%;height:38px;padding:2px;border-radius:var(--radius-sm)}
+.cat-colour-field input[type="color"]{width:100%;min-height:42px;padding:var(--space-1);border-radius:var(--radius-sm)}

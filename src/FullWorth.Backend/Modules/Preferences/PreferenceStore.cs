@@ -30,15 +30,15 @@ public sealed class PreferenceStore(FullWorthDbContext db)
         "dashboard.layout.mobile",
         "navigation.mobile",
         "notifications.types",
-        "analytics.savedAnalyses",
         "wealth.emergencyFund",
         "wealth.projection",
     };
-    // Drei Schluessel standen hier bis #177 und stehen jetzt in eigenen Tabellen:
+    // Vier Schluessel standen hier bis #177 und stehen jetzt in eigenen Tabellen:
     // accounts.visuals und account-groups.visuals in AccountAppearances/AccountGroupAppearances,
-    // transactions.seenAt in AccountTransactionSeenStates. Sie hier stehen zu lassen hiesse, den
-    // zweiten Weg offenzuhalten - und zwei Orte fuer dieselbe Sache sind genau das, was schon
-    // einmal dazu gefuehrt hat, dass die eine Haelfte gepflegt wurde und die andere nicht.
+    // transactions.seenAt in AccountTransactionSeenStates, analytics.savedAnalyses in SavedAnalyses.
+    // Sie hier stehen zu lassen hiesse, den zweiten Weg offenzuhalten - und zwei Orte fuer dieselbe
+    // Sache sind genau das, was schon einmal dazu gefuehrt hat, dass die eine Haelfte gepflegt wurde
+    // und die andere nicht.
     public const int MaxValueBytes = 64 * 1024;
 
     public async Task<PreferenceView?> GetAsync(Guid userId, Guid fullWorthSpaceId, string key, CancellationToken ct)

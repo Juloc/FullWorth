@@ -20,6 +20,11 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Auswertungen        Volles CRUD ohne Aufrufer, waehrend die Seite ihre Merkzettel in einen
+#                       Einstellungs-Blob legte. Ein Blob ist ein Feld: Loeschen hiess die ganze
+#                       Liste lesen, eine Zeile herausfiltern und alles zurueckschreiben - in zwei
+#                       Fenstern gleichzeitig verlor das einen Eintrag, ohne dass etwas fehlschlug.
+#
 #   Sicherung pruefen   Die Route stand sogar ZWEIMAL da, Zeile fuer Zeile gleich, einmal unter
 #                       /api/export und einmal unter /api/import; keine der beiden hatte einen
 #                       Aufrufer. Uebrig ist die eine, und die Einstellungen fuehren jetzt hin.
@@ -48,11 +53,9 @@
 #
 # Der Rest ist fertig gebaut und unerreichbar, und die groessten Brocken darunter sind:
 #
-#   /api/saved-analyses/*           gespeicherte Auswertungen, volles CRUD
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #   /api/category-merge             Kategorien zusammenfuehren
 #
-DELETE /api/saved-analyses/{id:guid}
 GET /api/bank-capabilities
 GET /api/category-merge/{sourceCategoryId:guid}/preview
 GET /api/intelligence/brand-assets/{contentSha256}
@@ -63,7 +66,6 @@ GET /api/merchants/resolve
 GET /api/product-learning/category-suggestions
 GET /api/purchase-analytics/by-merchant
 GET /api/purchases/discount-analytics
-GET /api/saved-analyses/
 GET /api/tax/profiles
 POST /api/bootstrap/accept-invite
 POST /api/bootstrap/deactivate-user
@@ -74,5 +76,3 @@ POST /api/category-intelligence/bulk
 POST /api/category-intelligence/learn
 POST /api/category-merge/{sourceCategoryId:guid}
 POST /api/coach/ask
-POST /api/saved-analyses/
-PUT /api/saved-analyses/{id:guid}

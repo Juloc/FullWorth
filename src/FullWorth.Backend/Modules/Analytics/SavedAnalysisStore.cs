@@ -82,6 +82,18 @@ public sealed class SavedAnalysisStore(FullWorthDbContext db, AuditService audit
         return true;
     }
 
+    /// <summary>
+    /// Mit <see cref="JsonSerializerOptions.Web"/>, und das ist kein Geschmack.
+    ///
+    /// Ohne sie schreibt der Serialisierer die Eigenschaften von <see cref="AnalysisQueryWrite"/> in
+    /// Grossschreibung ("Measure", "Dimension") - die Antwort reicht das gespeicherte JSON
+    /// unveraendert durch, und die Oberflaeche, die "measure" liest, bekommt undefined und faellt
+    /// still auf ihre Vorgabe zurueck. Eine gemerkte Auswertung haette sich dann beim Oeffnen
+    /// klaglos in eine andere verwandelt. Die beiden aeusseren Felder waren nie betroffen, weil sie
+    /// hier von Hand klein geschrieben stehen - genau deshalb war es nicht zu sehen.
+    /// </summary>
     private static string ConfigJson(SavedAnalysisWrite request) =>
-        JsonSerializer.Serialize(new { query = request.Query, chartType = request.ChartType });
+        JsonSerializer.Serialize(
+            new { query = request.Query, chartType = request.ChartType, period = request.Period },
+            JsonSerializerOptions.Web);
 }

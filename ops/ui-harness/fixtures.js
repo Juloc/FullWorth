@@ -736,6 +736,17 @@
       { date: '2026-09-09', netWorth: 48250.30 }
     ],
     'wealth/booking-activity': [],
+    // Gemerkte Auswertungen (#177). Sie lagen bis dahin in einem Einstellungs-Blob; das volle CRUD
+    // unter /api/saved-analyses hatte keinen Aufrufer. Zwei Eintraege, einer mit relativem Zeitraum
+    // und einer ohne - nur so ist im Harness zu sehen, dass 'period' die Wahl ueberlebt.
+    'saved-analyses': [
+      { id: 'sa1', name: 'Ausgaben nach Kategorie', schemaVersion: 1, createdAt: '2026-09-01T09:00:00Z',
+        updatedAt: '2026-09-01T09:00:00Z',
+        config: { query: { measure: 'spend', dimension: 'category', from: null, to: null }, chartType: 'donut', period: '1y' } },
+      { id: 'sa2', name: 'Einnahmen je Monat', schemaVersion: 1, createdAt: '2026-08-11T09:00:00Z',
+        updatedAt: '2026-08-11T09:00:00Z',
+        config: { query: { measure: 'income', dimension: 'month', from: null, to: null }, chartType: 'bar', period: null } }
+    ],
     'preferences/wealth.projection': { value: {} },
     'preferences/wealth.emergencyFund': { value: {} },
     'liabilities': [],

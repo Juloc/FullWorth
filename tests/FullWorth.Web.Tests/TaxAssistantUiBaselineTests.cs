@@ -75,15 +75,23 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task TaxUi_HasResponsiveReviewAndSettingsStyles()
     {
-        var taxCss = await GetAsync("/pages/tax/page.css");
-        var reviewCss = await GetAsync("/pages/tax/page.css");
+        // Einmal gelesen. Hier standen bis #177 zwei Variablen, die beide dieselbe Datei holten -
+        // ein Rest aus der Zeit, als die Pruefungs-Stile ein eigenes Blatt hatten.
+        var css = await GetAsync("/pages/tax/page.css");
 
-        Assert.Contains("tax-view", taxCss);
-        Assert.Contains("tax-case", taxCss);
-        Assert.Contains("@media", taxCss);
-        Assert.Contains("tax-year-review", reviewCss);
-        Assert.Contains("tax-advanced-grid", reviewCss);
-        Assert.Contains("@media", reviewCss);
+        Assert.Contains("tax-case", css);
+        Assert.Contains("tax-year-review", css);
+        Assert.Contains("tax-advanced-grid", css);
+        Assert.Contains("@media", css);
+
+        // ".tax-view" stand hier auch und ist bewusst weg: die Regel dazu war
+        // ".tax-view{display:none}" plus ein ".tax-view.active{display:block}" aus der alten Huelle.
+        // Mit .active blieb nur das Verstecken uebrig, und die Seite war unsichtbar. Was an ihrer
+        // Stelle prueft, dass die Seite ueberhaupt etwas zeigt, ist PageContentVisibilityTests - ein
+        // Selektor im Stylesheet kann das nicht, und genau deshalb hat er es damals auch nicht
+        // gemerkt. Der Abschnitt im Markup traegt die Klasse weiterhin; sie ist der Anker der Seite.
+        Assert.Contains("class=\"tax-view\"", WebSources.Page("Tax"), StringComparison.Ordinal);
+        Assert.DoesNotContain(".tax-view.active", css);
     }
 
     private string ReadWebAsset(string relative)

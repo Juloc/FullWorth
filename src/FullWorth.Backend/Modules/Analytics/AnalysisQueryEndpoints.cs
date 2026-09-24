@@ -4,7 +4,16 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Analytics;
 
-public sealed record SavedAnalysisWrite(string Name, AnalysisQueryWrite Query, string ChartType = "bar", int SchemaVersion = 1);
+/// <summary>
+/// Eine gemerkte Auswertung.
+///
+/// <c>Period</c> kam mit #177 dazu, und zwar aus einem Grund, der sonst still verlorengegangen waere:
+/// die Oberflaeche laesst "letzte 12 Monate" waehlen, der Server kennt nur von-bis. Ohne dieses Feld
+/// haette eine gemerkte Auswertung ihren Zeitraum EINGEFROREN - beim naechsten Oeffnen stuenden
+/// dieselben Tage da statt derselben Frage. <c>Query</c> bleibt trotzdem vollstaendig: was gespeichert
+/// ist, muss sich auch ohne die Oberflaeche wieder abfragen lassen.
+/// </summary>
+public sealed record SavedAnalysisWrite(string Name, AnalysisQueryWrite Query, string ChartType = "bar", int SchemaVersion = 1, string? Period = null);
 
 /// <summary>
 /// Die freie Auswertung: eine Kennzahl, ueber eine Dimension gruppiert - und die Auswertungen, die

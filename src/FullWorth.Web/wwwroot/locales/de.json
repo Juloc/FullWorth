@@ -545,7 +545,8 @@
       "type_line": "Linie",
       "type_hbar": "Horizontale Balken",
       "type_donut": "Donut",
-      "type_sankey": "Fluss"
+      "type_sankey": "Fluss",
+      "rename": "Umbenennen"
     }
   },
   "rules": {
