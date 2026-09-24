@@ -74,7 +74,20 @@ public sealed record WealthOverviewView(
     // retirement. There is deliberately NO second "tied wealth" field: today the tied part IS this
     // number, and a second field carrying the same value is a field that drifts the day a third
     // asset kind becomes tied. Free vs tied is a label the frontend puts on this component.
-    WealthComponentView? PensionAssets = null);
+    WealthComponentView? PensionAssets = null,
+    // Die restlichen zwei Teilmengen von ManualAssets (#178), dieselbe Umrechnung wie die Summe.
+    // Zusammen mit RealEstateAssets und PensionAssets ergeben sie wieder ManualAssets - das ist die
+    // Zusicherung, an der sich eine kuenftige Sachwert-Art messen lassen muss: sie gehoert in eine
+    // der vier Zeilen, sonst faellt sie aus der Aufteilung heraus, ohne dass eine Summe kippt.
+    WealthComponentView? PreciousMetalAssets = null,
+    WealthComponentView? OtherAssets = null,
+    // Marktwert der Immobilien minus der ihnen zugeordneten Restschuld. Anteilig: ein Kredit kann
+    // ueber AssetDebtLinks.AllocationPercent zu mehreren Objekten gehoeren.
+    //
+    // Gerechnet als EINE Umrechnung ueber Werte und negierte Schulden zusammen - nicht als Differenz
+    // zweier fertig umgerechneter Zahlen. Der Unterschied ist die Unvollstaendigkeit: fehlt der Kurs
+    // der Schuld, ist das Eigenkapital unbekannt und nicht etwa gleich dem Marktwert.
+    WealthComponentView? RealEstateEquity = null);
 
 public sealed record WealthHistoryPoint(
     DateOnly Date,
@@ -86,6 +99,17 @@ public sealed record WealthHistoryPoint(
     decimal? OtherLiabilities,
     decimal? TotalAssets,
     decimal? TotalLiabilities,
+    // Die Aufteilung der Sachwerte und das Immobilien-Eigenkapital (#178).
+    //
+    // Null heisst hier NICHT null Euro, sondern "an diesem Tag nicht festgehalten": ein
+    // Tageswert von vor dieser Aenderung kennt seine Aufteilung nicht und bekommt sie auch nicht
+    // nachtraeglich angerechnet. Die Kurve zeichnet dort eine Luecke, statt eine Zahl zu behaupten,
+    // die niemand gemessen hat.
+    decimal? RealEstateAssets,
+    decimal? PreciousMetalAssets,
+    decimal? PensionAssets,
+    decimal? OtherAssets,
+    decimal? RealEstateEquity,
     // Null when a rate the day needed was missing: the sum would be short a whole account, which is not
     // a smaller net worth but an unknown one. The chart drops a null point and draws a gap.
     decimal? NetWorth,
@@ -168,14 +192,23 @@ public sealed class WealthOverviewService(
             .Select(asset => new { asset.Kind, Value = new NativeValue(asset.CurrentValue, asset.Currency) })
             .ToListAsync(ct);
         var manualAssets = manualAssetRows.Select(row => row.Value).ToList();
-        var realEstateAssets = manualAssetRows
-            .Where(row => string.Equals(row.Kind, AssetKinds.RealEstate, StringComparison.OrdinalIgnoreCase))
+        List<NativeValue> OfKind(string kind) => manualAssetRows
+            .Where(row => string.Equals(row.Kind, kind, StringComparison.OrdinalIgnoreCase))
             .Select(row => row.Value)
             .ToList();
-        var pensionAssets = manualAssetRows
-            .Where(row => string.Equals(row.Kind, AssetKinds.InsurancePension, StringComparison.OrdinalIgnoreCase))
+        var realEstateAssets = OfKind(AssetKinds.RealEstate);
+        var pensionAssets = OfKind(AssetKinds.InsurancePension);
+        var preciousMetalAssets = OfKind(AssetKinds.PreciousMetal);
+        // "Sonstige" ist der REST, nicht eine Aufzaehlung der uebrigen Arten (#178). Eine neue
+        // Sachwert-Art faellt damit hier hinein, statt aus der Aufteilung herauszufallen - und die
+        // vier Teilmengen ergeben weiterhin die Summe.
+        var otherAssets = manualAssetRows
+            .Where(row => !string.Equals(row.Kind, AssetKinds.RealEstate, StringComparison.OrdinalIgnoreCase)
+                       && !string.Equals(row.Kind, AssetKinds.InsurancePension, StringComparison.OrdinalIgnoreCase)
+                       && !string.Equals(row.Kind, AssetKinds.PreciousMetal, StringComparison.OrdinalIgnoreCase))
             .Select(row => row.Value)
             .ToList();
+        var realEstateDebt = await ReadRealEstateDebtAsync(fullWorthSpaceId, ct);
 
         var loanRows = await db.Loans.AsNoTracking()
             .Where(loan => loan.FullWorthSpaceId == fullWorthSpaceId && loan.IsActive)
@@ -215,6 +248,16 @@ public sealed class WealthOverviewService(
         // other on screen. Its missing currencies are already counted by the manualAssets line.
         var pensionView = ConvertComponent(
             pensionAssets, targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        var preciousMetalView = ConvertComponent(
+            preciousMetalAssets, targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        var otherAssetsView = ConvertComponent(
+            otherAssets, targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        // Werte UND negierte Schulden in einem Aufruf: so traegt das Ergebnis die Unvollstaendigkeit
+        // beider Seiten. Als Differenz zweier fertiger Zahlen waere ein fehlender Schuldkurs eine
+        // stille Null gewesen - und das Eigenkapital damit gleich dem Marktwert.
+        var realEstateEquityView = ConvertComponent(
+            [.. realEstateAssets, .. realEstateDebt.Select(debt => new NativeValue(-debt.Amount, debt.Currency))],
+            targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         var loansView = ConvertComponent(loanRows, targetCurrency, today, fx, missingCurrencies);
         var otherLiabilitiesView = ConvertComponent(otherLiabilities, targetCurrency, today, fx, missingCurrencies);
 
@@ -291,7 +334,10 @@ public sealed class WealthOverviewService(
                 emergencyFund,
                 excludedInvestmentAccounts.Order().ToArray(),
                 realEstateView,
-                pensionView));
+                pensionView,
+                preciousMetalView,
+                otherAssetsView,
+                realEstateEquityView));
     }
 
     public async Task<WealthHistoryOutcome> GetHistoryForUserAsync(
@@ -428,11 +474,65 @@ public sealed class WealthOverviewService(
                 "Investments" = {overview.Investments.Amount},
                 "Loans" = {overview.Loans.Amount},
                 "OtherLiabilities" = {overview.OtherLiabilities.Amount},
+                "RealEstateAssets" = {overview.RealEstateAssets?.Amount},
+                "PreciousMetalAssets" = {overview.PreciousMetalAssets?.Amount},
+                "PensionAssets" = {overview.PensionAssets?.Amount},
+                "OtherAssets" = {overview.OtherAssets?.Amount},
+                "RealEstateEquity" = {overview.RealEstateEquity?.Amount},
                 "ComponentCurrency" = {overview.Currency},
                 "IsComplete" = {overview.IsComplete},
                 "MissingCurrenciesJson" = CAST({missingJson} AS jsonb)
             WHERE "Id" = {carrier.Id};
             """, ct);
+    }
+
+    /// <summary>
+    /// Was an Restschuld auf den Immobilien liegt, anteilig (#178).
+    ///
+    /// <c>AssetDebtLinks.AllocationPercent</c> ist der Grund, warum das eine eigene Abfrage ist und
+    /// keine Summe ueber die Kredite: ein Kredit kann zu mehreren Objekten gehoeren, und dann zaehlt
+    /// je Objekt nur sein Anteil. Die Waehrung bleibt die der Schuld - umgerechnet wird erst
+    /// zusammen mit den Marktwerten, damit ein fehlender Kurs das Eigenkapital unbekannt macht und
+    /// nicht stillschweigend gleich dem Marktwert.
+    ///
+    /// Gezaehlt wird nur, was auch im Nettovermoegen steht: ein stillgelegter Kredit und eine
+    /// Verbindlichkeit ausserhalb der Zaehlung gehoeren nicht dazu, sonst waere das Eigenkapital
+    /// kleiner als das Vermoegen, das daneben steht.
+    /// </summary>
+    private async Task<List<NativeValue>> ReadRealEstateDebtAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        var connection = db.Database.GetDbConnection();
+        var closeWhenDone = connection.State != ConnectionState.Open;
+        if (closeWhenDone) await connection.OpenAsync(ct);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT COALESCE(ln."CurrentBalance", li."CurrentBalance") * l."AllocationPercent" / 100 AS "Amount",
+                       COALESCE(ln."Currency", li."Currency") AS "Currency"
+                FROM "AssetDebtLinks" l
+                JOIN "Assets" a ON a."Id" = l."AssetId"
+                LEFT JOIN "Loans" ln ON ln."Id" = l."LoanId" AND ln."IsActive"
+                LEFT JOIN "Liabilities" li ON li."Id" = l."LiabilityId" AND li."IncludeInNetWorth"
+                WHERE l."FullWorthSpaceId" = @space
+                  AND a."FullWorthSpaceId" = @space
+                  AND a."IncludeInNetWorth"
+                  AND a."Kind" = @kind
+                  AND (ln."Id" IS NOT NULL OR li."Id" IS NOT NULL);
+                """;
+            AddParameter(command, "@space", fullWorthSpaceId);
+            AddParameter(command, "@kind", AssetKinds.RealEstate);
+
+            var rows = new List<NativeValue>();
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                rows.Add(new NativeValue(reader.GetDecimal(0), reader.GetString(1)));
+            return rows;
+        }
+        finally
+        {
+            if (closeWhenDone) await connection.CloseAsync();
+        }
     }
 
     private static WealthComponentView ConvertComponent(
@@ -499,6 +599,16 @@ public sealed class WealthOverviewService(
         decimal investments = 0m;
         decimal loans = 0m;
         decimal otherLiabilities = 0m;
+        // Die Aufteilung der Sachwerte (#178). Sie wird erst seit dieser Aenderung festgehalten, also
+        // kann ein Tag sie haben oder nicht - und "nicht" heisst hier NICHT null Euro. Gezaehlt wird
+        // deshalb nur, wenn ALLE Zeilen des Tages sie tragen; fehlt sie an einer, bleibt die ganze
+        // Reihe an diesem Tag unbekannt und die Kurve zeichnet eine Luecke.
+        decimal realEstate = 0m;
+        decimal preciousMetal = 0m;
+        decimal pension = 0m;
+        decimal otherAssets = 0m;
+        decimal realEstateEquity = 0m;
+        var splitKnown = true;
         var complete = true;
         // A conversion that FAILED is different from data that was already flagged incomplete when it
         // was written: the sum below is then missing a whole account, so it is not a smaller number -
@@ -538,6 +648,18 @@ public sealed class WealthOverviewService(
             investments += row.Investments!.Value * multiplier.Value;
             loans += row.Loans!.Value * multiplier.Value;
             otherLiabilities += row.OtherLiabilities!.Value * multiplier.Value;
+            if (row.HasAssetSplit)
+            {
+                realEstate += row.RealEstateAssets!.Value * multiplier.Value;
+                preciousMetal += row.PreciousMetalAssets!.Value * multiplier.Value;
+                pension += row.PensionAssets!.Value * multiplier.Value;
+                otherAssets += row.OtherAssets!.Value * multiplier.Value;
+                // Klammern, nicht Geschmack: ohne sie bindet ?? schwaecher als *, der Ausdruck waere
+                // "Wert ?? (0 * Kurs)" gewesen - und das Eigenkapital haette die Umrechnung
+                // uebersprungen. In der Basiswaehrung faellt so etwas nie auf, weil der Kurs 1 ist.
+                realEstateEquity += (row.RealEstateEquity ?? 0m) * multiplier.Value;
+            }
+            else splitKnown = false;
             if (row.IsComplete != true) complete = false;
             foreach (var currency in row.MissingCurrencies) missing.Add(currency);
         }
@@ -547,6 +669,7 @@ public sealed class WealthOverviewService(
         decimal? investmentsValue = componentsUnknown ? null : investments;
         decimal? loansValue = componentsUnknown ? null : loans;
         decimal? otherLiabilitiesValue = componentsUnknown ? null : otherLiabilities;
+        var splitUnknown = componentsUnknown || !splitKnown;
 
         return new(
             date,
@@ -558,6 +681,11 @@ public sealed class WealthOverviewService(
             otherLiabilitiesValue,
             componentsUnknown ? null : manualAssets + investments,
             componentsUnknown ? null : loans + otherLiabilities,
+            splitUnknown ? null : realEstate,
+            splitUnknown ? null : preciousMetal,
+            splitUnknown ? null : pension,
+            splitUnknown ? null : otherAssets,
+            splitUnknown ? null : realEstateEquity,
             accountsUnknown || componentsUnknown
                 ? null
                 : accounts + manualAssets + investments - loans - otherLiabilities,
@@ -598,6 +726,12 @@ public sealed class WealthOverviewService(
             null,
             null,
             null,
+            // Die Aufteilung der Sachwerte gab es an diesen Tagen noch gar nicht (#178).
+            null,
+            null,
+            null,
+            null,
+            null,
             // Same rule as the explicit path: a day that could not convert one of its accounts has an
             // unknown net worth, not a lower one.
             accountComplete ? netWorth : null,
@@ -615,6 +749,11 @@ public sealed class WealthOverviewService(
         overview.OtherLiabilities.Amount,
         overview.TotalAssets,
         overview.TotalLiabilities,
+        overview.RealEstateAssets?.Amount,
+        overview.PreciousMetalAssets?.Amount,
+        overview.PensionAssets?.Amount,
+        overview.OtherAssets?.Amount,
+        overview.RealEstateEquity?.Amount,
         overview.NetWorth,
         overview.IsComplete,
         overview.MissingCurrencies);
@@ -653,7 +792,9 @@ public sealed class WealthOverviewService(
             command.CommandText = $"""
                 SELECT "Date", "Currency", "Accounts", "Assets", "Liabilities", "NetWorth",
                        "ManualAssets", "Investments", "Loans", "OtherLiabilities", "ComponentCurrency",
-                       "IsComplete", "MissingCurrenciesJson"
+                       "IsComplete", "MissingCurrenciesJson",
+                       "RealEstateAssets", "PreciousMetalAssets", "PensionAssets", "OtherAssets",
+                       "RealEstateEquity"
                 FROM "NetWorthSnapshots"
                 WHERE {string.Join(" AND ", predicates)}
                 ORDER BY "Date", "Currency";
@@ -676,7 +817,12 @@ public sealed class WealthOverviewService(
                     reader.IsDBNull(9) ? null : reader.GetDecimal(9),
                     reader.IsDBNull(10) ? null : reader.GetString(10),
                     reader.IsDBNull(11) ? null : reader.GetBoolean(11),
-                    reader.IsDBNull(12) ? [] : ParseMissingCurrencies(reader.GetString(12))));
+                    reader.IsDBNull(12) ? [] : ParseMissingCurrencies(reader.GetString(12)),
+                    reader.IsDBNull(13) ? null : reader.GetDecimal(13),
+                    reader.IsDBNull(14) ? null : reader.GetDecimal(14),
+                    reader.IsDBNull(15) ? null : reader.GetDecimal(15),
+                    reader.IsDBNull(16) ? null : reader.GetDecimal(16),
+                    reader.IsDBNull(17) ? null : reader.GetDecimal(17)));
             }
             return rows;
         }
@@ -751,9 +897,27 @@ public sealed class WealthOverviewService(
         decimal? OtherLiabilities,
         string? ComponentCurrency,
         bool? IsComplete,
-        IReadOnlyList<string> MissingCurrencies)
+        IReadOnlyList<string> MissingCurrencies,
+        decimal? RealEstateAssets,
+        decimal? PreciousMetalAssets,
+        decimal? PensionAssets,
+        decimal? OtherAssets,
+        decimal? RealEstateEquity)
     {
         public bool HasExplicitComponents =>
             ManualAssets.HasValue && Investments.HasValue && Loans.HasValue && OtherLiabilities.HasValue;
+
+        /// <summary>
+        /// Ob dieser Tag die Aufteilung der Sachwerte traegt (#178). Sie wird erst seit dem Ergaenzen
+        /// der Reihen festgehalten - ein aelterer Tageswert hat sie nicht, und das ist etwas anderes
+        /// als "null Euro Immobilien".
+        ///
+        /// RealEstateEquity steht bewusst NICHT in der Bedingung: ein Bereich ohne Immobilie hat
+        /// keine, und das ist kein fehlender Messwert. Fuer ihn gilt die Null der vier Zeilen
+        /// darueber ohnehin schon.
+        /// </summary>
+        public bool HasAssetSplit =>
+            RealEstateAssets.HasValue && PreciousMetalAssets.HasValue &&
+            PensionAssets.HasValue && OtherAssets.HasValue;
     }
 }

@@ -3,6 +3,7 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { createWizard } from '../../components/wizard.js';
 import { openRealEstateDetail, refreshWealthExtensions } from './real-estate.js';
 import { sectionCard, trendBadge, esc, identityIcon } from '../../features/ux-kit.js';
+import { seriesChartMarkup, hasSeriesHistory, bindSeriesChart } from './history-series.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
@@ -65,6 +66,7 @@ const COPY = {
     fxRatesUsed: 'Umgerechnet mit', fxRateAsOf: 'Kurs vom', fxRateStale: 'Kurs ist älter als ein paar Tage',
     moreDetails: 'Mehr Angaben',
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
+    seriesTitle: 'Reihen im Zeitverlauf',
     real_estate: 'Immobilie', vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', collectible: 'Sammlerstück / Wertgegenstand',
     receivable: 'Forderung / privates Darlehen', business_interest: 'Unternehmensbeteiligung', insurance_pension: 'Versicherung / Vorsorge', other: 'Sonstiger Wert',
     manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen',
@@ -124,6 +126,7 @@ const COPY = {
     fxRatesUsed: 'Converted at', fxRateAsOf: 'rate of', fxRateStale: 'this rate is more than a few days old',
     moreDetails: 'More details',
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
+    seriesTitle: 'Series over time',
     real_estate: 'Real estate', vehicle: 'Vehicle', precious_metal: 'Precious metal', collectible: 'Collectible / valuable',
     receivable: 'Receivable / private loan', business_interest: 'Business interest', insurance_pension: 'Insurance / pension', other: 'Other asset',
     manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated',
@@ -268,10 +271,12 @@ function paintNetWorth() {
   const host = ctx.$('#view-networth');
   if (!host) return;
   const completeness = finanzguruCompletenessNotice(nw.importCompleteness, { scope: 'wealth', lang: isDe() ? 'de' : 'en' });
-  host.innerHTML = `${completeness}${buildHeroCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
+  host.innerHTML = `${completeness}${buildHeroCard()}${buildSeriesCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
 
   const hero = host.querySelector('.nw-hero');
   if (hero) wireHero(hero);
+  // Gezeichnet wird erst hier: die Auswahl der Reihen lebt im Blatt, und die Achse folgt ihr.
+  bindSeriesChart(ctx, host.querySelector('.nw-series'), nw.history, nw.currency);
   host.querySelector('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
   host.querySelector('[data-action="watchlist-add"]')?.addEventListener('click', () => void openWatchlistAdd());
   host.querySelector('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
@@ -1107,6 +1112,17 @@ function donutSvg(segments, assetSum, label, currency) {
 function legendRow(label, amount, color, currency, negative = false, pct = null) {
   const pctText = (pct !== null && Number.isFinite(pct)) ? `<span class="nw-legend-pct">${pct.toFixed(0)}%</span>` : '';
   return `<div class="nw-legend-item"><span class="nw-dot" style="background:${color}"></span><span class="nw-legend-label">${ctx.esc(label)}</span>${pctText}<span class="nw-legend-amt${negative ? ' negative' : ''}">${ctx.money(amount, currency)}</span></div>`;
+}
+
+// Die Reihen des Verlaufs (#178). Die Karte erscheint nur, wenn ueberhaupt ein Tag die Aufteilung
+// traegt - vor dem Ergaenzen der Reihen gab es sie nicht, und eine leere Karte waere ein Versprechen
+// auf Daten, die nie kommen. Sie steht unter der Hero-Kurve und ueber der Aufteilung von heute: erst
+// die eine Zahl, dann ihr Verlauf in Teilen, dann der Stand von heute.
+function buildSeriesCard() {
+  if (!hasSeriesHistory(nw.history)) return '';
+  const body = seriesChartMarkup(ctx, nw.history, nw.currency);
+  if (!body) return '';
+  return sectionCard(t('seriesTitle'), body, { className: 'nw-series' });
 }
 
 function buildAllocationCard() {

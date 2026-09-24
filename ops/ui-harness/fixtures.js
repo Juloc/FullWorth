@@ -778,14 +778,23 @@
       // labels "davon gebunden" - there is no separate tied total to keep in sync here.
       pensionAssets: { amount: 2000, isComplete: true }
     },
+    // Der Vermoegensverlauf mit den Reihen aus #178. Die ersten VIER Tage tragen die Aufteilung
+    // bewusst nicht: so ist im Harness zu sehen, dass die Linien dort abbrechen statt auf null zu
+    // fallen - genau der Unterschied zwischen "nicht festgehalten" und "null Euro".
     'wealth/history': [
-      { date: '2025-09-09', netWorth: 41050.30 }, { date: '2025-10-09', netWorth: 41650.30 },
-      { date: '2025-11-09', netWorth: 42250.30 }, { date: '2025-12-09', netWorth: 42850.30 },
-      { date: '2026-01-09', netWorth: 43450.30 }, { date: '2026-02-09', netWorth: 44050.30 },
-      { date: '2026-03-09', netWorth: 44650.30 }, { date: '2026-04-09', netWorth: 45250.30 },
-      { date: '2026-05-09', netWorth: 45850.30 }, { date: '2026-06-09', netWorth: 46450.30 },
-      { date: '2026-07-09', netWorth: 47050.30 }, { date: '2026-08-09', netWorth: 47650.30 },
-      { date: '2026-09-09', netWorth: 48250.30 }
+      { date: '2025-09-09', currency: 'EUR', netWorth: 41050.30 },
+      { date: '2025-10-09', currency: 'EUR', netWorth: 41650.30 },
+      { date: '2025-11-09', currency: 'EUR', netWorth: 42250.30 },
+      { date: '2025-12-09', currency: 'EUR', netWorth: 42850.30 },
+      { date: '2026-01-09', currency: 'EUR', netWorth: 43450.30, accounts: 12480, investments: 10200, loans: 284800, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4360, pensionAssets: 18360, otherAssets: 6000, realEstateEquity: 15200 },
+      { date: '2026-02-09', currency: 'EUR', netWorth: 44050.30, accounts: 12600, investments: 10500, loans: 284000, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4400, pensionAssets: 18450, otherAssets: 6000, realEstateEquity: 16000 },
+      { date: '2026-03-09', currency: 'EUR', netWorth: 44650.30, accounts: 12720, investments: 10800, loans: 283200, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4440, pensionAssets: 18540, otherAssets: 6000, realEstateEquity: 16800 },
+      { date: '2026-04-09', currency: 'EUR', netWorth: 45250.30, accounts: 12840, investments: 11100, loans: 282400, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4480, pensionAssets: 18630, otherAssets: 6000, realEstateEquity: 17600 },
+      { date: '2026-05-09', currency: 'EUR', netWorth: 45850.30, accounts: 12960, investments: 11400, loans: 281600, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4520, pensionAssets: 18720, otherAssets: 6000, realEstateEquity: 18400 },
+      { date: '2026-06-09', currency: 'EUR', netWorth: 46450.30, accounts: 13080, investments: 11700, loans: 280800, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4560, pensionAssets: 18810, otherAssets: 6000, realEstateEquity: 19200 },
+      { date: '2026-07-09', currency: 'EUR', netWorth: 47050.30, accounts: 13200, investments: 12000, loans: 280000, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4600, pensionAssets: 18900, otherAssets: 6000, realEstateEquity: 20000 },
+      { date: '2026-08-09', currency: 'EUR', netWorth: 47650.30, accounts: 13320, investments: 12300, loans: 279200, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4640, pensionAssets: 18990, otherAssets: 6000, realEstateEquity: 20800 },
+      { date: '2026-09-09', currency: 'EUR', netWorth: 48250.30, accounts: 13440, investments: 12600, loans: 278400, otherLiabilities: 0, realEstateAssets: 300000, preciousMetalAssets: 4680, pensionAssets: 19080, otherAssets: 6000, realEstateEquity: 21600 }
     ],
     'wealth/booking-activity': [],
     // Gemerkte Auswertungen (#177). Sie lagen bis dahin in einem Einstellungs-Blob; das volle CRUD

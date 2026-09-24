@@ -139,6 +139,7 @@ const APP_SHELL = [
   '/pages/transactions/page.js',
   '/pages/transactions/page.css',
   '/pages/networth/page.js',
+  '/pages/networth/history-series.js',
   '/pages/networth/page.css',
   '/pages/networth/real-estate.js',
   '/pages/networth/real-estate-core.js',

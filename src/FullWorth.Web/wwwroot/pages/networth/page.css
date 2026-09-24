@@ -1475,3 +1475,47 @@
   }
 
 }
+
+/* Die Reihen des Verlaufs (#178). Duenne Linien statt Flaechen: acht gefuellte Flaechen uebereinander
+   sind ein Farbbrei, und gemeint ist der VERLAUF je Reihe, nicht ihr Anteil - den zeigt die
+   Aufteilung darunter. */
+.nw-series-chart{width:100%;height:200px;margin-bottom:var(--space-3)}
+.nw-series-chart svg{width:100%;height:100%;display:block}
+
+.nw-series-line{stroke:var(--k4)}
+.nw-series-line[data-cat="1"]{stroke:var(--cat-1)}
+.nw-series-line[data-cat="2"]{stroke:var(--cat-2)}
+.nw-series-line[data-cat="3"]{stroke:var(--cat-3)}
+.nw-series-line[data-cat="4"]{stroke:var(--cat-4)}
+.nw-series-line[data-cat="5"]{stroke:var(--cat-5)}
+.nw-series-line[data-cat="6"]{stroke:var(--cat-6)}
+.nw-series-line[data-cat="7"]{stroke:var(--cat-7)}
+.nw-series-line[data-cat="8"]{stroke:var(--cat-8)}
+
+.nw-series-legend{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:var(--space-2) var(--space-4);
+  margin-bottom:var(--space-2);
+}
+
+/* Die Legende IST der Schalter. Ein abgeschalteter Eintrag bleibt lesbar und wird nur ruhiger -
+   ausgegraut hiesse "geht nicht", und genau das waere falsch. */
+.nw-series-legend-item{
+  display:flex;
+  align-items:center;
+  gap:var(--space-2);
+  min-width:0;
+  background:none;
+  border:0;
+  padding:var(--space-1) 0;
+  font:inherit;
+  color:inherit;
+  text-align:start;
+  cursor:pointer;
+}
+
+.nw-series-legend-item[aria-pressed="false"]{opacity:.45}
+.nw-series-legend-item[aria-pressed="false"] .cat-dot{background:var(--muted)}
+.nw-series-legend-item > span:nth-child(2){flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nw-series-legend-item > strong{flex:0 0 auto;font-variant-numeric:tabular-nums}
