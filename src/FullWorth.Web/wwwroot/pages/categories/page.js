@@ -1,6 +1,7 @@
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { emptyRow } from '../../components/empty.js';
 import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
+import { renderCategoryArrange } from './arrange.js';
 // Der "Übergeordnet"-Select trägt hier denselben Baum wie überall sonst (#157) - ohne Suche musste man
 // ihn beim Anlegen/Verschieben einer Unterkategorie in einem tief verschachtelten Baum durchscrollen.
 import { attachCombobox } from '../../components/combobox.js';
@@ -20,6 +21,21 @@ export function bindCategories(context) {
   // Der "Hinzufuegen"-Knopf der Kopfzeile. Er haengte bis #154 in app.js, weil das Markup dort lag;
   // jetzt gehoert beides der Seite. Ohne diese Zeile steht er da und tut nichts.
   ctx.$('[data-action="new-category"]')?.addEventListener('click', () => newCategory(ctx));
+  // Sortiermodus (#177). Er ist ein Modus und keine Zeilenaktion: zwei Pfeile in jeder Zeile der
+  // normalen Ansicht waeren zwei Knoepfe zu viel fuer etwas, das man einmal im Jahr macht.
+  ctx.$('[data-action="arrange-categories"]')?.addEventListener('click', () => {
+    arranging = !arranging;
+    renderCategories(ctx);
+  });
+}
+
+/** Der Knopf sagt, in welchem Modus man ist - sonst ist der einzige Hinweis der Baum selbst. */
+function paintArrangeButton() {
+  const button = ctx.$('[data-action="arrange-categories"]');
+  if (!button) return;
+  const label = arranging ? ctx.get('common.cancel') : ctx.get('categories.arrange');
+  button.textContent = label;
+  button.setAttribute('aria-pressed', arranging ? 'true' : 'false');
 }
 
 export async function newCategory(context) {
@@ -78,11 +94,35 @@ export async function newCategory(context) {
   dlg.showModal();
 }
 
+// Die gewaehlte Farbe je Kategorie (#177). Sie lag hinter GET/PUT
+// /api/category-intelligence/category-appearances, und beide hatten keinen Aufrufer: der Punkt vor
+// dem Namen bekam stattdessen eine Farbe nach Zaehlerstand - dieselbe Kategorie konnte damit heute
+// blau und morgen gruen sein, je nachdem, wie viele vor ihr standen.
+let appearance = new Map();
+let arranging = false;
+
 export async function renderCategories(context) {
   ctx = context;
   const showArchived = ctx.$('#cat-archived').checked;
-  const rows = await ctx.api(`api/categories${showArchived ? '?includeArchived=true' : ''}`);
+  const [rows, colours] = await Promise.all([
+    ctx.api(`api/categories${showArchived ? '?includeArchived=true' : ''}`),
+    ctx.api('api/category-intelligence/category-appearances').catch(() => [])
+  ]);
+  appearance = new Map((Array.isArray(colours) ? colours : [])
+    .filter(entry => entry.color)
+    .map(entry => [String(entry.categoryId), entry.color]));
   const tree = ctx.$('#categories-tree');
+
+  if (arranging) {
+    renderCategoryArrange(ctx, tree, rows || [], async changed => {
+      arranging = false;
+      paintArrangeButton();
+      if (!changed) return renderCategories(ctx);
+      await renderCategories(ctx);
+    });
+    paintArrangeButton();
+    return;
+  }
   const all = rows || [];
   const byParent = new Map();
   for (const c of all) {
@@ -126,7 +166,9 @@ function renderNode(node, byParent, parent, depth, all, catIndex) {
   row.innerHTML = `
     <div class="cat-row">
       <button class="cat-twist" ${children.length ? '' : 'disabled'} aria-label="${ctx.esc(ctx.get(isCollapsed ? 'categories.expand' : 'categories.collapse'))}">${children.length ? (isCollapsed ? '▸' : '▾') : '·'}</button>
-      <span class="cat-dot" data-cat="${catIndex}" aria-hidden="true"></span>
+      <span class="cat-dot"${appearance.has(String(node.id))
+        ? ` style="background:${ctx.esc(appearance.get(String(node.id)))}"`
+        : ` data-cat="${catIndex}"`} aria-hidden="true"></span>
       <span class="cat-icon" aria-hidden="true">${categoryIconInner(node.icon) || ''}</span><span class="cat-name">${ctx.esc(node.name)}${node.isArchived ? ` <span class="tx-marker">${ctx.esc(ctx.get('categories.archived'))}</span>` : ''}</span>
       <span class="cat-actions">
         <button class="${buttonClass(ButtonRole.Icon)}" data-edit aria-label="${ctx.esc(ctx.get('categories.edit'))}" title="${ctx.esc(ctx.get('categories.edit'))}">✎</button>
@@ -172,6 +214,7 @@ function openEdit(node, all) {
     <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120" value="${ctx.esc(node.name)}"></label>
     <label>${ctx.esc(ctx.get('categories.icon'))}<span data-icon-picker></span></label>
     <label>${ctx.esc(ctx.get('categories.parent'))}<select name="parent"><option value="">${ctx.esc(ctx.get('categories.topLevel'))}</option>${parentOptions(node, all, node.parentId)}</select></label>
+    <label class="cat-colour-field">${ctx.esc(ctx.get('categories.colour'))}<input name="colour" type="color" value="${ctx.esc(appearance.get(String(node.id)) || '#64748B')}"></label>
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
   const iconPicker = categoryIconPicker(node.icon, { none: ctx.get('categories.iconNone') });
   dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
@@ -187,6 +230,12 @@ function openEdit(node, all) {
     const fd = new FormData(e.currentTarget);
     try {
       await ctx.api(`api/categories/${node.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fd.get('name'), parentId: fd.get('parent') || null, icon: selectedIconKey(iconPicker), sortOrder: node.sortOrder ?? null }) });
+      // Die Farbe ist eine eigene Ressource und wird nur geschrieben, wenn sie sich geaendert hat:
+      // ein Farbfeld hat IMMER einen Wert, also wuerde jedes Umbenennen sonst eine Farbe setzen,
+      // die niemand gewaehlt hat.
+      const colour = String(fd.get('colour') || '').toUpperCase();
+      if (colour !== String(appearance.get(String(node.id)) || '').toUpperCase())
+        await ctx.api(`api/category-intelligence/category-appearances/${node.id}`, ctx.jsonBody({ color: colour }, 'PUT'));
       dlg.close(); ctx.toast(ctx.get('common.saved')); await renderCategories(ctx);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };

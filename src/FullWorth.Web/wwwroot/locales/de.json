@@ -971,7 +971,9 @@
     "restore": "Wiederherstellen",
     "restored": "Kategorie wiederhergestellt",
     "expand": "Ausklappen",
-    "collapse": "Einklappen"
+    "collapse": "Einklappen",
+    "arrange": "Reihenfolge",
+    "colour": "Farbe"
   },
   "notifications": {
     "title": "Benachrichtigungen",

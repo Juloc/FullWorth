@@ -20,6 +20,11 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Kategorie-Ordnung   Die Liste sortierte seit jeher nach sortOrder, und niemand konnte den Wert
+#                       aendern - die Reihenfolge war die, die der Seeder einmal vergeben hatte. Die
+#                       Farbe stand hinter zwei weiteren Routen ohne Aufrufer; der Punkt vor dem
+#                       Namen bekam stattdessen eine Farbe nach Zaehlerstand.
+#
 #   Budget-Gruppen      Vier Routen ohne Aufrufer - und dazu ein groupId im Geltungsbereich eines
 #                       Budgets, das der Dialog treu hin- und herschickte und niemand setzen konnte.
 #                       Die Budgetliste gruppiert jetzt danach, ein eigenes Blatt verwaltet sie.
@@ -43,7 +48,6 @@
 #
 DELETE /api/saved-analyses/{id:guid}
 GET /api/bank-capabilities
-GET /api/category-intelligence/category-appearances
 GET /api/category-merge/{sourceCategoryId:guid}/preview
 GET /api/intelligence/brand-assets/{contentSha256}
 GET /api/intelligence/digests/
@@ -66,6 +70,4 @@ POST /api/category-merge/{sourceCategoryId:guid}
 POST /api/coach/ask
 POST /api/import/wealth-backup/validate
 POST /api/saved-analyses/
-PUT /api/category-intelligence/category-appearances/{categoryId:guid}
-PUT /api/category-order
 PUT /api/saved-analyses/{id:guid}

@@ -971,7 +971,9 @@
     "restore": "Restore",
     "restored": "Category restored",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "arrange": "Order",
+    "colour": "Colour"
   },
   "notifications": {
     "title": "Notifications",

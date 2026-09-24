@@ -45,6 +45,11 @@
       { categoryId: 'c-res', categoryName: 'Restaurant', expenses: 286, count: 4 }
     ], transactionIds: ['t1', 't2'] },
     'collections': [{ id: 'col1', name: 'Wohnung', description: 'Alles rund um die Wohnung', icon: 'home', color: null, startDate: null, endDate: null, status: 'active', transactionCount: 14, expenses: 14820, income: 0, net: -14820, currency: 'EUR', isComplete: true, missingCurrencies: [] }, { id: 'col2', name: 'Gardasee 2026', description: null, icon: 'travel', color: null, startDate: '2026-08-12', endDate: '2026-08-17', status: 'completed', transactionCount: 9, expenses: 1436, income: 0, net: -1436, currency: 'EUR', isComplete: false, missingCurrencies: ['CHF'] }],
+    // Die gewaehlte Farbe je Kategorie (#177). Nur EINE hat eine - so stehen beide Faelle
+    // gleichzeitig im Baum: der Punkt mit der gewaehlten Farbe und der mit dem Zaehlerstand.
+    'category-intelligence/category-appearances': [
+      { categoryId: 'c1', color: '#2E7D32' }
+    ],
     'categories/language': { language: 'en', canChange: true, systemCategories: 80, renamedByUser: 0 },
     'categories': [
       { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, icon: 'groceries' },
