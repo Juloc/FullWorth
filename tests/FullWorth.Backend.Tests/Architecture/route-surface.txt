@@ -533,9 +533,7 @@ POST             /api/tags/
 POST             /api/tax/analyze
 POST             /api/tax/candidates/{id:guid}/confirm
 POST             /api/tax/candidates/{id:guid}/reject
-POST             /api/transaction-bulk/advanced-preview
 POST             /api/transaction-bulk/apply
-POST             /api/transaction-bulk/execute
 POST             /api/transaction-bulk/preview
 POST             /api/transactions/
 POST             /api/transactions/{id:guid}/transfer-external

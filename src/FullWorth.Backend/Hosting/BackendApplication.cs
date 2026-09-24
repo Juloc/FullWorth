@@ -313,7 +313,6 @@ public static class BackendApplication
         builder.Services.AddScoped<FinTsInvestmentSnapshotStore>();
         builder.Services.AddScoped<AccountGroupStore>();
         builder.Services.AddScoped<AccountBalanceHistoryStore>();
-        builder.Services.AddScoped<TransactionBulkStore>();
         builder.Services.AddScoped<WealthPreviewBasisService>();
         builder.Services.AddScoped<CloudRequestContextStore>();
         builder.Services.AddScoped<AdminSecretsStore>();
@@ -638,8 +637,7 @@ public static class BackendApplication
         endpoints.MapAccountAppearanceEndpoints();
         endpoints.MapAccountExperienceEndpoints()
             .MapBankCapabilityEndpoints();
-        endpoints.MapAccessEndpoints()
-            .MapTransactionBulkEndpoints();
+        endpoints.MapAccessEndpoints();
     }
 
     private static void ConfigureBackendMiddleware(IApplicationBuilder app, IConfiguration configuration)

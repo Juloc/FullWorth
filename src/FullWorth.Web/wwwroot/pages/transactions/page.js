@@ -12,6 +12,7 @@ import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { createWizard } from '../../components/wizard.js';
 import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
+import { openBulkEdit } from './bulk-edit.js';
 import { registerRowSelection } from '../../components/mobile-interactions.js';
 import { state } from '../../core/state.js';
 
@@ -59,12 +60,16 @@ function updateCoachSelectionBar() {
   const items = coachSelection.getSelectedIds().map(id => currentItemsById.get(id)).filter(Boolean);
   const currency = items.every(item => item.currency === items[0]?.currency) ? (items[0]?.currency || '') : '';
   const total = currency ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
-  bar.innerHTML = `<span><strong>${coachSelection.count}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-collect>${ctx.esc(ctx.get('collections.addToCollection'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  bar.innerHTML = `<span><strong>${coachSelection.count}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-collect>${ctx.esc(ctx.get('collections.addToCollection'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-edit>${deLabel('Bearbeiten','Edit')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
   // #124: die Massenzuordnung. Die Auswahl gab es hier schon, sie fuehrte aber nur zum Coach - eine
   // Reise oder Renovierung ist damit Zeile fuer Zeile zuzuordnen gewesen, obwohl der Endpunkt eine
   // ganze Liste auf einmal nimmt.
   bar.querySelector('[data-selection-collect]').onclick =
     () => openBulkCollectionPicker(coachSelection.getSelectedIds());
+  // #177: die Sammelbearbeitung. Der Endpunkt dafuer war fertig und hatte keinen Aufrufer - die
+  // Auswahl gab es hier laengst, sie fuehrte nur nirgendwo hin, wo man etwas aendern konnte.
+  bar.querySelector('[data-selection-edit]').onclick =
+    () => openBulkEdit(ctx, coachSelection.getSelectedIds(), () => renderTransactions(ctx));
   bar.querySelector('[data-selection-clear]').onclick = () => {
     coachSelection.selectAll(false);
     // selectAll() setzt .checked auf jeder gebundenen Checkbox direkt (siehe selection-list.js), feuert

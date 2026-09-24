@@ -36,6 +36,18 @@ public sealed record AdvancedTransactionBulkRequest(
     bool ConfirmReplaceNotes = false,
     bool PairAsTransfer = false);
 
+/// <summary>
+/// Massenaenderungen an Buchungen: Vorschau und Ausfuehrung (#177).
+///
+/// Es gab hier zwei Maschinen nebeneinander, beide fertig und beide ohne Aufrufer - diese unter
+/// /advanced-preview und /apply, und eine aeltere unter /preview und /execute. Geblieben ist diese:
+/// sie kann alles, was die andere konnte, und daruber hinaus Stichworte, Ueberweisungspaare und die
+/// Sicherung ueber ExpectedCount. Die Adresse heisst deshalb wieder schlicht /preview - "erweitert"
+/// war nur im Vergleich zu der Fassung, die es nicht mehr gibt.
+///
+/// TransactionBulkAgreementTests hat vor dem Loeschen festgehalten, dass beide im gemeinsamen Teil
+/// dasselbe taten - bis auf die leere Notiz, und dort ist diese hier die richtige.
+/// </summary>
 public static class TransactionBulkAdvancedEndpoints
 {
     private const int MaxExplicitIds = 1000;
@@ -44,7 +56,7 @@ public static class TransactionBulkAdvancedEndpoints
     public static IEndpointRouteBuilder MapTransactionBulkAdvancedEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/transaction-bulk").WithTags("Transactions");
-        group.MapPost("/advanced-preview", Preview);
+        group.MapPost("/preview", Preview);
         group.MapPost("/apply", Apply);
         return app;
     }

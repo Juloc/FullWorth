@@ -27,7 +27,7 @@ public sealed class AdvancedTransactionBulkRegressionTests
 
         var filter = new { query = "BULK COFFEE", includeIgnored = false };
         using var previewRequest = UserRequest(HttpMethod.Post,
-            $"/api/transaction-bulk/advanced-preview?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+            $"/api/transaction-bulk/preview?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
         previewRequest.Content = JsonContent.Create(new
         {
             filter,
@@ -119,7 +119,7 @@ public sealed class AdvancedTransactionBulkRegressionTests
         var credit = await SeedTransaction(factory, accountB, "transfer-in", 125m, "OWN TRANSFER");
 
         using var previewRequest = UserRequest(HttpMethod.Post,
-            $"/api/transaction-bulk/advanced-preview?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+            $"/api/transaction-bulk/preview?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
         previewRequest.Content = JsonContent.Create(new
         {
             filter = (object?)null,
