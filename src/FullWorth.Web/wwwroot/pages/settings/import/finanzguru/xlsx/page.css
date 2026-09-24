@@ -35,3 +35,6 @@
 .import-link-matches{display:grid;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .import-link-winner{display:flex;flex-wrap:wrap;gap:16px}
 .import-link-match{gap:10px}
+/* Die Vorschau (#131): erst sehen, dann uebernehmen. Zwei Knoepfe in einer Reihe - das Waehlen
+   einzelner Zeilen ist der Umweg und steht links, das Uebernehmen rechts. */
+.import-preview-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}

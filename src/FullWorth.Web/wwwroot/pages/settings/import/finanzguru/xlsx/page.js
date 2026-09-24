@@ -2,6 +2,9 @@ import { api as sharedApi, jsonBody } from '../../../../../core/services.js';
 import { snapshotUploadFile } from '../../../../../security/secure-fetch.js';
 import { confirmMessage } from '../../../../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../../../../components/buttons.js';
+import { createDialog } from '../../../../../components/dialog.js';
+import { selectionListHtml, createSelectionList } from '../../../../../components/selection-list.js';
+import { esc as escapeHtml } from '../../../../../core/html.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const text={
   de:{
@@ -13,6 +16,12 @@ const text={
     done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Quellzeilen',imported:'Neue Buchungen',
     existing:'Bereits importiert',matched:'Mit bestehenden Buchungen abgeglichen',accounts:'Konten zugeordnet',
     createdAccounts:'Historienkonten erstellt',splits:'Split-Buchungen',
+    previewTitle:'Das wird passieren',previewNew:'Neu',previewExisting:'Schon vorhanden',
+    previewMatched:'Deckt sich mit der Bank',previewPeriod:'Zeitraum',previewAccountNew:'wird angelegt',
+    previewAccountLinked:'verknüpftes Konto',previewAccountImport:'Importkonto',
+    chooseRows:'Zeilen auswählen …',chooseRowsTitle:'Welche Zeilen sollen übernommen werden?',
+    apply:'Übernehmen',previewNothing:'Nichts Neues in dieser Datei.',checking:'Datei wird gelesen …',
+    selectAll:'Alle',selectedCount:'{n} von {total} ausgewählt',
     linkHeading:'Importkonten verbinden',
     linkHint:'Ordne importierte Historienkonten dem echten Bank- oder FullWorth-Konto zu. Hat das Ziel keinen Kontostand, trage den aktuellen Stand ein. Fehlende Buchungen kannst du danach unter „Buchungen“ ergänzen.',
     manageAccounts:'Bank/Konto verbinden oder anlegen',loadingLinks:'Konten werden geladen …',
@@ -43,6 +52,12 @@ const text={
     done:'Import completed.',error:'Import failed.',rows:'Source rows',imported:'New transactions',
     existing:'Already imported',matched:'Matched existing transactions',accounts:'Accounts matched',
     createdAccounts:'History accounts created',splits:'Split transactions',
+    previewTitle:'What will happen',previewNew:'New',previewExisting:'Already there',
+    previewMatched:'Matches the bank',previewPeriod:'Period',previewAccountNew:'will be created',
+    previewAccountLinked:'linked account',previewAccountImport:'import account',
+    chooseRows:'Choose rows …',chooseRowsTitle:'Which rows should be imported?',
+    apply:'Import',previewNothing:'Nothing new in this file.',checking:'Reading the file …',
+    selectAll:'All',selectedCount:'{n} of {total} selected',
     linkHeading:'Link imported accounts',
     linkHint:'Map imported history accounts to the real bank or FullWorth account. If the target has no balance, enter the current balance. Missing bookings can then be added under Transactions.',
     manageAccounts:'Connect or create bank/account',loadingLinks:'Loading accounts …',
@@ -418,30 +433,131 @@ try{
   submit.disabled=true;
 }
 
+// Der Zwischenschritt (#131, Schritt 4). Der Finanzguru-Import war der letzte, bei dem Hochladen
+// gleich Festschreiben hiess - wer drei Jahre Historie hochlud, sah erst danach, was daraus geworden
+// war. Jetzt: lesen, zeigen was passieren WUERDE, und erst auf Zuruf schreiben.
+//
+// Die Zeilen holt die Auswahl aus /api/import-jobs/{id}/candidates - derselben Liste, aus der jeder
+// andere Import seine Vorschau nimmt. Der Auftrag liegt ja in denselben Tabellen.
+let staged=null;
+
+function previewRow(label,value){
+  const row=node('div','row');
+  const main=node('div','row-main');
+  main.append(node('div','row-title',label));
+  row.append(main,node('div','amount',String(value??0)));
+  return row;
+}
+
+function renderPreview(preview){
+  result.innerHTML='';
+  result.append(previewRow(text.rows,preview.sourceRows));
+  result.append(previewRow(text.previewNew,preview.newRows));
+  result.append(previewRow(text.previewExisting,preview.alreadyImported));
+  result.append(previewRow(text.previewMatched,preview.matchedExisting));
+  if(preview.from&&preview.to){
+    const period=node('div','row');
+    const main=node('div','row-main');
+    main.append(node('div','row-title',text.previewPeriod));
+    period.append(main,node('div','row-sub',`${preview.from} – ${preview.to}`));
+    result.append(period);
+  }
+  // Welches Konto welche Zeilen trifft - die Frage, die vorher erst hinterher zu beantworten war.
+  for(const account of preview.accounts||[]){
+    const row=node('div','row');
+    const main=node('div','row-main');
+    main.append(node('div','row-title',account.displayName));
+    const what=account.status==='new'?text.previewAccountNew
+      :account.status==='linked'?text.previewAccountLinked:text.previewAccountImport;
+    main.append(node('div','row-sub',`${what}${account.accountName?` · ${account.accountName}`:''}`));
+    row.append(main,node('div','amount',String(account.rows)));
+    result.append(row);
+  }
+
+  const actions=node('div','import-preview-actions');
+  if(preview.newRows>0){
+    const choose=document.createElement('button');
+    choose.type='button';
+    choose.className=buttonClass(ButtonRole.Secondary);
+    choose.textContent=text.chooseRows;
+    choose.addEventListener('click',()=>void chooseRows());
+    const apply=document.createElement('button');
+    apply.type='button';
+    apply.className=buttonClass(ButtonRole.Primary);
+    apply.textContent=text.apply;
+    apply.addEventListener('click',()=>void commit(null));
+    actions.append(choose,apply);
+  }else{
+    actions.append(node('div','row-sub',text.previewNothing));
+  }
+  result.append(actions);
+  result.hidden=false;
+}
+
+async function chooseRows(){
+  const rows=await sharedApi(
+    `api/import-jobs/${encodeURIComponent(staged.jobId)}/candidates?fullWorthSpaceId=${encodeURIComponent(space.id)}`);
+  // Nur die neuen sind waehlbar: eine Zeile abzuwaehlen, die ohnehin nicht geschrieben wird, waere
+  // eine Entscheidung ueber nichts.
+  const items=(rows||[]).filter(row=>row.duplicateStatus==='new').map(row=>({
+    id:escapeHtml(row.id),
+    selected:true,
+    html:`<div class="row-main"><div class="row-title">${escapeHtml(row.counterparty||row.description||'')}</div>`
+      +`<div class="row-sub">${escapeHtml(row.bookingDate||'')} · ${escapeHtml(row.amount)} ${escapeHtml(row.currency)}</div></div>`
+  }));
+  const dialog=createDialog(`<div class="dialog-card"><div class="panel-head"><h2>${escapeHtml(text.chooseRowsTitle)}</h2></div>
+    ${selectionListHtml(items,{rowClass:'row check-row',selectAllLabel:escapeHtml(text.selectAll)})}
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${escapeHtml(text.cancel)}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${escapeHtml(text.apply)}</button></div>
+  </div>`,{closeLabel:text.cancel});
+  const list=createSelectionList();
+  list.mount(dialog,{counterFormat:(n,total)=>text.selectedCount.replace('{n}',n).replace('{total}',total)});
+  dialog.querySelector('[data-cancel]').addEventListener('click',()=>dialog.close());
+  dialog.querySelector('[data-apply]').addEventListener('click',()=>{
+    const chosen=list.getSelectedIds();
+    dialog.close();
+    void commit(chosen);
+  });
+  dialog.showModal();
+}
+
+async function commit(candidateIds){
+  if(!await confirmMessage({message:text.confirm,title:text.heading,confirmLabel:text.submit,cancelLabel:text.cancel}))return;
+  submit.disabled=true;fileInput.disabled=true;status.textContent=text.working;
+  try{
+    const data=await sharedApi(
+      `api/import/finanzguru/jobs/${encodeURIComponent(staged.jobId)}/commit?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
+      jsonBody({candidateIds}));
+    renderResult(data);
+    staged=null;
+    await Promise.all([renderLinkOptions(),loadHistory()]);
+  }catch(error){
+    console.error(error);status.textContent=`${text.error} ${error.message||''}`.trim();
+  }finally{
+    submit.disabled=false;fileInput.disabled=false;
+  }
+}
+
+function renderResult(data){
+  const rows=[
+    [text.rows,data.sourceRows],[text.imported,data.transactionsImported],[text.existing,data.alreadyImported],
+    [text.matched,data.matchedExistingTransactions],[text.accounts,data.accountsMatched],[text.createdAccounts,data.accountsCreated],[text.splits,data.splitTransactions]
+  ];
+  result.innerHTML='';
+  for(const [label,value] of rows) result.appendChild(previewRow(label,value));
+  result.hidden=false;status.textContent=text.done;
+}
+
 form.addEventListener('submit',async event=>{
   event.preventDefault();
   const file=fileInput.files?.[0];
   if(!file||!space)return;
-  if(!await confirmMessage({message:text.confirm,title:text.heading,confirmLabel:text.submit,cancelLabel:text.cancel}))return;
-  submit.disabled=true;fileInput.disabled=true;status.textContent=text.working;result.hidden=true;result.innerHTML='';
+  submit.disabled=true;fileInput.disabled=true;status.textContent=text.checking;result.hidden=true;result.innerHTML='';
   try{
     const uploadFile=await snapshotUploadFile(file);
     const body=new FormData();body.append('file',uploadFile,uploadFile.name);
-    const data=await sharedApi(`api/import/finanzguru?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
-    const rows=[
-      [text.rows,data.sourceRows],[text.imported,data.transactionsImported],[text.existing,data.alreadyImported],
-      [text.matched,data.matchedExistingTransactions],[text.accounts,data.accountsMatched],[text.createdAccounts,data.accountsCreated],[text.splits,data.splitTransactions]
-    ];
-    result.innerHTML='';
-    for(const [label,value] of rows){
-      const row=node('div','row');
-      const main=node('div','row-main');
-      main.append(node('div','row-title',label));
-      row.append(main,node('div','amount',String(value??0)));
-      result.appendChild(row);
-    }
-    result.hidden=false;status.textContent=text.done;
-    await Promise.all([renderLinkOptions(),loadHistory()]);
+    staged=await sharedApi(`api/import/finanzguru/stage?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
+    renderPreview(staged);
+    status.textContent='';
   }catch(error){
     console.error(error);status.textContent=`${text.error} ${error.message||''}`.trim();
   }finally{

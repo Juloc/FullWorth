@@ -413,6 +413,7 @@ public static class BackendApplication
         builder.Services.AddScoped<IngestionService>();
         builder.Services.AddSingleton<FinanzguruWorkbookReader>();
         builder.Services.AddScoped<FinanzguruImportService>();
+        builder.Services.AddScoped<FinanzguruStagingService>();
         builder.Services.AddScoped<FinanzguruAccountReconciliationService>();
         builder.Services.AddScoped<ExportService>();
         builder.Services.AddScoped<WealthPortableExportService>();

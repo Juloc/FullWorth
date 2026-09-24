@@ -66,9 +66,10 @@ public sealed class FinanzguruImportService(
     /// <see cref="FinalizeImportJobCountsAsync"/>: erst wenn die Schleife durch ist, steht fest, wie
     /// viele Zeilen neu und wie viele schon vorhanden waren.
     ///
-    /// Zeilen (<c>ImportCandidates</c>) legt er keine an: der Finanzguru-Weg hat keine Vorschau, bei
-    /// der man Zeile fuer Zeile entscheidet - er wird in einem Zug festgeschrieben, und eine erfundene
-    /// Vorschau waere eine Behauptung ueber einen Schritt, den es nicht gab.
+    /// Zeilen (<c>ImportCandidates</c>) legt DIESE Fassung keine an: sie ist der Weg ohne Halt, bei
+    /// dem Hochladen gleich Festschreiben heisst, und eine Kandidatenzeile ohne Entscheidung waere eine
+    /// Behauptung ueber einen Schritt, den es hier nicht gab. Den Weg MIT Vorschau legt
+    /// <see cref="FinanzguruStagingService"/> an, und der bringt seinen Auftrag samt Zeilen mit.
     /// </summary>
     private async Task CreateImportJobAsync(
         Guid userId, Guid fullWorthSpaceId, Guid jobId, string? fileSha, CancellationToken ct)
@@ -95,7 +96,11 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',0,0,0,0,0,@now,@now,@now
         var connection = await RawSql.OpenAsync(db, ct);
         await using var command = RawSql.Command(connection, """
 UPDATE "ImportJobs"
-SET "SourceRowCount"=@source,"ReadyCount"=@imported,"ImportedCount"=@imported,"DuplicateCount"=@duplicates,"UpdatedAt"=@now
+-- GREATEST, damit ein Festschreiben aus der Vorschau die Zeilenzahl der DATEI nicht durch die
+-- Zahl der gewaehlten Zeilen ersetzt: "312 Zeilen, 40 uebernommen" ist die Auskunft, "40 von 40"
+-- waere eine andere und falsche (#131).
+SET "SourceRowCount"=GREATEST("SourceRowCount",@source),"ReadyCount"=@imported,"ImportedCount"=@imported,
+    "DuplicateCount"=@duplicates,"Status"='completed',"CompletedAt"=@now,"UpdatedAt"=@now
 WHERE "Id"=@id
 """,
             ("@id", jobId), ("@source", sourceRows), ("@imported", imported), ("@duplicates", duplicates),
@@ -116,9 +121,14 @@ WHERE "Id"=@id
         return await ImportRowsAsync(userId, fullWorthSpaceId, rows, ct, sha);
     }
 
+    /// <param name="existingJobId">
+    /// Der Auftrag, den die Vorschau schon angelegt hat (#131). Ohne ihn entstuende beim
+    /// Festschreiben ein ZWEITER Auftrag fuer dieselbe Datei - und die Kandidatenzeilen, die der
+    /// Nutzer gerade abgewaehlt hat, haengten am ersten.
+    /// </param>
     public async Task<FinanzguruImportResult?> ImportRowsAsync(
         Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct,
-        string? fileSha = null)
+        string? fileSha = null, Guid? existingJobId = null)
     {
         var role = await db.FullWorthSpaceMembers.AsNoTracking()
             .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId)
@@ -137,13 +147,15 @@ WHERE "Id"=@id
         // er schrieb Buchungen direkt, ohne Herkunftsverknuepfung - und damit gab es keinen Weg, ihn
         // rueckgaengig zu machen. Die Konten laesst dieser Schritt bewusst unangetastet; sie sind
         // Teil (c) des Umbaus und brauchen ihre eigene Migration.
-        var jobId = Guid.NewGuid();
+        var jobId = existingJobId ?? Guid.NewGuid();
         var createdTransactionIds = new List<Guid>();
 
         // Zuerst die Zeile in "ImportJobs" selbst - "TransactionAllocations.CreatedByImportJobId" und
         // "ImportJobCreatedAccounts" zeigen per Fremdschluessel darauf und koennen schon in der
         // Konto- bzw. Buchungsschleife unten entstehen.
-        await CreateImportJobAsync(userId, fullWorthSpaceId, jobId, fileSha, ct);
+        // Den Auftrag gibt es schon, wenn die Vorschau ihn angelegt hat - dann wird er hier nur
+        // abgeschlossen statt neu erfunden.
+        if (existingJobId is null) await CreateImportJobAsync(userId, fullWorthSpaceId, jobId, fileSha, ct);
 
         var accounts = await ResolveAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
         var categoryResolver = await CategoryResolver.CreateAsync(db, fullWorthSpaceId, role == FullWorthSpaceRoles.Owner, ct);
@@ -282,32 +294,36 @@ WHERE "Id"=@id
             splitTransactions);
     }
 
-    private async Task<AccountResolution> ResolveAccountsAsync(Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct)
+    /// <summary>
+    /// Welches Konto eine Quellzeile MEINT - ohne eines anzulegen (#131, Schritt 3).
+    ///
+    /// Die Vorschau muss dieselbe Frage beantworten wie das Festschreiben, sonst zeigt sie etwas
+    /// anderes, als danach passiert. Deshalb steht die Zuordnungsregel genau hier, einmal, und
+    /// <see cref="ResolveAccountsAsync"/> benutzt sie: es haengt nur das Anlegen an, wo nichts passt.
+    ///
+    /// <c>null</c> heisst "dafuer gibt es noch kein Konto" - beim Festschreiben entsteht dort eines,
+    /// in der Vorschau steht dort "wird angelegt".
+    /// </summary>
+    internal async Task<Dictionary<string, MatchedAccount>> MatchAccountsAsync(
+        Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct)
     {
         var sourceGroups = rows.GroupBy(AccountKey, StringComparer.Ordinal).ToList();
         var hashes = sourceGroups.Select(group => IdentificationHash(group.Key)).ToArray();
-        var importAccounts = await db.Accounts
+        var importAccounts = await db.Accounts.AsNoTracking()
             .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.Provider == Provider && hashes.Contains(account.IdentificationHash))
             .Include(account => account.Owners)
             .ToDictionaryAsync(account => account.IdentificationHash, StringComparer.Ordinal, ct);
-        var ownedAccounts = await db.Accounts
+        var ownedAccounts = await db.Accounts.AsNoTracking()
             .Where(account => account.FullWorthSpaceId == fullWorthSpaceId
                               && account.Provider != Provider
                               && account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
             .ToListAsync(ct);
 
-        var bySourceKey = new Dictionary<string, ResolvedAccount>(StringComparer.Ordinal);
-        var matched = 0;
-        var created = 0;
-        var createdAccountIds = new List<Guid>();
-        var now = DateTimeOffset.UtcNow;
-
+        var result = new Dictionary<string, MatchedAccount>(StringComparer.Ordinal);
         foreach (var group in sourceGroups)
         {
-            var sourceKey = group.Key;
             var sample = group.First();
-            var hash = IdentificationHash(sourceKey);
-            importAccounts.TryGetValue(hash, out var importedAccount);
+            importAccounts.TryGetValue(IdentificationHash(group.Key), out var importedAccount);
 
             // A user-confirmed link is authoritative and survives later re-imports, including imports
             // whose source account has no usable IBAN. Without such a link, retain the conservative
@@ -331,31 +347,82 @@ WHERE "Id"=@id
                 if (candidates.Count == 1) liveMatch = candidates[0];
             }
 
-            if (liveMatch is not null)
+            result[group.Key] = liveMatch is not null
+                ? new MatchedAccount(liveMatch, true, false)
+                : importedAccount is not null
+                    ? new MatchedAccount(importedAccount, false, false)
+                    : new MatchedAccount(null, false, true);
+        }
+        return result;
+    }
+
+    /// <summary>Ein Konto, das eine Quellzeile meint - oder die Feststellung, dass es noch keines gibt.</summary>
+    internal sealed record MatchedAccount(FinanceAccount? Account, bool MatchedLiveAccount, bool WouldBeCreated);
+
+    /// <summary>
+    /// Dasselbe wie <see cref="MatchAccountsAsync"/>, nur dass hier angelegt wird, wo nichts passt.
+    ///
+    /// Die Zuordnungsregel steht bewusst NICHT noch einmal hier: eine Vorschau, die nach einer
+    /// anderen Regel zuordnet als das Festschreiben, zeigt etwas anderes, als danach passiert - und
+    /// das waere schlimmer als gar keine Vorschau.
+    /// </summary>
+    private async Task<AccountResolution> ResolveAccountsAsync(Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct)
+    {
+        var matches = await MatchAccountsAsync(userId, fullWorthSpaceId, rows, ct);
+        var sourceGroups = rows.GroupBy(AccountKey, StringComparer.Ordinal).ToList();
+
+        // Die Zuordnung liest ohne Nachverfolgung - zum Schreiben braucht es die verfolgten Entitaeten,
+        // sonst bliebe das UpdatedAt unten wirkungslos.
+        var matchedIds = matches.Values
+            .Where(match => match.Account is not null)
+            .Select(match => match.Account!.Id)
+            .Distinct()
+            .ToArray();
+        var tracked = matchedIds.Length == 0
+            ? []
+            : await db.Accounts
+                .Where(account => matchedIds.Contains(account.Id))
+                .Include(account => account.Owners)
+                .ToDictionaryAsync(account => account.Id, ct);
+
+        var bySourceKey = new Dictionary<string, ResolvedAccount>(StringComparer.Ordinal);
+        var matchedCount = 0;
+        var created = 0;
+        var createdAccountIds = new List<Guid>();
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var group in sourceGroups)
+        {
+            var sourceKey = group.Key;
+            var sample = group.First();
+            var match = matches[sourceKey];
+
+            if (match.Account is { } found && tracked.TryGetValue(found.Id, out var account))
             {
-                bySourceKey[sourceKey] = new(liveMatch, true);
-                matched++;
+                if (!match.MatchedLiveAccount)
+                {
+                    if (!account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
+                        throw new FinanzguruImportConflictException("A matching Finanzguru import account already exists in this FullWorth Space but is owned by another user.");
+                    // Ein zweiter Import derselben Quelle fasst das Konto nicht mehr an. Hier stand die
+                    // Gegenprobe "hat es einen Kontostand?" und, wenn nicht, ein Zurueckstufen auf
+                    // archiviert und ausserhalb des Vermoegens - was jeden Re-Import zum Ruecknehmer
+                    // einer Nutzerentscheidung machte. Ein Importkonto ist jetzt von Anfang an ein
+                    // richtiges.
+                    account.UpdatedAt = now;
+                }
+                bySourceKey[sourceKey] = new(account, match.MatchedLiveAccount);
+                matchedCount++;
                 continue;
             }
 
-            if (importedAccount is not null)
-            {
-                if (!importedAccount.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
-                    throw new FinanzguruImportConflictException("A matching Finanzguru import account already exists in this FullWorth Space but is owned by another user.");
-                // Ein zweiter Import derselben Quelle fasst das Konto nicht mehr an. Hier stand die
-                // Gegenprobe "hat es einen Kontostand?" und, wenn nicht, ein Zurueckstufen auf
-                // archiviert und ausserhalb des Vermoegens - was jeden Re-Import zum Ruecknehmer einer
-                // Nutzerentscheidung machte. Ein Importkonto ist jetzt von Anfang an ein richtiges.
-                importedAccount.UpdatedAt = now;
-                bySourceKey[sourceKey] = new(importedAccount, false);
-                matched++;
-                continue;
-            }
+            var hash = IdentificationHash(sourceKey);
+            var normalizedReference = NormalizeAccountReference(sample.ReferenceAccount);
+            var ibanLast4 = LooksLikeIban(normalizedReference) ? normalizedReference[^4..] : null;
 
             // Ein vollwertiges Konto, nicht mehr der stille Behaelter von frueher: der Store setzt
             // Eigentuemer und Standardgruppe und laesst IsActive/IncludeInNetWorth auf ihren
             // Vorgabewerten - das Konto ist ab dem Import sichtbar und zaehlt mit.
-            var account = await accounts.CreateForImportAsync(userId, new ImportAccountWrite(
+            var fresh = await accounts.CreateForImportAsync(userId, new ImportAccountWrite(
                 fullWorthSpaceId,
                 Provider,
                 hash,
@@ -365,17 +432,21 @@ WHERE "Id"=@id
                 "Imported history",
                 sample.Currency,
                 ibanLast4), ct);
-            importAccounts[hash] = account;
-            bySourceKey[sourceKey] = new(account, false);
-            createdAccountIds.Add(account.Id);
+            bySourceKey[sourceKey] = new(fresh, false);
+            createdAccountIds.Add(fresh.Id);
             created++;
         }
 
         await db.SaveChangesAsync(ct);
-        return new AccountResolution(bySourceKey, matched, created, createdAccountIds);
+        return new AccountResolution(bySourceKey, matchedCount, created, createdAccountIds);
     }
 
-    private static void ValidateSplits(IReadOnlyList<FinanzguruRow> rows)
+    /// <summary>
+    /// Auch die Vorschau prueft das, und zwar mit genau dieser Fassung (#131): eine Datei mit einer
+    /// Aufteilung ohne Elternzeile ist als Ganzes unbrauchbar, und ein Zwischenstand dafuer waere
+    /// einer, den niemand zu Ende bringen kann.
+    /// </summary>
+    internal static void ValidateSplits(IReadOnlyList<FinanzguruRow> rows)
     {
         var originals = rows.Where(row => row.SplitType == "Original")
             .ToDictionary(row => row.BookingId, StringComparer.Ordinal);
@@ -400,6 +471,9 @@ WHERE "Id"=@id
         }
     }
 
+    /// <summary>Dieselbe Gruppierung fuer die Vorschau - siehe <see cref="ExternalKeyOf"/>.</summary>
+    internal static string AccountKeyOf(FinanzguruRow row) => AccountKey(row);
+
     private static string AccountKey(FinanzguruRow row)
     {
         var reference = NormalizeAccountReference(row.ReferenceAccount);
@@ -421,7 +495,13 @@ WHERE "Id"=@id
     private static string IdentificationHash(string sourceKey) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"finanzguru|{sourceKey}"))).ToLowerInvariant();
 
-    private static string ExternalKey(string bookingId) => $"finanzguru:{bookingId.Trim()}";
+    private static string ExternalKey(string bookingId) => ExternalKeyOf(bookingId);
+
+    /// <summary>
+    /// Der Schluessel, unter dem eine Finanzguru-Buchung wiedererkannt wird. Die Vorschau muss ihn
+    /// genauso bilden wie das Festschreiben - deshalb bildet sie ihn nicht selbst.
+    /// </summary>
+    internal static string ExternalKeyOf(string bookingId) => $"finanzguru:{bookingId.Trim()}";
 
     private static TransactionSignature Signature(FinanzguruRow row) => new(
         row.BookingDate,
@@ -441,7 +521,7 @@ WHERE "Id"=@id
         return string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
     }
 
-    private sealed record TransactionSignature(DateOnly? Date, decimal Amount, string Currency, string? Party);
+    internal sealed record TransactionSignature(DateOnly? Date, decimal Amount, string Currency, string? Party);
     private sealed record ResolvedAccount(FinanceAccount Account, bool MatchedLiveAccount);
     private sealed record AccountResolution(
         Dictionary<string, ResolvedAccount> BySourceKey, int Matched, int Created, IReadOnlyList<Guid> CreatedAccountIds);

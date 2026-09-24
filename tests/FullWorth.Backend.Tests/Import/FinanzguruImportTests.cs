@@ -1,8 +1,5 @@
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
-using System.Xml.Linq;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;
@@ -13,26 +10,19 @@ using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using static FullWorth.Backend.Tests.Import.FinanzguruWorkbook;
 
 namespace FullWorth.Backend.Tests.Import;
 
 public sealed class FinanzguruImportTests
 {
-    private static readonly string[] Headers =
-    [
-        "Buchungstag", "Referenzkonto", "Name Referenzkonto", "Betrag", "Waehrung",
-        "Beguenstigter/Auftraggeber", "Verwendungszweck", "E-Ref",
-        "Analyse-Hauptkategorie", "Analyse-Unterkategorie", "Analyse-Umbuchung",
-        "Buchungs-ID", "Referenz-Original-ID", "Split-Typ"
-    ];
-
     [Fact]
     public async Task ImportIsIdempotentAndConvertsFinanzguruSplitsToAllocations()
     {
         using var factory = new BackendWebApplicationFactory();
         var scenario = await SeedAsync(factory);
         using var client = factory.CreateClient();
-        var workbook = CreateWorkbook(
+        var workbook = Create(
             Row("28.08.2026", -10m, "Supermarkt", "Lebensmittel", "Essen", "Lebensmittel", "tx-1"),
             Row("27.08.2026", -30m, "Amazon", "Bestellung", "Lifestyle", "Shopping", "split-original", splitType: "Original"),
             Row("27.08.2026", -10m, "Amazon", "Bestellung", "Lifestyle", "Shopping", "split-child-1", "split-original", "Teilbuchung"),
@@ -79,7 +69,7 @@ public sealed class FinanzguruImportTests
         using var factory = new BackendWebApplicationFactory();
         var scenario = await SeedAsync(factory, addExistingTransaction: true);
         using var client = factory.CreateClient();
-        var workbook = CreateWorkbook(Row("28.08.2026", -10m, "Supermarkt", "Different provider text", "Essen", "Lebensmittel", "fg-id"));
+        var workbook = Create(Row("28.08.2026", -10m, "Supermarkt", "Different provider text", "Essen", "Lebensmittel", "fg-id"));
 
         using var response = await SendImportAsync(client, scenario.Space, scenario.User, workbook);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -98,7 +88,7 @@ public sealed class FinanzguruImportTests
         using var factory = new BackendWebApplicationFactory();
         var scenario = await SeedAsync(factory, addLiveAccount: false);
         using var client = factory.CreateClient();
-        var workbook = CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "new-1"));
+        var workbook = Create(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "new-1"));
 
         using var response = await SendImportAsync(client, scenario.Space, scenario.User, workbook);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -130,7 +120,7 @@ public sealed class FinanzguruImportTests
         using var factory = new BackendWebApplicationFactory();
         var scenario = await SeedAsync(factory);
         using var client = factory.CreateClient();
-        var workbook = CreateWorkbook(Row("28.08.2026", -1m, "Shop", "Test", "Lifestyle", "Shopping", "x"));
+        var workbook = Create(Row("28.08.2026", -1m, "Shop", "Test", "Lifestyle", "Shopping", "x"));
 
         using var response = await SendImportAsync(client, scenario.Space, scenario.Outsider, workbook);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -147,7 +137,7 @@ public sealed class FinanzguruImportTests
         using var client = factory.CreateClient();
 
         using var import = await SendImportAsync(client, scenario.Space, scenario.User,
-            CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "anchor-1")));
+            Create(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "anchor-1")));
         Assert.Equal(HttpStatusCode.OK, import.StatusCode);
         var importedId = await ImportedAccountIdAsync(factory, scenario.Space);
 
@@ -180,7 +170,7 @@ public sealed class FinanzguruImportTests
         using var client = factory.CreateClient();
 
         using var first = await SendImportAsync(client, scenario.Space, scenario.User,
-            CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "keep-1")));
+            Create(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "keep-1")));
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var importedId = await ImportedAccountIdAsync(factory, scenario.Space);
         Assert.Equal(HttpStatusCode.NoContent,
@@ -188,7 +178,7 @@ public sealed class FinanzguruImportTests
 
         // The same account again: it is matched rather than created, and must not be re-archived.
         using var second = await SendImportAsync(client, scenario.Space, scenario.User,
-            CreateWorkbook(Row("29.08.2026", -5m, "Shop", "Test", "Lifestyle", "Shopping", "keep-2")));
+            Create(Row("29.08.2026", -5m, "Shop", "Test", "Lifestyle", "Shopping", "keep-2")));
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         await factory.SeedAsync(async db =>
@@ -209,7 +199,7 @@ public sealed class FinanzguruImportTests
         using var client = factory.CreateClient();
 
         using var import = await SendImportAsync(client, scenario.Space, scenario.User,
-            CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "recon-1")));
+            Create(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "recon-1")));
         Assert.Equal(HttpStatusCode.OK, import.StatusCode);
         var importedId = await ImportedAccountIdAsync(factory, scenario.Space);
         Assert.Equal(HttpStatusCode.NoContent,
@@ -331,80 +321,5 @@ public sealed class FinanzguruImportTests
         form.Add(file, "file", "finanzguru.xlsx");
         request.Content = form;
         return await client.SendAsync(request);
-    }
-
-    private static Dictionary<string, string?> Row(
-        string date,
-        decimal amount,
-        string counterparty,
-        string description,
-        string mainCategory,
-        string subCategory,
-        string bookingId,
-        string? originalId = null,
-        string? splitType = null) => new(StringComparer.Ordinal)
-    {
-        ["Buchungstag"] = date,
-        ["Referenzkonto"] = "DE65500105175456601426",
-        ["Name Referenzkonto"] = "Girokonto",
-        ["Betrag"] = amount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ["Waehrung"] = "EUR",
-        ["Beguenstigter/Auftraggeber"] = counterparty,
-        ["Verwendungszweck"] = description,
-        ["E-Ref"] = null,
-        ["Analyse-Hauptkategorie"] = mainCategory,
-        ["Analyse-Unterkategorie"] = subCategory,
-        ["Analyse-Umbuchung"] = "nein",
-        ["Buchungs-ID"] = bookingId,
-        ["Referenz-Original-ID"] = originalId,
-        ["Split-Typ"] = splitType
-    };
-
-    private static byte[] CreateWorkbook(params Dictionary<string, string?>[] dataRows)
-    {
-        var spreadsheet = (XNamespace)"http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rowElements = new List<XElement> { BuildRow(spreadsheet, 1, Headers.ToDictionary(header => header, header => (string?)header, StringComparer.Ordinal)) };
-        for (var index = 0; index < dataRows.Length; index++)
-            rowElements.Add(BuildRow(spreadsheet, index + 2, dataRows[index]));
-
-        var document = new XDocument(
-            new XElement(spreadsheet + "worksheet",
-                new XElement(spreadsheet + "sheetData", rowElements)));
-
-        using var output = new MemoryStream();
-        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            var entry = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var stream = entry.Open();
-            document.Save(stream);
-        }
-        return output.ToArray();
-    }
-
-    private static XElement BuildRow(XNamespace ns, int rowNumber, IReadOnlyDictionary<string, string?> values)
-    {
-        var cells = new List<XElement>();
-        for (var index = 0; index < Headers.Length; index++)
-        {
-            var value = values.GetValueOrDefault(Headers[index]);
-            if (value is null) continue;
-            cells.Add(new XElement(ns + "c",
-                new XAttribute("r", $"{ColumnName(index + 1)}{rowNumber}"),
-                new XAttribute("t", "inlineStr"),
-                new XElement(ns + "is", new XElement(ns + "t", value))));
-        }
-        return new XElement(ns + "row", new XAttribute("r", rowNumber), cells);
-    }
-
-    private static string ColumnName(int column)
-    {
-        var builder = new StringBuilder();
-        while (column > 0)
-        {
-            column--;
-            builder.Insert(0, (char)('A' + column % 26));
-            column /= 26;
-        }
-        return builder.ToString();
     }
 }

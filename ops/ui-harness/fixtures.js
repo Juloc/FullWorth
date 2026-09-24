@@ -4,8 +4,18 @@
 (() => {
   const SPACE = '11111111-1111-1111-1111-111111111111';
   const iso = d => d;
+  // Der Auftrag, den die Finanzguru-Vorschau anlegt (#131). Er steht als Konstante da, weil drei
+  // Antworten ihn teilen muessen: die Vorschau nennt ihn, die Zeilenauswahl holt die Kandidaten
+  // unter ihm, und das Uebernehmen adressiert ihn.
+  const FINANZGURU_STAGE_JOB = '7f000000-0000-4000-8000-000000000131';
 
   const FIXTURES = {
+    [`import-jobs/${FINANZGURU_STAGE_JOB}/candidates`]: [
+      { id: '3a000000-0000-4000-8000-000000000001', bookingDate: iso('2026-09-12'), amount: '-42.19', currency: 'EUR', counterparty: 'REWE Markt GmbH', description: 'Einkauf', duplicateStatus: 'new' },
+      { id: '3a000000-0000-4000-8000-000000000002', bookingDate: iso('2026-09-11'), amount: '-9.99', currency: 'EUR', counterparty: 'Spotify', description: 'Abo', duplicateStatus: 'new' },
+      { id: '3a000000-0000-4000-8000-000000000003', bookingDate: iso('2026-09-10'), amount: '2810.44', currency: 'EUR', counterparty: 'Arbeitgeber AG', description: 'Gehalt September', duplicateStatus: 'new' },
+      { id: '3a000000-0000-4000-8000-000000000004', bookingDate: iso('2026-09-09'), amount: '-12.40', currency: 'EUR', counterparty: 'Deutsche Bahn', description: 'Ticket', duplicateStatus: 'duplicate' }
+    ],
     // Gehalt. Bewusst ein TEILJAHR (vier Monate) - das ist der Fall, dessen Hinweis leicht
     // vergessen wird. Ohne diese Einträge rechnete die Seite gegen den allgemeinen
     // Schreib-Stub und zeigte NaN, was in der Harness wie ein Fehler der Seite aussah.
@@ -1515,6 +1525,32 @@
     // ist, liesse sich also nicht ansehen. Geantwortet wird nach der Endung: das ist nicht, was der
     // Server tut (er liest den Inhalt), aber es ist ehrlich das, was eine Fixture kann, und es macht
     // jeden der fuenf Wege im Harness erreichbar.
+    // #131, Schritt 4: der Zwischenschritt des Finanzguru-Imports. Ohne eigene Antwort bekaeme die
+    // Seite den allgemeinen Schreib-Echo ({id:'stub'}) und zeigte eine Vorschau aus lauter
+    // undefined - der Weg Datei -> Vorschau -> Zeilenauswahl -> Uebernehmen liesse sich also nirgends
+    // am Stueck ansehen, und genau er ist das Neue an dieser Seite.
+    if (after.startsWith('import/finanzguru/stage')) return { status: 200, body: {
+      jobId: FINANZGURU_STAGE_JOB, sourceRows: 312, newRows: 3, alreadyImported: 268, matchedExisting: 41,
+      from: iso('2024-01-01'), to: iso('2026-09-13'),
+      accounts: [
+        { sourceKey: 'DE02…2051', displayName: 'C24 Girokonto', accountId: 'a1', accountName: 'Girokonto', status: 'linked', rows: 212 },
+        { sourceKey: 'paypal', displayName: 'PayPal', accountId: 'a4', accountName: 'PayPal', status: 'import', rows: 74 },
+        { sourceKey: 'DE44…9912', displayName: 'DKB Girokonto', accountId: null, accountName: null, status: 'new', rows: 26 }
+      ]
+    } };
+    if (/^import\/finanzguru\/jobs\/[^/]+\/commit/.test(after)) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
+      // Die Auswahl entscheidet, wie viele Zeilen ankommen - ohne das zeigte das Ergebnis dieselbe
+      // Zahl, egal was der Nutzer gerade abgewaehlt hat, und die Zeilenauswahl waere im Harness
+      // nicht zu pruefen.
+      const chosen = Array.isArray(body?.candidateIds) ? body.candidateIds.length : 3;
+      return { status: 200, body: {
+        sourceRows: 312, transactionsImported: chosen, alreadyImported: 268, matchedExistingTransactions: 41,
+        accountsMatched: 2, accountsCreated: 1, categoriesCreated: 0, categoriesMatched: 3,
+        categoriesUnmapped: 0, splitTransactions: 1
+      } };
+    }
     if (after.startsWith('import/detect')) {
       const uploaded = init?.body instanceof FormData ? init.body.get('file') : null;
       const fileName = uploaded && typeof uploaded.name === 'string' ? uploaded.name : 'datei.csv';

@@ -2,9 +2,31 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Import;
 
+/// <summary>Welche Zeilen der Vorschau uebernommen werden sollen. Leer heisst: alle neuen.</summary>
+public sealed record FinanzguruStageCommitRequest(IReadOnlyList<Guid>? CandidateIds);
+
 public static class FinanzguruImportEndpoints
 {
     private const long MaxUploadBytes = 25L * 1024 * 1024;
+
+    /// <summary>Die Datei einmal lesen und pruefen - fuer beide Wege dieselben Schranken.</summary>
+    private static async Task<(MemoryStream? Content, string? FileName, string? Error)> ReadWorkbookAsync(
+        HttpRequest request, CancellationToken ct)
+    {
+        if (!request.HasFormContentType)
+            return (null, null, "Expected multipart/form-data with an .xlsx file.");
+        var form = await request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("file");
+        if (file is null || file.Length == 0) return (null, null, "No file was uploaded.");
+        if (file.Length > MaxUploadBytes) return (null, null, "The import file is too large (maximum 25 MB).");
+        if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
+            return (null, null, "Finanzguru import accepts .xlsx files only.");
+
+        var buffer = new MemoryStream(capacity: checked((int)file.Length));
+        await file.CopyToAsync(buffer, ct);
+        buffer.Position = 0;
+        return (buffer, file.FileName, null);
+    }
 
     /// <summary>
     /// Die Vermoegenshistorie wird hier NICHT angestossen.
@@ -113,6 +135,55 @@ public static class FinanzguruImportEndpoints
             catch (ArgumentException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
+            }
+        }).WithTags("Import");
+
+        // Der Zwischenschritt (#131, Schritt 4): lesen, sagen was passieren wuerde, nichts schreiben.
+        //
+        // /api/import/finanzguru bleibt daneben bestehen und macht beides in einem Zug. Das ist kein
+        // zweiter Weg, sondern derselbe ohne Halt: beide landen in ImportRowsAsync. Wer ihn
+        // abschaffen will, muss vorher jeden Aufrufer auf die zwei Schritte umstellen - die
+        // Oberflaeche ist einer davon, die Tests sind die anderen.
+        app.MapPost("/api/import/finanzguru/stage", async (
+            Guid fullWorthSpaceId,
+            HttpRequest request,
+            CurrentUserContext currentUser,
+            FinanzguruStagingService staging,
+            CancellationToken ct) =>
+        {
+            var file = await ReadWorkbookAsync(request, ct);
+            if (file.Error is not null) return Results.BadRequest(new { error = file.Error });
+
+            try
+            {
+                await using var buffer = file.Content!;
+                var preview = await staging.StageAsync(
+                    currentUser.RequireUserId(), fullWorthSpaceId, buffer, file.FileName!, ct);
+                return preview is null ? Results.NotFound() : Results.Ok(preview);
+            }
+            catch (FinanzguruWorkbookException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).WithTags("Import");
+
+        app.MapPost("/api/import/finanzguru/jobs/{jobId:guid}/commit", async (
+            Guid jobId,
+            Guid fullWorthSpaceId,
+            FinanzguruStageCommitRequest? body,
+            CurrentUserContext currentUser,
+            FinanzguruStagingService staging,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await staging.CommitAsync(
+                    currentUser.RequireUserId(), fullWorthSpaceId, jobId, body?.CandidateIds, ct);
+                return result is null ? Results.NotFound() : Results.Ok(result);
+            }
+            catch (FinanzguruImportConflictException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
             }
         }).WithTags("Import");
 
