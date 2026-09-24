@@ -89,14 +89,6 @@ main:focus{outline:none}
 #privacy-toggle.active .pv-on{display:block}
 #privacy-toggle.active .pv-off{display:none}
 
-/* Eine Regel statt zwei, und sie gewinnt.
-   Vorher hieß es .view{display:none} plus .view.active{display:block}. Beide haben die
-   Spezifität einer Klasse, also entschied die Reihenfolge - und ein Seiten-Stylesheet, das weiter
-   unten .meine-ansicht{display:grid} sagte, zeigte seine Ansicht auf jeder Seite. Genau das ist
-   beim Umzug des Import-Bereichs passiert, und der Layout-Test hat es gemeldet.
-   :not(.active) hat die Spezifität zweier Klassen und lässt sich davon nicht überstimmen. Eine
-   sichtbare Ansicht behält ihre natürliche Darstellung, und eine Seite darf sie frei setzen. */
-.view:not(.active){display:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* Menügruppen (Übersicht · Finanzen · Planung · Auswertung · Verwaltung).

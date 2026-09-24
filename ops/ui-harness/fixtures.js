@@ -833,6 +833,62 @@
         status: 'confirmed', hasDocument: true, explanation: 'Überwiegend beruflich genutzt, privater Anteil abgezogen.' }
     ],
 
+    // ---- KI & Intelligence (/settings/intelligence) ----
+    //
+    // Ohne diese Eintraege beantwortete die Harness /overview mit der allgemeinen leeren Liste, die
+    // Seite las settings von einem Array, warf, und zeigte genau eine Zeile: die Plakette 'Fehler'.
+    // 31 Pixel hoch. Gemessen wurde hier also nie die Seite, sondern ihr Fehlerzustand - und weil ein
+    // Fehlerzustand nicht springt, stand /settings/intelligence in LayoutStabilityTests mit 0,000 da.
+    // Genau diese leere Zustimmung findet PageContentVisibilityTests.
+    //
+    // Die Werte sind bewusst der eingeschaltete Fall mit Inhalt in jeder Liste: ein Zugang, ein
+    // offener Vorschlag, ein Lauf, ein Audit-Ereignis. Der Leerzustand zeigt vier Saetze und misst
+    // nichts.
+    'intelligence/admin/overview': {
+      settings: {
+        enabled: true, provider: 'openai', credentialId: 'ai-cred-1', allowUserCredentials: false,
+        defaultTextModel: 'gpt-5-mini', defaultVisionModel: 'gpt-5', dailyBudgetEur: 2, monthlyBudgetEur: 40,
+        dailyScanEnabled: true, weeklyDeepScanEnabled: false, monthlyReviewEnabled: true,
+        modules: ['categorization', 'receipts', 'coach'],
+        availableModules: ['categorization', 'receipts', 'products', 'contracts', 'coach', 'collection-suggestions', 'logo-research', 'internet-research'],
+        updatedAt: '2026-09-18T07:30:00Z'
+      },
+      providers: [
+        { provider: 'openai', capabilities: 3, maximumInputBytes: 2097152, reportsUsage: true },
+        { provider: 'codex', capabilities: 3, maximumInputBytes: 1048576, reportsUsage: false }
+      ],
+      credentialCount: 1, pendingSuggestions: 1, failedJobs: 0, todayCostEur: 0.12, monthlyCostEur: 3.48
+    },
+    'intelligence/admin/credentials': [
+      { id: 'ai-cred-1', ownerUserId: null, provider: 'openai', name: 'Instanz-Schluessel',
+        secretFingerprint: 'a1b2c3d4', createdAt: '2026-08-02T10:00:00Z', updatedAt: '2026-09-18T07:30:00Z',
+        lastTestedAt: '2026-09-18T07:30:00Z', lastTestSucceeded: true }
+    ],
+    // Ein Vorschlag mit Begruendung und Beleg - das ist die Zeile, an der die Seite haengt: ohne sie
+    // steht dort 'Keine offenen Vorschlaege' und die Annehmen/Ablehnen-Knoepfe gibt es gar nicht.
+    'intelligence/admin/suggestions/pending': [
+      { id: 'ai-sug-1', type: 'merchant-category', subjectId: 'BAUHAUS', confidence: 0.86,
+        provider: 'openai', model: 'gpt-5-mini', createdAt: '2026-09-18T06:10:00Z',
+        proposedPayloadJson: JSON.stringify({ categoryKey: 'home.hardware', direction: 'expense', evidenceSummary: 'Sieben Buchungen, alle Baumarkt-typisch.' }),
+        evidenceJson: JSON.stringify({ occurrences: 7 }) }
+    ],
+    'intelligence/admin/runs': [
+      { id: 'ai-run-1', jobType: 'daily-scan', status: 'succeeded', provider: 'openai', model: 'gpt-5-mini',
+        startedAt: '2026-09-18T06:00:00Z', inputTokens: 4210, outputTokens: 318, estimatedCostEur: 0.12, actualCostEur: 0.12 }
+    ],
+    'intelligence/admin/audit': [
+      { id: 'ai-aud-1', action: 'credential.tested', outcome: 'success', entityType: 'AiCredential',
+        entityId: 'ai-cred-1', occurredAt: '2026-09-18T07:30:00Z' }
+    ],
+    // Der Cloud-Abschnitt derselben Seite. 'disabled' plus requiresSetupDecision:false ist der Fall,
+    // den ein Selbst-Hoster ohne Cloud sieht - die Seite muss ihn zeigen koennen, ohne zu draengen.
+    'intelligence/admin/cloud': {
+      mode: 'disabled', requiresSetupDecision: false, setupDecisionAt: '2026-08-02T10:00:00Z',
+      cloudEndpoint: 'https://cloud.fullworth.de', currentPolicyVersion: '1', entitlementStatus: null,
+      lastRegistrationAt: null, lastSubmissionAt: null, lastErrorCode: null,
+      outbox: { waitingCount: 0, deadLetterCount: 0, oldestWaitingCreatedAt: null }
+    },
+
     // ---- Coach (spending review dock + chat; #157/Scheibe 14 gap for the review/summary panel) ----
     // One conversation with one finished exchange, so the thread is not empty on first paint.
     'coach/conversations': [

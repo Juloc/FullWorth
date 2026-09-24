@@ -199,6 +199,13 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         ("/compensation",    0.065,  0.020)
     ];
 
+    /// <summary>
+    /// Die Adressen dieser Tabelle, fuer Waechter, die dieselbe Liste brauchen. Sie ist die Liste
+    /// aller angemeldeten Seiten und soll genau einmal gepflegt werden -
+    /// <see cref="PageContentVisibilityTests"/> haengt daran.
+    /// </summary>
+    public static IEnumerable<string> Paths => Budget.Select(entry => entry.Path);
+
     public static TheoryData<string, bool> Pages()
     {
         var data = new TheoryData<string, bool>();

@@ -68,13 +68,8 @@
 
 .tax-brow .amount{white-space:nowrap;text-align:right}
 
-.tax-view {
-  display: none
-}
-
-.tax-view.active {
-  display: block
-}
+/* Siehe pages/pension/page.css: das display-Paar gehoerte der alten Huelle, und ohne .active blieb
+   nur das Verstecken uebrig. */
 
 .tax-toolbar {
   display: flex;

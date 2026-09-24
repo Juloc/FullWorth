@@ -2,8 +2,10 @@
    every theme including the cute one. The toolbar and tab shapes deliberately reuse the same geometry
    as styles/features/tax.css, because a second tab style would be a second visual language. */
 
-.pension-view { display: none; }
-.pension-view.active { display: block; }
+/* Kein display-Umschalten mehr: diese Seite IST das Dokument, es gibt nichts zu verstecken.
+   Vorher stand hier "display:none" plus ".pension-view.active{display:block}" - das Paar der alten
+   Huelle. Mit ihr ist .active verschwunden, und damit blieb nur noch die erste Haelfte: die Seite
+   war unsichtbar. Aufgefallen ist es nicht, weil eine leere Seite auch nicht springt. */
 
 .pension-toolbar {
   display: flex;

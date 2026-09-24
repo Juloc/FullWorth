@@ -351,18 +351,6 @@ html[data-theme="light"] .an-cat:hover{
   animation:fw-line-in 1.05s var(--fw-ease) .08s forwards;
 }
 
-/* Views and cards enter gently, but ONLY on user-initiated navigation (contract: .view-enter,
-   added by app.js and removed on animationend). Plain .view.active on boot/history nav gets no
-   animation, so content is fully visible at its final position on first paint. */
-.view.view-enter{
-  animation:fw-view-in .12s ease-out both;
-}
-
-.view-enter .dashboard-grid > .widget,
-.view-enter .metric-grid > .metric{
-  animation:fw-card-in .12s ease-out both;
-}
-
 /* Dialogs and sheets remain clearly above the new card elevation. */
 dialog::backdrop{
   background:rgba(11,15,20,.42);
@@ -382,11 +370,6 @@ html[data-theme="light"] dialog.drawer .dialog-card{
 }
 
 @keyframes fw-card-in{
-  from{opacity:.85}
-  to{opacity:1}
-}
-
-@keyframes fw-view-in{
   from{opacity:.85}
   to{opacity:1}
 }
@@ -433,9 +416,6 @@ html[data-theme="light"] dialog.drawer .dialog-card{
 }
 
 @media(prefers-reduced-motion:reduce){
-  .view.view-enter,
-  .view-enter .dashboard-grid > .widget,
-  .view-enter .metric-grid > .metric,
   .chart-empty svg path,
   .contract-trend svg path,
   .loan-chart svg path{
