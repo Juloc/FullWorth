@@ -102,11 +102,17 @@ WHERE e."ImportJobId"=@job AND t."Id"=e."TransactionId"
 """, ("@job", jobId), ("@now", now)))
             reverted = await categories.ExecuteNonQueryAsync(ct);
 
+        // Die Umbuchung traegt keine Herkunftsmarke wie die Kategorie. Ob der Nutzer sie seither
+        // selbst bestaetigt hat, laesst sich deshalb nur an einem ablesen: ob die Buchung nach der
+        // Ergaenzung noch einmal geaendert wurde. Wurde sie, bleibt die Kennzeichnung stehen - eine
+        // unvollstaendige Ruecknahme ist hier der kleinere Fehler als eine, die eine Entscheidung des
+        // Nutzers still wieder zu Ausgaben macht.
         await using (var transfers = RawSql.Command(connection, """
 UPDATE "Transactions" t
 SET "IsTransfer"=false,"UpdatedAt"=@now
 FROM "ImportTransactionEnrichments" e
 WHERE e."ImportJobId"=@job AND t."Id"=e."TransactionId" AND e."SetTransfer" AND t."IsTransfer"
+  AND t."UpdatedAt"<=e."CreatedAt"
 """, ("@job", jobId), ("@now", now)))
             await transfers.ExecuteNonQueryAsync(ct);
 

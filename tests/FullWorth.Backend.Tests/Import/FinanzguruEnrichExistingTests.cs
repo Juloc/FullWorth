@@ -164,6 +164,85 @@ public sealed class FinanzguruEnrichExistingTests
         });
     }
 
+    /// <summary>
+    /// Ein Import, der nur ergaenzt hat, bietet seine Ruecknahme auch an. Der Endpunkt nahm sie
+    /// schon an; der Verlauf zeigte den Knopf nicht, weil er nur erzeugte Buchungen zaehlte.
+    /// </summary>
+    [Fact]
+    public async Task AnImportThatOnlyEnrichedOffersItsRollback()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        var result = await ImportAsync(client, scenario, Create(
+            Row("28.08.2026", -10m, "Supermarkt", "Einkauf", "Lebensmittel", "Essen", "enrich-1")));
+        Assert.Equal(0, result.TransactionsImported);
+        Assert.Equal(1, result.EnrichedExistingTransactions);
+
+        using var history = await SendAsync(client, HttpMethod.Get,
+            $"/api/import-jobs?fullWorthSpaceId={scenario.Space:D}&adapterKey=finanzguru_xlsx", scenario.User);
+        history.EnsureSuccessStatusCode();
+        using var doc = System.Text.Json.JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        var job = Assert.Single(doc.RootElement.EnumerateArray());
+        Assert.True(job.GetProperty("rollbackAvailable").GetBoolean());
+    }
+
+    /// <summary>
+    /// Wer den Raum nicht besitzt, darf keine Kategorie anlegen - fuer ihn ergaenzt eine unbekannte
+    /// Kategorie beim Festschreiben nichts. Die Vorschau darf es ihm dann auch nicht versprechen.
+    /// </summary>
+    [Fact]
+    public async Task AMemberIsNotPromisedAnEnrichmentWithACategoryTheyCannotCreate()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory, FullWorthSpaceRoles.Member);
+        using var client = factory.CreateClient();
+
+        using var stage = await SendAsync(client, HttpMethod.Post,
+            $"/api/import/finanzguru/stage?fullWorthSpaceId={scenario.Space:D}", scenario.User, Create(
+                Row("28.08.2026", -10m, "Supermarkt", "Einkauf", "Gibt es nicht", "Auch nicht", "enrich-1")));
+        stage.EnsureSuccessStatusCode();
+        var preview = (await stage.Content.ReadFromJsonAsync<FinanzguruStagePreview>())!;
+        Assert.Equal(1, preview.MatchedExisting);
+        Assert.Equal(0, preview.EnrichedExisting);
+
+        using var commit = await SendAsync(client, HttpMethod.Post,
+            $"/api/import/finanzguru/jobs/{preview.JobId:D}/commit?fullWorthSpaceId={scenario.Space:D}", scenario.User);
+        commit.EnsureSuccessStatusCode();
+        var result = (await commit.Content.ReadFromJsonAsync<FinanzguruImportResult>())!;
+        Assert.Equal(preview.EnrichedExisting, result.EnrichedExistingTransactions);
+    }
+
+    /// <summary>
+    /// Die Umbuchung traegt keine Herkunftsmarke. Wurde die Buchung nach der Ergaenzung noch einmal
+    /// geaendert, kann das die Bestaetigung des Nutzers gewesen sein - dann bleibt die Kennzeichnung.
+    /// </summary>
+    [Fact]
+    public async Task ATransferFlagOnABookingEditedSinceSurvivesTheRollback()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await ImportAsync(client, scenario, Create(
+            Row("28.08.2026", -10m, "Supermarkt", "Einkauf", "Lebensmittel", "Essen", "enrich-1", isTransfer: true)));
+        await factory.SeedAsync(async db =>
+        {
+            var transaction = await db.Transactions.SingleAsync(item => item.AccountId == scenario.Account);
+            transaction.UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(5);
+            await db.SaveChangesAsync();
+        });
+        var jobId = await JobIdAsync(factory, scenario);
+
+        using var rollback = await SendAsync(client, HttpMethod.Post,
+            $"/api/import-jobs/{jobId:D}/rollback?fullWorthSpaceId={scenario.Space:D}", scenario.User);
+        Assert.Equal(HttpStatusCode.OK, rollback.StatusCode);
+
+        await factory.SeedAsync(async db =>
+            Assert.True((await db.Transactions.SingleAsync(item => item.AccountId == scenario.Account)).IsTransfer));
+    }
+
     /// <summary>Die Vorschau nennt dieselbe Zahl, die danach eintritt.</summary>
     [Fact]
     public async Task ThePreviewAnnouncesTheSameNumberOfEnrichments()
@@ -253,7 +332,8 @@ public sealed class FinanzguruEnrichExistingTests
 
     private sealed record Scenario(Guid Space, Guid User, Guid Account);
 
-    private static async Task<Scenario> SeedAsync(BackendWebApplicationFactory factory)
+    private static async Task<Scenario> SeedAsync(
+        BackendWebApplicationFactory factory, string role = FullWorthSpaceRoles.Owner)
     {
         var scenario = new Scenario(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         await factory.SeedAsync(async db =>
@@ -270,7 +350,7 @@ public sealed class FinanzguruEnrichExistingTests
             {
                 FullWorthSpaceId = scenario.Space,
                 UserId = scenario.User,
-                Role = FullWorthSpaceRoles.Owner
+                Role = role
             });
 
             var connectionId = Guid.NewGuid();

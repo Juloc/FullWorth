@@ -195,11 +195,7 @@ WHERE "Id"=@id
             {
                 var minDate = sourceRows.Min(row => row.BookingDate);
                 var maxDate = sourceRows.Max(row => row.BookingDate);
-                var existingRows = await db.Transactions
-                    .Where(item => item.AccountId == resolved.Account.Id
-                                   && item.BookingDate >= minDate && item.BookingDate <= maxDate
-                                   && item.Status != "PDNG"
-                                   && !item.ExternalKey.StartsWith("finanzguru:"))
+                var existingRows = await SemanticMatchPool(db.Transactions, resolved.Account.Id, minDate, maxDate)
                     .ToListAsync(ct);
                 semanticMatches = existingRows
                     .GroupBy(Signature)
@@ -331,6 +327,41 @@ WHERE "Id"=@id
             categoryResolver.Matched,
             categoryResolver.Unmapped,
             splitTransactions);
+    }
+
+    /// <summary>
+    /// Die Buchungen eines Kontos, gegen die eine Quellzeile fachlich abgeglichen wird: gebucht, im
+    /// Zeitraum der Datei, und nicht selbst aus Finanzguru. Steht einmal, weil die Vorschau und das
+    /// Festschreiben dieselbe Menge meinen muessen - eine zweite Fassung dieses Filters waere die
+    /// Stelle, an der beide auseinanderlaufen, sobald nur eine davon geaendert wird.
+    /// </summary>
+    internal static IQueryable<FinanceTransaction> SemanticMatchPool(
+        IQueryable<FinanceTransaction> transactions, Guid accountId, DateOnly? minDate, DateOnly? maxDate) =>
+        transactions.Where(item => item.AccountId == accountId
+                                   && item.BookingDate >= minDate && item.BookingDate <= maxDate
+                                   && item.Status != "PDNG"
+                                   && !item.ExternalKey.StartsWith("finanzguru:"));
+
+    /// <summary>
+    /// Ob das Festschreiben fuer diese Kategorie eine liefern wuerde - ohne eine anzulegen.
+    ///
+    /// Die Vorschau braucht die Antwort, um "wird ergaenzt" zu sagen, darf das Aufloesen aber nicht
+    /// selbst ausfuehren: es legt fehlende Kategorien an, und eine Vorschau, die etwas anlegt, ist
+    /// keine. Blosses "hat eine Kategorie" reichte nicht: wer den Raum nicht besitzt, darf keine
+    /// Kategorie anlegen, und fuer ihn ergaenzt eine unbekannte Kategorie beim Festschreiben nichts.
+    /// </summary>
+    internal async Task<Func<string?, string?, bool>> CategoryPredictorAsync(
+        Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        var role = await db.FullWorthSpaceMembers.AsNoTracking()
+            .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId)
+            .Select(member => member.Role)
+            .SingleOrDefaultAsync(ct);
+        var categories = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
+            .ToListAsync(ct);
+        var canCreate = role == FullWorthSpaceRoles.Owner;
+        return (main, sub) => CategoryResolver.WouldResolve(categories, canCreate, main, sub);
     }
 
     /// <summary>
@@ -687,10 +718,36 @@ WHERE "Id"=@id
             return result;
         }
 
+        /// <summary>
+        /// Dieselbe Entscheidung wie <see cref="Resolve"/>, nur ohne etwas anzulegen oder zu zaehlen.
+        /// Folgt Resolve Schritt fuer Schritt - weicht es ab, sagt die Vorschau etwas anderes voraus,
+        /// als das Festschreiben tut.
+        /// </summary>
+        public static bool WouldResolve(List<FinanceCategory> categories, bool canCreate, string? main, string? sub)
+        {
+            main = Normalize(main);
+            sub = Normalize(sub);
+            if (main is null && sub is null) return false;
+
+            Guid? parentId = null;
+            if (main is not null)
+            {
+                var parent = Find(categories, main, null);
+                // Eine fehlende Oberkategorie legt Resolve an, wenn es darf - und dann auch die
+                // Unterkategorie darunter. Darf es nicht, endet es hier mit null.
+                if (parent is null) return canCreate;
+                parentId = parent.Id;
+            }
+            return sub is null || Find(categories, sub, parentId) is not null || canCreate;
+        }
+
+        private static FinanceCategory? Find(List<FinanceCategory> categories, string name, Guid? parentId) =>
+            categories.FirstOrDefault(category =>
+                category.ParentId == parentId && string.Equals(category.Name, name, StringComparison.OrdinalIgnoreCase));
+
         private Guid? ResolveSingle(string name, Guid? parentId, string hierarchy)
         {
-            var existing = categories.FirstOrDefault(category =>
-                category.ParentId == parentId && string.Equals(category.Name, name, StringComparison.OrdinalIgnoreCase));
+            var existing = Find(categories, name, parentId);
             if (existing is not null)
             {
                 Matched++;

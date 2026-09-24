@@ -23,7 +23,7 @@ const text={
     apply:'Übernehmen',previewNothing:'Nichts Neues in dieser Datei.',checking:'Datei wird gelesen …',
     selectAll:'Alle',selectedCount:'{n} von {total} ausgewählt',
     previewEnriched:'Davon ergänzt',enriched:'Vorhandene Buchungen ergänzt',
-    previewTarget:'Zielkonto',previewTargetNew:'Neues Konto anlegen',retargeting:'Vorschau wird neu gerechnet …',
+    previewTarget:'Zielkonto',previewTargetNew:'Neues Konto anlegen',retargeting:'Vorschau wird neu gerechnet …',targetRejected:'Dieses Zielkonto geht nicht, die vorige Wahl gilt weiter.',
     linkHeading:'Importkonten verbinden',
     linkHint:'Ordne importierte Historienkonten dem echten Bank- oder FullWorth-Konto zu. Hat das Ziel keinen Kontostand, trage den aktuellen Stand ein. Fehlende Buchungen kannst du danach unter „Buchungen“ ergänzen.',
     manageAccounts:'Bank/Konto verbinden oder anlegen',loadingLinks:'Konten werden geladen …',
@@ -43,7 +43,7 @@ const text={
     historyHeading:'Frühere Importe',historyEmpty:'Noch keine Finanzguru-Importe.',
     rollback:'Import rückgängig machen',
     rollbackConfirm:'Diesen Finanzguru-Import wirklich rückgängig machen? Buchungen, die du seither verlinkt, geteilt, verschlagwortet, geprüft oder mit einem Vertrag verknüpft hast, bleiben erhalten.',
-    rolledBack:'{removed} entfernt, {kept} behalten.',statusCompleted:'Abgeschlossen',statusRolledBack:'Rückgängig gemacht'
+    rolledBack:'{removed} entfernt, {kept} behalten.',statusCompleted:'Abgeschlossen',statusRolledBack:'Rückgängig gemacht',statusCancelled:'Nicht übernommen'
   },
   en:{
     subtitle:'Import historical transactions from Finanzguru.',back:'Back',heading:'Import all transactions',
@@ -61,7 +61,7 @@ const text={
     apply:'Import',previewNothing:'Nothing new in this file.',checking:'Reading the file …',
     selectAll:'All',selectedCount:'{n} of {total} selected',
     previewEnriched:'Of those, enriched',enriched:'Existing transactions enriched',
-    previewTarget:'Target account',previewTargetNew:'Create a new account',retargeting:'Recalculating the preview …',
+    previewTarget:'Target account',previewTargetNew:'Create a new account',retargeting:'Recalculating the preview …',targetRejected:'This target account cannot be used, the previous choice still applies.',
     linkHeading:'Link imported accounts',
     linkHint:'Map imported history accounts to the real bank or FullWorth account. If the target has no balance, enter the current balance. Missing bookings can then be added under Transactions.',
     manageAccounts:'Connect or create bank/account',loadingLinks:'Loading accounts …',
@@ -81,7 +81,7 @@ const text={
     historyHeading:'Previous imports',historyEmpty:'No Finanzguru imports yet.',
     rollback:'Roll back import',
     rollbackConfirm:'Really roll back this Finanzguru import? Bookings you have since linked, split, tagged, reviewed or linked to a contract are kept.',
-    rolledBack:'{removed} removed, {kept} kept.',statusCompleted:'Completed',statusRolledBack:'Rolled back'
+    rolledBack:'{removed} removed, {kept} kept.',statusCompleted:'Completed',statusRolledBack:'Rolled back',statusCancelled:'Not imported'
   }
 }[lang];
 
@@ -109,7 +109,7 @@ let linkOptions={importAccounts:[],targetAccounts:[],attachedHistory:[]};
 let history=[];
 
 const fill=(template,values)=>Object.entries(values).reduce((s,[k,v])=>s.replaceAll(`{${k}}`,v),template);
-const jobStatusLabel=jobStatus=>({completed:text.statusCompleted,rolled_back:text.statusRolledBack})[jobStatus]||jobStatus;
+const jobStatusLabel=jobStatus=>({completed:text.statusCompleted,rolled_back:text.statusRolledBack,cancelled:text.statusCancelled})[jobStatus]||jobStatus;
 
 function node(tag,className,textValue){
   const el=document.createElement(tag);
@@ -385,11 +385,15 @@ function buildAttachedHistoryCard(item){
 function renderHistory(){
   if(!historyList)return;
   historyList.replaceChildren();
-  if(!history.length){
+  // Jede Vorschau legt einen Auftrag an (#131). Solange er nicht festgeschrieben ist, ist er kein
+  // frueherer Import - wer eine Datei dreimal ansieht und einmal uebernimmt, sah sonst drei Zeilen
+  // "0 importiert" mehr.
+  const shown=history.filter(item=>item.status!=='ready');
+  if(!shown.length){
     historyList.append(node('div','row-sub',text.historyEmpty));
     return;
   }
-  for(const item of history){
+  for(const item of shown){
     const row=node('div','row');
     const main=node('div','row-main');
     main.append(node('div','row-title',item.fileName||'Finanzguru'));
@@ -478,7 +482,15 @@ function targetSelect(account){
 }
 
 async function retarget(sourceKey,targetId){
+  // Was der Server zuletzt gerechnet hat. Eine abgelehnte Wahl stellt genau das wieder her - nicht
+  // "gar kein Ziel": sonst zeigte die Vorschau das vorige Ziel, und das Uebernehmen liefe ohne es.
+  const accepted={...targets};
   if(targetId)targets[sourceKey]=targetId;else delete targets[sourceKey];
+  // Eine Wahl nach der anderen. Zwei schnelle Aenderungen schickten sonst zwei Anfragen, deren
+  // Antworten sich ueberholen koennen - die Vorschau zeigte dann die aeltere, das Uebernehmen
+  // schickte die neuere. Auch "Uebernehmen" wartet, bis die Vorschau zur Wahl passt; das Neuzeichnen
+  // unten gibt alles wieder frei.
+  for(const control of result.querySelectorAll('select,button'))control.disabled=true;
   status.textContent=text.retargeting;
   try{
     staged=await sharedApi(
@@ -487,11 +499,10 @@ async function retarget(sourceKey,targetId){
     renderPreview(staged);
     status.textContent='';
   }catch(error){
-    // Eine abgelehnte Wahl nimmt die Seite zurueck, statt sie stehen zu lassen: sonst zeigte die
-    // Auswahl ein Ziel, das beim Uebernehmen nicht gilt.
-    delete targets[sourceKey];
+    targets=accepted;
     renderPreview(staged);
-    console.error(error);status.textContent=`${text.error} ${error.message||''}`.trim();
+    // Nichts ist fehlgeschlagen - eine Wahl wurde abgelehnt, und die vorige gilt weiter.
+    console.error(error);status.textContent=`${text.targetRejected} ${error.message||''}`.trim();
   }
 }
 

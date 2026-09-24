@@ -49,9 +49,10 @@ public sealed class ImportStagingCleanupService(FullWorthDbContext db)
     /// seine Kandidatenzeilen SIND der Klartext-Rest, den der Nutzer loswerden wollte. Dasselbe gilt
     /// fuer einen Zwischenstand ('ready'), den nie jemand festgeschrieben hat: aus ihm wurde nichts,
     /// und beim Finanzguru-Weg haengt zusaetzlich die gelesene Datei daran (#131). Ein abgeschlossener
-    /// Auftrag bleibt unangetastet, solange er noch verknuepfte Buchungen hat
-    /// (<see cref="ImportTransactionProvenance.LinkCountAsync"/>) - erst ohne Verknuepfung ist er
-    /// nachweislich folgenlos oder bereits vollstaendig zurueckgenommen.
+    /// Auftrag bleibt unangetastet, solange er noch verknuepfte oder ergaenzte Buchungen hat
+    /// (<see cref="ImportTransactionProvenance.LinkCountAsync"/>,
+    /// <see cref="ImportTransactionEnrichment.CountAsync"/>) - erst ohne beides ist er nachweislich
+    /// folgenlos oder bereits vollstaendig zurueckgenommen.
     /// </summary>
     /// <returns>Die Zahl geloeschter "ImportCandidates"-Zeilen.</returns>
     public async Task<int> PurgeStaleCandidatesAsync(int retentionDays, CancellationToken ct)
@@ -74,7 +75,13 @@ public sealed class ImportStagingCleanupService(FullWorthDbContext db)
             // ist: aus ihm wurde nichts geschrieben, und er haelt genau das, was der Nutzer nicht
             // aufbewahrt sehen will - Empfaenger und Verwendungszweck im Klartext, beim
             // Finanzguru-Weg dazu die gelesene Datei selbst (#131).
-            if (status != "completed" || await ImportTransactionProvenance.LinkCountAsync(db, id, ct) == 0)
+            //
+            // "Folgenlos" heisst: weder eine Buchung erzeugt noch eine ergaenzt. Ein Finanzguru-Auftrag,
+            // der nur vorhandenen Bankbuchungen Kategorien nachgetragen hat, laesst sich noch
+            // zuruecknehmen und ist deshalb so wenig faellig wie einer mit verknuepften Buchungen.
+            if (status != "completed"
+                || (await ImportTransactionProvenance.LinkCountAsync(db, id, ct) == 0
+                    && await ImportTransactionEnrichment.CountAsync(db, id, ct) == 0))
                 eligible.Add(id);
         }
         if (eligible.Count == 0) return 0;

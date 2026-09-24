@@ -125,6 +125,7 @@ public sealed class FinanzguruStagingService(
         var parentRows = rows.Where(row => row.SplitType is null or "Original").ToList();
         if (targets is { Count: > 0 }) await ValidateTargetsAsync(userId, fullWorthSpaceId, parentRows, targets, ct);
         var matches = await import.MatchAccountsAsync(userId, fullWorthSpaceId, parentRows, ct, targets);
+        var wouldResolve = await import.CategoryPredictorAsync(userId, fullWorthSpaceId, ct);
 
         var candidates = new List<StagedCandidate>();
         var accountSummaries = new List<FinanzguruStagedAccount>();
@@ -134,7 +135,7 @@ public sealed class FinanzguruStagingService(
             var match = matches[group.Key];
             var sample = group.First();
             var sourceRows = group.ToList();
-            var statuses = await ClassifyAsync(match, sourceRows, ct);
+            var statuses = await ClassifyAsync(match, sourceRows, wouldResolve, ct);
 
             for (var index = 0; index < sourceRows.Count; index++)
                 candidates.Add(new StagedCandidate(
@@ -181,6 +182,10 @@ public sealed class FinanzguruStagingService(
         IReadOnlyDictionary<string, Guid> targets, CancellationToken ct)
     {
         var baseline = await import.MatchAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
+        var otherAccounts = await db.Accounts.AsNoTracking()
+            .Where(account => account.FullWorthSpaceId == fullWorthSpaceId)
+            .Select(account => account.Id)
+            .ToArrayAsync(ct);
         foreach (var (sourceKey, targetId) in targets)
         {
             if (!baseline.TryGetValue(sourceKey, out var match))
@@ -193,11 +198,13 @@ public sealed class FinanzguruStagingService(
                 .Where(row => FinanzguruImportService.AccountKeyOf(row) == sourceKey)
                 .Select(row => FinanzguruImportService.ExternalKeyOf(row.BookingId))
                 .ToArray();
+            // Ueber die Konten des Raums, nicht ueber die Schluessel allein: der einzige Index auf den
+            // Buchungen ist (AccountId, ExternalKey), und ohne die fuehrende Spalte laese Postgres
+            // hier bei jeder Zielwahl die ganze Tabelle.
             var elsewhere = await db.Transactions.AsNoTracking()
-                .AnyAsync(item => keys.Contains(item.ExternalKey)
+                .AnyAsync(item => otherAccounts.Contains(item.AccountId)
                                   && item.AccountId != targetId
-                                  && db.Accounts.Any(account => account.Id == item.AccountId
-                                                                && account.FullWorthSpaceId == fullWorthSpaceId), ct);
+                                  && keys.Contains(item.ExternalKey), ct);
             if (elsewhere)
                 throw new FinanzguruTargetRejectedException(
                     "Bookings of this source were already imported into another account. Choosing a different target would count them twice.");
@@ -267,7 +274,8 @@ public sealed class FinanzguruStagingService(
     /// zu schreiben.
     /// </summary>
     private async Task<List<(string Status, bool WouldEnrich)>> ClassifyAsync(
-        FinanzguruImportService.MatchedAccount match, List<FinanzguruRow> sourceRows, CancellationToken ct)
+        FinanzguruImportService.MatchedAccount match, List<FinanzguruRow> sourceRows,
+        Func<string?, string?, bool> wouldResolve, CancellationToken ct)
     {
         // Ein Konto, das es noch nicht gibt, hat nichts, wogegen sich vergleichen liesse.
         if (match.Account is null) return [.. sourceRows.Select(_ => ("new", false))];
@@ -289,11 +297,7 @@ public sealed class FinanzguruStagingService(
         {
             var minDate = sourceRows.Min(row => row.BookingDate);
             var maxDate = sourceRows.Max(row => row.BookingDate);
-            var existing = await db.Transactions.AsNoTracking()
-                .Where(item => item.AccountId == accountId
-                               && item.BookingDate >= minDate && item.BookingDate <= maxDate
-                               && item.Status != "PDNG"
-                               && !item.ExternalKey.StartsWith("finanzguru:"))
+            var existing = await FinanzguruImportService.SemanticMatchPool(db.Transactions.AsNoTracking(), accountId, minDate, maxDate)
                 .Select(item => new
                 {
                     item.Id, item.BookingDate, item.Amount, item.Currency, item.NormalizedCounterparty,
@@ -327,13 +331,13 @@ public sealed class FinanzguruStagingService(
             if (match.MatchedLiveAccount && semantic.TryGetValue(signature, out var queue) && queue.Count > 0)
             {
                 var existingId = queue.Dequeue();
-                // Beizutragen gibt es etwas, wenn die Quelle eine Kategorie, eine Aufteilung oder die
-                // Umbuchungskennzeichnung mitbringt. Die Kategorie wird hier NICHT aufgeloest: das
-                // Aufloesen legt fehlende Kategorien an, und eine Vorschau, die etwas anlegt, ist
-                // keine.
+                // Beizutragen gibt es etwas, wenn die Quelle eine Aufteilung, die
+                // Umbuchungskennzeichnung oder eine Kategorie mitbringt, die das Festschreiben auch
+                // tatsaechlich aufloesen wird - fuer wen den Raum nicht besitzt, ist eine unbekannte
+                // Kategorie keine (siehe CategoryPredictorAsync).
                 var brings = splitParents.Contains(row.BookingId)
                     || row.IsTransfer
-                    || !string.IsNullOrWhiteSpace(row.MainCategory);
+                    || wouldResolve(row.MainCategory, row.SubCategory);
                 result.Add(("matched", enrichable.Contains(existingId) && brings));
                 continue;
             }
@@ -369,31 +373,49 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'ready',@source,@ready,@duplicates,0
         await InsertCandidatesAsync(connection, null, jobId, candidates, ct);
     }
 
+    /// <summary>
+    /// Schreibt die Kandidaten in Stapeln zu <see cref="InsertBatch"/> Zeilen. Zeile fuer Zeile waren
+    /// das bei einer Datei mit drei Jahren Historie ueber 700 Rundreisen - und seit die Zielwahl die
+    /// Kandidaten neu schreibt, bei jeder Aenderung einer Auswahl noch einmal so viele.
+    /// </summary>
     private static async Task InsertCandidatesAsync(
         System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction? transaction,
         Guid jobId, IReadOnlyList<StagedCandidate> candidates, CancellationToken ct)
     {
-        foreach (var candidate in candidates)
+        foreach (var batch in candidates.Chunk(InsertBatch))
         {
+            var values = new List<string>(batch.Length);
+            var parameters = new List<(string, object?)> { ("@job", jobId) };
+            for (var index = 0; index < batch.Length; index++)
+            {
+                var candidate = batch[index];
+                values.Add($"(@id{index},@job,@account{index},@date{index},@amount{index},@currency{index},"
+                    + $"@party{index},@description{index},@category{index},@key{index},@fingerprint{index},@status{index},'ready')");
+                parameters.AddRange([
+                    ($"@id{index}", Guid.NewGuid()), ($"@account{index}", candidate.SourceKey),
+                    ($"@date{index}", candidate.Row.BookingDate), ($"@amount{index}", candidate.Row.Amount),
+                    ($"@currency{index}", candidate.Row.Currency), ($"@party{index}", candidate.Row.Counterparty),
+                    ($"@description{index}", candidate.Row.Description), ($"@category{index}", Category(candidate.Row)),
+                    ($"@key{index}", FinanzguruImportService.ExternalKeyOf(candidate.Row.BookingId)),
+                    // Der Fingerabdruck ist hier die Buchungskennung selbst: Finanzguru vergibt sie, und
+                    // sie ist genau das, woran das Festschreiben die Zeile wiederfindet.
+                    ($"@fingerprint{index}", candidate.Row.BookingId), ($"@status{index}", candidate.Status)
+                ]);
+            }
             await using var command = RawSql.Command(connection, """
 INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate","Amount","Currency",
                                 "Counterparty","Description","CategoryText","ExternalKey","RowFingerprint",
                                 "DuplicateStatus","ValidationStatus")
-VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,@key,@fingerprint,@status,'ready')
-""",
-                ("@id", Guid.NewGuid()), ("@job", jobId), ("@account", candidate.SourceKey),
-                ("@date", candidate.Row.BookingDate), ("@amount", candidate.Row.Amount),
-                ("@currency", candidate.Row.Currency), ("@party", candidate.Row.Counterparty),
-                ("@description", candidate.Row.Description),
-                ("@category", Category(candidate.Row)),
-                ("@key", FinanzguruImportService.ExternalKeyOf(candidate.Row.BookingId)),
-                // Der Fingerabdruck ist hier die Buchungskennung selbst: Finanzguru vergibt sie, und
-                // sie ist genau das, woran das Festschreiben die Zeile wiederfindet.
-                ("@fingerprint", candidate.Row.BookingId), ("@status", candidate.Status));
+VALUES
+""" + string.Join(",\n", values), [.. parameters]);
             command.Transaction = transaction;
             await command.ExecuteNonQueryAsync(ct);
         }
     }
+
+    // Zwoelf Parameter je Zeile; Postgres erlaubt 65 535 je Anweisung. 200 Zeilen bleiben weit
+    // darunter und halten die einzelne Anweisung klein genug, um sie im Log noch lesen zu koennen.
+    private const int InsertBatch = 200;
 
     /// <summary>
     /// Schreibt die Kandidaten eines Auftrags neu. Die Kennungen wechseln dabei - eine Zeilenauswahl

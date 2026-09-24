@@ -64,7 +64,27 @@ public sealed class ImportStagingCleanupServiceTests
         var (userId, spaceId) = await SeedSpaceAsync(factory);
         var jobId = await SeedJobAsync(factory, userId, spaceId, "completed", DaysAgo(RetentionDays + 10));
         await SeedCandidateAsync(factory, jobId);
-        await SeedLinkedTransactionAsync(factory, spaceId, jobId);
+        await SeedTransactionTracedByAsync(factory, spaceId, jobId, "ImportTransactionLinks");
+
+        var purged = await PurgeAsync(factory);
+
+        Assert.Equal(0, purged);
+        await factory.SeedAsync(async db => Assert.Equal(1, await CandidateCountAsync(db, jobId)));
+    }
+
+    /// <summary>
+    /// Ein Finanzguru-Auftrag, der nur vorhandene Bankbuchungen ergaenzt hat, erzeugt keine Buchung
+    /// und ist trotzdem nicht folgenlos: er laesst sich zuruecknehmen (#131). Er darf so wenig
+    /// geraeumt werden wie einer mit verknuepften Buchungen.
+    /// </summary>
+    [Fact]
+    public async Task ACompletedJobThatOnlyEnrichedIsUntouchedEvenWhenOld()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var (userId, spaceId) = await SeedSpaceAsync(factory);
+        var jobId = await SeedJobAsync(factory, userId, spaceId, "completed", DaysAgo(RetentionDays + 10));
+        await SeedCandidateAsync(factory, jobId);
+        await SeedTransactionTracedByAsync(factory, spaceId, jobId, "ImportTransactionEnrichments");
 
         var purged = await PurgeAsync(factory);
 
@@ -265,7 +285,12 @@ public sealed class ImportStagingCleanupServiceTests
                 ({Guid.NewGuid()},{jobId},-10.00,'EUR',{Guid.NewGuid().ToString("N")},'imported','ready')
             """));
 
-    private static async Task SeedLinkedTransactionAsync(BackendWebApplicationFactory factory, Guid spaceId, Guid jobId)
+    /// <summary>
+    /// Eine Buchung, an der der Auftrag eine Spur hinterlassen hat - erzeugt
+    /// (<c>ImportTransactionLinks</c>) oder ergaenzt (<c>ImportTransactionEnrichments</c>).
+    /// </summary>
+    private static async Task SeedTransactionTracedByAsync(
+        BackendWebApplicationFactory factory, Guid spaceId, Guid jobId, string traceTable)
     {
         var accountId = Guid.NewGuid();
         var transactionId = Guid.NewGuid();
@@ -295,10 +320,10 @@ public sealed class ImportStagingCleanupServiceTests
             });
             await db.SaveChangesAsync();
         });
-        await factory.SeedAsync(db => db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "ImportTransactionLinks" ("ImportJobId","TransactionId","CreatedAt")
-            VALUES ({jobId},{transactionId},{DateTimeOffset.UtcNow})
-            """));
+        // Der Tabellenname ist eine der zwei Konstanten oben, nie Eingabe - deshalb darf er hier stehen.
+        await factory.SeedAsync(db => db.Database.ExecuteSqlRawAsync(
+            $"INSERT INTO \"{traceTable}\" (\"ImportJobId\",\"TransactionId\",\"CreatedAt\") VALUES ({{0}},{{1}},{{2}})",
+            jobId, transactionId, DateTimeOffset.UtcNow));
     }
 
     private static async Task<(Guid BatchId, Guid ItemId)> SeedReceiptBatchAsync(

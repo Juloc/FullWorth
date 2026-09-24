@@ -22,6 +22,22 @@
       sourceCategories: []
     },
     [`import-jobs/${MAPPING_JOB}/candidates`]: [],
+    // Der Importverlauf. Drei Faelle, die im Harness zu sehen sein muessen (#131): ein Finanzguru-
+    // Import, der nur ergaenzt hat (keine neue Buchung - und trotzdem ruecknehmbar), eine Vorschau,
+    // die nie uebernommen wurde (gehoert NICHT in den Verlauf), und eine, die die Aufraeumfrist
+    // abgebrochen hat.
+    'import-jobs': [
+      { id: 'j-fg-enrich', fileName: 'alle-buchungen.xlsx', adapterKey: 'finanzguru_xlsx', status: 'completed',
+        sourceRowCount: 312, readyCount: 0, duplicateCount: 309, importedCount: 0, errorCount: 0,
+        createdAt: iso('2026-09-20T10:00:00Z'), completedAt: iso('2026-09-20T10:01:00Z'), rolledBackAt: null,
+        rollbackAvailable: true },
+      { id: 'j-fg-ready', fileName: 'alle-buchungen.xlsx', adapterKey: 'finanzguru_xlsx', status: 'ready',
+        sourceRowCount: 312, readyCount: 3, duplicateCount: 309, importedCount: 0, errorCount: 0,
+        createdAt: iso('2026-09-24T09:00:00Z'), completedAt: null, rolledBackAt: null, rollbackAvailable: false },
+      { id: 'j-fg-cancelled', fileName: 'alt.xlsx', adapterKey: 'finanzguru_xlsx', status: 'cancelled',
+        sourceRowCount: 40, readyCount: 40, duplicateCount: 0, importedCount: 0, errorCount: 0,
+        createdAt: iso('2026-08-01T09:00:00Z'), completedAt: null, rolledBackAt: null, rollbackAvailable: false }
+    ],
     'import/finanzguru/accounts': {
       importAccounts: [],
       attachedHistory: [],
@@ -1571,6 +1587,10 @@
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
       const dkb = body?.accountTargets?.['DE44…9912'] || null;
+      // Das Haushaltskonto fuehrt Buchungen dieser Quelle schon - so ist die Ablehnung im Harness
+      // erreichbar, und mit ihr die Frage, auf welche Wahl die Seite danach zurueckfaellt.
+      if (dkb === 'a1') return { status: 409, body: {
+        error: 'Bookings of this source were already imported into another account. Choosing a different target would count them twice.' } };
       const names = { a1: 'Haushaltskonto', a2: 'Tagesgeld mit langem Namen' };
       return { status: 200, body: {
         jobId: FINANZGURU_STAGE_JOB, sourceRows: 312,

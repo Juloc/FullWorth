@@ -31,7 +31,7 @@ public sealed record ImportJobCommitOutcome(int Imported, int Duplicates, bool B
 public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, FieldCipher cipher, AccountStore accounts)
 {
     private const string JobColumns =
-        "\"Id\",\"FileName\",\"AdapterKey\",\"Status\",\"SourceRowCount\",\"ReadyCount\",\"DuplicateCount\",\"ImportedCount\",\"ErrorCount\",\"CreatedAt\",\"CompletedAt\",\"RolledBackAt\",(SELECT count(*) FROM \"ImportTransactionLinks\" l WHERE l.\"ImportJobId\"=j.\"Id\")::int AS \"LinkCount\"";
+        "\"Id\",\"FileName\",\"AdapterKey\",\"Status\",\"SourceRowCount\",\"ReadyCount\",\"DuplicateCount\",\"ImportedCount\",\"ErrorCount\",\"CreatedAt\",\"CompletedAt\",\"RolledBackAt\",(SELECT count(*) FROM \"ImportTransactionLinks\" l WHERE l.\"ImportJobId\"=j.\"Id\")::int AS \"LinkCount\",(SELECT count(*) FROM \"ImportTransactionEnrichments\" e WHERE e.\"ImportJobId\"=j.\"Id\")::int AS \"EnrichmentCount\"";
 
     public async Task<string> BaseCurrencyAsync(Guid fullWorthSpaceId, CancellationToken ct)
     {
@@ -498,8 +498,11 @@ WHERE j."Id"=@job
         rolledBackAt = RawSql.NullableTimestamp(reader, "RolledBackAt"),
         // Only offered when the job actually left a trace to undo - an import committed before
         // provenance existed has no links, so the button would promise something it cannot do.
+        // A trace is either a booking it created or one it enriched (#131): a Finanzguru import whose
+        // every row matched the bank creates nothing and still changed forty categories, and the
+        // rollback endpoint accepts it for exactly that reason.
         rollbackAvailable = RawSql.String(reader, "Status") == "completed"
             && RawSql.NullableTimestamp(reader, "RolledBackAt") is null
-            && RawSql.Int(reader, "LinkCount") > 0
+            && (RawSql.Int(reader, "LinkCount") > 0 || RawSql.Int(reader, "EnrichmentCount") > 0)
     };
 }
