@@ -8,8 +8,20 @@
   // Antworten ihn teilen muessen: die Vorschau nennt ihn, die Zeilenauswahl holt die Kandidaten
   // unter ihm, und das Uebernehmen adressiert ihn.
   const FINANZGURU_STAGE_JOB = '7f000000-0000-4000-8000-000000000131';
+  // Der Auftrag des Spalten-Imports (#131, Abschnitt 3). Seine Zusammenfassung fuehrt zwei
+  // Quellkonten: eines, das beim letzten Import schon zugeordnet wurde, und eines ohne Erinnerung -
+  // nur so ist im Harness zu sehen, dass die Vorauswahl der Erinnerung folgt und nicht dem Raten.
+  const MAPPING_JOB = '7f000000-0000-4000-8000-000000000132';
 
   const FIXTURES = {
+    [`import-mapping/jobs/${MAPPING_JOB}/summary`]: {
+      sourceAccounts: [
+        { source: 'Tagesgeld', count: 12, rememberedAccountId: 'a1' },
+        { source: 'Neues Depotkonto', count: 3, rememberedAccountId: null }
+      ],
+      sourceCategories: []
+    },
+    [`import-jobs/${MAPPING_JOB}/candidates`]: [],
     [`import-jobs/${FINANZGURU_STAGE_JOB}/candidates`]: [
       { id: '3a000000-0000-4000-8000-000000000001', bookingDate: iso('2026-09-12'), amount: '-42.19', currency: 'EUR', counterparty: 'REWE Markt GmbH', description: 'Einkauf', duplicateStatus: 'new' },
       { id: '3a000000-0000-4000-8000-000000000002', bookingDate: iso('2026-09-11'), amount: '-9.99', currency: 'EUR', counterparty: 'Spotify', description: 'Abo', duplicateStatus: 'new' },
@@ -1507,6 +1519,10 @@
     // #131: der Schritt NACH der Erkennung. Ohne eigene Antwort bekam die Spaltenzuordnung den
     // allgemeinen Schreib-Echo ({id:'stub'}) und brach mit "headers is not iterable" ab - der Weg vom
     // Waehlen der Datei bis zur Vorschau liess sich im Harness also nie am Stueck ansehen.
+    if (after.startsWith('import-mapping/upload'))
+      return { status: 200, body: { jobId: MAPPING_JOB, sourceRows: 15, ready: 15, errors: 0 } };
+    if (/^import-mapping\/jobs\/[^/]+\/duplicate-preview/.test(after))
+      return { status: 200, body: { candidates: [], duplicates: 0, unmapped: 0, fresh: 15 } };
     if (after.startsWith('import-mapping/detect')) {
       return { status: 200, body: {
         fileName: 'umsaetze.csv',

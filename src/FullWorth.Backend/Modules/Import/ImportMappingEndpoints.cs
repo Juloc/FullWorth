@@ -140,22 +140,42 @@ public static class ImportMappingEndpoints
     }
 
     private static async Task<IResult> MappingSummary(
-        Guid jobId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, ImportMappingStore store, CancellationToken ct)
+        Guid jobId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ImportMappingStore store, ImportSourceAccountStore sourceAccounts, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         if (!await store.OwnsOpenJobAsync(jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
         var accounts = await store.SourceAccountCountsAsync(jobId, ct);
         var categories = await store.SourceCategoryCountsAsync(jobId, ct);
+
+        // Was beim letzten Mal zugeordnet wurde (#131, Abschnitt 3). Nur was der Nutzer noch
+        // erreichen darf: eine Erinnerung an ein Konto, das inzwischen jemand anderem gehoert, waere
+        // ein Vorschlag, den der Commit danach ablehnt.
+        var remembered = await sourceAccounts.ForSpaceAsync(fullWorthSpaceId, ct);
+        var writable = await space.WritableAccountIdsAsync(userId, fullWorthSpaceId, ct);
+        Guid? RememberedFor(string? source) =>
+            ImportSourceAccountStore.Normalize(source) is { } key
+            && remembered.TryGetValue(key, out var accountId)
+            && writable.Contains(accountId)
+                ? accountId
+                : null;
+
         return Results.Ok(new
         {
-            sourceAccounts = accounts.Select(row => new { source = row.Source, count = row.Count }),
+            sourceAccounts = accounts.Select(row => new
+            {
+                source = row.Source,
+                count = row.Count,
+                rememberedAccountId = RememberedFor(row.Source)
+            }),
             sourceCategories = categories.Select(row => new { source = row.Source, count = row.Count })
         });
     }
 
     private static async Task<IResult> CommitMapped(
         Guid jobId, Guid fullWorthSpaceId, ImportMappedCommitWrite request, CurrentUserContext currentUser,
-        SpaceAccess space, ImportMappingStore store, ImportMappingCommitService commit, CancellationToken ct)
+        SpaceAccess space, ImportMappingStore store, ImportMappingCommitService commit,
+        ImportSourceAccountStore sourceAccounts, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         if (!await store.OwnsOpenJobAsync(jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
@@ -202,6 +222,21 @@ public static class ImportMappingEndpoints
         var outcome = await commit.CommitAsync(
             userId, fullWorthSpaceId, jobId, candidates, classifications, categoryMap,
             request.CreateMissingCategories, request.RunFullWorthCategorization, newAccounts, ct);
+
+        // Erst jetzt gemerkt, nicht beim Zuordnen (#131, Abschnitt 3): bis hierher war die Auswahl
+        // ein Entwurf, und ein abgebrochener Import soll die naechste Vorauswahl nicht praegen.
+        // Ein eben angelegtes Konto wird mit seiner echten Kennung gemerkt, nicht mit dem Platzhalter:
+        // beim naechsten Import derselben Datei soll es dort stehen, wo es entstanden ist.
+        await sourceAccounts.RememberAsync(
+            fullWorthSpaceId,
+            accountMap
+                // Ein Platzhalter ohne angelegtes Konto zeigt auf nichts - ihn zu merken liefe gegen den
+                // Fremdschluessel und machte aus einem gelungenen Import einen Fehler.
+                .Where(entry => entry.Value is not { } id || !newAccounts.ContainsKey(id) || outcome.CreatedAccounts.ContainsKey(id))
+                .ToDictionary(
+                    entry => entry.Key,
+                    entry => entry.Value is { } id && outcome.CreatedAccounts.TryGetValue(id, out var real) ? real : entry.Value),
+            ct);
 
         return Results.Ok(new
         {

@@ -332,6 +332,7 @@ public static class BackendApplication
         builder.Services.AddScoped<BudgetScopeStore>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Budgets.Suggestions.BudgetSuggestionStore>();
         builder.Services.AddScoped<ImportMappingStore>();
+        builder.Services.AddScoped<ImportSourceAccountStore>();
         builder.Services.AddScoped<ImportMappingCommitService>();
         builder.Services.AddScoped<ImportJobStore>();
         builder.Services.Configure<ImportStagingRetentionOptions>(builder.Configuration.GetSection(ImportStagingRetentionOptions.SectionName));

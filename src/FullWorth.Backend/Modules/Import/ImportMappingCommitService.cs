@@ -13,7 +13,9 @@ public sealed record CandidateClassification(
     Guid CandidateId, Guid? AccountId, string ExternalKey, string? NormalizedCounterparty, string Status, string? Reason);
 
 /// <summary>Was ein Festschreiben hinterlassen hat.</summary>
-public sealed record ImportCommitOutcome(int Imported, int Duplicates, int Skipped, int Total);
+/// <param name="CreatedAccounts">Platzhalter-Kennung auf das Konto, das der Commit dafuer angelegt hat.</param>
+public sealed record ImportCommitOutcome(
+    int Imported, int Duplicates, int Skipped, int Total, IReadOnlyDictionary<Guid, Guid> CreatedAccounts);
 
 /// <summary>
 /// Aus geprueften Importzeilen werden Buchungen.
@@ -148,7 +150,7 @@ public sealed class ImportMappingCommitService(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-        return new ImportCommitOutcome(imported, duplicates, skipped, candidates.Count);
+        return new ImportCommitOutcome(imported, duplicates, skipped, candidates.Count, resolved);
     }
 
     private Task MarkCandidateAsync(Guid candidateId, string state, CancellationToken ct) =>
