@@ -26,8 +26,9 @@ public sealed class ImportStagingRetentionOptions
 }
 
 /// <summary>
-/// Raeumt Import-Staging auf (#142): "ImportCandidates"-Zeilen abgebrochener, zurueckgenommener oder
-/// folgenlos abgeschlossener Auftraege, sowie den OCR-Volltext alter Beleg-Importstapel.
+/// Raeumt Import-Staging auf (#142): "ImportCandidates"-Zeilen abgebrochener, zurueckgenommener,
+/// liegen gebliebener oder folgenlos abgeschlossener Auftraege, den am Auftrag aufbewahrten
+/// Dateiinhalt (#131) sowie den OCR-Volltext alter Beleg-Importstapel.
 ///
 /// "ImportJobs"-Zeilen selbst bleiben immer stehen - sie sind der Auftragsverlauf, und
 /// "ImportJobStore" liest fuer die Verlaufsanzeige nie wieder aus "ImportCandidates" zurueck, nur aus
@@ -39,14 +40,20 @@ public sealed class ImportStagingRetentionOptions
 public sealed class ImportStagingCleanupService(FullWorthDbContext db)
 {
     /// <summary>
-    /// Loescht "ImportCandidates"-Zeilen abgebrochener, zurueckgenommener oder folgenlos
-    /// abgeschlossener Auftraege, deren letzter Statuswechsel laenger als <paramref name="retentionDays"/>
-    /// zurueckliegt. Ein abgebrochener oder zurueckgenommener Auftrag ist immer faellig, sobald er alt
-    /// genug ist - seine Kandidatenzeilen SIND der Klartext-Rest, den der Nutzer loswerden wollte. Ein
-    /// abgeschlossener Auftrag bleibt unangetastet, solange er noch verknuepfte Buchungen hat
+    /// Loescht "ImportCandidates"-Zeilen abgebrochener, zurueckgenommener, liegen gebliebener oder
+    /// folgenlos abgeschlossener Auftraege, deren letzter Statuswechsel laenger als
+    /// <paramref name="retentionDays"/> zurueckliegt, und nimmt denselben Auftraegen den aufbewahrten
+    /// Dateiinhalt ab.
+    ///
+    /// Ein abgebrochener oder zurueckgenommener Auftrag ist immer faellig, sobald er alt genug ist -
+    /// seine Kandidatenzeilen SIND der Klartext-Rest, den der Nutzer loswerden wollte. Dasselbe gilt
+    /// fuer einen Zwischenstand ('ready'), den nie jemand festgeschrieben hat: aus ihm wurde nichts,
+    /// und beim Finanzguru-Weg haengt zusaetzlich die gelesene Datei daran (#131). Ein abgeschlossener
+    /// Auftrag bleibt unangetastet, solange er noch verknuepfte Buchungen hat
     /// (<see cref="ImportTransactionProvenance.LinkCountAsync"/>) - erst ohne Verknuepfung ist er
     /// nachweislich folgenlos oder bereits vollstaendig zurueckgenommen.
     /// </summary>
+    /// <returns>Die Zahl geloeschter "ImportCandidates"-Zeilen.</returns>
     public async Task<int> PurgeStaleCandidatesAsync(int retentionDays, CancellationToken ct)
     {
         var cutoff = DateTimeOffset.UtcNow.AddDays(-Math.Max(0, retentionDays));
@@ -54,7 +61,7 @@ public sealed class ImportStagingCleanupService(FullWorthDbContext db)
 
         var candidateJobs = new List<(Guid Id, string Status)>();
         await using (var select = RawSql.Command(connection,
-            "SELECT \"Id\",\"Status\" FROM \"ImportJobs\" WHERE \"UpdatedAt\"<@cutoff AND \"Status\" IN ('cancelled','rolled_back','completed')",
+            "SELECT \"Id\",\"Status\" FROM \"ImportJobs\" WHERE \"UpdatedAt\"<@cutoff AND \"Status\" IN ('cancelled','rolled_back','completed','ready')",
             ("@cutoff", cutoff)))
         await using (var reader = await select.ExecuteReaderAsync(ct))
             while (await reader.ReadAsync(ct))
@@ -63,15 +70,34 @@ public sealed class ImportStagingCleanupService(FullWorthDbContext db)
         var eligible = new List<Guid>();
         foreach (var (id, status) in candidateJobs)
         {
+            // Ein liegen gebliebener Zwischenstand ('ready') ist immer faellig, sobald er alt genug
+            // ist: aus ihm wurde nichts geschrieben, und er haelt genau das, was der Nutzer nicht
+            // aufbewahrt sehen will - Empfaenger und Verwendungszweck im Klartext, beim
+            // Finanzguru-Weg dazu die gelesene Datei selbst (#131).
             if (status != "completed" || await ImportTransactionProvenance.LinkCountAsync(db, id, ct) == 0)
                 eligible.Add(id);
         }
         if (eligible.Count == 0) return 0;
 
-        await using var delete = RawSql.Command(connection,
-            "DELETE FROM \"ImportCandidates\" WHERE \"ImportJobId\"=ANY(@ids)",
-            ("@ids", eligible.ToArray()));
-        return await delete.ExecuteNonQueryAsync(ct);
+        var ids = eligible.ToArray();
+        int deleted;
+        await using (var delete = RawSql.Command(connection,
+            "DELETE FROM \"ImportCandidates\" WHERE \"ImportJobId\"=ANY(@ids)", ("@ids", ids)))
+            deleted = await delete.ExecuteNonQueryAsync(ct);
+
+        // Der Auftrag behaelt seine Zeile, aber nicht mehr die gelesene Datei, und ein liegen
+        // gebliebener Zwischenstand hoert auf, einer zu sein: ohne Kandidatenzeilen gaebe es nichts
+        // mehr festzuschreiben, und 'ready' zu lassen hiesse, einen Knopf anzubieten, der nur noch
+        // "nichts uebernommen" antworten kann.
+        await using (var finish = RawSql.Command(connection, """
+UPDATE "ImportJobs"
+SET "SourcePayloadEncrypted"=NULL,
+    "Status"=CASE WHEN "Status"='ready' THEN 'cancelled' ELSE "Status" END
+WHERE "Id"=ANY(@ids) AND ("SourcePayloadEncrypted" IS NOT NULL OR "Status"='ready')
+""", ("@ids", ids)))
+            await finish.ExecuteNonQueryAsync(ct);
+
+        return deleted;
     }
 
     /// <summary>

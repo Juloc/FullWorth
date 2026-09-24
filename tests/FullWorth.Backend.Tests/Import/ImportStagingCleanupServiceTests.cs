@@ -90,6 +90,53 @@ public sealed class ImportStagingCleanupServiceTests
         });
     }
 
+    /// <summary>
+    /// Ein Zwischenstand, den nie jemand festgeschrieben hat (#131, Schritt 4). Er steht auf
+    /// 'ready' und wuerde ohne diese Regel ewig liegen bleiben - mitsamt der gelesenen Datei, die
+    /// der Finanzguru-Weg bis zum Festschreiben am Auftrag aufbewahrt.
+    /// </summary>
+    [Fact]
+    public async Task AnAbandonedStagedJobLosesItsRowsAndItsStoredFile()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var (userId, spaceId) = await SeedSpaceAsync(factory);
+        var jobId = await SeedJobAsync(factory, userId, spaceId, "ready", DaysAgo(RetentionDays + 1));
+        await SeedCandidateAsync(factory, jobId);
+        await SeedStoredPayloadAsync(factory, jobId);
+
+        var purged = await PurgeAsync(factory);
+
+        Assert.Equal(1, purged);
+        await factory.SeedAsync(async db =>
+        {
+            Assert.Equal(0, await CandidateCountAsync(db, jobId));
+            Assert.Equal(1, await JobCountAsync(db, jobId));
+            Assert.Null(await StoredPayloadAsync(db, jobId));
+            // Nicht mehr 'ready': ein Festschreiben haette nichts mehr zu schreiben.
+            Assert.Equal("cancelled", await StatusAsync(db, jobId));
+        });
+    }
+
+    [Fact]
+    public async Task AStagedJobYoungerThanTheWindowKeepsEverything()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var (userId, spaceId) = await SeedSpaceAsync(factory);
+        var jobId = await SeedJobAsync(factory, userId, spaceId, "ready", DaysAgo(RetentionDays - 1));
+        await SeedCandidateAsync(factory, jobId);
+        await SeedStoredPayloadAsync(factory, jobId);
+
+        var purged = await PurgeAsync(factory);
+
+        Assert.Equal(0, purged);
+        await factory.SeedAsync(async db =>
+        {
+            Assert.Equal(1, await CandidateCountAsync(db, jobId));
+            Assert.NotNull(await StoredPayloadAsync(db, jobId));
+            Assert.Equal("ready", await StatusAsync(db, jobId));
+        });
+    }
+
     [Fact]
     public async Task AnOldCompletedReceiptBatchHasItsSourceTextNulledButKeepsTheItemRow()
     {
@@ -154,6 +201,18 @@ public sealed class ImportStagingCleanupServiceTests
     private static Task<int> CandidateCountAsync(FullWorthDbContext db, Guid jobId) =>
         db.Database.SqlQuery<int>(
             $"""SELECT count(*)::int AS "Value" FROM "ImportCandidates" WHERE "ImportJobId" = {jobId}""").SingleAsync();
+
+    private static Task SeedStoredPayloadAsync(BackendWebApplicationFactory factory, Guid jobId) =>
+        factory.SeedAsync(db => db.Database.ExecuteSqlInterpolatedAsync(
+            $"""UPDATE "ImportJobs" SET "SourcePayloadEncrypted" = 'verschluesselt' WHERE "Id" = {jobId}"""));
+
+    private static async Task<string?> StoredPayloadAsync(FullWorthDbContext db, Guid jobId) =>
+        (await db.Database.SqlQuery<string?>(
+            $"""SELECT "SourcePayloadEncrypted" AS "Value" FROM "ImportJobs" WHERE "Id" = {jobId}""").ToListAsync()).Single();
+
+    private static Task<string> StatusAsync(FullWorthDbContext db, Guid jobId) =>
+        db.Database.SqlQuery<string>(
+            $"""SELECT "Status" AS "Value" FROM "ImportJobs" WHERE "Id" = {jobId}""").SingleAsync();
 
     private static Task<int> JobCountAsync(FullWorthDbContext db, Guid jobId) =>
         db.Database.SqlQuery<int>(
