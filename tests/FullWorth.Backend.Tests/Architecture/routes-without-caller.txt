@@ -9,6 +9,16 @@
 # hat inzwischen entweder eine Oberflaeche bekommen oder ist geloescht worden, weil sie eine zweite
 # Fassung von etwas war, das es schon gab. Eine neue Zeile hier ist ab jetzt immer eine Entscheidung.
 #
+# WICHTIG beim Loeschen einer Route: diese Ratsche sieht NUR das Frontend. Ob eine Route noch
+# gebraucht wird, entscheidet sie nicht allein - Tests koennen sie als Messfenster benutzen. Bei
+# /api/investments/net-worth-contribution ist genau das passiert: kein Aufrufer im Frontend, aber
+# fuenf Geldregel-Tests lasen den Depot-Beitrag darueber. Also vor dem Loeschen auch
+#
+#     grep -rn "api/die-route" tests/ --include=*.cs
+#
+# und, falls es Treffer gibt, zuerst entscheiden, was die Tests eigentlich pruefen. Meistens ist das
+# eine Rechnung und keine Adresse; dann fragen sie besser den Dienst direkt.
+#
 # Nicht jede Zeile ist ein Fehler. Manches ist absichtlich ohne Oberflaeche:
 #
 #   /api/bootstrap/*                bedient der Auth-Host (FullWorth.Web), nicht die Anwendung

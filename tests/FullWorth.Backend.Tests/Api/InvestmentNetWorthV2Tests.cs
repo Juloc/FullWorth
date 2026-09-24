@@ -2,9 +2,11 @@ using System.Net;
 using System.Text.Json;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Fx;
+using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FullWorth.Backend.Tests.Api;
 
@@ -57,16 +59,13 @@ VALUES
             await InsertDeposit(db, usdPortfolio, day, 100m, "USD", now.AddSeconds(1));
         });
 
-        using var request = UserRequest(HttpMethod.Get,
-            $"/api/investments/net-worth-contribution?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={day:yyyy-MM-dd}", owner);
-        using var response = await client.SendAsync(request);
+        var contribution = await ContributionAsync(factory, owner, day);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("EUR", document.RootElement.GetProperty("currency").GetString());
-        Assert.Equal("fullworth-space-base", document.RootElement.GetProperty("currencyMode").GetString());
-        Assert.Equal(100m, document.RootElement.GetProperty("total").GetDecimal());
-        Assert.False(document.RootElement.GetProperty("incomplete").GetBoolean());
+        // Die Waehrung IST die Basiswaehrung des Bereichs - fruehere Fassungen lieferten ein
+        // zusaetzliches "currencyMode"-Feld, das genau das noch einmal sagte.
+        Assert.Equal("EUR", contribution.BaseCurrency);
+        Assert.Equal(100m, contribution.Amount);
+        Assert.False(contribution.Incomplete);
     }
 
     [Fact]
@@ -103,14 +102,26 @@ VALUES ({portfolio},{FullWorthSpaceDefaults.LegacyId},{"GBP Depot"},{"GBP"},{tru
             await InsertDeposit(db, portfolio, day, 100m, "GBP", now);
         });
 
-        using var request = UserRequest(HttpMethod.Get,
-            $"/api/investments/net-worth-contribution?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={day:yyyy-MM-dd}", owner);
-        using var response = await client.SendAsync(request);
+        var contribution = await ContributionAsync(factory, owner, day);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.True(document.RootElement.GetProperty("incomplete").GetBoolean());
-        Assert.Equal(0m, document.RootElement.GetProperty("total").GetDecimal());
+        Assert.True(contribution.Incomplete);
+        Assert.Equal(0m, contribution.Amount);
+    }
+
+    /// <summary>
+    /// Der Beitrag der Depots, direkt aus <see cref="InvestmentNetWorthService"/>.
+    ///
+    /// Bis #177 ging das ueber <c>GET /api/investments/net-worth-contribution</c>. Die Route war das
+    /// Fenster dieser Tests und sonst nichts - im Frontend rief sie niemand, und in der Anwendung
+    /// liest den Dienst laengst jemand anderes (Vermoegensuebersicht, Schnappschuesse, Analytics).
+    /// Sie ist geloescht; die Rechnung, um die es hier geht, wird jetzt direkt gefragt.
+    /// </summary>
+    private static async Task<InvestmentNetWorthContribution> ContributionAsync(
+        BackendWebApplicationFactory factory, Guid owner, DateOnly asOf)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<InvestmentNetWorthService>();
+        return await service.CalculateAsync(FullWorthSpaceDefaults.LegacyId, owner, asOf, CancellationToken.None);
     }
 
     private static async Task InsertDeposit(
