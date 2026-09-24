@@ -191,10 +191,15 @@ public sealed class FrontendArchitectureGuardTests
     public void BootstrapLivesInApp_NotInFeatureOwners()
     {
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var shell = File.ReadAllText(Path.Combine(WwwRoot(), "app", "shell.js"));
         var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "accounts", "page.js"));
 
-        Assert.Contains("initResizableSidebar();", app);
-        Assert.Contains("syncResponsiveSidebar();", app);
+        // Die Seitenleiste gehoert seit #154 der geteilten Huelle, nicht mehr app.js allein: eine
+        // Razor-Seite laedt app.js nicht, und dort war der Einklapp-Knopf deshalb tot. Die Regel ist
+        // dieselbe geblieben - der Start gehoert der Huelle und keiner Seite -, nur umfasst "die
+        // Huelle" jetzt beide Dateien.
+        Assert.Contains("initResizableSidebar();", shell);
+        Assert.Contains("syncResponsiveSidebar();", shell);
         Assert.Contains("boot();", app);
 
         Assert.DoesNotContain("initResizableSidebar();", accounts);

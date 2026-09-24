@@ -23,6 +23,7 @@ import { state } from '../core/state.js';
 import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from '../components/privacy.js';
 import { installTopbarMetrics } from '../components/topbar-metrics.js';
 import { installNavigation } from '../core/navigation.js';
+import { emitAppEvent, onAppEvent } from '../core/event-bus.js';
 import { setPrimaryAction } from '../features/ux-kit.js';
 import { openGlobalSearch } from './global-search.js';
 import { initLock } from './lock.js';
@@ -190,6 +191,13 @@ export function createShell({
       const select = $('#theme');
       if (select) select.value = state.theme;
     });
+    // Der Einklapp-Knopf stand im Markup jeder Seite, verdrahtet wurde er aber nur in app.js -
+    // auf einer Razor-Seite war er da und tat nichts. Hier gilt er fuer beide.
+    $('#nav-collapse')?.addEventListener('click', toggleSidebar);
+    // "Layout zuruecksetzen" steht auf der Einstellungsseite, setzt aber die Moebel zurueck.
+    $('#layout-reset')?.addEventListener('click', resetLayout);
+    initResizableSidebar();
+    syncResponsiveSidebar();
     $('#privacy-toggle')?.addEventListener('click', () => togglePrivacy());
     $('#global-search')?.addEventListener('click', () => openGlobalSearch(ctx));
     $('#topbar-more')?.addEventListener('click', openTopbarMenu);
@@ -203,6 +211,141 @@ export function createShell({
     });
   }
 
+  // --- Seitenleiste: Einklappen, Breite, automatisches Einklappen --------------------------------
+  //
+  // Stand bis #154 in app.js, also nur in der alten Huelle. Auf einer Razor-Seite fehlte damit der
+  // Ziehgriff ganz, und der Einklapp-Knopf war da und tat nichts - er wurde nie verdrahtet. Hier
+  // gilt es fuer beide: die Huelle ruft dieselben Funktionen wie jede Seite.
+  //
+  // Das Aussehen selbst kommt weiterhin vor dem ersten Bild aus app/boot.js (Breite und der
+  // eingeklappte Zustand aus localStorage) - sonst waere der Wechsel ein Sprung.
+  function toggleSidebar(){
+    const collapsed=!root.classList.contains('nav-collapsed');
+    root.classList.toggle('nav-collapsed',collapsed);
+    localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');
+    if(collapsed)root.classList.remove('nav-auto-collapsed');
+    syncResponsiveSidebar();
+  }
+  function sidebarEffectivelyCollapsed(){return root.classList.contains('nav-collapsed')||root.classList.contains('nav-auto-collapsed')}
+  // Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
+  function syncNavToggle(){
+    const b=$('#nav-collapse');if(!b)return;
+    const manual=root.classList.contains('nav-collapsed');
+    const autoOnly=root.classList.contains('nav-auto-collapsed')&&!manual;
+    const collapsed=manual||autoOnly;
+    b.textContent=collapsed?'›':'‹';
+    b.disabled=autoOnly;
+    const label=autoOnly
+      ? (state.lang==='de'?'Navigation wegen Platz automatisch eingeklappt':'Navigation automatically collapsed for available space')
+      : get(collapsed?'nav.expand':'nav.collapse');
+    b.setAttribute('aria-label',label);b.title=label;
+  }
+  function syncResponsiveSidebar(){
+    const desktop=window.matchMedia('(min-width:768px)').matches;
+    const manual=root.classList.contains('nav-collapsed');
+    if(!desktop||manual){
+      const changed=root.classList.contains('nav-auto-collapsed');
+      root.classList.remove('nav-auto-collapsed');
+      syncNavToggle();
+      if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
+      return;
+    }
+    const desiredSidebar=Math.max(176,Number(localStorage.getItem(sidebarWidthKey()))||Number(localStorage.getItem('finance.sidebar.width'))||228);
+    const coachKey=`finance.coach.dockWidth.${layoutWidthMode()}`;
+    const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem(coachKey))||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
+    const minMain=window.innerWidth<1100?420:520;
+    const shouldCollapse=window.innerWidth-desiredSidebar-coach<minMain;
+    const changed=root.classList.contains('nav-auto-collapsed')!==shouldCollapse;
+    root.classList.toggle('nav-auto-collapsed',shouldCollapse);
+    syncNavToggle();
+    if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
+  }
+  onAppEvent('layout:sync-sidebar',syncResponsiveSidebar);
+
+  function layoutWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
+  function sidebarWidthKey(){return `finance.sidebar.width.${layoutWidthMode()}`}
+  function resetLayout(){
+    ['finance.sidebar.width','finance.sidebar.width.desktop','finance.sidebar.width.tablet','finance.coach.dockWidth','finance.coach.dockWidth.desktop','finance.coach.dockWidth.tablet'].forEach(key=>localStorage.removeItem(key));
+    localStorage.setItem('finance.navCollapsed','0');
+    root.classList.remove('nav-collapsed','nav-auto-collapsed');
+    document.documentElement.style.removeProperty('--sidebar-w');
+    document.documentElement.style.removeProperty('--coach-dock-w');
+    window.dispatchEvent(new CustomEvent('fullworth:layout-reset'));
+    window.dispatchEvent(new Event('resize'));
+    syncResponsiveSidebar();
+    ctx.toast(state.lang==='de'?'Layout zurückgesetzt':'Layout reset');
+  }
+
+  function initResizableSidebar(){
+    const sidebar=$('.sidebar');
+    if(!sidebar)return;
+    const minWidth=176;
+    const defaults={desktop:228,tablet:196};
+    const desktopMode=()=>window.matchMedia('(min-width:768px)').matches;
+    const key=()=>sidebarWidthKey();
+    const defaultWidth=()=>defaults[layoutWidthMode()];
+    const savedWidth=()=>{
+      const scoped=Number(localStorage.getItem(key()));
+      if(scoped>0)return scoped;
+      const legacy=Number(localStorage.getItem('finance.sidebar.width'));
+      return legacy>0?legacy:defaultWidth();
+    };
+    const maxWidth=()=>{
+      const coach=document.body.classList.contains('coach-dock-open')?$('#coach-dock')?.getBoundingClientRect().width||0:0;
+      const minMain=window.innerWidth<1100?280:420;
+      return Math.max(minWidth,Math.min(360,window.innerWidth-coach-minMain));
+    };
+    const apply=value=>{
+      if(!desktopMode())return;
+      const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||savedWidth())));
+      document.documentElement.style.setProperty('--sidebar-w',`${width}px`);
+      handle.setAttribute('aria-valuemax',String(maxWidth()));
+      handle.setAttribute('aria-valuenow',String(width));
+      window.dispatchEvent(new CustomEvent('fullworth:sidebar-resize',{detail:{width}}));
+      syncResponsiveSidebar();
+      return width;
+    };
+    const save=width=>{if(width)localStorage.setItem(key(),String(width))};
+    const handle=document.createElement('div');
+    handle.className='sidebar-resizer';
+    handle.setAttribute('role','separator');
+    handle.setAttribute('aria-orientation','vertical');
+    handle.setAttribute('aria-label','Navigation width');
+    handle.setAttribute('aria-valuemin',String(minWidth));
+    handle.tabIndex=0;
+    sidebar.appendChild(handle);
+    apply(savedWidth());
+
+    let pointerId=null;
+    handle.addEventListener('pointerdown',event=>{
+      if(!desktopMode()||sidebarEffectivelyCollapsed())return;
+      pointerId=event.pointerId;handle.setPointerCapture(pointerId);
+      handle.classList.add('is-dragging');document.body.classList.add('sidebar-resizing');event.preventDefault();
+    });
+    handle.addEventListener('pointermove',event=>{if(pointerId===event.pointerId)apply(event.clientX)});
+    const finish=event=>{
+      if(pointerId===null||event.pointerId!==pointerId)return;
+      pointerId=null;handle.classList.remove('is-dragging');document.body.classList.remove('sidebar-resizing');
+      save(apply(sidebar.getBoundingClientRect().width));
+    };
+    handle.addEventListener('pointerup',finish);
+    handle.addEventListener('pointercancel',finish);
+    handle.addEventListener('dblclick',()=>save(apply(defaultWidth())));
+    handle.addEventListener('keydown',event=>{
+      if(!desktopMode()||sidebarEffectivelyCollapsed()||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();
+      const current=sidebar.getBoundingClientRect().width;
+      const step=event.shiftKey?40:10;
+      const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?step:-step);
+      save(apply(next));
+    });
+    window.addEventListener('resize',()=>{if(!desktopMode()){syncResponsiveSidebar();return}apply(savedWidth());syncResponsiveSidebar()});
+    window.addEventListener('fullworth:coach-resize',syncResponsiveSidebar);
+    window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
+    onAppEvent('layout:clamp-sidebar',()=>apply(savedWidth()));
+  }
+
+
   // Die Auswahl fuer Farbschema und Sprache steht auf der Einstellungsseite, also gehoert ihr auch
   // das Umschalten - dafuer braucht sie applyTheme. Frueher stand beides in app.js, weil dort das
   // Markup lag; seit #154 liegt es bei der Seite, und app.js griff ins Leere.
@@ -214,6 +357,10 @@ export function createShell({
     renderUserBlock,
     applyTheme,
     renderPageHeader,
+    syncResponsiveSidebar,
+    syncNavToggle,
+    resetLayout,
+    initResizableSidebar,
     syncPrivacyToggle,
     syncThemeToggle,
     openMoreSheet,

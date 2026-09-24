@@ -124,7 +124,9 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
 
         // "Layout zuruecksetzen" steht auf der Einstellungsseite - die Huelle liest ihn nur.
         Assert.Contains("id=\"layout-reset\"", WebSources.Page("Settings"));
-        Assert.Contains("finance.sidebar.width.", app);
+        // Der pro Breite getrennte Schluessel steht seit #154 in app/shell.js: Coach und
+        // Seitenleiste teilen sich den Platz, und beide muessen dieselbe Zahl lesen.
+        Assert.Contains("finance.sidebar.width.", await GetAsync("/app/shell.js"));
         Assert.Contains("fullworth:view-change", app);
         // "Budget oeffnen" fuehrt auf eine andere Seite. Solange beide dasselbe Dokument waren,
         // ging das als Ereignis nach dem Wechsel; seit #154 ist der Wechsel eine echte Navigation

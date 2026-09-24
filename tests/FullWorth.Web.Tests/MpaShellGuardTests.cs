@@ -43,6 +43,33 @@ public sealed class MpaShellGuardTests
                 $"Die Unterseite {page.View} hängt an {page.Parent}, das es in der Navigation nicht gibt.");
     }
 
+    /// <summary>
+    /// Die Möbel der Seitenleiste werden von der GETEILTEN Hülle verdrahtet, nicht von app.js.
+    ///
+    /// Der Einklapp-Knopf steht im Markup jeder Seite, verdrahtet wurde er aber nur in app.js — und
+    /// das lädt eine Razor-Seite nicht. Über vier Commits hinweg war er auf zwanzig Seiten da und tat
+    /// nichts, und der Ziehgriff für die Breite fehlte dort ganz. Im Quelltext sah alles richtig aus:
+    /// das Markup stimmte, die Funktion existierte, nur lief sie nie.
+    ///
+    /// Deshalb prüft dieser Test nicht das Markup, sondern wer bindet. Alles, was auf jeder Seite
+    /// steht, gehört in app/shell.js — sonst gilt es nur dort, wo zufällig noch app.js läuft.
+    /// </summary>
+    [Fact]
+    public void The_sidebar_furniture_is_wired_by_the_shared_shell()
+    {
+        var shell = Read("wwwroot", "app", "shell.js");
+        var app = Read("wwwroot", "app.js");
+
+        foreach (var wiring in new[] { "'#nav-collapse'", "'#layout-reset'", "initResizableSidebar()" })
+            Assert.True(shell.Contains(wiring, StringComparison.Ordinal),
+                $"app/shell.js verdrahtet {wiring} nicht - dann gilt es nur in der alten Hülle.");
+
+        foreach (var wiring in new[] { "'#nav-collapse'", "'#layout-reset'" })
+            Assert.False(app.Contains($"$({wiring})", StringComparison.Ordinal),
+                $"app.js verdrahtet {wiring} selbst. Auf einer Razor-Seite läuft app.js nicht, also "
+                + "wäre die Schaltfläche dort tot - genau der Fehler, den dieser Test festhält.");
+    }
+
     [Fact]
     public void The_layout_links_no_page_specific_asset()
     {

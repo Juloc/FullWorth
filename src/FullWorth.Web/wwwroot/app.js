@@ -116,7 +116,6 @@ function bind(){
   }));
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true,path:location.pathname}));
-  $('#nav-collapse').addEventListener('click',toggleSidebar);
   // preventDefault, weil ein Sprung auch ein echter Link sein darf: mit Strg oder Mittelklick
   // öffnet er einen neuen Tab, beim normalen Klick bleibt die Anwendung stehen und wechselt.
   $$('[data-view-jump]').forEach(b=>b.addEventListener('click',event=>{
@@ -124,137 +123,15 @@ function bind(){
     event.preventDefault();showView(b.dataset.viewJump);
   }));
   bindDashboard(ctx);
-  $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
 }
 const syncPrivacyToggle=()=>shell.syncPrivacyToggle();
+// Die Seitenleiste - Einklappen, Breite, automatisches Einklappen bei wenig Platz - steht seit #154
+// in app/shell.js und gilt damit auf JEDER Seite. Vorher stand sie hier, und eine Razor-Seite hatte
+// weder den Ziehgriff noch einen funktionierenden Einklapp-Knopf: er war da und tat nichts.
+const syncNavToggle=()=>shell.syncNavToggle();
 
-function toggleSidebar(){
-  const collapsed=!root.classList.contains('nav-collapsed');
-  root.classList.toggle('nav-collapsed',collapsed);
-  localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');
-  if(collapsed)root.classList.remove('nav-auto-collapsed');
-  syncResponsiveSidebar();
-}
-function sidebarEffectivelyCollapsed(){return root.classList.contains('nav-collapsed')||root.classList.contains('nav-auto-collapsed')}
-// Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
-function syncNavToggle(){
-  const b=$('#nav-collapse');if(!b)return;
-  const manual=root.classList.contains('nav-collapsed');
-  const autoOnly=root.classList.contains('nav-auto-collapsed')&&!manual;
-  const collapsed=manual||autoOnly;
-  b.textContent=collapsed?'›':'‹';
-  b.disabled=autoOnly;
-  const label=autoOnly
-    ? (state.lang==='de'?'Navigation wegen Platz automatisch eingeklappt':'Navigation automatically collapsed for available space')
-    : get(collapsed?'nav.expand':'nav.collapse');
-  b.setAttribute('aria-label',label);b.title=label;
-}
-function syncResponsiveSidebar(){
-  const desktop=window.matchMedia('(min-width:768px)').matches;
-  const manual=root.classList.contains('nav-collapsed');
-  if(!desktop||manual){
-    const changed=root.classList.contains('nav-auto-collapsed');
-    root.classList.remove('nav-auto-collapsed');
-    syncNavToggle();
-    if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
-    return;
-  }
-  const desiredSidebar=Math.max(176,Number(localStorage.getItem(sidebarWidthKey()))||Number(localStorage.getItem('finance.sidebar.width'))||228);
-  const coachKey=`finance.coach.dockWidth.${layoutWidthMode()}`;
-  const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem(coachKey))||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
-  const minMain=window.innerWidth<1100?420:520;
-  const shouldCollapse=window.innerWidth-desiredSidebar-coach<minMain;
-  const changed=root.classList.contains('nav-auto-collapsed')!==shouldCollapse;
-  root.classList.toggle('nav-auto-collapsed',shouldCollapse);
-  syncNavToggle();
-  if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
-}
-onAppEvent('layout:sync-sidebar',syncResponsiveSidebar);
-
-function layoutWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
-function sidebarWidthKey(){return `finance.sidebar.width.${layoutWidthMode()}`}
-function resetLayout(){
-  ['finance.sidebar.width','finance.sidebar.width.desktop','finance.sidebar.width.tablet','finance.coach.dockWidth','finance.coach.dockWidth.desktop','finance.coach.dockWidth.tablet'].forEach(key=>localStorage.removeItem(key));
-  localStorage.setItem('finance.navCollapsed','0');
-  root.classList.remove('nav-collapsed','nav-auto-collapsed');
-  document.documentElement.style.removeProperty('--sidebar-w');
-  document.documentElement.style.removeProperty('--coach-dock-w');
-  window.dispatchEvent(new CustomEvent('fullworth:layout-reset'));
-  window.dispatchEvent(new Event('resize'));
-  syncResponsiveSidebar();
-  toast(state.lang==='de'?'Layout zurückgesetzt':'Layout reset');
-}
-
-function initResizableSidebar(){
-  const sidebar=$('.sidebar');
-  if(!sidebar)return;
-  const minWidth=176;
-  const defaults={desktop:228,tablet:196};
-  const desktopMode=()=>window.matchMedia('(min-width:768px)').matches;
-  const key=()=>sidebarWidthKey();
-  const defaultWidth=()=>defaults[layoutWidthMode()];
-  const savedWidth=()=>{
-    const scoped=Number(localStorage.getItem(key()));
-    if(scoped>0)return scoped;
-    const legacy=Number(localStorage.getItem('finance.sidebar.width'));
-    return legacy>0?legacy:defaultWidth();
-  };
-  const maxWidth=()=>{
-    const coach=document.body.classList.contains('coach-dock-open')?$('#coach-dock')?.getBoundingClientRect().width||0:0;
-    const minMain=window.innerWidth<1100?280:420;
-    return Math.max(minWidth,Math.min(360,window.innerWidth-coach-minMain));
-  };
-  const apply=value=>{
-    if(!desktopMode())return;
-    const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||savedWidth())));
-    document.documentElement.style.setProperty('--sidebar-w',`${width}px`);
-    handle.setAttribute('aria-valuemax',String(maxWidth()));
-    handle.setAttribute('aria-valuenow',String(width));
-    window.dispatchEvent(new CustomEvent('fullworth:sidebar-resize',{detail:{width}}));
-    syncResponsiveSidebar();
-    return width;
-  };
-  const save=width=>{if(width)localStorage.setItem(key(),String(width))};
-  const handle=document.createElement('div');
-  handle.className='sidebar-resizer';
-  handle.setAttribute('role','separator');
-  handle.setAttribute('aria-orientation','vertical');
-  handle.setAttribute('aria-label','Navigation width');
-  handle.setAttribute('aria-valuemin',String(minWidth));
-  handle.tabIndex=0;
-  sidebar.appendChild(handle);
-  apply(savedWidth());
-
-  let pointerId=null;
-  handle.addEventListener('pointerdown',event=>{
-    if(!desktopMode()||sidebarEffectivelyCollapsed())return;
-    pointerId=event.pointerId;handle.setPointerCapture(pointerId);
-    handle.classList.add('is-dragging');document.body.classList.add('sidebar-resizing');event.preventDefault();
-  });
-  handle.addEventListener('pointermove',event=>{if(pointerId===event.pointerId)apply(event.clientX)});
-  const finish=event=>{
-    if(pointerId===null||event.pointerId!==pointerId)return;
-    pointerId=null;handle.classList.remove('is-dragging');document.body.classList.remove('sidebar-resizing');
-    save(apply(sidebar.getBoundingClientRect().width));
-  };
-  handle.addEventListener('pointerup',finish);
-  handle.addEventListener('pointercancel',finish);
-  handle.addEventListener('dblclick',()=>save(apply(defaultWidth())));
-  handle.addEventListener('keydown',event=>{
-    if(!desktopMode()||sidebarEffectivelyCollapsed()||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
-    event.preventDefault();
-    const current=sidebar.getBoundingClientRect().width;
-    const step=event.shiftKey?40:10;
-    const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?step:-step);
-    save(apply(next));
-  });
-  window.addEventListener('resize',()=>{if(!desktopMode()){syncResponsiveSidebar();return}apply(savedWidth());syncResponsiveSidebar()});
-  window.addEventListener('fullworth:coach-resize',syncResponsiveSidebar);
-  window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
-  onAppEvent('layout:clamp-sidebar',()=>apply(savedWidth()));
-}
 async function showView(view,opts={}){
   // Die Seite gehoert nicht mehr hierher - hin fuehrt die Adresse, nicht ein Ansichtswechsel.
   if(MIGRATED.has(view)){
@@ -327,6 +204,4 @@ const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard());
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
-initResizableSidebar();
-syncResponsiveSidebar();
 boot();
