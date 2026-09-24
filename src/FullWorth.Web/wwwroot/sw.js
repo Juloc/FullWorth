@@ -187,6 +187,7 @@ const APP_SHELL = [
   '/pages/settings/intelligence/cloud.js',
   '/pages/settings/intelligence/brand-packs.js',
   '/pages/settings/intelligence/jobs.js',
+  '/pages/settings/intelligence/digests.js',
   '/pages/settings/import/page.js',
   '/pages/settings/import/page.css',
   '/pages/settings/import/broker-pdf/page.js',

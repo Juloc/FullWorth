@@ -110,7 +110,6 @@ GET              /api/assets/{assetId:guid}/valuations/
 GET              /api/assets/{assetId:guid}/vehicle/
 GET              /api/assets/{id:guid}
 GET              /api/audit
-GET              /api/bank-capabilities
 GET              /api/bank-connections/
 GET              /api/bank-connections/{id:guid}
 GET              /api/bank-connections/{id:guid}/raw-responses
@@ -201,7 +200,6 @@ GET              /api/intelligence/benchmarks/savings
 GET              /api/intelligence/brand-assets/{contentSha256}
 GET              /api/intelligence/brand-catalog
 GET              /api/intelligence/digests/
-GET              /api/intelligence/digests/{id:guid}
 GET              /api/intelligence/prices/purchase-items/{purchaseItemId:guid}
 GET              /api/investment-import/history
 GET              /api/investment-import/jobs/{jobId:guid}

@@ -940,6 +940,27 @@
     ],
     // Der Cloud-Abschnitt derselben Seite. 'disabled' plus requiresSetupDecision:false ist der Fall,
     // den ein Selbst-Hoster ohne Cloud sieht - die Seite muss ihn zeigen koennen, ohne zu draengen.
+    // Die Zusammenfassungen der geplanten Laeufe (#177). Zwei Zeitraeume, damit beide Etiketten
+    // (Woche/Monat) auf dem Schirm stehen - und einer davon mit Kosten, denn genau die sind der
+    // Grund, warum diese Seite sie zeigt.
+    'intelligence/digests': [
+      { id: 'dg1', fullWorthSpaceId: SPACE, periodType: 'monthly', periodKey: '2026-09',
+        periodStart: '2026-09-01T00:00:00Z', periodEnd: '2026-10-01T00:00:00Z',
+        createdAt: '2026-09-01T02:00:00Z', updatedAt: '2026-09-23T02:00:00Z',
+        summary: { period: 'monthly', periodKey: '2026-09',
+          suggestions: { created: 12, pending: 1, accepted: 9, rejected: 2, byType: { 'merchant-category': 12 } },
+          learning: { feedbackEvents: 9, cloudEligible: 7 },
+          ai: { runs: 24, succeeded: 23, failed: 1, estimatedOrActualCostEur: 3.48, inputItems: 480, outputItems: 96 },
+          unresolved: { purchaseItems: 3, receipts: 1 } } },
+      { id: 'dg2', fullWorthSpaceId: SPACE, periodType: 'weekly', periodKey: '2026-09-21',
+        periodStart: '2026-09-21T00:00:00Z', periodEnd: '2026-09-28T00:00:00Z',
+        createdAt: '2026-09-21T02:00:00Z', updatedAt: '2026-09-21T02:00:00Z',
+        summary: { period: 'weekly', periodKey: '2026-09-21',
+          suggestions: { created: 0, pending: 0, accepted: 0, rejected: 0, byType: {} },
+          learning: { feedbackEvents: 0, cloudEligible: 0 },
+          ai: { runs: 0, succeeded: 0, failed: 0, estimatedOrActualCostEur: 0, inputItems: 0, outputItems: 0 },
+          unresolved: { purchaseItems: 0, receipts: 0 } } }
+    ],
     'intelligence/admin/cloud': {
       mode: 'disabled', requiresSetupDecision: false, setupDecisionAt: '2026-08-02T10:00:00Z',
       cloudEndpoint: 'https://cloud.fullworth.de', currentPolicyVersion: '1', entitlementStatus: null,

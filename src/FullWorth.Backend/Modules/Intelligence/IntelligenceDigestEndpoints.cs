@@ -24,20 +24,10 @@ public static class IntelligenceDigestEndpoints
             return Results.Ok(rows.Select(ToView));
         });
 
-        group.MapGet("/{id:guid}", async (
-            Guid id,
-            CurrentUserContext currentUser,
-            SpaceAccess space,
-            IntelligenceDigestStore store,
-            CancellationToken ct) =>
-        {
-            // Erst laden, dann pruefen: welchen Space die Zusammenfassung betrifft, steht in ihr.
-            var row = await store.FindAsync(id, ct);
-            if (row is null) return Results.NotFound();
-            return await space.IsMemberAsync(currentUser.RequireUserId(), row.FullWorthSpaceId, ct)
-                ? Results.Ok(ToView(row))
-                : Results.NotFound();
-        });
+        // Hier stand bis #177 ein zweiter Leser fuer EINE Zusammenfassung. Er hatte keinen Aufrufer,
+        // und er haette auch keinen bekommen koennen, ohne etwas Neues zu koennen: die Liste liefert
+        // je Eintrag denselben ToView(), samt vollstaendigem summary. Ein Detailabruf haette dieselbe
+        // Antwort ein zweites Mal geholt.
 
         return app;
     }

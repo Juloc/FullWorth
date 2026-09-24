@@ -20,6 +20,15 @@
 #   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
 #                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
 #                       Zuordnung ab.
+#   Zusammenfassungen   Die geplanten Laeufe schreiben seit Monaten je Woche und je Monat eine
+#                       Zusammenfassung - mit den AI-Kosten darin -, und niemand konnte sie sehen.
+#                       Der Detailabruf daneben ist geloescht: er lieferte dieselbe Ansicht wie die
+#                       Liste.
+#   Bank-Faehigkeiten   Geloescht. In BankValidationRecords hat nie etwas geschrieben; der Handler
+#                       antwortete deshalb immer aus einer fest eingebauten Liste "geplanter"
+#                       Institute, und die ist inzwischen falsch (ING laeuft ueber FinTS). Eine
+#                       Oberflaeche haette keine Luecke gefuellt, sondern eine Unwahrheit gezeigt.
+#
 #   Immer so            "Kuenftig alle von REWE so kategorisieren" war gebaut und unerreichbar - und
 #                       nur dieser Weg meldet die bestaetigte Haendler-zu-Kategorie-Zuordnung an die
 #                       Cloud weiter. Eine dritte Massenaenderung fuer Buchungen lag daneben, konnte
@@ -65,10 +74,7 @@
 #
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #
-GET /api/bank-capabilities
 GET /api/intelligence/brand-assets/{contentSha256}
-GET /api/intelligence/digests/
-GET /api/intelligence/digests/{id:guid}
 GET /api/investments/net-worth-contribution
 GET /api/merchants/resolve
 GET /api/product-learning/category-suggestions

@@ -18,6 +18,6 @@ public sealed class IntelligenceDigestStore(IntelligenceDbContext db)
             .Take(Math.Clamp(limit, 1, MaxLimit))
             .ToListAsync(ct);
 
-    public Task<IntelligenceDigest?> FindAsync(Guid id, CancellationToken ct) =>
-        db.IntelligenceDigests.AsNoTracking().SingleOrDefaultAsync(digest => digest.Id == id, ct);
+    // FindAsync stand hier bis #177 und bediente den Detailabruf einer einzelnen
+    // Zusammenfassung. Die Route ist weg - sie lieferte dieselbe Ansicht wie die Liste.
 }

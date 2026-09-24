@@ -7,6 +7,7 @@ import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 import './cloud.js';
 import './brand-packs.js';
 import './jobs.js';
+import { renderIntelligenceDigests } from './digests.js';
 const $ = id => document.getElementById(id);
 
 let overview = null;
@@ -462,4 +463,8 @@ $('refresh-suggestions').addEventListener('click', refreshSuggestions);
 // Bei jedem Besuch neu laden. Als eigenes Dokument gab es keinen zweiten Besuch.
 export function renderIntelligence() {
   reload();
+  // Die Zusammenfassungen haengen an keinem der fuenf Aufrufe von reload() und duerfen sie auch
+  // nicht aufhalten: sie sind ein Rueckblick, kein Zustand. Ein eigener Abruf, und ein Fehler darin
+  // laesst den Rest der Seite in Ruhe.
+  renderIntelligenceDigests().catch(console.error);
 }

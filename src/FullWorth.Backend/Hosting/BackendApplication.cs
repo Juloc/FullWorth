@@ -443,7 +443,6 @@ public static class BackendApplication
         builder.Services.AddScoped<TaxYearReviewService>();
         builder.Services.AddScoped<TaxExportService>();
         builder.Services.AddScoped<TaxAnalysisCoordinator>();
-        builder.Services.AddScoped<BankCapabilityStore>();
         builder.Services.AddHostedService<TaxAutomaticAnalysisWorker>();
         builder.Services.AddHostedService<NetWorthSnapshotWorker>();
         builder.Services.AddHostedService<FullWorth.Backend.Modules.Notifications.ContractDueNotificationWorker>();
@@ -635,8 +634,7 @@ public static class BackendApplication
         endpoints.MapXlsxExportEndpoints();
         endpoints.MapCsvZipExportEndpoints();
         endpoints.MapAccountAppearanceEndpoints();
-        endpoints.MapAccountExperienceEndpoints()
-            .MapBankCapabilityEndpoints();
+        endpoints.MapAccountExperienceEndpoints();
         endpoints.MapAccessEndpoints();
     }
 
