@@ -13,7 +13,8 @@ function init(){
   if(!tabs||!toast)return;
 
 
-  tabs.insertAdjacentHTML('beforeend','<button data-extended-tab="optimizer" type="button">Optimierer</button><button data-extended-tab="payslips" type="button">Lohnabrechnungen</button>');
+  // Die beiden Reiter stehen im Markup der Seite - nichts wird hier mehr in eine bereits
+  // gezeichnete Leiste geschoben.
   toast.insertAdjacentHTML('beforebegin',optimizerMarkup()+payslipMarkup());
 
   $$('[data-extended-tab]').forEach(button=>button.addEventListener('click',()=>openExtendedTab(button.dataset.extendedTab)));

@@ -130,7 +130,27 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         // einmal). Das zu beseitigen hiesse, für all das im Skelett schon Platz zu reservieren, ohne zu
         // wissen, wie viel echte Daten am Ende brauchen - eine echte Weiterentwicklung, kein Bugfix mehr.
         ("/tax",             0.395,   0.385),
-        ("/networth",        0.0,    0.0)
+        ("/networth",        0.0,    0.0),
+        // Ab hier: die in #154 Phase C umgezogenen Seiten. Sie standen vorher nicht hier, weil es sie
+        // als eigene Adresse nicht gab - in der alten Hülle war jede von ihnen nur eine Ansicht, die
+        // beim Umschalten sichtbar wurde, und was dabei sprang, sah der Benutzer nie beim Laden.
+        ("/notifications",   0.0,    0.0),
+        ("/categories",      0.0,    0.0),
+        ("/collections",     0.0,    0.0),
+        ("/analytics",       0.0,    0.0),
+        ("/pension",         0.0,    0.0),
+        // compensation: kam mit 0,230 / 0,042 herein, jetzt 0,062 / 0,015 - über je drei Läufen auf
+        // die dritte Stelle konstant, nicht bimodal wie /admin und /tax. Zwei echte Fehler steckten
+        // darin und sind behoben (siehe Compensation/Index.cshtml): vier Module hängten ihren Reiter
+        // per insertAdjacentHTML in eine schon gezeichnete Leiste, und die Plakette im Kopf bekam das
+        // Steuerjahr nachträglich angehängt, wurde dadurch breiter und drückte den Absatz daneben in
+        // eine zusätzliche Zeile.
+        //
+        // Was bleibt, ist das Ergebnis der Berechnung selbst: die Kennzahlen rechts stehen anfangs
+        // leer und bekommen Zahlen, deren Breite niemand vorher kennt (313x323 -> 350x307). Dafür
+        // Platz zu reservieren hiesse, eine Breite zu raten - das wäre kein Bugfix mehr, sondern
+        // eine Festlegung darüber, wie breit ein Gehalt aussehen darf.
+        ("/compensation",    0.065,  0.020)
     ];
 
     public static TheoryData<string, bool> Pages()
@@ -163,9 +183,12 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         //
         // Versucht und wieder entfernt: die Sprachdatei in app/boot.js vorladen und das 'no-store'
         // beim Abruf fallenlassen. Beides ändert nichts, weil nicht der Abruf zu spät ist, sondern
-        // der erste Anstrich vor dem aufgeschobenen Modul liegt. Das wirklich zu beseitigen hieße,
-        // das Dokument je Sprache auszuliefern - ein Schritt zur Laufzeit, den dieses Frontend nicht
-        // hat, für 1,4e-5.
+        // der erste Anstrich vor dem aufgeschobenen Modul liegt.
+        //
+        // Für die Razor-Seiten aus #154 ist genau das inzwischen gelöst: sie holen ihren Text
+        // serverseitig (LocaleText), und die Sprache steht vor dem ersten Anstrich fest. Was hier
+        // bleibt, ist die untere Leiste der alten Hülle - und die verschwindet mit ihr. Für 1,4e-5
+        // lohnt es nicht, sie vorher noch einmal anzufassen.
         //
         // Der kleinste echte Sprung, der in diesem Umbau gemessen wurde, war 0,001. Der fällt durch.
         Assert.True(

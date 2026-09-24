@@ -18,18 +18,25 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void PensionAreaIsWiredIntoTheShellAndThePwaCache()
     {
-        var html = ReadAsset("index.html");
-        var app = ReadAsset("app.js");
+        // Seit #154 ist der Bereich eine eigene Razor-Seite statt einer Ansicht in der einen Hülle.
+        // Die Zusicherung ist dieselbe geblieben - er ist vollständig verdrahtet - nur die Orte haben
+        // gewechselt: das Markup liegt bei der Seite, der Einstieg in entry.js, und app/routes.js muss
+        // ihn führen, sonst fängt die alte Hülle seine Links weiter ab.
+        var page = WebSources.Page("Pension");
+        var entry = ReadAsset("pages", "pension", "entry.js");
+        var routes = ReadAsset("app", "routes.js");
         var sw = ReadAsset("sw.js");
 
-        Assert.Contains("id=\"view-pension\"", html);
-        Assert.Contains("data-view=\"pension\"", html);
-        Assert.Contains("/pages/pension/page.css", html);
+        Assert.Contains("@page \"/pension\"", page);
+        Assert.Contains("id=\"view-pension\"", page);
+        Assert.Contains("/pages/pension/page.css", page);
+        Assert.Contains("/pages/pension/entry.js", page);
 
-        Assert.Contains("from './pages/pension/page.js'", app);
-        Assert.Contains("register('pension'", app);
-        Assert.Contains("'pension'", app);
-        Assert.Contains("bindPension(ctx)", app);
+        Assert.Contains("./page.js", entry);
+        Assert.Contains("bindPension(context)", entry);
+        Assert.Contains("renderPension(context)", entry);
+
+        Assert.Contains("'pension'", routes);
 
         Assert.Contains("/pages/pension/page.js", sw);
         Assert.Contains("/pages/pension/page.css", sw);

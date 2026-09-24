@@ -7,10 +7,7 @@ import { renderCoach, bindCoach } from './pages/coach/page.js';
 import { renderContracts, bindContracts, newContract } from './pages/contracts/page.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './pages/networth/page.js';
 import { renderLoans, bindLoans } from './pages/networth/loans.js';
-import { renderAnalytics, bindAnalytics } from './pages/analytics/page.js';
 import { renderPurchases, bindPurchases } from './pages/purchases/page.js';
-import { renderTax, bindTax } from './pages/tax/page.js';
-import { renderPension, bindPension } from './pages/pension/page.js';
 import { renderDashboardInsights, mountInsights } from './pages/insights/page.js';
 
 import { createAccessSetup } from './pages/settings/access-setup.js';
@@ -31,9 +28,7 @@ import { createShell } from './app/shell.js';
 import { loadSpaces as loadSpacesInto } from './app/page-context.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { SUBPAGES, MIGRATED, pathForView as canonicalPath } from './app/routes.js';
-import { renderAdmin } from './pages/admin/page.js';
 import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
-import { renderCompensation } from './pages/compensation/page.js';
 import { renderImportCenter } from './pages/settings/import/page.js';
 import { renderIntelligence } from './pages/settings/intelligence/page.js';
 import { renderBrokerPdfImport } from './pages/settings/import/broker-pdf/page.js';
@@ -146,10 +141,7 @@ function bind(){
   bindContracts(ctx);
   bindNetWorth(ctx);
   bindLoans(ctx);
-  bindAnalytics(ctx);
   bindPurchases(ctx);
-  bindTax(ctx);
-  bindPension(ctx);
   bindDashboard(ctx);
   bindCoach();
   $('#layout-reset')?.addEventListener('click',resetLayout);
@@ -363,18 +355,13 @@ const featureRegistry=createFeatureRegistry()
   .register('budgets',()=>renderBudgets(ctx))
   .register('contracts',()=>renderContracts(ctx))
   .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
-  .register('analytics',()=>renderAnalytics(ctx))
   .register('purchases',()=>renderPurchases(ctx))
-  .register('tax',()=>renderTax(ctx))
-  .register('pension',()=>renderPension(ctx))
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
-  .register('admin',()=>renderAdmin())
   .register('passkeys',()=>renderPasskeys(ctx))
   .register('import',()=>renderImportCenter())
   .register('intelligence',()=>renderIntelligence())
   .register('import-broker-pdf',()=>renderBrokerPdfImport())
-  .register('import-finanzguru-xlsx',()=>{})
-  .register('compensation',()=>renderCompensation());
+  .register('import-finanzguru-xlsx',()=>{});
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 initResizableSidebar();

@@ -1,0 +1,23 @@
+@page "/tax"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Steuern · FullWorth";
+    ViewData["ActiveView"] = "tax";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/tax/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-tax" class="tax-view"></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/tax/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/tax/entry.js"></script>
+}

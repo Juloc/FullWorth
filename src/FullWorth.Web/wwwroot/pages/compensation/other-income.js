@@ -25,9 +25,8 @@ function init() {
   const toast = $('#comp-error');
   if (!tabs || !toast) return;
 
-  // Right after Benefits: the income tracks stay next to each other instead of at the far end of the bar.
-  const anchor = tabs.querySelector('[data-tab="benefits"]') || tabs.lastElementChild;
-  anchor.insertAdjacentHTML('afterend', '<button data-income-tab="other-income" type="button">Weitere Einkünfte</button>');
+  // Der Reiter steht im Markup der Seite, direkt hinter "Benefits" - die Einkunftsarten bleiben
+  // nebeneinander, ohne dass er sich nach dem ersten Bild dorthin schiebt.
   toast.insertAdjacentHTML('beforebegin', markup());
 
   $$('[data-income-tab]').forEach(button => button.addEventListener('click', () => openTab()));

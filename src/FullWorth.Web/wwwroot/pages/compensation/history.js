@@ -43,7 +43,7 @@ initHistory();
 function initHistory(){
   const tabs=H$('.comp-tabs'),toast=H$('#comp-error');
   if(!tabs||!toast)return;
-  tabs.insertAdjacentHTML('beforeend','<button data-history-tab="history" type="button">Verlauf</button>');
+  // Der Reiter steht im Markup der Seite, siehe Compensation/Index.cshtml.
   toast.insertAdjacentHTML('beforebegin',historyMarkup());
   const stack=H$('#tab-calculator .comp-form-stack');
   if(stack)stack.insertAdjacentHTML('afterbegin',historyEditMarkup());

@@ -28,9 +28,15 @@ export function localise(markup) {
     .replace(/(data-i18n="([\w.]+)"[^>]*>)([^<]*)(<)/g,
       (all, open, key, text, close) => text.trim() === '' ? all : `${open}@Text.Get("${key}", language)${close}`)
     // placeholder und title stehen als eigene Attribute daneben.
-    .replace(/(data-i18n-placeholder="([\w.]+)"[^>]*?)placeholder="[^"]*"/g,
+    //
+    // Das (?!@Text\.Get) ist kein Schmuck: ohne es frisst der zweite Lauf den ersten. Der
+    // eingesetzte Aufruf trägt selbst Anführungszeichen, also endet [^"]*" mitten darin, und
+    // zurück bleibt ein halber Aufruf als sichtbarer Text im Markup. Das Skript läuft über ALLE
+    // Seiten, sobald irgendwo eine neue dazukommt — es muss sich also beliebig oft wiederholen
+    // lassen, ohne etwas anzurichten.
+    .replace(/(data-i18n-placeholder="([\w.]+)"[^>]*?)placeholder="(?!@Text\.Get)[^"]*"/g,
       (_, before, key) => `${before}placeholder="@Text.Get("${key}", language)"`)
-    .replace(/(data-i18n-title="([\w.]+)"[^>]*?)title="[^"]*"/g,
+    .replace(/(data-i18n-title="([\w.]+)"[^>]*?)title="(?!@Text\.Get)[^"]*"/g,
       (_, before, key) => `${before}title="@Text.Get("${key}", language)"`);
 }
 

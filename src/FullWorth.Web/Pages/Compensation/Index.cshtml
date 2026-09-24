@@ -1,4 +1,18 @@
-    <section id="view-compensation" class="view comp-view">
+@page "/compensation"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Gehalt & Benefits · FullWorth";
+    ViewData["ActiveView"] = "compensation";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/compensation/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-compensation" class="comp-view">
       <div class="comp-page-actions">
         <label class="comp-space-label">Finanzbereich <select id="space-select"></select></label>
         <button id="save-profile" class="btn btn-primary" type="button">Profil speichern</button>
@@ -9,14 +23,38 @@
           <h2>Was ist dein Gehalt wirklich wert?</h2>
           <p>Netto, Arbeitgeberkosten, Firmenwagen, bAV, Benefits und Kaufkraft in einer Rechnung.</p>
         </div>
-        <div id="comp-hero-note" class="comp-hero-note">Planungsrechnung für Deutschland</div>
+        @* Das Steuerjahr steht hier von Anfang an, nur die Ziffern fehlen noch.
+
+           Vorher trug die Plakette nur "Planungsrechnung für Deutschland" und bekam nach der
+           Berechnung " · Steuerjahr 2026" angehängt. Am Schreibtisch wurde sie dadurch breiter,
+           drückte den Text daneben schmaler und der brach eine Zeile mehr um; am Telefon brach sie
+           selbst um. Beides schob die ganze Seite 22 px nach unten - gemessen 0,228.
+
+           Die Ziffern kommen aus der Berechnung, der Rest des Satzes nicht. Also steht der Rest im
+           Markup und die vier Stellen sind reserviert. *@
+        <div id="comp-hero-note" class="comp-hero-note">Planungsrechnung für Deutschland · Steuerjahr <span id="comp-hero-year"></span></div>
       </section>
 
+      @* Alle acht Reiter stehen hier, auch die der Nachbarmodule.
+
+         Bis #154 hingen vier davon sich selbst per insertAdjacentHTML in diese Leiste, sobald ihr
+         Modul geladen war - also nach dem ersten Bild. "Weitere Einkünfte" schob sich dabei hinter
+         "Benefits" und drückte die zwei Reiter dahinter um 162 px nach rechts. In der alten Hülle
+         sah das niemand, weil die Seite erst beim Umschalten sichtbar wurde; als eigene Adresse
+         passiert es vor den Augen des Benutzers.
+
+         Die Reihenfolge ist die, die vorher am Ende herauskam - sie ist fest, und genau deshalb
+         gehört sie ins Markup und nicht in vier Module. Jedes Modul bindet jetzt nur noch an
+         seinen Knopf. *@
       <nav class="comp-tabs" aria-label="Bereiche">
         <button class="active" data-tab="calculator" type="button">Rechner</button>
         <button data-tab="benefits" type="button">Benefits</button>
+        <button data-income-tab="other-income" type="button">Weitere Einkünfte</button>
         <button data-tab="negotiation" type="button">Gehaltsgespräch</button>
         <button data-tab="scenarios" type="button">Szenarien</button>
+        <button data-extended-tab="optimizer" type="button">Optimierer</button>
+        <button data-extended-tab="payslips" type="button">Lohnabrechnungen</button>
+        <button data-history-tab="history" type="button">Verlauf</button>
       </nav>
 
       <section id="tab-calculator" class="comp-tab active">
@@ -216,3 +254,11 @@
 
       <div id="comp-error" class="comp-toast" role="status" aria-live="polite"></div>
     </section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/compensation/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/compensation/entry.js"></script>
+}

@@ -1,4 +1,18 @@
-    <section id="view-admin" class="view">
+@page "/admin"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Admin · FullWorth";
+    ViewData["ActiveView"] = "admin";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/admin/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-admin">
       <section id="admin-overview" class="admin-metrics" aria-label="Übersicht">
         <article><span>User</span><strong id="metric-users">–</strong></article>
         <article><span>Aktiv</span><strong id="metric-active">–</strong></article>
@@ -72,3 +86,11 @@
         <div id="vault-body"></div>
       </section>
     </section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/admin/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/admin/entry.js"></script>
+}

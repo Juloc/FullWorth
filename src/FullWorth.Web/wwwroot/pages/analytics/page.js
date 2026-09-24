@@ -43,14 +43,12 @@ export async function renderAnalytics(context) {
   activeBucket = activeBucketRange(win.granularity, win.to);
   win.activeLabel = activeBucket.label;
 
-  view.innerHTML = shellHtml(win);
-  wireControls(view);
-
   const from = win.from, to = win.to, gran = win.granularity;
   const cmp = '&comparison=previous-period';
 
   // Preview includes the active bucket. Historical average uses completed buckets immediately before it.
-  const [overview, averageOverview, history, categories, merchants, forecast, catList, importCompleteness] = await Promise.all([
+  const [overview, averageOverview, history, categories, merchants, forecast, catList, importCompleteness, savings]
+    = await Promise.all([
     ctx.api(`api/analytics/overview?from=${from}&to=${to}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/analytics/overview?from=${win.averageFrom}&to=${win.averageTo}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
@@ -59,6 +57,10 @@ export async function renderAnalytics(context) {
     ctx.api('api/analytics/forecast?months=12').catch(() => null),
     ctx.api('api/categories').catch(() => []),
     loadFinanzguruCompleteness(ctx.api),
+    // Gehört in dieselbe Runde wie alles andere. Lief dieser Abruf für sich, kam seine Karte
+    // garantiert nach dem ersten Bild und schob den Rest nach unten - derselbe Fehler, der auf
+    // /tax schon einmal gefunden wurde.
+    ctx.api('api/intelligence/benchmarks/savings').catch(() => null),
   ]);
   // Map categoryId -> icon key (user emoji Icon, else semantic Key) so the category list can show the
   // same icon it uses elsewhere. Flatten in case the endpoint nests children under parents.
@@ -67,8 +69,18 @@ export async function renderAnalytics(context) {
   // fall back to the semantic Key (which resolves to a line-art glyph).
   (function walk(list) { (list || []).forEach(c => { if (c && c.id) catIcon.set(c.id, (c.icon && !/^cat-\d/.test(c.icon)) ? c.icon : c.key); if (c && c.children) walk(c.children); }); })(catList);
 
-  const completenessNotice = finanzguruCompletenessNotice(importCompleteness, { scope: 'analytics', lang });
-  if (completenessNotice) view.insertAdjacentHTML('afterbegin', completenessNotice);
+  // Ein einziger Anstrich, und zwar mit dem fertigen Ergebnis.
+  //
+  // Vorher stand hier das Gerüst schon auf dem Schirm, wenn die Daten ankamen: der Hinweis wurde
+  // mit insertAdjacentHTML('afterbegin') darüber geschoben und drückte die ganze Seite 137 px nach
+  // unten, während die Karten gleichzeitig von "Wird geladen…" auf ihre echte Höhe sprangen.
+  // Gemessen: 0,059 am Schreibtisch, 0,149 am Telefon.
+  //
+  // Die Seite wartet ohnehin schon auf das Netz - ensureOfficialBrandCatalog steht weiter oben.
+  // Sie eher zu zeichnen kauft also keine Zeit, sondern nur einen Sprung.
+  const completenessNotice = finanzguruCompletenessNotice(importCompleteness, { scope: 'analytics', lang }) || '';
+  view.innerHTML = completenessNotice + shellHtml(win);
+  wireControls(view);
 
   const cur = overview?.currency || history?.[0]?.currency || 'EUR';
   fillSpending(ctx.$('#an-spending'), overview, averageOverview);
@@ -77,7 +89,7 @@ export async function renderAnalytics(context) {
   fillMerchant(ctx.$('#an-merchant'), merchants);
   fillNetWorth(ctx.$('#an-networth'), history, cur);
   fillForecast(ctx.$('#an-forecast'), forecast);
-  loadSavingsBenchmark();
+  fillSavingsBenchmark(savings);
 }
 
 function savingsPct(value) {
@@ -97,11 +109,11 @@ function savingsMonthLabel(value) {
   }).format(new Date(year, month - 1, 1));
 }
 
-async function loadSavingsBenchmark() {
+/** Zeichnet den Cloud-Vergleich aus bereits geladenen Daten - ohne eigenen Abruf, siehe oben. */
+function fillSavingsBenchmark(result) {
   const box = ctx.$('#an-cloud-savings');
   if (!box) return;
   try {
-    const result = await ctx.api('api/intelligence/benchmarks/savings');
     if (!result?.available) {
       box.hidden = true;
       box.innerHTML = '';

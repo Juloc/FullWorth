@@ -194,8 +194,11 @@ function renderResult(result){
   $('#benefit-summary').innerHTML=summary.map(([label,val,tone])=>benefitLine(label,val,tone)).join('');
   const a=result.assumptions;
   // The tax year comes from the calculation, so the badge always matches the law that was actually applied.
-  const note=$('#comp-hero-note');
-  if(note)note.textContent=`Planungsrechnung für Deutschland · Steuerjahr ${a.taxYear}`;
+  // Nur die Ziffern, nicht der ganze Satz: der steht im Markup und hat den Platz dafuer schon frei.
+  // Und nur, wenn es wirklich eine Jahreszahl gibt - vorher stand hier bei fehlendem Wert
+  // "Steuerjahr undefined" auf dem Schirm.
+  const year=$('#comp-hero-year');
+  if(year)year.textContent=a.taxYear==null?'':String(a.taxYear);
   $('#assumptions').textContent=`${a.calculationKind}. ${a.taxSource}. ${a.socialInsuranceSource}. Stand ${a.dataAsOf}. ${a.disclaimer}`;
 }
 

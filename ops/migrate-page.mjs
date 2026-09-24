@@ -48,7 +48,12 @@ export const PAGES = {
   collections: {
     folder: 'collections', page: 'Collections', route: '/collections',
     render: 'renderCollections', bind: 'bindCollections', action: ['collections.new', 'newCollection']
-  }
+  },
+  analytics: { folder: 'analytics', page: 'Analytics', route: '/analytics', render: 'renderAnalytics', bind: 'bindAnalytics' },
+  tax: { folder: 'tax', page: 'Tax', route: '/tax', render: 'renderTax', bind: 'bindTax' },
+  pension: { folder: 'pension', page: 'Pension', route: '/pension', render: 'renderPension', bind: 'bindPension' },
+  admin: { folder: 'admin', page: 'Admin', route: '/admin', render: 'renderAdmin' },
+  compensation: { folder: 'compensation', page: 'Compensation', route: '/compensation', render: 'renderCompensation' }
 };
 
 /** Dieselbe Regel wie serverseitig in PageHeadings: Seitentitel, sonst der Name aus der Navigation. */
@@ -70,8 +75,20 @@ export function migrate(view) {
 
   // Die Sichtbarkeitsklasse der alten Hülle fällt weg: auf einer echten Seite gibt es nichts
   // umzuschalten, und .view:not(.active){display:none} würde die Seite sonst verstecken.
-  const body = html.replace(/(<section id="view-[a-z-]+")\s+class="view"/, '$1');
-  if (body === html) throw new Error('Der <section class="view">-Rahmen sieht anders aus als erwartet.');
+  //
+  // Nur "view" verschwindet, nicht das ganze Attribut: mehrere Seiten tragen daneben eine eigene
+  // Klasse (class="view tax-view"), an der ihr page.css hängt. Wer das Attribut im Ganzen
+  // entfernt, nimmt der Seite ihr halbes Aussehen - und zwar lautlos.
+  let found = false;
+  const body = html.replace(
+    /(<section id="view-[a-z-]+")\s+class="([^"]*)"/,
+    (all, open, classes) => {
+      const rest = classes.split(/\s+/).filter(name => name && name !== 'view');
+      if (rest.length === classes.split(/\s+/).filter(Boolean).length) return all;
+      found = true;
+      return rest.length ? `${open} class="${rest.join(' ')}"` : open;
+    });
+  if (!found) throw new Error('Der <section class="view">-Rahmen sieht anders aus als erwartet.');
 
   const cshtml = [
     `@page "${spec.route}"`,

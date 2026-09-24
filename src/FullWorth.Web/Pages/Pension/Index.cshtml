@@ -1,0 +1,23 @@
+@page "/pension"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Altersvorsorge · FullWorth";
+    ViewData["ActiveView"] = "pension";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/pension/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-pension" class="pension-view"></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/pension/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/pension/entry.js"></script>
+}

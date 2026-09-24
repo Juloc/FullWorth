@@ -38,5 +38,6 @@ export const VIEW_PATHS = Object.fromEntries(
 // Menge wächst mit jeder migrierten Seite und ist leer, wenn die Hülle verschwindet.
 export const MIGRATED = new Set([
   'transactions',
-  'audit', 'notifications', 'merchants', 'rules', 'categories', 'collections'
+  'audit', 'notifications', 'merchants', 'rules', 'categories', 'collections',
+  'analytics', 'tax', 'pension', 'admin', 'compensation'
 ]);

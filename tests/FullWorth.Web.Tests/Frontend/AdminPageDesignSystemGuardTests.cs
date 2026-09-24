@@ -29,7 +29,11 @@ public sealed class AdminPageDesignSystemGuardTests
     {
         Assert.False(Directory.Exists(WwwRoot("admin")), "wwwroot/admin ist die alte Fremdseite und muss weg sein.");
 
-        var html = File.ReadAllText(WwwRoot("index.html"));
+        // Seit #154 ist die Verwaltung eine eigene Razor-Seite. "Keine Fremdseite" heisst weiterhin
+        // dasselbe - sie gehört zur Anwendung und benutzt deren Hülle - nur steht ihr Markup jetzt
+        // bei ihr statt in dem einen Dokument.
+        var html = WebSources.Page("Admin");
+        Assert.Contains("@page \"/admin\"", html);
         Assert.Contains("id=\"view-admin\"", html);
         Assert.Contains("/pages/admin/page.css", html);
 
@@ -37,7 +41,6 @@ public sealed class AdminPageDesignSystemGuardTests
         // Die Berechtigung selbst liegt am Server, nicht an diesem Attribut.
         var app = File.ReadAllText(WwwRoot("app.js"));
         Assert.Contains("[data-entry=\"admin\"]", app);
-        Assert.Contains(".register('admin'", app);
     }
 
     /// <summary>
@@ -52,7 +55,7 @@ public sealed class AdminPageDesignSystemGuardTests
         var css = Regex.Replace(
             File.ReadAllText(WwwRoot("pages", "admin", "page.css")), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
         var js = File.ReadAllText(WwwRoot("pages", "admin", "page.js"));
-        var markup = File.ReadAllText(WwwRoot("pages", "admin", "page.html"));
+        var markup = WebSources.Page("Admin");
 
         var hexColours = Regex.Matches(css, "#[0-9a-fA-F]{3,8}\\b").Select(match => match.Value).ToArray();
         Assert.True(hexColours.Length == 0,

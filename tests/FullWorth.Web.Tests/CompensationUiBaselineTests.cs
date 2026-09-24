@@ -21,7 +21,7 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task CompensationPage_CanEnterAPartialEmploymentYearAndSaysWhenItDoes()
     {
-        var html = await PageFileAsync("page.html");
+        var html = await MarkupAsync();
         var shared = await PageFileAsync("shared.js");
         var baseJs = await PageFileAsync("page.js");
         var css = await PageFileAsync("page.css");
@@ -79,7 +79,8 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("{ view: 'compensation'", menu);
         Assert.DoesNotContain("href: '/compensation.html'", menu);
         Assert.Contains("data-entry=\"compensation\"", html);
-        Assert.Contains("id=\"view-compensation\"", html);
+        // Das Markup der Seite liegt seit #154 nicht mehr in der Hülle, sondern bei der Seite.
+        Assert.Contains("id=\"view-compensation\"", await MarkupAsync());
         Assert.False(File.Exists(Path.Combine(
             _factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath,
             "features", "compensation-nav.js")));
@@ -91,6 +92,15 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
     {
         var root = _factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
         return await File.ReadAllTextAsync(Path.Combine(root, "pages", "compensation", name));
+    }
+
+    // Das Markup der Seite. Es lag bis #154 als page.html neben page.js und steht seitdem in der
+    // Razor-Seite - dieselbe Datei, nur an dem Ort, an dem der Server sie ausliefert.
+    private async Task<string> MarkupAsync()
+    {
+        var root = _factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+        return await File.ReadAllTextAsync(Path.Combine(
+            Path.GetDirectoryName(root)!, "Pages", "Compensation", "Index.cshtml"));
     }
 
     private string ReadWebAsset(string relative)

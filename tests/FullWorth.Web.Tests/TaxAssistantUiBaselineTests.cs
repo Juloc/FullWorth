@@ -20,18 +20,19 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
         // "/" is served by MapFallbackToFile("index.html").RequireAuthorization(), so an unauthenticated
         // client is redirected to the auth login shell. Read the shipped index.html shell directly.
         //
-        // Tax is a real registered view on the new architecture (app.js's ALL_VIEWS/feature-registry),
-        // not a motion.js side-effect import (the old patch-layer pattern this branch removed): it has a
-        // static nav entry + view section in index.html, and app.js imports and registers the module.
-        var html = ReadWebAsset("index.html");
-        var appJs = await GetAsync("/app.js");
+        // Steuern ist ein echter, verdrahteter Bereich - kein motion.js-Seiteneffekt-Import, wie es
+        // die alte Flickschicht einmal war. Seit #154 ist der Bereich eine eigene Razor-Seite: das
+        // Markup steht dort, der Einstieg in entry.js, und app/routes.js führt ihn als migriert.
+        var html = WebSources.Page("Tax");
+        var entry = ReadWebAsset(Path.Combine("pages", "tax", "entry.js"));
+        var routes = ReadWebAsset(Path.Combine("app", "routes.js"));
         var tax = await GetAsync("/pages/tax/page.js");
         var review = await GetAsync("/pages/tax/review-extra.js");
 
-        Assert.Contains("data-view=\"tax\"", html);
+        Assert.Contains("@page \"/tax\"", html);
         Assert.Contains("id=\"view-tax\"", html);
-        Assert.Contains("./pages/tax/page.js", appJs);
-        Assert.Contains("'tax'", appJs);
+        Assert.Contains("./page.js", entry);
+        Assert.Contains("'tax'", routes);
         Assert.Contains("/tax/review", tax);
         Assert.Contains("api/tax/candidates", tax);
         Assert.Contains("api/tax/years/", review);
