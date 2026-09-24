@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v143';
+const VERSION = 'v144';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -22,6 +22,26 @@ const APP_SHELL = [
   // genuinely works offline. Auth, admin, intelligence and passkeys are deliberately NOT here: every
   // one of them needs the server to do anything, so caching them would only fake availability.
   '/security/browser-fetch.js',
+  // Der Einstieg jeder eigenen Seite (#154). Eine Razor-Seite laedt genau eine Moduldatei, und
+  // ohne sie im Vorrat oeffnet die Seite offline zwar, bleibt aber leer - schlimmer als gar
+  // nicht zu oeffnen, weil es nach einem Fehler aussieht statt nach fehlendem Netz.
+  '/pages/admin/entry.js',
+  '/pages/analytics/entry.js',
+  '/pages/audit/entry.js',
+  '/pages/budgets/entry.js',
+  '/pages/categories/entry.js',
+  '/pages/coach/entry.js',
+  '/pages/collections/entry.js',
+  '/pages/compensation/entry.js',
+  '/pages/contracts/entry.js',
+  '/pages/insights/entry.js',
+  '/pages/merchants/entry.js',
+  '/pages/notifications/entry.js',
+  '/pages/pension/entry.js',
+  '/pages/purchases/entry.js',
+  '/pages/rules/entry.js',
+  '/pages/tax/entry.js',
+  '/pages/transactions/entry.js',
   '/pages/dashboard/page.js',
   '/pages/dashboard/page.css',
   '/app/lock.js',

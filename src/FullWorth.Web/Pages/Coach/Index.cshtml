@@ -1,0 +1,23 @@
+@page "/coach"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Coach · FullWorth";
+    ViewData["ActiveView"] = "coach";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/coach/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-coach" class="coach-view"><div class="coach-layout"><div class="coach-main"><article class="panel coach-hero"><div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt="" width="335" height="180"></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div><div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="btn btn-secondary coach-new-chat" data-i18n="coach.newChat">@Text.Get("coach.newChat", language)</button><span id="coach-mode" class="coach-mode" data-i18n="coach.mode">@Text.Get("coach.mode", language)</span></div></article><article class="panel coach-chat-panel"><div id="coach-starters" class="coach-starters"></div><div id="coach-messages" class="coach-messages" aria-live="polite"></div><form id="coach-form" class="coach-composer"><label class="sr-only" for="coach-input" data-i18n="coach.question">@Text.Get("coach.question", language)</label><textarea id="coach-input" rows="2" maxlength="2000" data-i18n-placeholder="coach.placeholder" placeholder="@Text.Get("coach.placeholder", language)"></textarea><div class="coach-composer-footer"><label class="coach-model-picker" for="coach-model"><span class="sr-only" data-i18n="coach.model">@Text.Get("coach.model", language)</span><select id="coach-model"><option value="" data-i18n="coach.automatic">@Text.Get("coach.automatic", language)</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7.8 9.6 4.2 4.2L16.2 9.6"/></svg></label><button id="coach-send" type="submit" class="btn btn-primary coach-send" data-i18n-title="coach.send" title="@Text.Get("coach.send", language)" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg></button></div></form></article></div><aside class="coach-side"><article class="panel"><div class="panel-head"><h2 data-i18n="coach.review">@Text.Get("coach.review", language)</h2><button id="coach-review-refresh" type="button" class="btn btn-secondary">↻</button></div><div id="coach-summary"><div class="coach-summary-grid"><div class="coach-metric"><span data-i18n="coach.coverage">@Text.Get("coach.coverage", language)</span><strong id="coach-coverage">—</strong></div><div class="coach-metric"><span data-i18n="coach.worthIt">@Text.Get("coach.worthIt", language)</span><strong id="coach-worth-it">—</strong></div><div class="coach-metric coach-metric--good"><span data-i18n="coach.good">@Text.Get("coach.good", language)</span><strong id="coach-good">—</strong></div><div class="coach-metric coach-metric--bad"><span data-i18n="coach.bad">@Text.Get("coach.bad", language)</span><strong id="coach-bad">—</strong></div></div><div id="coach-signals"><p class="coach-muted" data-i18n="coach.reviewMore">@Text.Get("coach.reviewMore", language)</p></div></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="coach.reviewRecent">@Text.Get("coach.reviewRecent", language)</h2></div><div id="coach-review-list" class="coach-review-list"></div></article></aside></div></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/coach/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/coach/entry.js"></script>
+}

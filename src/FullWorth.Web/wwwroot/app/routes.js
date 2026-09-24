@@ -39,5 +39,6 @@ export const VIEW_PATHS = Object.fromEntries(
 export const MIGRATED = new Set([
   'transactions',
   'audit', 'notifications', 'merchants', 'rules', 'categories', 'collections',
-  'analytics', 'tax', 'pension', 'admin', 'compensation'
+  'analytics', 'tax', 'pension', 'admin', 'compensation',
+  'insights', 'coach', 'purchases', 'contracts', 'budgets'
 ]);

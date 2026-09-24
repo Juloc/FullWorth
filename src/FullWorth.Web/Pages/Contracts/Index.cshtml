@@ -1,0 +1,23 @@
+@page "/contracts"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Verträge · FullWorth";
+    ViewData["ActiveView"] = "contracts";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/contracts/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-contracts"><article class="panel"><div class="panel-head"><h2 data-i18n="contracts.title">@Text.Get("contracts.title", language)</h2><div class="panel-head-actions"><label class="check inline"><input id="contracts-archived" type="checkbox"><span data-i18n="contracts.showArchived">@Text.Get("contracts.showArchived", language)</span></label><button id="contracts-detect" class="btn btn-secondary" data-i18n="contracts.detect">@Text.Get("contracts.detect", language)</button></div></div><div id="contracts-price-changes" class="detected-panel" hidden></div><div id="contracts-detected" class="detected-panel" hidden></div><div id="contracts-list" class="rows"></div></article></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/contracts/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/contracts/entry.js"></script>
+}

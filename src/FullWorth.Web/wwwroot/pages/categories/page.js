@@ -17,6 +17,9 @@ const collapsed = new Set(); // category ids collapsed by the user this session
 export function bindCategories(context) {
   ctx = context;
   ctx.$('#cat-archived').addEventListener('change', () => renderCategories(ctx));
+  // Der "Hinzufuegen"-Knopf der Kopfzeile. Er haengte bis #154 in app.js, weil das Markup dort lag;
+  // jetzt gehoert beides der Seite. Ohne diese Zeile steht er da und tut nichts.
+  ctx.$('[data-action="new-category"]')?.addEventListener('click', () => newCategory(ctx));
 }
 
 export async function newCategory(context) {

@@ -116,7 +116,13 @@ export function createPageContext({ reload = () => location.reload() } = {}) {
     // Kündigungsschreiben ist text/plain), scheiterte daran - dieselbe Anfrage über denselben
     // Client, nur ohne JSON.parse.
     apiText: path => apiClient.backendResponse(path).then(response => response.text()),
-    showView: view => { location.assign(pathForView(view)); },
+    // Mit Mitgabe: auf einer eigenen Seite ist das eine echte Navigation, und ein Ereignis, das
+    // danach abgeschickt wird, trifft niemanden mehr - das Dokument, das zuhoeren wuerde, wird
+    // gerade abgebaut. Was die Zielseite wissen muss, steht deshalb in der Adresse.
+    showView: (view, options = {}) => {
+      const query = options.query ? '?' + String(options.query).replace(/^\?/, '') : '';
+      location.assign(pathForView(view) + query);
+    },
     navScope: (view, query) => {
       const target = pathForView(view);
       location.assign(query ? `${target}?${String(query).replace(/^\?/, '')}` : target);

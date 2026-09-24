@@ -53,7 +53,21 @@ export const PAGES = {
   tax: { folder: 'tax', page: 'Tax', route: '/tax', render: 'renderTax', bind: 'bindTax' },
   pension: { folder: 'pension', page: 'Pension', route: '/pension', render: 'renderPension', bind: 'bindPension' },
   admin: { folder: 'admin', page: 'Admin', route: '/admin', render: 'renderAdmin' },
-  compensation: { folder: 'compensation', page: 'Compensation', route: '/compensation', render: 'renderCompensation' }
+  compensation: { folder: 'compensation', page: 'Compensation', route: '/compensation', render: 'renderCompensation' },
+  insights: { folder: 'insights', page: 'Insights', route: '/insights', render: 'mountInsights' },
+  coach: { folder: 'coach', page: 'Coach', route: '/coach', render: 'renderCoach' },
+  purchases: {
+    folder: 'purchases', page: 'Purchases', route: '/purchases',
+    render: 'renderPurchases', bind: 'bindPurchases'
+  },
+  contracts: {
+    folder: 'contracts', page: 'Contracts', route: '/contracts',
+    render: 'renderContracts', bind: 'bindContracts', action: ['contracts.new', 'newContract']
+  },
+  budgets: {
+    folder: 'budgets', page: 'Budgets', route: '/budgets',
+    render: 'renderBudgets', action: ['budgets.new', 'newBudget']
+  }
 };
 
 /** Dieselbe Regel wie serverseitig in PageHeadings: Seitentitel, sonst der Name aus der Navigation. */

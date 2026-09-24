@@ -33,6 +33,8 @@ export function bindCollections(pageContext) {
   // Wort wäre langsamer als das Tippen.
   ctx.$('#col-search')?.addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); renderList(); });
   ctx.$('#col-close')?.addEventListener('click', () => { state.openId = null; renderDetail(); });
+  // Siehe categories/page.js: der Knopf der Kopfzeile gehoert der Seite, seit ihr Markup es tut.
+  ctx.$('[data-action="new-collection"]')?.addEventListener('click', () => newCollection(ctx));
 }
 
 /** Der Eintrag „Hinzufügen" der Kopfzeile - dieselbe Aktion wie auf anderen Seiten. */

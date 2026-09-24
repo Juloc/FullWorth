@@ -431,10 +431,16 @@ export async function renderCoach() {
   loading = true;
   setMascotLabel();
   renderPageContext();
-  renderStarters();
   try { await Promise.all([loadConversation(), loadReviews(), loadModels()]); }
   catch (error) { renderError(error); }
   finally { loading = false; }
+  // Erst zeichnen, wenn feststeht, ob es ueberhaupt etwas anzubieten gibt.
+  //
+  // Vorher standen die Vorschlaege sofort da und wurden von appendMessage wieder versteckt, sobald
+  // die geladene Unterhaltung ihre erste Nachricht brachte - ein Block, der erscheint und wieder
+  // verschwindet, und darunter rutscht alles. Solange Coach eine Ansicht in der Huelle war, sah das
+  // niemand: die Seite war beim Umschalten schon fertig. Als eigene Adresse passiert es beim Laden.
+  renderStarters();
 }
 
 function setMascotLabel() {
@@ -841,7 +847,7 @@ function renderContextActions(){
   }else if(context.entityType==='account'&&context.entityId){
     add(tr('Kontobuchungen öffnen','Open account transactions'),()=>navigate('transactions',{query:'accountId='+encodeURIComponent(context.entityId)}));
   }else if(context.entityType==='budget'&&context.entityId){
-    add(tr('Budget öffnen','Open budget'),()=>openView('budgets').then(()=>emitAppEvent('budget:open',{id:context.entityId})));
+    add(tr('Budget öffnen','Open budget'),()=>navigate('budgets',{query:'open='+encodeURIComponent(context.entityId)}));
   }else if(['asset','liability','portfolio'].includes(context.entityType)){
     add(tr('Vermögen öffnen','Open net worth'),()=>openView('networth'));
   }else if(context.entityType==='transactions'){

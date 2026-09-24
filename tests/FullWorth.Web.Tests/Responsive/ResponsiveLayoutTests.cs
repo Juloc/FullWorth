@@ -160,7 +160,17 @@ public sealed class ResponsiveLayoutTests
 
         // Regression guard: "Add" buttons (budgets/contracts/rules) once existed in the markup with
         // no click handler at all — visibly dead UI. Every data-action must have a JS binding somewhere.
-        var actions = System.Text.RegularExpressions.Regex.Matches(html, "data-action=\"([^\"]+)\"")
+        //
+        // Seit #154 liegt das Markup der umgezogenen Seiten nicht mehr in index.html, sondern in
+        // ihrer Razor-Seite. Beide Orte gehoeren hier hinein: als index.html die letzte davon
+        // abgab, stand die Liste auf null und der Waechter fiel ueber sein eigenes NotEmpty - er
+        // haette ab da jeden toten Knopf durchgelassen, ohne dass es jemandem aufgefallen waere.
+        var pagesRoot = Path.Combine(root, "src", "FullWorth.Web", "Pages");
+        var markup = html + string.Concat(Directory
+            .EnumerateFiles(pagesRoot, "*.cshtml", SearchOption.AllDirectories)
+            .Select(File.ReadAllText));
+
+        var actions = System.Text.RegularExpressions.Regex.Matches(markup, "data-action=\"([^\"]+)\"")
             .Select(match => match.Groups[1].Value).Distinct().ToList();
         Assert.NotEmpty(actions);
         foreach (var action in actions)

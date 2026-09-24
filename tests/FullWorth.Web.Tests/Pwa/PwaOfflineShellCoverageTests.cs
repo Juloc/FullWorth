@@ -68,10 +68,11 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void The_salary_page_works_offline()
     {
-        // Gehalt ist eine Seite der Hülle geworden, also ist "die Gehaltsseite offline" dasselbe wie
-        // "die Hülle offline" plus die Module dieser Seite. Der Einstieg ist index.html.
+        // Seit #154 ist Gehalt eine eigene Razor-Seite, und ihr Einstieg ist pages/compensation/
+        // entry.js statt index.html. Die Frage bleibt dieselbe - was diese Seite laedt, muss im
+        // Vorrat liegen -, nur die Wurzel des Importgraphen hat gewechselt.
         var precached = PrecachedPaths();
-        var reachable = ReachableFrom("index.html")
+        var reachable = ReachableFromMarkup(WebSources.Page("Compensation"))
             .Where(path => path.StartsWith("/pages/compensation/", StringComparison.Ordinal))
             .ToArray();
 
@@ -99,9 +100,11 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
     /// </summary>
     private HashSet<string> ReachableFromIndex() => ReachableFrom("index.html");
 
-    private HashSet<string> ReachableFrom(string pageFile)
+    private HashSet<string> ReachableFrom(string pageFile) =>
+        ReachableFromMarkup(File.ReadAllText(AssetPath(pageFile)));
+
+    private HashSet<string> ReachableFromMarkup(string index)
     {
-        var index = File.ReadAllText(AssetPath(pageFile));
         var queue = new Queue<string>(Regex
             .Matches(index, """<script[^>]+type="module"[^>]+src="(?<path>/[^"?#]+)""")
             .Select(match => match.Groups["path"].Value)

@@ -1,4 +1,3 @@
-import { emitAppEvent } from '../../core/event-bus.js';
 import { confirmDialog } from '../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
@@ -346,9 +345,11 @@ function openDetail(ctx, initialSignal, refresh) {
   dlg.querySelector('[data-open-target]')?.addEventListener('click', async () => {
     dlg.close();
     const view = targetView(signal);
-    await ctx.showView(view, { query: '' });
-    if (signal.subjectType === 'contract') emitAppEvent('contract:open', { id: signal.subjectId });
-    if (signal.subjectType === 'budget') emitAppEvent('budget:open', { id: signal.subjectId });
+    // Vertrag und Budget sollen auf der Zielseite gleich offen stehen. Frueher wurde dafuer nach
+    // dem Wechsel ein Ereignis geschickt - das ging, solange beides dasselbe Dokument war. Seit
+    // #154 ist der Wechsel eine echte Navigation, und ein Ereignis danach kaeme nirgends an.
+    const opens = signal.subjectType === 'contract' || signal.subjectType === 'budget';
+    await ctx.showView(view, { query: opens ? 'open=' + encodeURIComponent(signal.subjectId) : '' });
   });
   dlg.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', async () => {
     const action = button.dataset.action;

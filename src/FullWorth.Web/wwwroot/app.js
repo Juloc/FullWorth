@@ -3,18 +3,14 @@ import { isPrivate, onPrivacyChange } from './components/privacy.js';
 import { confirmDialog } from './components/confirm.js';
 import { bindIdentityIcons } from './features/ux-kit.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
-import { renderCoach, bindCoach } from './pages/coach/page.js';
-import { renderContracts, bindContracts, newContract } from './pages/contracts/page.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './pages/networth/page.js';
 import { renderLoans, bindLoans } from './pages/networth/loans.js';
-import { renderPurchases, bindPurchases } from './pages/purchases/page.js';
-import { renderDashboardInsights, mountInsights } from './pages/insights/page.js';
+import { renderDashboardInsights } from './pages/insights/page.js';
 
 import { createAccessSetup } from './pages/settings/access-setup.js';
 import { bindAccounts, renderAccounts, renderAccountDetail, openAddAccount } from './pages/accounts/page.js';
 import { renderBankConnections, openBankConnection, openBankingSetup, renderBankingSettings } from './pages/settings/bank-connections/page.js';
 import { bindSettings, renderSettings } from './pages/settings/page.js';
-import { renderBudgets, newBudget, openBudgetDetail } from './pages/budgets/page.js';
 
 import { createDialog } from './components/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
@@ -59,7 +55,7 @@ const viewFromPath=router.viewFromPath;
 // regex against the rendered label from a MutationObserver, which a new label or language broke.
 // Nur noch die Ansichten, die diese Huelle selbst zeigt. Eine umgezogene Seite bringt ihre
 // Hauptaktion in ihrem eigenen entry.js mit - sie gehoert zur Seite und nicht in eine Tabelle.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)]};
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const root=document.documentElement;
@@ -137,13 +133,9 @@ function bind(){
   }));
   bindAccounts(ctx,()=>openBankConnection(ctx));
   bindSettings(ctx);
-  $('[data-action="new-budget"]').addEventListener('click',()=>newBudget(ctx));
-  bindContracts(ctx);
   bindNetWorth(ctx);
   bindLoans(ctx);
-  bindPurchases(ctx);
   bindDashboard(ctx);
-  bindCoach();
   $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
@@ -320,7 +312,6 @@ async function categoryOptions(selected){const categories=await api('api/categor
 // Fassung davor las die Einträge aus dem Desktop-Markup aus, und genau deshalb fehlten dort Admin
 // und Insights, während Händler und Protokoll nur hier standen.
 installNavigation((view,options={})=>showView(view,options));
-onAppEvent('budget:open',detail=>{if(detail?.id)openBudgetDetail(ctx,detail.id)});
 onAppEvent('surface:reload',()=>loadCurrent());
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
@@ -347,15 +338,10 @@ const shell=createShell({
 const accessSetup=createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,status,options));
 const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
-  .register('insights',()=>mountInsights(ctx))
-  .register('coach',()=>renderCoach())
   .register('accounts',()=>renderAccounts(ctx))
   .register('account-detail',()=>renderAccountDetail(ctx))
   .register('bank-connections',()=>renderBankConnections(ctx))
-  .register('budgets',()=>renderBudgets(ctx))
-  .register('contracts',()=>renderContracts(ctx))
   .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
-  .register('purchases',()=>renderPurchases(ctx))
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
   .register('passkeys',()=>renderPasskeys(ctx))
   .register('import',()=>renderImportCenter())

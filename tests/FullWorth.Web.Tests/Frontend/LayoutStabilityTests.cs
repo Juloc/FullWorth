@@ -103,7 +103,26 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         // der Sprung zwischen 0,000 (er passt oft in ein Bild) und 0,020 / 0,028 (Chat-Antwort und
         // Review-Karte kommen manchmal erst im nächsten Bild) - dieselbe Kopfleiste wie oben trägt
         // ihren Teil bei, der Rest ist die neu sichtbare Chat-/Review-Fläche.
-        ("/coach",           0.03,   0.04), // 0.000-0.020 / 0.000-0.028   Chat-Antwort + Review-Karte
+        // Seit #154 ist Coach eine eigene Adresse, und damit misst diese Zeile etwas anderes als
+        // vorher: als Ansicht in der Hülle war die Seite beim Umschalten längst fertig geladen, nur
+        // der letzte Nachschlag fiel noch auf. Beim Laden einer echten Seite kommt alles auf einmal -
+        // Unterhaltung, Ausgaben-Review, Signale -, und die Chat-Fläche wächst dabei von 340 px auf
+        // 568 px.
+        //
+        // Ein echter Fehler steckte darin und ist behoben: renderStarters() zeichnete die Vorschläge
+        // sofort, und appendMessage versteckte sie wieder, sobald die geladene Unterhaltung ihre
+        // erste Nachricht brachte. Ein Block, der erscheint und wieder verschwindet. Er wird jetzt
+        // erst gezeichnet, wenn feststeht, ob es etwas anzubieten gibt.
+        //
+        // Was bleibt, ist bimodal wie bei /admin und /tax - über je drei Läufen 0,051 am Schreibtisch
+        // und 0,285 oder 0,411 am Telefon, je nachdem, ob die Antworten noch ins erste Bild fallen.
+        // Das zu beseitigen hiesse, für eine Unterhaltung Platz zu reservieren, deren Länge niemand
+        // vorher kennt.
+        //
+        // Die Zahl am Telefon streut: über zehn Läufen 0,285, 0,411 und einmal 0,434, Letzteres unter
+        // Last. Das Budget liegt bewusst über diesem Höchstwert - ein Wächter, der jeden zehnten Lauf
+        // grundlos rot wird, wird abgeschaltet und schützt dann gar nichts mehr.
+        ("/coach",           0.055,  0.440), // 0.051 / 0.285-0.434   Unterhaltung + Review + Signale
         // Ab hier neu in Scheibe 14: erst mit echten Fixtures (ops/ui-harness/fixtures.js) gemessen,
         // vorher zeigte die Harness hier nur den Leerzustand und ein Sprung dort hätte nichts bedeutet.
         // admin: über 23 Läufen (13 davon vor dieser Zeile, 10 danach zur Gegenprobe) stabil bimodal -

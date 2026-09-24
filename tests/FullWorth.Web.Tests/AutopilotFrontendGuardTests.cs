@@ -57,16 +57,20 @@ public sealed class AutopilotFrontendGuardTests
         var appCss = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "app.css"));
         var insightCssPath = Path.Combine(WwwRoot(), "pages", "insights", "page.css");
 
+        // Die Hinweise haben zwei Orte, und das ist Absicht: ein Block auf der Startseite und eine
+        // eigene Seite. Seit #154 liegt Letztere als Razor-Seite vor, der Block bleibt in der Huelle.
+        var page = WebSources.Page("Insights");
+        var entry = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "entry.js"));
+
         Assert.Contains("id=\"dashboard-insights\"", html);
-        Assert.Contains("id=\"view-insights\"", html);
-        Assert.Contains("id=\"insights-root\"", html);
+        Assert.Contains("id=\"view-insights\"", page);
+        Assert.Contains("id=\"insights-root\"", page);
 
         Assert.True(File.Exists(insightCssPath));
-        Assert.Contains("/pages/insights/page.css", html);
+        Assert.Contains("/pages/insights/page.css", page);
         Assert.DoesNotContain("Autopilot Deploy 5: read-only financial insights", appCss, StringComparison.Ordinal);
-        Assert.Contains(".register('insights'", app);
+        Assert.Contains("mountInsights", entry);
         Assert.Contains("renderDashboardInsights", app);
-        Assert.Contains("mountInsights", app);
 
         Assert.Contains("api/insights?view=", feature);
         Assert.Contains("load(ctx, 'current', 3", feature);
@@ -79,8 +83,16 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("ctx.isPrivate()", feature);
         Assert.Contains("ctx.dialog", feature);
         Assert.Contains("AbortController", feature);
-        Assert.Contains("emitAppEvent('contract:open'", feature);
-        Assert.Contains("emitAppEvent('budget:open'", feature);
+        // Vertrag und Budget sollen auf der Zielseite offen stehen. Das war ein Ereignis nach dem
+        // Ansichtswechsel; seit #154 ist der Wechsel eine echte Navigation, also reist die Kennung
+        // in der Adresse mit - und die beiden Zielseiten lesen sie in ihrer entry.js.
+        Assert.Contains("'open=' + encodeURIComponent(signal.subjectId)", feature);
+        Assert.Contains(
+            "emitAppEvent('contract:open'",
+            File.ReadAllText(Path.Combine(WwwRoot(), "pages", "contracts", "entry.js")));
+        Assert.Contains(
+            "openBudgetDetail(context, open)",
+            File.ReadAllText(Path.Combine(WwwRoot(), "pages", "budgets", "entry.js")));
 
         Assert.Contains("api/contracts/merge-preview", feature, StringComparison.Ordinal);
         Assert.Contains("api/contracts/merge-execute", feature, StringComparison.Ordinal);
@@ -137,10 +149,11 @@ public sealed class AutopilotFrontendGuardTests
     public void InsightsIsAnOrdinaryMenuEntry()
     {
         var menu = File.ReadAllText(Path.Combine(WwwRoot(), "app", "menu.js"));
-        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var routes = File.ReadAllText(Path.Combine(WwwRoot(), "app", "routes.js"));
 
         Assert.Contains("{ view: 'insights'", menu);
-        Assert.Contains(".register('insights'", app);
+        // Seit #154 eine eigene Seite: die Huelle fuehrt sie als migriert, statt sie zu registrieren.
+        Assert.Contains("'insights'", routes);
     }
 
     private static string Slice(string text, string startMarker, string endMarker)

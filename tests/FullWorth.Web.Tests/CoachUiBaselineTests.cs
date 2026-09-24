@@ -36,9 +36,9 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
 
         // Coach wurde einmal nachgeladen: register-sw.js holte es per import() nach dem Zeichnen.
         // Jetzt ist es eine Seite wie jede andere, also lädt der Einstieg es fest mit - und der
-        // Registrierer lädt gar nichts mehr.
+        // Registrierer lädt gar nichts mehr. Seit #154 ist dieser Einstieg die Seite selbst.
         Assert.DoesNotContain("import(", register);
-        Assert.Contains("from './pages/coach/page.js'", await GetAsync("/app.js"));
+        Assert.Contains("from './page.js'", await GetAsync("/pages/coach/entry.js"));
     }
 
     [Fact]
@@ -46,7 +46,8 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var shell = await GetAsync("/pages/coach/page.js");
         var coachCss = await GetAsync("/pages/coach/page.css");
-        var markup = ReadSource("index.html");
+        // Seit #154 liegt das Markup der Seite bei der Seite, nicht mehr in dem einen Dokument.
+        var markup = WebSources.Page("Coach");
         // Die Beschriftungen stehen jetzt im Markup und in den Sprachdateien, nicht mehr zweisprachig
         // im Modul.
         Assert.Contains("coach.mode", markup);
@@ -67,8 +68,11 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("coach-followups", shell);
         // Sprechblase und Dock stehen im Dokument, nicht im Modul: sie begleiten jede Seite, und
         // was vor dem ersten Zeichnen da ist, kann nichts mehr verschieben.
-        Assert.Contains("id=\"coach-launcher\"", markup);
-        Assert.Contains("id=\"coach-dock\"", markup);
+        // Der schwebende Starter gehoert der Huelle und ist auf jeder Seite da; das Bedienfeld
+        // gehoert der Coach-Seite. Zwei Orte, und das ist richtig so.
+        Assert.Contains("id=\"coach-launcher\"", ReadSource("index.html"));
+        // Auch der Andockbereich gehoert der Huelle - er schwebt ueber jeder Seite.
+        Assert.Contains("id=\"coach-dock\"", ReadSource("index.html"));
         Assert.Contains("finance.coach.quickAccess", shell);
         Assert.Contains("restartConversation", shell);
         Assert.Contains("api/coach/conversations?limit=1", shell);
@@ -121,8 +125,12 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("id=\"layout-reset\"", html);
         Assert.Contains("finance.sidebar.width.", app);
         Assert.Contains("fullworth:view-change", app);
-        Assert.Contains("onAppEvent('budget:open'", app);
-        Assert.Contains("emitAppEvent('budget:open'", coach);
+        // "Budget oeffnen" fuehrt auf eine andere Seite. Solange beide dasselbe Dokument waren,
+        // ging das als Ereignis nach dem Wechsel; seit #154 ist der Wechsel eine echte Navigation
+        // und das Ereignis kaeme nirgends an - die Kennung reist deshalb in der Adresse mit, und
+        // der Einstieg der Budgetseite liest sie dort.
+        Assert.Contains("navigate('budgets',{query:'open='", coach);
+        Assert.Contains("openBudgetDetail(context, open)", await GetAsync("/pages/budgets/entry.js"));
         // Der Auswahlzustand lebt seit der gemeinsamen Auswahl-Komponente in einer
         // components/selection-list.js-Instanz statt in einer seiteneigenen Map (siehe #160).
         Assert.Contains("coachSelection", transactions);
