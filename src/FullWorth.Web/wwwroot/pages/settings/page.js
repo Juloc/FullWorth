@@ -148,6 +148,26 @@ async function openTwoFactorDialog(ctx) {
 export function bindSettings(ctx) {
   if (bound) return;
   bound = true;
+  // Farbschema und Sprache: die beiden Felder stehen im Markup DIESER Seite, also bindet sie diese
+  // Seite. Bis #154 tat es app.js, weil das Markup in der einen Huelle lag - und als es hierher zog,
+  // warf app.js beim Start auf jeder Seite, weil $('#theme') nichts mehr fand. Die Huelle blieb
+  // dabei auf halbem Weg stehen: unter anderem wurde "Mehr" in der unteren Leiste nie verdrahtet,
+  // und damit war am Telefon nichts ausserhalb der vier schnellen Ziele mehr erreichbar.
+  ctx.$('#theme')?.addEventListener('change', event => {
+    state.theme = event.target.value;
+    window.FullWorthTheme.writeThemeState({ mode: state.theme });
+    ctx.applyTheme?.();
+  });
+  ctx.$('#language')?.addEventListener('change', event => {
+    state.lang = event.target.value;
+    localStorage.setItem('finance.language', state.lang);
+    // Das Cookie MUSS hier gesetzt werden, nicht erst von app/boot.js beim naechsten Start: der
+    // Server liest es, um das Markup in der richtigen Sprache zu schicken. Schriebe es erst boot.js,
+    // kaeme das erste Bild nach dem Umschalten noch in der alten Sprache und JavaScript tauschte es
+    // danach aus - genau der Sprung, gegen den die serverseitige Uebersetzung gebaut wurde.
+    document.cookie = `fw.lang=${state.lang}; path=/; max-age=31536000; SameSite=Lax`;
+    location.reload();
+  });
   ctx.$('#delete-account')?.addEventListener('click', () => openDeleteAccountDialog(ctx));
   // Admin ist eine Ansicht dieser Hülle, kein eigenes Dokument mehr - ein location.assign hätte
   // die ganze Anwendung neu geladen, nur um eine Seite weiterzugehen.

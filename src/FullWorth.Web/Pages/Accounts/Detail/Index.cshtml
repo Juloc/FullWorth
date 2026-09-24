@@ -1,0 +1,23 @@
+@page "/accounts/detail"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Konto · FullWorth";
+    ViewData["ActiveView"] = "account-detail";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/accounts/detail/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-account-detail"><article class="panel"><div class="panel-head"><button id="account-detail-back" type="button" class="btn btn-secondary account-detail-back"><span aria-hidden="true">←</span> <span data-i18n="accounts.backToList">@Text.Get("accounts.backToList", language)</span></button><div class="panel-head-actions"><button id="account-detail-edit" data-i18n="common.edit">@Text.Get("common.edit", language)</button></div></div><div id="account-detail-head" class="account-detail-head"></div><div id="account-detail-info" class="rows"></div></article></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/accounts/detail/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/accounts/detail/entry.js"></script>
+}

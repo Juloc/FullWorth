@@ -203,6 +203,11 @@ export function createShell({
     });
   }
 
+  // Die Auswahl fuer Farbschema und Sprache steht auf der Einstellungsseite, also gehoert ihr auch
+  // das Umschalten - dafuer braucht sie applyTheme. Frueher stand beides in app.js, weil dort das
+  // Markup lag; seit #154 liegt es bei der Seite, und app.js griff ins Leere.
+  ctx.applyTheme = applyTheme;
+
   return {
     ctx,
     bind,

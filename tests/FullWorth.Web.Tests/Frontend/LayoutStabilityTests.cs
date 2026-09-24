@@ -64,6 +64,9 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         //                 desktop  mobile      gemessen        was sich noch bewegt
         ("/",                0.0,    0.0), // 0.000 / 0.000   nichts
         ("/accounts",        0.0,    0.0), // 0.000 / 0.003   Beschriftung der zwei Kopfknöpfe
+        // Die Kontodetails hatten als Ansicht der Hülle keine Adresse, die man hätte laden können -
+        // gemessen wurde hier also nie etwas (#154).
+        ("/accounts/detail", 0.0,    0.0),
         // War hier als "0.001 / 0.003, Beschriftung des Aktionsknopfs" notiert; das stimmt nicht mehr -
         // nachgemessen (53 Läufe: 23 vor einer CSS-Korrektur, 30 danach) zeigt der Sprung nur noch am
         // Telefon, bimodal zwischen 0,000 (haeufiger) und immer genau 0,007 (nie ein anderer Wert). Der

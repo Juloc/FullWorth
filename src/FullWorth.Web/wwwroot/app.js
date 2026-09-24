@@ -3,15 +3,14 @@ import { isPrivate, onPrivacyChange } from './components/privacy.js';
 import { confirmDialog } from './components/confirm.js';
 import { bindIdentityIcons } from './features/ux-kit.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
-import { renderNetWorth, bindNetWorth, newAsset } from './pages/networth/page.js';
-import { renderLoans, bindLoans } from './pages/networth/loans.js';
 import { renderDashboardInsights } from './pages/insights/page.js';
 
-import { createAccessSetup } from './pages/settings/access-setup.js';
-import { bindAccounts, renderAccounts, renderAccountDetail, openAddAccount } from './pages/accounts/page.js';
-import { openBankConnection, openBankingSetup, renderBankingSettings } from './pages/settings/bank-connections/page.js';
-import { bindSettings, renderSettings } from './pages/settings/page.js';
 
+// Der Registrierungs-Assistent. Er gehoert zu den Einstellungen, laeuft aber nach dem Registrieren
+// auf der Startseite los - und die ist die letzte Ansicht, die diese Huelle noch zeigt. Beide
+// Zeilen ziehen mit ihr um, nicht vorher.
+import { createAccessSetup } from './pages/settings/access-setup.js';
+import { openBankingSetup } from './pages/settings/bank-connections/page.js';
 import { createDialog } from './components/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
@@ -50,7 +49,7 @@ const viewFromPath=router.viewFromPath;
 // regex against the rendered label from a MutationObserver, which a new label or language broke.
 // Nur noch die Ansichten, die diese Huelle selbst zeigt. Eine umgezogene Seite bringt ihre
 // Hauptaktion in ihrem eigenen entry.js mit - sie gehoert zur Seite und nicht in eine Tabelle.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)]};
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit']};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const root=document.documentElement;
@@ -59,7 +58,7 @@ const toast=(text,duration)=>toastController.show(text,duration);
 
 async function boot(){
   setMoneyLocale(state.lang);
-  $('#theme').value=state.theme;$('#language').value=state.lang;applyTheme();
+  applyTheme();
   await loadMessages();await loadCapabilities();bind();syncAdminVisibility();syncPrivacyToggle();syncNavToggle();
   const startView=handleConnectRedirect()||viewFromPath(location.pathname);
   try{await loadSpaces()}catch(e){console.error(e);toast(get('common.error'))}
@@ -68,7 +67,7 @@ async function boot(){
   await showView(startView,{replace:true,path:startPath});
   // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
   shell.startLock();
-  await accessSetup.maybeOpenRegistrationOnboarding();
+  await createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,status,options)).maybeOpenRegistrationOnboarding();
 }
 async function loadCapabilities(){
   try{
@@ -106,8 +105,6 @@ const applyTheme=()=>shell.applyTheme();
 
 function bind(){
   bindIdentityIcons();
-  $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
-  $('#theme').addEventListener('change',e=>{state.theme=e.target.value;window.FullWorthTheme.writeThemeState({mode:state.theme});applyTheme()});
   // Sidebar theme toggle: cycles System -> Hell -> Dunkel (same behaviour as the login screen) and keeps the Settings select in sync.
   shell.bind();
   media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
@@ -126,10 +123,6 @@ function bind(){
     if(event.metaKey||event.ctrlKey||event.shiftKey)return;
     event.preventDefault();showView(b.dataset.viewJump);
   }));
-  bindAccounts(ctx,()=>openBankConnection(ctx));
-  bindSettings(ctx);
-  bindNetWorth(ctx);
-  bindLoans(ctx);
   bindDashboard(ctx);
   $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
@@ -330,13 +323,8 @@ const shell=createShell({
   currentView:()=>state.view,
   primaryAction:view=>PRIMARY_ACTION[view]??null
 });
-const accessSetup=createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,status,options));
 const featureRegistry=createFeatureRegistry()
-  .register('dashboard',()=>loadDashboard())
-  .register('accounts',()=>renderAccounts(ctx))
-  .register('account-detail',()=>renderAccountDetail(ctx))
-  .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
-  .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}));
+  .register('dashboard',()=>loadDashboard());
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 initResizableSidebar();

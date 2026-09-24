@@ -39,7 +39,7 @@ public sealed class DataExportSurfaceTests
     [Fact]
     public void All_five_export_routes_are_reachable_through_one_entry()
     {
-        var html = Asset("pages", "settings", "page.html");
+        var html = WebSources.Page("Settings");
         var js = Asset("pages", "settings", "page.js");
 
         Assert.Contains("id=\"export-data\"", html);
@@ -142,7 +142,7 @@ public sealed class DataExportSurfaceTests
     [Fact]
     public void The_one_export_row_is_named_the_same_in_markup_and_in_both_languages()
     {
-        Assert.Contains("data-i18n=\"export.title\"", Asset("pages", "settings", "page.html"));
+        Assert.Contains("data-i18n=\"export.title\"", WebSources.Page("Settings"));
 
         foreach (var (locale, title) in new[] { ("de", "Daten exportieren"), ("en", "Export data") })
         {
@@ -170,7 +170,7 @@ public sealed class DataExportSurfaceTests
     [Fact]
     public void The_json_variants_are_reachable_but_never_as_their_own_row()
     {
-        var html = Asset("pages", "settings", "page.html");
+        var html = WebSources.Page("Settings");
         var js = Portability();
 
         Assert.Contains("api/export/wealth-full", js);

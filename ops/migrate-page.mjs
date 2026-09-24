@@ -90,6 +90,22 @@ export const PAGES = {
     folder: 'settings/bank-connections', page: 'Settings/BankConnections',
     route: '/settings/bank-connections', render: 'renderBankConnections'
   },
+  accounts: {
+    folder: 'accounts', page: 'Accounts', route: '/accounts',
+    render: 'renderAccounts', bind: 'bindAccounts', action: ['accounts.add', 'openAddAccount']
+  },
+  'account-detail': {
+    folder: 'accounts/detail', page: 'Accounts/Detail', route: '/accounts/detail',
+    render: 'renderAccountDetail'
+  },
+  networth: {
+    folder: 'networth', page: 'NetWorth', route: '/networth',
+    render: 'renderNetWorth', bind: 'bindNetWorth', action: ['networth.newAsset', 'newAsset']
+  },
+  settings: {
+    folder: 'settings', page: 'Settings', route: '/settings',
+    render: 'renderSettings', bind: 'bindSettings'
+  },
   'import-broker-pdf': {
     folder: 'settings/import/broker-pdf', page: 'Settings/Import/BrokerPdf',
     route: '/settings/import/broker-pdf', render: 'renderBrokerPdfImport'

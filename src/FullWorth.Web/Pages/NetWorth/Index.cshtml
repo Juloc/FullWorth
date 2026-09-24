@@ -1,0 +1,23 @@
+@page "/networth"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Vermögen · FullWorth";
+    ViewData["ActiveView"] = "networth";
+}
+
+@*
+    Eine eigene Seite (#154 Phase C): ihr Markup, ihr CSS, ihr JS - und nichts von den anderen.
+    Das Markup stand bis hierher in wwwroot/pages/networth/page.html, von wo
+    ops/generate-shell.mjs es in das eine grosse Dokument geschrieben hat.
+*@
+
+<section id="view-networth"></section>
+
+@section Styles {
+    <link rel="stylesheet" href="/pages/networth/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="/pages/networth/entry.js"></script>
+}

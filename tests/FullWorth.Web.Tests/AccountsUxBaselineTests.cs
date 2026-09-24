@@ -17,10 +17,9 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void AccountsPresentation_IsOwnedByAccountsModule_AndIncludedInPwaShell()
     {
-        // Read the shipped app shell directly. The served "/" is behind RequireAuthorization, so an
-        // unauthenticated test client is redirected to the auth shell instead of index.html; the static
-        // index.html read here is exactly what an authenticated user receives via MapFallbackToFile.
-        var html = ReadAsset("index.html");
+        // Seit #154 hat die Kontenseite ihr eigenes Markup - das Stylesheet steht dort im Abschnitt
+        // "Styles" und wird nur noch von IHR geladen, nicht mehr von jeder Seite.
+        var html = WebSources.Page("Accounts");
         var sw = ReadAsset("sw.js");
 
         var accounts = ReadAsset("pages", "accounts", "page.js");

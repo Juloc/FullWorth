@@ -122,7 +122,8 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var coach = await GetAsync("/pages/coach/page.js");
         var dialogs = await GetAsync("/components/dialog.js");
 
-        Assert.Contains("id=\"layout-reset\"", html);
+        // "Layout zuruecksetzen" steht auf der Einstellungsseite - die Huelle liest ihn nur.
+        Assert.Contains("id=\"layout-reset\"", WebSources.Page("Settings"));
         Assert.Contains("finance.sidebar.width.", app);
         Assert.Contains("fullworth:view-change", app);
         // "Budget oeffnen" fuehrt auf eine andere Seite. Solange beide dasselbe Dokument waren,

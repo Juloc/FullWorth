@@ -173,8 +173,14 @@ public sealed class FrontendArchitectureGuardTests
         Assert.DoesNotContain("openDeleteAccountDialog", app);
         Assert.DoesNotContain("openTwoFactorDialog", app);
         Assert.DoesNotContain("renderSharing(", app);
-        Assert.Contains("bindSettings(ctx)", app);
-        Assert.Contains("renderSettings(ctx", app);
+
+        // Seit #154 heisst der Name dieses Tests woertlich, was er prueft: die Einstellungen werden
+        // von ihrer eigenen Seite verdrahtet und nicht mehr beim Start der Huelle. Die beiden Zeilen
+        // darueber bleiben: sie halten die Dialoge dort, wo sie hingehoeren.
+        var entry = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "settings", "entry.js"));
+        Assert.DoesNotContain("bindSettings(ctx)", app);
+        Assert.Contains("bindSettings(context)", entry);
+        Assert.Contains("renderSettings(context", entry);
 
         Assert.Contains("openDeleteAccountDialog", settings);
         Assert.Contains("openTwoFactorDialog", settings);

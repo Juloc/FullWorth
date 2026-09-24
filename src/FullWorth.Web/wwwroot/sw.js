@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v145';
+const VERSION = 'v146';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -28,6 +28,8 @@ const APP_SHELL = [
   //
   // PwaOfflineShellCoverageTests laeuft den Importgraphen jeder Seite ab und haelt die Liste
   // darunter vollstaendig; diese Zeilen sind die Wurzeln, an denen er beginnt.
+  '/pages/accounts/detail/entry.js',
+  '/pages/accounts/entry.js',
   '/pages/admin/entry.js',
   '/pages/analytics/entry.js',
   '/pages/audit/entry.js',
@@ -39,11 +41,13 @@ const APP_SHELL = [
   '/pages/contracts/entry.js',
   '/pages/insights/entry.js',
   '/pages/merchants/entry.js',
+  '/pages/networth/entry.js',
   '/pages/notifications/entry.js',
   '/pages/pension/entry.js',
   '/pages/purchases/entry.js',
   '/pages/rules/entry.js',
   '/pages/settings/bank-connections/entry.js',
+  '/pages/settings/entry.js',
   '/pages/settings/import/broker-pdf/entry.js',
   '/pages/settings/import/entry.js',
   '/pages/settings/import/finanzguru/xlsx/entry.js',
