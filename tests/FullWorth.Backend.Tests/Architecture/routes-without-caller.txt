@@ -12,15 +12,17 @@
 #                                   assetPath), und FullWorth.Web/Program.cs reicht sie durch - das
 #                                   Frontend schreibt sie deshalb nirgends hin
 #
-# Erledigt: die Sammelbearbeitung. Es waren ZWEI Maschinen dafuer, beide fertig und beide ohne
-# Aufrufer; die aeltere ist geloescht, die gebliebene haengt an der Auswahl, die es auf der
-# Buchungsseite ohnehin gab. 264 Zeilen weniger, und die Oberflaeche zementiert keine Doppelung.
+# Erledigt:
+#
+#   Sammelbearbeitung   Es waren ZWEI Maschinen dafuer, beide fertig und beide ohne Aufrufer; die
+#                       aeltere ist geloescht, die gebliebene haengt an der Auswahl, die es auf der
+#                       Buchungsseite ohnehin gab. 264 Zeilen weniger.
+#   Fluss-Diagramm      Eine weitere Darstellung derselben freien Auswertung. Sein Rumpf lief davor
+#                       nicht einmal: FinancialReconciliationMiddleware fing die Route vor der
+#                       Zuordnung ab.
 #
 # Der Rest ist fertig gebaut und unerreichbar, und die groessten Brocken darunter sind:
 #
-#   /api/analytics/sankey           das Fluss-Diagramm der freien Auswertung. Der Rumpf lief lange
-#                                   gar nicht - FinancialReconciliationMiddleware fing die Route vor
-#                                   der Zuordnung ab. Die Middleware ist weg, der Aufrufer fehlt noch.
 #   /api/saved-analyses/*           gespeicherte Auswertungen, volles CRUD
 #   /api/account-experience/*       Darstellung und Reihenfolge der Konten
 #   /api/category-merge             Kategorien zusammenfuehren
@@ -41,7 +43,6 @@ GET /api/purchases/discount-analytics
 GET /api/tax/profiles
 POST /api/account-experience/reorder
 POST /api/account-experience/{accountId:guid}/seen
-POST /api/analytics/sankey
 POST /api/bootstrap/accept-invite
 POST /api/bootstrap/deactivate-user
 POST /api/bootstrap/first-admin

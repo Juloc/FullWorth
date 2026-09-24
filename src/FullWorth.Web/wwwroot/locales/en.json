@@ -544,7 +544,8 @@
       "type_bar": "Bars",
       "type_line": "Line",
       "type_hbar": "Horizontal bars",
-      "type_donut": "Donut"
+      "type_donut": "Donut",
+      "type_sankey": "Flow"
     }
   },
   "rules": {

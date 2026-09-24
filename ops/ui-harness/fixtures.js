@@ -597,6 +597,26 @@
     // Overview widgets (#157/Scheibe 14 gap): DashboardResult (AnalyticsService.cs) drives net-worth,
     // available, income/expense and upcoming - without this key all four rendered their empty state.
     // Numbers agree with the other wealth/* fixtures above so the page does not contradict itself.
+    // Das Flussdiagramm der freien Auswertung (#177). Bewusst MIT Rest und MIT fehlendem Kurs:
+    // beide Hinweise der Ansicht sind sonst nicht zu sehen, und genau sie sind die Geldregeln -
+    // ein fehlender Kurs macht die Summe unvollstaendig, und das muss dastehen.
+    //
+    // Die Zahlen gehen auf: 3200 Einnahmen, 1852,30 ausgegeben, 1347,70 bleiben stehen.
+    'analytics/sankey': {
+      currency: 'EUR', incomplete: true, reconciles: true,
+      nodes: [
+        { id: 'income', name: 'Einnahmen' }, { id: 'available', name: 'Verfügbar' },
+        { id: 'cat-0', name: 'Wohnen' }, { id: 'cat-1', name: 'Lebensmittel' },
+        { id: 'cat-2', name: 'Mobilität' }, { id: 'remaining', name: 'Bleibt übrig' }
+      ],
+      links: [
+        { source: 'income', target: 'available', value: 3200 },
+        { source: 'available', target: 'cat-0', value: 980 },
+        { source: 'available', target: 'cat-1', value: 612.30 },
+        { source: 'available', target: 'cat-2', value: 260 },
+        { source: 'available', target: 'remaining', value: 1347.70 }
+      ]
+    },
     'analytics/dashboard': {
       currency: 'EUR', accounts: 21250.30, assets: 12000, liabilities: 5000, netWorth: 48250.30,
       income: 3200, expenses: 1852.30, incomplete: true,
@@ -1279,6 +1299,10 @@
   function writeAnswer(method, pathname, init) {
     const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
     if (after.startsWith('compensation/calculate')) return { status: 200, body: COMPENSATION_RESULT };
+    // #177: das Flussdiagramm ist ein POST, weil die Auswahl ein ganzer Filter ist - geschrieben
+    // wird nichts. Ohne eigene Antwort bekaeme die Ansicht den allgemeinen Schreib-Echo ({id:'stub'})
+    // und zeigte "keine Fluesse", was im Harness wie ein Fehler der Seite aussieht.
+    if (after.startsWith('analytics/sankey')) return { status: 200, body: FIXTURES['analytics/sankey'] };
     // #115: der Vorschlag ist ein POST, weil die Auswahl eine Kategorienliste ist - geschrieben wird
     // nichts. Ohne eigene Antwort bekaeme die Seite den allgemeinen Schreib-Echo ({id:'stub'}) und
     // zeigte einen Vorschlag aus undefined-Werten. Die Zahlen wachsen mit der Anzahl gewaehlter

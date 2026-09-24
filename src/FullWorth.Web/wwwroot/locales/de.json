@@ -544,7 +544,8 @@
       "type_bar": "Balken",
       "type_line": "Linie",
       "type_hbar": "Horizontale Balken",
-      "type_donut": "Donut"
+      "type_donut": "Donut",
+      "type_sankey": "Fluss"
     }
   },
   "rules": {

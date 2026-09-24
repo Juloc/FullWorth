@@ -9,6 +9,7 @@ import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIco
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
 import { emptyRow } from '../../components/empty.js';
+import { renderSankey } from './sankey.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
@@ -195,7 +196,7 @@ function advancedHtml() {
     <label class="field"><span>${esc(ctx.get('analytics.builder.measure'))}</span><select id="an-measure">${opt('spend', 'analytics.builder.measure_spend')}${opt('income', 'analytics.builder.measure_income')}${opt('net', 'analytics.builder.measure_net')}${opt('count', 'analytics.builder.measure_count')}</select></label>
     <label class="field"><span>${esc(ctx.get('analytics.builder.dimension'))}</span><select id="an-dimension">${opt('month', 'analytics.builder.dimension_month')}${opt('category', 'analytics.builder.dimension_category')}${opt('merchant', 'analytics.builder.dimension_merchant')}${opt('none', 'analytics.builder.dimension_none')}</select></label>
     <label class="field"><span>${esc(ctx.get('analytics.period'))}</span><select id="an-cperiod">${PERIODS.map(p => opt(p, 'analytics.period_' + p, '1y')).join('')}</select></label>
-    <label class="field"><span>${esc(ctx.get('analytics.builder.type'))}</span><select id="an-ctype">${opt('bar', 'analytics.builder.type_bar')}${opt('line', 'analytics.builder.type_line')}${opt('hbar', 'analytics.builder.type_hbar')}${opt('donut', 'analytics.builder.type_donut')}</select></label>
+    <label class="field"><span>${esc(ctx.get('analytics.builder.type'))}</span><select id="an-ctype">${opt('bar', 'analytics.builder.type_bar')}${opt('line', 'analytics.builder.type_line')}${opt('hbar', 'analytics.builder.type_hbar')}${opt('donut', 'analytics.builder.type_donut')}${opt('sankey', 'analytics.builder.type_sankey')}</select></label>
   </div>`;
   return `<details class="fw-card an-advanced">
     <summary>${esc(t('Erweitert / Eigene Analyse', 'Advanced / Custom analysis'))}</summary>
@@ -789,6 +790,20 @@ async function runBuilder(context) {
   if (cfg.period === 'all') { const s = new Date(); s.setFullYear(s.getFullYear() - 5); win = { from: isoLocal(s), to: isoLocal(new Date()) }; }
   else win = range(cfg.period);
   const { from, to } = win;
+  // Der Fluss ist keine Reihe ueber eine Dimension, sondern wohin das Geld gegangen ist - er kommt
+  // deshalb aus einer eigenen Antwort. /api/analytics/sankey war bis #177 unerreichbar, und sein
+  // Rumpf lief davor nicht einmal: eine Middleware fing die Route vor der Zuordnung ab.
+  if (cfg.chartType === 'sankey') {
+    let flow;
+    try {
+      flow = await ctx.api('api/analytics/sankey', ctx.jsonBody({
+        measure: cfg.measure, dimension: cfg.dimension, from: from || null, to: to || null
+      }));
+    } catch (err) { el.innerHTML = `<div class="row-sub">${esc(err.message || ctx.get('common.error'))}</div>`; return; }
+    renderSankey(ctx, el, flow);
+    return;
+  }
+
   const qs = `?measure=${cfg.measure}&dimension=${cfg.dimension}${from ? `&from=${from}&to=${to}` : ''}`;
   let r;
   try { r = await ctx.api('api/analytics/chart' + qs); }

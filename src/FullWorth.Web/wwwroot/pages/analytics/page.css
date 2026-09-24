@@ -162,3 +162,18 @@
   stroke:var(--cta);
   stroke-width:4;
 }
+
+/* Das Flussdiagramm der freien Auswertung (#177).
+
+   Nur Tokens, wie ueberall: die drei Rollen sind Zufluss, Abfluss und der Rest, der stehen bleibt.
+   Der Rest ist die einzige, die eine eigene Farbe verdient - dass am Monatsende etwas uebrig ist,
+   ist die Aussage des Bildes. */
+.an-sankey{width:100%;height:auto;overflow:visible}
+.an-sankey-link{fill:var(--k4);opacity:.34}
+.an-sankey-link-in{fill:var(--k2)}
+.an-sankey-link-remaining{fill:var(--positive);opacity:.42}
+.an-sankey-node{fill:var(--k2)}
+.an-sankey-node-remaining{fill:var(--positive)}
+.an-sankey-label{font-size:var(--text-caption-size);fill:var(--muted)}
+.an-sankey-note{margin:var(--s2) 0 0}
+.an-sankey-note-warn{color:var(--warning)}
