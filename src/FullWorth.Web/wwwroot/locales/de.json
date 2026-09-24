@@ -1067,7 +1067,9 @@
   "export": {
     "title": "Daten exportieren",
     "hint": "Sicherung oder Tabellen – als ZIP, Excel oder JSON",
-    "done": "Export heruntergeladen."
+    "done": "Export heruntergeladen.",
+    "checkTitle": "Sicherung prüfen",
+    "checkHint": "Format, Bereich und jede Datei im Archiv nachsehen"
   },
   "sharing": {
     "title": "Freigabe & Mitglieder",

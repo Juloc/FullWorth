@@ -83,7 +83,13 @@ public sealed class DataExportSurfaceTests
         // Bewusst die Code-Form und nicht das blosse Wort: "content-disposition" steht auch im
         // Kommentar darueber, und ein Test, der Prosa mitzaehlt, misst nicht, was er behauptet.
         Assert.Single(Regex.Matches(js, @"headers\.get\('content-disposition'\)"));
-        Assert.Single(Regex.Matches(js, @"apiClient\.backendResponse"));
+        // Auf den Herunterlade-Weg eingegrenzt, nicht auf die ganze Datei: seit #177 wohnt die
+        // Sicherungspruefung hier mit, und die holt ihre Antwort ueber denselben gemeinsamen Client.
+        // Beides zu zaehlen haette den Test rot gemacht, ohne dass an den fuenf Exporten etwas
+        // auseinandergelaufen waere.
+        var download = js[js.IndexOf("async function downloadExport", StringComparison.Ordinal)
+            ..js.IndexOf("const EXPORT_TARGETS", StringComparison.Ordinal)];
+        Assert.Single(Regex.Matches(download, @"apiClient\.backendResponse"));
         // Und genau EIN Aufrufer: der Dialog holt das Ziel aus der Tabelle, statt fuenf Funktionen zu
         // haben, die sich nur in drei Zeichenketten unterscheiden.
         Assert.Single(Regex.Matches(js, @"downloadExport\(ctx, null, \{"));
@@ -179,6 +185,10 @@ public sealed class DataExportSurfaceTests
         // Kein eigener Einstieg - weder als Zeile in den Einstellungen noch als zweite Funktion.
         Assert.DoesNotContain("wealth-full", html);
         Assert.DoesNotContain("snapshot", html);
-        Assert.Single(Regex.Matches(js, @"export function "));
+        // Zwei ausgefuehrte Funktionen, und beide sind benannt: der Export-Dialog und die
+        // Sicherungspruefung (#177). Eine dritte waere die Rueckkehr der fuenf Einzelwege.
+        Assert.Equal(2, Regex.Matches(js, @"export function ").Count);
+        Assert.Contains("export function openExportDialog", js);
+        Assert.Contains("export function openBackupCheckDialog", js);
     }
 }

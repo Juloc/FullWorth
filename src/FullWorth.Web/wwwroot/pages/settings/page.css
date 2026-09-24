@@ -99,3 +99,15 @@
   .appearance-preview{grid-template-columns:1fr}
   .appearance-preview-chart{width:100%;justify-self:start}
 }
+
+/* Das Ergebnis der Sicherungspruefung (#177). Drei Toene, und die Farbe ist nur die Zugabe: der
+   Satz in der Zeile sagt dasselbe, sonst haette ein Farbfehlsichtiger nur eine Liste. */
+.backup-check-result{margin-top:var(--space-3)}
+
+.backup-check-ok,
+.backup-check-bad,
+.backup-check-warn{border-inline-start:3px solid var(--border);padding-inline-start:var(--space-3)}
+
+.backup-check-ok{border-inline-start-color:var(--success)}
+.backup-check-bad{border-inline-start-color:var(--danger)}
+.backup-check-warn{border-inline-start-color:var(--warning)}

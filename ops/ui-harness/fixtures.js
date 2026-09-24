@@ -1388,6 +1388,14 @@
     // wird nichts. Ohne eigene Antwort bekaeme die Ansicht den allgemeinen Schreib-Echo ({id:'stub'})
     // und zeigte "keine Fluesse", was im Harness wie ein Fehler der Seite aussieht.
     if (after.startsWith('analytics/sankey')) return { status: 200, body: FIXTURES['analytics/sankey'] };
+    // #177: die Sicherungspruefung ist ein POST mit der ZIP im Rumpf. Ohne eigene Antwort bekaeme
+    // der Dialog den allgemeinen Schreib-Echo ({id:'stub'}) - valid waere undefined, und er zeigte
+    // 'nicht vollstaendig' ohne einen einzigen Grund. Hier der interessantere Fall: gueltig, aber
+    // mit einer Warnung, denn genau die geht sonst beim Zeichnen unter.
+    if (after.startsWith('import/wealth-backup/validate')) return { status: 200, body: {
+      valid: true, fullWorthSpaceId: SPACE, schemaVersion: 1, errors: [],
+      warnings: ['Backup manifest does not contain asset-document metadata.'], documentsChecked: 0
+    } };
     // #115: der Vorschlag ist ein POST, weil die Auswahl eine Kategorienliste ist - geschrieben wird
     // nichts. Ohne eigene Antwort bekaeme die Seite den allgemeinen Schreib-Echo ({id:'stub'}) und
     // zeigte einen Vorschlag aus undefined-Werten. Die Zahlen wachsen mit der Anzahl gewaehlter

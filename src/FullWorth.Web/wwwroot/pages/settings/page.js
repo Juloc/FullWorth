@@ -5,7 +5,7 @@ import { createDialog } from '../../components/dialog.js';
 import { openPinDialog } from '../../app/lock.js';
 import { privacyDefault, setPrivacyDefault } from '../../components/privacy.js';
 import { renderSharing, bindSharing } from './sharing.js';
-import { openExportDialog } from '../../features/wealth-portability.js';
+import { openExportDialog, openBackupCheckDialog } from '../../features/wealth-portability.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
@@ -177,6 +177,9 @@ export function bindSettings(ctx) {
   // Routen hatten gar keinen. Fünf Zeilen für im Kern dieselben Daten wären die falsche Antwort -
   // es sind zwei Fragen: was, und in welcher Form.
   ctx.$('#export-data')?.addEventListener('click', () => openExportDialog(ctx, { openFormDialog, FieldKind }));
+  // Die andere Haelfte derselben Sache (#177): eine Sicherung ist erst eine, wenn jemand sie
+  // geprueft hat. Der Endpunkt dafuer stand fertig im Baum und hatte keinen Aufrufer.
+  ctx.$('#check-backup')?.addEventListener('click', () => openBackupCheckDialog(ctx, { openFormDialog, FieldKind }));
   ctx.$('#lock-settings')?.addEventListener('click', () => openPinDialog(ctx));
   ctx.$('#privacy-default')?.addEventListener('change', event => setPrivacyDefault(event.target.checked));
   // Der Schalter gehört den Einstellungen, die Sprechblase dem Coach. Deshalb schreibt hier nur der

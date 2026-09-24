@@ -158,3 +158,109 @@ export function openExportDialog(ctx, { openFormDialog, FieldKind }) {
   format.closest('label')?.after(hint);
   return handles;
 }
+
+/**
+ * Eine Sicherung prüfen (#177).
+ *
+ * `POST /api/import/wealth-backup/validate` stand fertig im Baum und hatte keinen Aufrufer — und
+ * davor sogar zweimal, Zeile für Zeile gleich, einmal unter `/api/export` und einmal unter
+ * `/api/import`. Übrig ist der eine Weg, und jetzt führt auch einer hin.
+ *
+ * Geprüft, nicht eingespielt: einen Wiederherstellungs-Endpunkt gibt es in diesem Stand NICHT. Das
+ * steht deshalb im Dialog und nicht nur hier — ein Knopf namens „Sicherung“ in einer Anwendung, die
+ * nicht zurückspielen kann, ist genau die Art Versprechen, das man erst im Ernstfall prüft.
+ *
+ * Was der Server nachsieht: Format und Schema-Version des Manifests, ob die Sicherung zu DIESEM
+ * Bereich gehört, und für jedes Dokument, ob es im Archiv liegt und sein SHA-256 stimmt. Die Zahl
+ * der geprüften Dokumente gehört deshalb ins Ergebnis: „gültig" über null geprüften Dokumenten
+ * bedeutet etwas anderes als über zweihundert.
+ */
+export function openBackupCheckDialog(ctx, { openFormDialog, FieldKind }) {
+  const handles = openFormDialog({
+    title: t('Sicherung prüfen', 'Check backup'),
+    closeLabel: ctx.get('common.close'),
+    fallbackError: ctx.get('common.error'),
+    fields: [{ name: 'file', kind: FieldKind.Text, label: t('Sicherungsdatei (ZIP)', 'Backup file (ZIP)') }],
+    values: { file: '' },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close('cancel') },
+      { name: 'check', label: t('Prüfen', 'Check'), role: 'primary', submit: true }
+    ],
+    onSubmit: ({ setFormError }) => check(setFormError)
+  });
+
+  const form = handles.form;
+  // form-dialog kennt keine Dateiauswahl. Das Feld hier gegen ein echtes <input type="file"> zu
+  // tauschen ist die kleinere Änderung als eine sechste Feldart für einen einzigen Dialog.
+  const text = form.elements.namedItem('file');
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.name = 'file';
+  file.accept = '.zip,application/zip';
+  file.required = true;
+  text.replaceWith(file);
+
+  const hint = document.createElement('p');
+  hint.className = 'row-sub';
+  hint.textContent = t(
+    'Geprüft wird Format, Bereich und jede Datei im Archiv. Einspielen kann FullWorth eine Sicherung noch nicht.',
+    'Checks format, space and every file in the archive. FullWorth cannot restore a backup yet.');
+  file.closest('label')?.after(hint);
+
+  const result = document.createElement('div');
+  result.className = 'rows backup-check-result';
+  hint.after(result);
+
+  async function check(setFormError) {
+    const chosen = file.files?.[0];
+    if (!chosen) return setFormError(t('Bitte eine ZIP-Datei wählen.', 'Please choose a ZIP file.'));
+
+    const space = state.space?.id || localStorage.getItem('finance.space') || '';
+    result.replaceChildren(line(t('Wird geprüft …', 'Checking …')));
+    try {
+      const response = await apiClient.backendResponse(
+        `api/import/wealth-backup/validate?fullWorthSpaceId=${encodeURIComponent(space)}`,
+        { method: 'POST', body: chosen, headers: { 'Content-Type': 'application/zip', Accept: 'application/json' } });
+      paint(await response.json());
+    } catch (error) {
+      result.replaceChildren();
+      setFormError(error.message || ctx.get('common.error'));
+    }
+  }
+
+  function line(title, sub, tone) {
+    const row = document.createElement('div');
+    row.className = `row${tone ? ` backup-check-${tone}` : ''}`;
+    const main = document.createElement('div');
+    main.className = 'row-main';
+    const head = document.createElement('div');
+    head.className = 'row-title';
+    head.textContent = title;
+    main.append(head);
+    if (sub) {
+      const detail = document.createElement('div');
+      detail.className = 'row-sub';
+      detail.textContent = sub;
+      main.append(detail);
+    }
+    row.append(main);
+    return row;
+  }
+
+  function paint(verdict) {
+    const rows = [];
+    rows.push(verdict.valid
+      ? line(t('Die Sicherung ist in Ordnung.', 'The backup is sound.'),
+          t(`${verdict.documentsChecked} Dokument(e) geprüft, Schema ${verdict.schemaVersion ?? '—'}.`,
+            `${verdict.documentsChecked} document(s) checked, schema ${verdict.schemaVersion ?? '—'}.`), 'ok')
+      : line(t('Die Sicherung ist nicht vollständig.', 'The backup is not complete.'),
+          t('Sie lässt sich so nicht als Sicherung verwenden.', 'It cannot be relied on as a backup.'), 'bad'));
+
+    // Fehler und Warnungen kommen vom Server als Text. Sie gehen über textContent, nie über Markup.
+    for (const error of verdict.errors || []) rows.push(line(error, null, 'bad'));
+    for (const warning of verdict.warnings || []) rows.push(line(warning, null, 'warn'));
+    result.replaceChildren(...rows);
+  }
+
+  return handles;
+}

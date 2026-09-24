@@ -1067,7 +1067,9 @@
   "export": {
     "title": "Export data",
     "hint": "Backup or tables – as ZIP, Excel or JSON",
-    "done": "Export downloaded."
+    "done": "Export downloaded.",
+    "checkTitle": "Check backup",
+    "checkHint": "Verify format, space and every file in the archive"
   },
   "sharing": {
     "title": "Sharing & members",

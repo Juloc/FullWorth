@@ -43,6 +43,13 @@ public static class WebSources
     private static string Shared(string name) =>
         File.ReadAllText(Path.Combine(Web(), "Pages", "Shared", name));
 
+    /// <summary>
+    /// Die Wurzel des Arbeitsbaums. Ein Test, der ueber das Web-Projekt hinaussieht - etwa in die
+    /// aufgezeichnete Routenflaeche -, braucht sie; sie noch einmal zu suchen waere der zweite Leser,
+    /// den diese Klasse gerade abschafft.
+    /// </summary>
+    public static string RepoRoot => Root();
+
     private static string Web() => Path.Combine(Root(), "src", "FullWorth.Web");
 
     private static string Root()
