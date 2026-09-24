@@ -117,6 +117,10 @@ CREATE TABLE IF NOT EXISTS "InvestmentImportSecurityLinks" (
     // "ImportTransactionLinks" kam spaeter dazu (#175): eine Finanzguru-Kontoverknuepfung loescht seither
     // die Herkunftsverknuepfung einer verschobenen (nicht zusammengefuehrten) Buchung selbst mit -
     // vorher war das die einzige der acht Tabellen, die dieser Codepfad nie anfasste.
+    //
+    // "ImportTransactionEnrichments" kam mit #131 dazu und wandert beim Zusammenfuehren mit, also
+    // muss sie hier stehen - sonst scheitert jede Zusammenfuehrung in diesen Tests an "no such
+    // table", was nach einem Produktfehler aussieht und keiner ist.
     private static Task CreateRawTransactionTablesAsync(FullWorthDbContext db) =>
         db.Database.ExecuteSqlRawAsync("""
 CREATE TABLE IF NOT EXISTS "AssetCashflowEntries" (
@@ -211,6 +215,14 @@ CREATE TABLE IF NOT EXISTS "ImportTransactionLinks" (
   "CreatedAt" text NOT NULL,
   PRIMARY KEY ("ImportJobId","TransactionId"),
   UNIQUE ("TransactionId")
+);
+CREATE TABLE IF NOT EXISTS "ImportTransactionEnrichments" (
+  "ImportJobId" uuid NOT NULL,
+  "TransactionId" uuid NOT NULL,
+  "SetCategoryId" uuid NULL,
+  "SetTransfer" integer NOT NULL DEFAULT 0,
+  "CreatedAt" text NOT NULL,
+  PRIMARY KEY ("ImportJobId","TransactionId")
 );
 """);
 

@@ -79,6 +79,15 @@ WHERE c.contype='f'
         var rollbackSql = ImportTransactionProvenance.DeleteImportedTransactionsSql;
         foreach (var table in TransactionMergeService.CoveredTables)
         {
+            // Die eine Tabelle, bei der die beiden Listen mit Absicht auseinandergehen (#131): eine
+            // Ergaenzungs-Notiz wandert beim Zusammenfuehren mit, weil die Aufteilungen, die sie
+            // beschreibt, mitwandern - aber sie darf die Ruecknahme des Imports, der die Buchung
+            // ERZEUGT hat, nicht blockieren. Sie ist keine Nutzerarbeit, sondern die Notiz einer
+            // zweiten Quelle, und eine Notiz ueber eine geloeschte Buchung beschreibt nichts mehr.
+            // Zurueckgenommen wird sie auf dem anderen Weg, in
+            // ImportTransactionEnrichment.RevertAsync.
+            if (table == "ImportTransactionEnrichments") continue;
+
             // "Transactions" steht im Rollback-SQL als die Tabelle, aus der geloescht wird - der
             // Selbstverweis "RefundOfTransactionId" ist dort eine eigene NOT-EXISTS-Zeile.
             Assert.True(

@@ -46,6 +46,13 @@ internal static class TransactionMergeService
     [
         new("AssetCashflowEntries", "TransactionId", ["AssetId", "Type"]),
         new("ContractTransactionLinks", "TransactionId", ["ContractId"]),
+        // Die Notiz darueber, was ein Import an dieser Buchung ergaenzt hat (#131), wandert mit -
+        // anders als der Herkunftsnachweis daneben. Sie loescht nichts, sie beschreibt nur den
+        // eigenen Beitrag, und der wandert beim Zusammenfuehren tatsaechlich mit: die Aufteilungen,
+        // die der Import geschrieben hat, haengen danach am Gewinner. Bliebe die Notiz beim
+        // Verlierer, ginge sie mit ihm unter, und die Ruecknahme dieses Imports faende die eigenen
+        // Aufteilungen nicht mehr.
+        new("ImportTransactionEnrichments", "TransactionId", ["ImportJobId"]),
         new("PriceChangeSuggestions", "EvidenceTransactionId", null),
         new("PurchaseItemReturns", "RefundTransactionId", null),
         new("PurchasePaymentLinks", "TransactionId", ["PurchaseId"]),
