@@ -157,6 +157,11 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
       'class="nav-item active"$1 aria-current="page"');
   }
 
+  // "~/styles/x.css" loest ASP.NET mit MapStaticAssets zur Adresse mit Fingerabdruck auf
+  // ("/styles/x.892ywcc37e.css", #154). Die Werkstatt serviert wwwroot direkt und kennt keine
+  // Fingerabdruecke - fuer sie ist es dieselbe Datei unter ihrem Namen.
+  html = html.replace(/\b(href|src)="~\//g, '$1="/');
+
   const leftover = html.match(/@[A-Za-z(]/);
   if (leftover) {
     throw new Error(

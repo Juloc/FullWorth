@@ -21,9 +21,9 @@
 <section id="view-transactions"><div class="toolbar tx-toolbar"><button id="tx-back" type="button" class="btn btn-secondary tx-back" hidden aria-label="Zurück">←</button><label class="tx-search"><svg class="tx-search-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="tx-query" type="search" data-i18n-placeholder="transactions.search" placeholder="@Text.Get("transactions.search", language)"></label><button id="tx-filter" type="button" class="tx-filter-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7Z"/></svg><span data-i18n="common.filter">@Text.Get("common.filter", language)</span></button></div><div id="tx-transfer-hint" class="tx-transfer-hint" hidden></div><div id="tx-daybar" class="tx-daybar"><span id="tx-daybar-date" class="tx-daybar-date"></span><span id="tx-daybar-balance" class="tx-daybar-balance"></span><button id="tx-daybar-today" type="button" class="btn btn-secondary tx-daybar-today" data-i18n="common.today">@Text.Get("common.today", language)</button></div><article class="panel table-panel"><div class="tx-list"><div class="tx-list-head" aria-hidden="true"><span data-i18n="transactions.date">@Text.Get("transactions.date", language)</span><span data-i18n="transactions.counterparty">@Text.Get("transactions.counterparty", language)</span><span data-i18n="transactions.category">@Text.Get("transactions.category", language)</span><span data-i18n="transactions.account">@Text.Get("transactions.account", language)</span><span class="number" data-i18n="transactions.amount">@Text.Get("transactions.amount", language)</span><span></span></div><div id="transactions-body"></div></div></article><button id="tx-add" type="button" class="tx-fab" hidden aria-label="Buchung hinzufügen">+</button></section>
 
 @section Styles {
-    <link rel="stylesheet" href="/pages/transactions/page.css">
+    <link rel="stylesheet" href="~/pages/transactions/page.css">
 }
 
 @section Scripts {
-    <script type="module" src="/pages/transactions/entry.js"></script>
+    <script type="module" src="~/pages/transactions/entry.js"></script>
 }

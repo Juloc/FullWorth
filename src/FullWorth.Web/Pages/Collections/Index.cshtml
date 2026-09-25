@@ -15,9 +15,9 @@
 <section id="view-collections"><article class="panel"><div class="panel-head"><h2 data-i18n="collections.title">@Text.Get("collections.title", language)</h2><div class="panel-head-actions"><select id="col-status" aria-label="Status"><option value="" data-i18n="common.all">@Text.Get("common.all", language)</option><option value="active" data-i18n="collections.status_active">@Text.Get("collections.status_active", language)</option><option value="completed" data-i18n="collections.status_completed">@Text.Get("collections.status_completed", language)</option><option value="archived" data-i18n="collections.status_archived">@Text.Get("collections.status_archived", language)</option></select><input id="col-search" type="search" data-i18n-placeholder="collections.search" placeholder="@Text.Get("collections.search", language)"><button data-action="new-collection" data-i18n="common.add">@Text.Get("common.add", language)</button></div></div><div id="collections-list" class="rows"></div></article><article class="panel" id="collection-detail" hidden><div class="panel-head"><h2 id="collection-detail-title"></h2><div class="panel-head-actions"><button id="col-add-transactions" class="btn btn-secondary" data-i18n="collections.addTransactions">@Text.Get("collections.addTransactions", language)</button><button id="col-search-transactions" class="btn btn-secondary" data-i18n="collections.searchTransactions">@Text.Get("collections.searchTransactions", language)</button><button id="col-edit" class="btn btn-secondary" data-i18n="common.edit">@Text.Get("common.edit", language)</button><button id="col-delete" class="btn btn-secondary" data-i18n="common.delete">@Text.Get("common.delete", language)</button><button id="col-close" class="btn btn-icon" aria-label="Schließen">×</button></div></div><div id="collection-detail-body"></div></article></section>
 
 @section Styles {
-    <link rel="stylesheet" href="/pages/collections/page.css">
+    <link rel="stylesheet" href="~/pages/collections/page.css">
 }
 
 @section Scripts {
-    <script type="module" src="/pages/collections/entry.js"></script>
+    <script type="module" src="~/pages/collections/entry.js"></script>
 }

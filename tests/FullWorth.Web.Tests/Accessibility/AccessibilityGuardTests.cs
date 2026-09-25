@@ -35,7 +35,7 @@ public sealed class AccessibilityGuardTests
         // so naming individual files made the guard depend on where the rules happen to sit today.
         var html = WebSources.Layout();
         var hrefs = System.Text.RegularExpressions.Regex
-            .Matches(html, "<link[^>]+rel=\"stylesheet\"[^>]+href=\"/([^\"]+\\.css)\"")
+            .Matches(html, "<link[^>]+rel=\"stylesheet\"[^>]+href=\"~?/([^\"]+\\.css)\"")
             .Select(match => match.Groups[1].Value)
             .Distinct(StringComparer.Ordinal)
             .ToArray();

@@ -22,6 +22,9 @@ public sealed class PwaOfflineShellCoverageTests
     {
         var precached = PrecachedPaths();
         var reachable = ReachableFromIndex();
+        // Findet das Muster nichts - etwa weil das Markup seine Adressen anders schreibt -, waere dieser
+        // Test ueber eine leere Liste gruen und bewiese nichts.
+        Assert.NotEmpty(reachable);
 
         var missing = reachable.Where(path => !precached.Contains(path)).Order(StringComparer.Ordinal).ToArray();
 
@@ -37,9 +40,12 @@ public sealed class PwaOfflineShellCoverageTests
         var precached = PrecachedPaths();
         var index = WebSources.Layout();
 
-        var missing = Regex.Matches(index, """<link[^>]+rel="stylesheet"[^>]+href="(?<path>/[^"?#]+)""")
+        var linked = Regex.Matches(index, """<link[^>]+rel="stylesheet"[^>]+href="~?(?<path>/[^"?#]+)""")
             .Select(match => match.Groups["path"].Value)
             .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        Assert.NotEmpty(linked);
+        var missing = linked
             .Where(path => !precached.Contains(path))
             .Order(StringComparer.Ordinal)
             .ToArray();

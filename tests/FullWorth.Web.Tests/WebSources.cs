@@ -50,10 +50,10 @@ public static class WebSources
     public static HashSet<string> Reachable(string markup)
     {
         var queue = new Queue<string>(System.Text.RegularExpressions.Regex
-            .Matches(markup, """<script[^>]+type="module"[^>]+src="(?<path>/[^"?#]+)""")
+            .Matches(markup, """<script[^>]+type="module"[^>]+src="~?(?<path>/[^"?#]+)""")
             .Select(match => match.Groups["path"].Value)
             .Concat(System.Text.RegularExpressions.Regex
-                .Matches(markup, """<link[^>]+rel="stylesheet"[^>]+href="(?<path>/[^"?#]+)""")
+                .Matches(markup, """<link[^>]+rel="stylesheet"[^>]+href="~?(?<path>/[^"?#]+)""")
                 .Select(match => match.Groups["path"].Value)));
 
         var seen = new HashSet<string>(StringComparer.Ordinal);

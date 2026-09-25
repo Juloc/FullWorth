@@ -32,7 +32,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-    <script src="/pwa/standalone-init.js"></script>
+    <script src="~/pwa/standalone-init.js"></script>
     <meta name="color-scheme" content="light dark">
     <link rel="icon" type="image/svg+xml" href="/pwa/icon-light.svg?v=5" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/svg+xml" href="/pwa/icon-dark.svg?v=5" media="(prefers-color-scheme: dark)">
@@ -47,18 +47,18 @@
     @* Bewusst klassische Skripte im Kopf und keine Module: Theme und Darstellung muessen VOR dem
        ersten Zeichnen stehen. Ein Modul laeuft verzoegert - das waere ein Aufblitzen des falschen
        Themes und damit genau der Sprung, den Frontend-Regel 1 verbietet. *@
-    <script src="/app/theme.js"></script>
-    <script src="/app/boot.js"></script>
+    <script src="~/app/theme.js"></script>
+    <script src="~/app/boot.js"></script>
     <link rel="preload" href="/fonts/nunito-variable.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/styles/tokens.css">
-    <link rel="stylesheet" href="/styles/reset.css">
-    <link rel="stylesheet" href="/styles/appearance.css">
-    <link rel="stylesheet" href="/styles/shell.css">
-    <link rel="stylesheet" href="/styles/components.css">
-    <link rel="stylesheet" href="/styles/app.css">
-    <link rel="stylesheet" href="/styles/responsive.css">
-    <link rel="stylesheet" href="/styles/design-depth.css">
-    <link rel="stylesheet" href="/styles/dialogs.css">
+    <link rel="stylesheet" href="~/styles/tokens.css">
+    <link rel="stylesheet" href="~/styles/reset.css">
+    <link rel="stylesheet" href="~/styles/appearance.css">
+    <link rel="stylesheet" href="~/styles/shell.css">
+    <link rel="stylesheet" href="~/styles/components.css">
+    <link rel="stylesheet" href="~/styles/app.css">
+    <link rel="stylesheet" href="~/styles/responsive.css">
+    <link rel="stylesheet" href="~/styles/design-depth.css">
+    <link rel="stylesheet" href="~/styles/dialogs.css">
     @* Der Coach-Andockbereich schwebt ueber JEDER Seite, also gehoert sein Stylesheet hierher und
        nicht zu einer Seite. Es lag bis zum Ende von #154 unter pages/coach/, und als das Markup in
        den Rahmen zog, war es auf allen anderen Seiten unformatiert: der Starter stand als nackter
@@ -66,11 +66,11 @@
 
        Die Stelle ist bewusst diese: genau dort stand es vorher als Seiten-CSS, also gewinnt und
        verliert es gegen dieselben Blaetter wie zuvor. *@
-    <link rel="stylesheet" href="/styles/coach.css">
+    <link rel="stylesheet" href="~/styles/coach.css">
     @await RenderSectionAsync("Styles", required: false)
     @* Meldet den Service Worker an. Stand bis zum Ende von #154 nur in index.html - ohne diese
        Zeile wuerde die Anwendung nie wieder als PWA installiert oder offline verfuegbar sein. *@
-    <script src="/pwa/register-sw.js"></script>
+    <script src="~/pwa/register-sw.js"></script>
 </head>
 @* Die Ansicht am <body>, damit die Shell sie ohne Inline-Skript lesen kann: die CSP erlaubt
    script-src 'self', und ein Datenattribut ist kein Skript. *@
@@ -116,7 +116,7 @@
 <aside id="coach-dock" class="coach-dock" aria-label="FullWorth Coach" hidden>
   <div id="coach-dock-resizer" class="coach-dock-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Coach" tabindex="0"></div>
   <header class="coach-dock-header">
-    <div class="coach-dock-title"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt="" width="335" height="180"><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
+    <div class="coach-dock-title"><img class="brand-logo" src="~/branding/fullworth-logo.svg" alt="" width="335" height="180"><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
     <div class="coach-dock-actions">
       <button id="coach-dock-pin" type="button" class="icon-button coach-dock-pin" data-i18n-title="coach.pin" title="Coach anheften" aria-label="Pin" aria-pressed="false">⌖</button>
       <button id="coach-dock-new" type="button" class="icon-button" data-i18n-title="coach.newChat" title="Neu starten" aria-label="New chat">↻</button>

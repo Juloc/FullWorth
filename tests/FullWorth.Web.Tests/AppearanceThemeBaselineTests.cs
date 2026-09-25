@@ -35,8 +35,9 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("window.FullWorthTheme.readThemeState()", init);
         Assert.Contains("window.FullWorthTheme.applyTheme(", init);
         Assert.Contains("/app/appearance.js", init);
-        Assert.Contains("<script src=\"/app/theme.js\"></script>", head);
-        Assert.Contains("<script src=\"/app/boot.js\"></script>", head);
+        // "~/" loest ASP.NET zur Adresse mit Fingerabdruck auf (#154); ein klassisches <script> bleibt es.
+        Assert.Contains("<script src=\"~/app/theme.js\"></script>", head);
+        Assert.Contains("<script src=\"~/app/boot.js\"></script>", head);
         Assert.True(
             head.IndexOf("/app/theme.js", StringComparison.Ordinal) < head.IndexOf("/app/boot.js", StringComparison.Ordinal),
             "theme.js must load BEFORE boot.js, or boot.js's synchronous call has nothing to call into yet.");
