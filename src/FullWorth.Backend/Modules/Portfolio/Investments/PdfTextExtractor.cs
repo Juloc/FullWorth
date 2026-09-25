@@ -1,10 +1,10 @@
 // Den Text aus einem PDF holen. Gehoerte nie zu einer Route (#134).
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using FullWorth.Backend.Documents;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
@@ -19,48 +19,20 @@ internal static class PdfTextExtractor
         try
         {
             await File.WriteAllBytesAsync(input, content, ct);
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "pdftotext",
-                    UseShellExecute = false,
-                    RedirectStandardError = true,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                }
-            };
-            process.StartInfo.ArgumentList.Add("-layout");
-            process.StartInfo.ArgumentList.Add("-nopgbrk");
-            process.StartInfo.ArgumentList.Add("-enc");
-            process.StartInfo.ArgumentList.Add("UTF-8");
-            process.StartInfo.ArgumentList.Add(input);
-            process.StartInfo.ArgumentList.Add(output);
-
             try
             {
-                if (!process.Start()) throw new FileNotFoundException("pdftotext could not be started.");
+                await LocalTool.RunAsync("pdftotext", ["-layout", "-nopgbrk", "-enc", "UTF-8", input, output], TimeSpan.FromSeconds(20), ct);
             }
-            catch (System.ComponentModel.Win32Exception exception)
+            catch (LocalToolException exception) when (exception.Kind == LocalToolFailure.Missing)
             {
                 throw new FileNotFoundException("pdftotext is not installed.", exception);
             }
-
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(20));
-            try
+            catch (LocalToolException exception)
             {
-                await process.WaitForExitAsync(timeout.Token);
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                throw new InvalidDataException("PDF text extraction timed out.");
-            }
-            if (process.ExitCode != 0)
-            {
-                var error = (await process.StandardError.ReadToEndAsync(ct)).Trim();
-                throw new InvalidDataException(string.IsNullOrWhiteSpace(error) ? "PDF text extraction failed." : $"PDF text extraction failed: {error}");
+                // Die Route antwortet mit der Meldung - stderr haette ihr den Pfad der Temp-Datei mitgegeben.
+                throw new InvalidDataException(exception.Kind == LocalToolFailure.TimedOut
+                    ? "PDF text extraction timed out."
+                    : "PDF text extraction failed.", exception);
             }
             if (!File.Exists(output)) throw new InvalidDataException("PDF text extraction produced no output.");
             var info = new FileInfo(output);

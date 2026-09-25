@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using FullWorth.Backend.Documents;
 using Microsoft.Extensions.Options;
 
 namespace FullWorth.Backend.Modules.Purchases.Extraction;
@@ -30,7 +30,11 @@ public sealed class TesseractReceiptExtractor(IOptions<ReceiptExtractionOptions>
         try
         {
             await File.WriteAllBytesAsync(temp, request.Content, ct);
-            var text = await RunAsync(temp, options.Value, ct);
+            var opts = options.Value;
+            var text = await LocalTool.RunAsync(
+                string.IsNullOrWhiteSpace(opts.TesseractPath) ? "tesseract" : opts.TesseractPath,
+                [temp, "stdout", "-l", string.IsNullOrWhiteSpace(opts.Languages) ? "eng" : opts.Languages],
+                TimeSpan.FromSeconds(30), ct);
             return string.IsNullOrWhiteSpace(text)
                 ? ReceiptExtractionResult.Empty(Provider)
                 : ReceiptTextParser.Parse(text, request.CurrencyHint);
@@ -48,29 +52,5 @@ public sealed class TesseractReceiptExtractor(IOptions<ReceiptExtractionOptions>
         {
             try { File.Delete(temp); } catch { /* best effort */ }
         }
-    }
-
-    private static async Task<string> RunAsync(string imagePath, ReceiptExtractionOptions opts, CancellationToken ct)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = string.IsNullOrWhiteSpace(opts.TesseractPath) ? "tesseract" : opts.TesseractPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        startInfo.ArgumentList.Add(imagePath);
-        startInfo.ArgumentList.Add("stdout");
-        startInfo.ArgumentList.Add("-l");
-        startInfo.ArgumentList.Add(string.IsNullOrWhiteSpace(opts.Languages) ? "eng" : opts.Languages);
-
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
-        return await stdout;
     }
 }

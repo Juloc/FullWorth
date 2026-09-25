@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using FullWorth.Backend.Documents;
 
 namespace FullWorth.Backend.Modules.Purchases;
 
@@ -12,11 +12,9 @@ public static class ReceiptPdfRasterizer
     public static async Task<int> GetPageCountAsync(string absolutePdfPath, int maxPages, CancellationToken ct)
     {
         if (maxPages <= 0) throw new ArgumentOutOfRangeException(nameof(maxPages));
-        var result = await RunAsync("pdfinfo", [absolutePdfPath], TimeSpan.FromSeconds(15), ct);
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException("Receipt PDF could not be inspected.");
+        var stdout = await RunAsync("pdfinfo", [absolutePdfPath], TimeSpan.FromSeconds(15), "Receipt PDF could not be inspected.", ct);
 
-        foreach (var line in result.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (!line.StartsWith("Pages:", StringComparison.OrdinalIgnoreCase)) continue;
             if (!int.TryParse(line["Pages:".Length..].Trim(), out var pages) || pages <= 0) break;
@@ -36,17 +34,19 @@ public static class ReceiptPdfRasterizer
         Directory.CreateDirectory(tempRoot);
         var outputBase = Path.Combine(tempRoot, "page");
         var outputPath = $"{outputBase}.png";
+        const string notRendered = "Receipt PDF page could not be rendered.";
         try
         {
             var invariant = System.Globalization.CultureInfo.InvariantCulture;
-            var result = await RunAsync(
+            await RunAsync(
                 "pdftoppm",
                 ["-f", pageNumber.ToString(invariant), "-l", pageNumber.ToString(invariant),
                  "-singlefile", "-png", "-r", "180", absolutePdfPath, outputBase],
                 TimeSpan.FromSeconds(30),
+                notRendered,
                 ct);
-            if (result.ExitCode != 0 || !File.Exists(outputPath))
-                throw new InvalidOperationException("Receipt PDF page could not be rendered.");
+            if (!File.Exists(outputPath))
+                throw new InvalidOperationException(notRendered);
             return await File.ReadAllBytesAsync(outputPath, ct);
         }
         finally
@@ -55,44 +55,17 @@ public static class ReceiptPdfRasterizer
         }
     }
 
-    private static async Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
+    private static async Task<string> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, string failed, CancellationToken ct)
     {
-        var startInfo = new ProcessStartInfo
+        try { return await LocalTool.RunAsync(fileName, arguments, timeout, ct); }
+        catch (LocalToolException exception)
         {
-            FileName = fileName,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
-
-        using var process = new Process { StartInfo = startInfo };
-        try
-        {
-            process.Start();
+            throw exception.Kind switch
+            {
+                LocalToolFailure.Missing => new InvalidOperationException($"Required PDF helper '{fileName}' is unavailable.", exception),
+                LocalToolFailure.TimedOut => new TimeoutException($"PDF helper '{fileName}' timed out.", exception),
+                _ => new InvalidOperationException(failed, exception)
+            };
         }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Required PDF helper '{fileName}' is unavailable.", ex);
-        }
-
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        var stderr = process.StandardError.ReadToEndAsync(ct);
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(timeout);
-        try
-        {
-            await process.WaitForExitAsync(timeoutCts.Token);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            try { process.Kill(entireProcessTree: true); } catch { }
-            throw new TimeoutException($"PDF helper '{fileName}' timed out.");
-        }
-
-        return new(process.ExitCode, await stdout, await stderr);
     }
-
-    private sealed record ProcessResult(int ExitCode, string Stdout, string Stderr);
 }

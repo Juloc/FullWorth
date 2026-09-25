@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using FullWorth.Backend.Documents;
 
 namespace FullWorth.Backend.Modules.Pension;
 
@@ -41,9 +41,8 @@ public sealed class BavDocumentTextException(string category, string message, Ex
 /// a wrong Vertragsguthaben is the most expensive kind of wrong this feature can produce.
 ///
 /// Two things the payslip pipeline could not do, which is why it was not reused: it OCRs page one only,
-/// and it never asks whether a text layer exists. Both differences live here; the process runner and its
-/// "tool not available" translation are deliberately the same shape as
-/// <c>PayslipExtractor.RunProcessAsync</c> so an operator sees one behaviour for a missing binary.
+/// and it never asks whether a text layer exists. Both differences live here; the process runner is the
+/// shared <see cref="LocalTool"/>, so an operator sees one behaviour for a missing binary.
 /// </summary>
 public sealed class PensionDocumentTextSource : IBavDocumentTextSource
 {
@@ -163,39 +162,12 @@ public sealed class PensionDocumentTextSource : IBavDocumentTextSource
 
     private static async Task<string> RunProcessAsync(string fileName, IEnumerable<string> args, TimeSpan timeoutAfter, CancellationToken ct)
     {
-        var start = new ProcessStartInfo
+        try { return await LocalTool.RunAsync(fileName, args, timeoutAfter, ct); }
+        catch (LocalToolException exception)
         {
-            FileName = fileName,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args) start.ArgumentList.Add(arg);
-
-        using var process = new Process { StartInfo = start };
-        try
-        {
-            process.Start();
+            throw new BavDocumentTextException(BavDocumentTextException.ToolMissing, exception.Kind == LocalToolFailure.Missing
+                ? $"Lokales Extraktionswerkzeug '{fileName}' ist nicht verfügbar."
+                : $"Lokales Extraktionswerkzeug '{fileName}' konnte das Dokument nicht verarbeiten.", exception);
         }
-        catch (Exception exception)
-        {
-            throw new BavDocumentTextException(BavDocumentTextException.ToolMissing,
-                $"Lokales Extraktionswerkzeug '{fileName}' ist nicht verfügbar.", exception);
-        }
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(timeoutAfter);
-        var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
-        await process.WaitForExitAsync(timeout.Token);
-        var output = await stdout;
-        _ = await stderr;
-        if (process.ExitCode != 0)
-            // Unlike the payslip runner this does not quote stderr: poppler and tesseract put the input
-            // path into their error text, and a pension document's path must never reach a log line.
-            throw new BavDocumentTextException(BavDocumentTextException.ToolMissing,
-                $"Lokales Extraktionswerkzeug '{fileName}' konnte das Dokument nicht verarbeiten.");
-        return output;
     }
 }

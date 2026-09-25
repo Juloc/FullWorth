@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -60,8 +59,19 @@ public sealed partial class PopplerPdfWordSource : IPdfWordSource
         {
             var source = Path.Combine(workDir, "source.pdf");
             await File.WriteAllBytesAsync(source, pdf, ct);
-            var xhtml = await RunAsync(
-                ["-enc", "UTF-8", "-bbox-layout", "-f", "1", "-l", MaxPages.ToString(CultureInfo.InvariantCulture), source, "-"], ct);
+            string xhtml;
+            try
+            {
+                xhtml = await LocalTool.RunAsync("pdftotext",
+                    ["-enc", "UTF-8", "-bbox-layout", "-f", "1", "-l", MaxPages.ToString(CultureInfo.InvariantCulture), source, "-"],
+                    TimeSpan.FromSeconds(60), ct);
+            }
+            catch (LocalToolException exception)
+            {
+                throw new PdfWordsException(exception.Kind == LocalToolFailure.Missing
+                    ? "Das Werkzeug zum Lesen von PDF-Dateien (pdftotext) ist nicht verfügbar."
+                    : "Die PDF-Datei ließ sich nicht lesen.", exception);
+            }
             return ParseBboxLayout(xhtml).Select(page => AssembleLines(page)).ToList();
         }
         finally
@@ -107,39 +117,6 @@ public sealed partial class PopplerPdfWordSource : IPdfWordSource
     }
 
     private static double Number(string value) => double.Parse(value, CultureInfo.InvariantCulture);
-
-    private static async Task<string> RunAsync(IEnumerable<string> args, CancellationToken ct)
-    {
-        var start = new ProcessStartInfo
-        {
-            FileName = "pdftotext",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args) start.ArgumentList.Add(arg);
-
-        using var process = new Process { StartInfo = start };
-        try { process.Start(); }
-        catch (Exception exception)
-        {
-            throw new PdfWordsException("Das Werkzeug zum Lesen von PDF-Dateien (pdftotext) ist nicht verfügbar.", exception);
-        }
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(60));
-        var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
-        await process.WaitForExitAsync(timeout.Token);
-        var output = await stdout;
-        _ = await stderr;
-        // stderr wird bewusst nicht zitiert: poppler setzt den Dateipfad hinein, und der Pfad eines
-        // Kontoauszugs gehoert in keine Logzeile.
-        if (process.ExitCode != 0)
-            throw new PdfWordsException("Die PDF-Datei ließ sich nicht lesen.");
-        return output;
-    }
 
     [GeneratedRegex("<page ", RegexOptions.CultureInvariant)]
     private static partial Regex PagePattern();

@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using FullWorth.Backend.Documents;
 using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Compensation;
@@ -60,39 +60,14 @@ public static partial class PayslipExtractor
 
     private static async Task<string> RunProcessAsync(string fileName, IEnumerable<string> args, CancellationToken ct)
     {
-        var start = new ProcessStartInfo
+        try { return await LocalTool.RunAsync(fileName, args, TimeSpan.FromSeconds(45), ct); }
+        catch (LocalToolException exception)
         {
-            FileName = fileName,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args) start.ArgumentList.Add(arg);
-
-        using var process = new Process { StartInfo = start };
-        try
-        {
-            process.Start();
+            throw new InvalidOperationException(exception.Kind == LocalToolFailure.Missing
+                ? $"Lokales Extraktionswerkzeug '{fileName}' ist nicht verfügbar."
+                : $"{fileName} konnte die Lohnabrechnung nicht verarbeiten.", exception);
         }
-        catch (Exception exception)
-        {
-            throw new InvalidOperationException($"Lokales Extraktionswerkzeug '{fileName}' ist nicht verfügbar.", exception);
-        }
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(45));
-        var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
-        await process.WaitForExitAsync(timeout.Token);
-        var output = await stdout;
-        var error = await stderr;
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} konnte die Lohnabrechnung nicht verarbeiten: {Trim(error, 300)}");
-        return output;
     }
-
-    private static string Trim(string value, int max) => value.Length <= max ? value : value[..max];
 }
 
 public static partial class PayslipTextParser

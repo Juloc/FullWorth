@@ -1,8 +1,8 @@
 // Texterkennung fuer Broker-PDFs ohne Textebene. Lag bis 2026-09-15 hinter der Route (#134).
 
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using FullWorth.Backend.Documents;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
@@ -30,7 +30,7 @@ internal static class BrokerPdfOcr
             var totalChars = 0;
             foreach (var image in images)
             {
-                var text = await RunCaptureAsync("tesseract", [image, "stdout", "-l", "deu+eng", "--psm", "6"], TimeSpan.FromSeconds(35), ct);
+                var text = await RunAsync("tesseract", [image, "stdout", "-l", "deu+eng", "--psm", "6"], TimeSpan.FromSeconds(35), ct);
                 if (text.Length + totalChars > maxChars)
                     text = text[..Math.Max(0, maxChars - totalChars)];
                 result.Add(text);
@@ -45,75 +45,17 @@ internal static class BrokerPdfOcr
         }
     }
 
-    private static async Task RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeoutValue, CancellationToken ct)
+    // Die Route antwortet mit der Meldung - stderr haette ihr den Pfad der Temp-Datei mitgegeben.
+    private static async Task<string> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
     {
-        using var process = CreateProcess(fileName, arguments, redirectOutput: false);
-        Start(process, fileName);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(timeoutValue);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            try { process.Kill(entireProcessTree: true); } catch { }
-            throw new InvalidDataException($"{fileName} timed out.");
-        }
-        if (process.ExitCode != 0)
-        {
-            var error = (await process.StandardError.ReadToEndAsync(ct)).Trim();
-            throw new InvalidDataException(string.IsNullOrWhiteSpace(error) ? $"{fileName} failed." : $"{fileName} failed: {error}");
-        }
-    }
-
-    private static async Task<string> RunCaptureAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeoutValue, CancellationToken ct)
-    {
-        using var process = CreateProcess(fileName, arguments, redirectOutput: true);
-        Start(process, fileName);
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(timeoutValue);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            try { process.Kill(entireProcessTree: true); } catch { }
-            throw new InvalidDataException($"{fileName} timed out.");
-        }
-        if (process.ExitCode != 0)
-        {
-            var error = (await process.StandardError.ReadToEndAsync(ct)).Trim();
-            throw new InvalidDataException(string.IsNullOrWhiteSpace(error) ? $"{fileName} failed." : $"{fileName} failed: {error}");
-        }
-        return await stdout;
-    }
-
-    private static Process CreateProcess(string fileName, IReadOnlyList<string> arguments, bool redirectOutput)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            UseShellExecute = false,
-            RedirectStandardOutput = redirectOutput,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
-        return new Process { StartInfo = startInfo };
-    }
-
-    private static void Start(Process process, string fileName)
-    {
-        try
-        {
-            if (!process.Start()) throw new FileNotFoundException($"{fileName} could not be started.");
-        }
-        catch (System.ComponentModel.Win32Exception exception)
+        try { return await LocalTool.RunAsync(fileName, arguments, timeout, ct); }
+        catch (LocalToolException exception) when (exception.Kind == LocalToolFailure.Missing)
         {
             throw new FileNotFoundException($"{fileName} is not installed.", exception);
+        }
+        catch (LocalToolException exception)
+        {
+            throw new InvalidDataException(exception.Kind == LocalToolFailure.TimedOut ? $"{fileName} timed out." : $"{fileName} failed.", exception);
         }
     }
 }
