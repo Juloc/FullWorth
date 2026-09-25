@@ -74,7 +74,7 @@ ON CONFLICT ("ImportJobId","TransactionId") DO NOTHING
     /// Nimmt zurueck, was dieser Import an fremden Buchungen gesetzt hat - die Buchungen selbst
     /// bleiben stehen. Sie gehoeren ihm nicht.
     /// </summary>
-    internal static async Task<int> RevertAsync(FullWorthDbContext db, Guid jobId, CancellationToken ct)
+    internal static async Task RevertAsync(FullWorthDbContext db, Guid jobId, CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
         var now = DateTimeOffset.UtcNow;
@@ -88,38 +88,38 @@ WHERE e."ImportJobId"=@job AND a."TransactionId"=e."TransactionId" AND a."Create
 """, ("@job", jobId)))
             await allocations.ExecuteNonQueryAsync(ct);
 
-        // IS NOT DISTINCT FROM, nicht "=": eine Buchung, die nur Aufteilungen bekam, hat bis heute
-        // keine eigene Kategorie, und NULL = NULL waere unbekannt statt wahr - die Herkunftsmarke
+        // EINE Anweisung fuer Kategorie und Umbuchung, nicht zwei nacheinander. Beide Bedingungen muessen
+        // den Stand VOR der Ruecknahme sehen: stand die Kategorie zuerst da, setzte ihre Ruecknahme
+        // UpdatedAt auf jetzt, und die Umbuchungs-Bedingung darunter ("seither nicht geaendert") fand
+        // danach immer eine Aenderung - die eigene. Die Umbuchung wurde so nie zurueckgenommen.
+        //
+        // Kategorie: IS NOT DISTINCT FROM, nicht "=". Eine Buchung, die nur Aufteilungen bekam, hat bis
+        // heute keine eigene Kategorie, und NULL = NULL waere unbekannt statt wahr - die Herkunftsmarke
         // bliebe auf "finanzguru" stehen, obwohl von diesem Import nichts mehr da ist.
-        int reverted;
-        await using (var categories = RawSql.Command(connection, """
+        //
+        // Umbuchung: sie traegt keine Herkunftsmarke wie die Kategorie. Ob der Nutzer sie seither selbst
+        // bestaetigt hat, laesst sich nur daran ablesen, ob die Buchung nach der Ergaenzung noch einmal
+        // geaendert wurde. Wurde sie, bleibt die Kennzeichnung stehen - eine unvollstaendige Ruecknahme
+        // ist hier der kleinere Fehler als eine, die eine Entscheidung des Nutzers still wieder zu
+        // Ausgaben macht.
+        await using (var revert = RawSql.Command(connection, """
 UPDATE "Transactions" t
-SET "CategoryId"=NULL,"CategorizationSource"='none',"UpdatedAt"=@now
+SET "CategoryId"           = CASE WHEN t."CategorizationSource"='finanzguru' AND t."CategoryId" IS NOT DISTINCT FROM e."SetCategoryId"
+                               THEN NULL ELSE t."CategoryId" END,
+    "CategorizationSource" = CASE WHEN t."CategorizationSource"='finanzguru' AND t."CategoryId" IS NOT DISTINCT FROM e."SetCategoryId"
+                               THEN 'none' ELSE t."CategorizationSource" END,
+    "IsTransfer"           = CASE WHEN e."SetTransfer" AND t."IsTransfer" AND t."UpdatedAt"<=e."CreatedAt"
+                               THEN false ELSE t."IsTransfer" END,
+    "UpdatedAt"            = @now
 FROM "ImportTransactionEnrichments" e
 WHERE e."ImportJobId"=@job AND t."Id"=e."TransactionId"
-  AND t."CategorizationSource"='finanzguru'
-  AND t."CategoryId" IS NOT DISTINCT FROM e."SetCategoryId"
+  AND ((t."CategorizationSource"='finanzguru' AND t."CategoryId" IS NOT DISTINCT FROM e."SetCategoryId")
+       OR (e."SetTransfer" AND t."IsTransfer" AND t."UpdatedAt"<=e."CreatedAt"))
 """, ("@job", jobId), ("@now", now)))
-            reverted = await categories.ExecuteNonQueryAsync(ct);
-
-        // Die Umbuchung traegt keine Herkunftsmarke wie die Kategorie. Ob der Nutzer sie seither
-        // selbst bestaetigt hat, laesst sich deshalb nur an einem ablesen: ob die Buchung nach der
-        // Ergaenzung noch einmal geaendert wurde. Wurde sie, bleibt die Kennzeichnung stehen - eine
-        // unvollstaendige Ruecknahme ist hier der kleinere Fehler als eine, die eine Entscheidung des
-        // Nutzers still wieder zu Ausgaben macht.
-        await using (var transfers = RawSql.Command(connection, """
-UPDATE "Transactions" t
-SET "IsTransfer"=false,"UpdatedAt"=@now
-FROM "ImportTransactionEnrichments" e
-WHERE e."ImportJobId"=@job AND t."Id"=e."TransactionId" AND e."SetTransfer" AND t."IsTransfer"
-  AND t."UpdatedAt"<=e."CreatedAt"
-""", ("@job", jobId), ("@now", now)))
-            await transfers.ExecuteNonQueryAsync(ct);
+            await revert.ExecuteNonQueryAsync(ct);
 
         await using (var records = RawSql.Command(connection,
             "DELETE FROM \"ImportTransactionEnrichments\" WHERE \"ImportJobId\"=@job", ("@job", jobId)))
             await records.ExecuteNonQueryAsync(ct);
-
-        return reverted;
     }
 }
