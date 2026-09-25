@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v153';
+const VERSION = 'v154';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -21,7 +21,6 @@ const APP_SHELL = [
   // does not reach it. It is precached because the payroll engine is pure client-side maths and
   // genuinely works offline. Auth, admin, intelligence and passkeys are deliberately NOT here: every
   // one of them needs the server to do anything, so caching them would only fake availability.
-  '/security/browser-fetch.js',
   // Seiten stehen hier NICHT (#154, Abschnitt 12). Eine Razor-Seite ist HTML, und HTML cacht dieser
   // Worker nie - es traegt persoenliche Finanzdaten. Ohne ihr HTML oeffnet eine Seite offline also
   // ohnehin nicht, und ihr JS im Vorrat haette nichts gerettet; es haette nur jede Installation dazu
@@ -56,8 +55,6 @@ const APP_SHELL = [
   '/core/api.js',
   '/core/html.js',
   '/core/state.js',
-  '/core/router.js',
-  '/core/feature-registry.js',
   '/core/i18n.js',
   '/core/services.js',
   '/core/navigation.js',
@@ -78,10 +75,10 @@ const APP_SHELL = [
   '/styles/coach.css',
   
   '/components/accessibility-release.js',
-  '/app/motion.js',
   '/app/theme.js',
   '/app/appearance.js',
   '/app/boot.js',
+  '/pwa/register-sw.js',
   '/app/menu.js',
   '/app/routes.js',
   '/app/shell.js',

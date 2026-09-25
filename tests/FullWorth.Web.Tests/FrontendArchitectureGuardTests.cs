@@ -73,7 +73,8 @@ public sealed class FrontendArchitectureGuardTests
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            "security/browser-fetch.js",
+            // security/browser-fetch.js stood here. Since #154 retired index.html nothing loaded it, and it
+            // is gone; core/api.js reaches the antiforgery token through security/secure-fetch.js.
         };
 
         AssertNoNewViolations(
@@ -100,7 +101,9 @@ public sealed class FrontendArchitectureGuardTests
         {
             // Shared infrastructure observers are explicitly reviewed and scoped.
             "components/accessibility-release.js",
-            "app/motion.js"
+            // app/motion.js stood here: it made figures count up by watching their text. Since #154
+            // retired index.html no page loaded it, and figures standing at once is the intended
+            // state - one paint, no change after it - so it is gone rather than restored.
             // app/appearance.js used to be here: it rebuilt the "Farben" settings panel via DOM
             // injection and kept it in sync with a MutationObserver (Issue #149). The panel is now
             // static markup in pages/settings/page.html, wired once like every other settings

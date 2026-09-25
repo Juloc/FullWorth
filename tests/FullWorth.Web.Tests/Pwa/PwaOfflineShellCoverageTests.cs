@@ -111,6 +111,26 @@ public sealed class PwaOfflineShellCoverageTests
             + Environment.NewLine + string.Join(Environment.NewLine, surplus));
     }
 
+    /// <summary>
+    /// Die dritte Richtung: kein Modul im Vorrat, das keine Seite laedt. Als index.html ging (#154),
+    /// verloren core/feature-registry.js, security/browser-fetch.js und app/motion.js ihren letzten
+    /// Lader - und blieben im Vorrat, wo jede Installation sie weiter herunterlud. Die beiden Tests
+    /// oben sahen es nicht, weil sie nur fragen, ob Geladenes gelistet ist, nicht umgekehrt.
+    /// </summary>
+    [Fact]
+    public void Nothing_is_precached_that_no_page_loads()
+    {
+        var orphans = PrecachedPaths()
+            .Where(path => path.EndsWith(".js", StringComparison.Ordinal) && !WebSources.LoadedByAPage(path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            orphans.Length == 0,
+            "the service worker precaches these modules, but no page loads them:"
+            + Environment.NewLine + string.Join(Environment.NewLine, orphans));
+    }
+
     private static HashSet<string> PrecachedPaths()
     {
         var sw = WebSources.Asset("sw.js");
@@ -122,5 +142,6 @@ public sealed class PwaOfflineShellCoverageTests
     }
 
     /// <summary>Was das gemeinsame Layout laedt - der Graph selbst steht in <see cref="WebSources.Reachable"/>.</summary>
-    private static HashSet<string> ReachableFromIndex() => WebSources.Reachable(WebSources.Layout());
+    private static HashSet<string> ReachableFromIndex() =>
+        WebSources.Reachable(WebSources.Layout() + WebSources.Navigation() + WebSources.BottomNavigation());
 }

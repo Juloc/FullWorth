@@ -150,7 +150,7 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task CloudProviderImports_SnapshotFilesBeforeMultipartUpload()
     {
-        using var security = await client.GetAsync("/security/browser-fetch.js");
+        using var security = await client.GetAsync("/security/secure-fetch.js");
         security.EnsureSuccessStatusCode();
         var securityJs = await security.Content.ReadAsStringAsync();
         Assert.Contains("snapshotUploadFile", securityJs);

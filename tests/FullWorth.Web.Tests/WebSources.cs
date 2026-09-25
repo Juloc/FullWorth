@@ -47,10 +47,15 @@ public static class WebSources
     /// Was ein Markup laedt: seine Module und Stilblaetter und alles, was diese Module importieren -
     /// statisch wie dynamisch, denn ein dynamisch importiertes Modul wird gebraucht, sobald sein Pfad laeuft.
     /// </summary>
+    /// <remarks>
+    /// Klassische Skripte zaehlen mit, und ebenso absolute Importe: app/boot.js laeuft als klassisches
+    /// Skript im Kopf und holt `/app/appearance.js` mit `import()`. Kannte der Graph beides nicht, sah
+    /// er auch nicht, dass nach dem Ende von index.html drei Module von niemandem mehr geladen wurden.
+    /// </remarks>
     public static HashSet<string> Reachable(string markup)
     {
         var queue = new Queue<string>(System.Text.RegularExpressions.Regex
-            .Matches(markup, """<script[^>]+type="module"[^>]+src="~?(?<path>/[^"?#]+)""")
+            .Matches(markup, """<script[^>]+src="~?(?<path>/[^"?#]+)""")
             .Select(match => match.Groups["path"].Value)
             .Concat(System.Text.RegularExpressions.Regex
                 .Matches(markup, """<link[^>]+rel="stylesheet"[^>]+href="~?(?<path>/[^"?#]+)""")
@@ -64,10 +69,10 @@ public static class WebSources
             var file = Path.Combine(Web(), "wwwroot", path.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(file)) continue;
             foreach (var specifier in System.Text.RegularExpressions.Regex
-                         .Matches(File.ReadAllText(file), """(?:from|import)\s*\(?\s*['"](?<spec>\.{1,2}/[^'"]+)['"]""")
+                         .Matches(File.ReadAllText(file), """(?:from|import)\s*\(?\s*['"](?<spec>(?:\.{1,2})?/[^'"]+)['"]""")
                          .Select(match => match.Groups["spec"].Value))
             {
-                var resolved = Resolve(path, specifier);
+                var resolved = specifier.StartsWith('/') ? specifier : Resolve(path, specifier);
                 if (resolved is not null) queue.Enqueue(resolved);
             }
         }
@@ -86,7 +91,7 @@ public static class WebSources
     private static readonly Lazy<HashSet<string>> PageLoadGraph = new(() =>
         Directory.EnumerateFiles(Path.Combine(Web(), "Pages"), "Index.cshtml", SearchOption.AllDirectories)
             .Select(File.ReadAllText)
-            .Append(Layout())
+            .Append(Layout() + Navigation() + BottomNavigation())
             .SelectMany(Reachable)
             .ToHashSet(StringComparer.Ordinal));
 
