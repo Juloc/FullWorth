@@ -74,7 +74,7 @@
 </head>
 @* Die Ansicht am <body>, damit die Shell sie ohne Inline-Skript lesen kann: die CSP erlaubt
    script-src 'self', und ein Datenattribut ist kein Skript. *@
-<body data-view="@(view ?? string.Empty)">
+<body data-view="@(view ?? string.Empty)" data-sprite="@IconSprite.Url(Context)">
 <a class="skip-link" href="#main" data-i18n="a11y.skipToContent">Zum Inhalt springen</a>
 <div class="shell">
     <partial name="_Navigation" />

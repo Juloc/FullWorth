@@ -26,7 +26,8 @@ const LOCALES = {
 const text = (key, language) => key.split('.').reduce((node, part) => node?.[part], LOCALES[language])
   ?? (() => { throw new Error(`locales/${language}.json kennt ${key} nicht.`); })();
 
-const svg = content => `<svg viewBox="0 0 24 24" aria-hidden="true">${content}</svg>`;
+// Dasselbe Sprite wie im Betrieb (#154), nur ohne Fingerabdruck - die Werkstatt serviert wwwroot direkt.
+const svg = symbol => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="/icons/sprite.svg#${symbol}"></use></svg>`;
 const href = entry => entry.href ?? (entry.view === 'dashboard' ? '/' : `/${entry.view}`);
 
 /** Ein Eintrag, so wie ihn die Partial schreibt. Die aktive Markierung setzt razor.mjs danach. */
@@ -67,7 +68,7 @@ function replaceLoop(markup, generated) {
   return markup.slice(0, start) + generated.trim() + markup.slice(index + 1);
 }
 
-const chevron = svg('<path d="m9 6 6 6-6 6"/>');
+const chevron = svg('nav-chevron');
 
 const groups = language => MENU.map(group => [
   `<div class="nav-group" data-group="${group.id}">`,

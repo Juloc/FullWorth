@@ -15,12 +15,12 @@
     {
         var entry = byView[view];
         <a class="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "nav-item active" : "nav-item")" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View" aria-current="@(string.Equals(view, activeView, StringComparison.Ordinal) ? "page" : null)">
-            <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, entry.Icon)"></use></svg>
             <span data-i18n="@entry.Label">@Text.Get(entry.Label, language)</span>
         </a>
     }
     <button id="bottom-more" class="nav-item" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-more")"></use></svg>
         <span data-i18n="nav.more">@Text.Get("nav.more", language)</span>
     </button>
 </nav>

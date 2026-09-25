@@ -45,13 +45,13 @@
             <div class="nav-group" data-group="@group.Id">
                 <button class="nav-group-head" type="button" data-group="@group.Id" aria-expanded="true">
                     <span data-i18n="@group.Label">@Text.Get(group.Label, language)</span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-chevron")"></use></svg>
                 </button>
                 <div class="nav-group-items">
                     @foreach (var entry in group.Items)
                     {
                         <a class="@ItemClass(entry.View)" href="@entry.Path" data-entry="@entry.View" data-view="@entry.View" aria-current="@AriaCurrent(entry.View)" hidden="@(entry.AdminOnly && !isAdmin)">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">@Html.Raw(entry.Icon)</svg>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, entry.Icon)"></use></svg>
                             <span data-i18n="@entry.Label">@Text.Get(entry.Label, language)</span>
                         </a>
                     }

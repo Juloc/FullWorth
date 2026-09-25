@@ -156,7 +156,7 @@ export function createShell({
       const items = group.items.filter(visible).map(entry => {
         const target = entry.href ? `data-open="${entry.href}"` : `data-go="${entry.view}"`;
         const active = view === entry.view ? ' class="active"' : '';
-        return `<button type="button" ${target}${active}><svg viewBox="0 0 24 24" aria-hidden="true">${entry.icon}</svg><span>${esc(get(entry.label))}</span></button>`;
+        return `<button type="button" ${target}${active}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="${document.body.dataset.sprite}#${entry.icon}"></use></svg><span>${esc(get(entry.label))}</span></button>`;
       }).join('');
       return `<h3 class="more-group">${esc(get(group.label))}</h3><div class="more-list">${items}</div>`;
     }).join('');

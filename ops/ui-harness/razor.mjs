@@ -161,6 +161,10 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
   // ("/styles/x.892ywcc37e.css", #154). Die Werkstatt serviert wwwroot direkt und kennt keine
   // Fingerabdruecke - fuer sie ist es dieselbe Datei unter ihrem Namen.
   html = html.replace(/\b(href|src)="~\//g, '$1="/');
+  // Das Sprite (#154): dieselben Verweise wie IconSprite, ohne Fingerabdruck.
+  html = html
+    .replace(/@IconSprite\.Href\(ViewContext\.HttpContext, "([\w-]+)"\)/g, '/icons/sprite.svg#$1')
+    .replace(/@IconSprite\.Url\(Context\)/g, '/icons/sprite.svg');
 
   const leftover = html.match(/@[A-Za-z(]/);
   if (leftover) {
