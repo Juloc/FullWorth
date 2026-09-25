@@ -10,9 +10,14 @@ using Microsoft.EntityFrameworkCore;
 namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>Eine eingelesene Zeile, bevor daraus eine Buchung wird.</summary>
+/// <param name="ReviewNote">
+/// Warum eine gueltige Zeile dem Nutzer vorgelegt statt vorgewaehlt wird (#131, Abschnitt 11) - nicht
+/// dasselbe wie <paramref name="Error"/>, der eine Zeile unimportierbar macht.
+/// </param>
 public sealed record Candidate(
     Guid Id, string? SourceAccount, DateOnly? Date, decimal Amount, string Currency, string? Counterparty,
-    string? Description, string? Category, string? ExternalKey, string Fingerprint, string Status, string? Error);
+    string? Description, string? Category, string? ExternalKey, string Fingerprint, string Status, string? Error,
+    string? ReviewNote = null);
 
 /// <summary>Der Kontostand, den eine Kontoauszugsdatei nennt.</summary>
 public sealed record JobStatementBalance(decimal Amount, string Currency, DateOnly AsOf);
@@ -81,7 +86,7 @@ public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, Fi
     {
         var connection = await RawSql.OpenAsync(db, ct);
         await using var cmd = RawSql.Command(connection,
-            "SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"DuplicateStatus\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",
+            "SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"DuplicateStatus\",\"ValidationStatus\",\"ValidationError\",\"ReviewNote\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",
             ("@job", jobId));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
@@ -100,7 +105,8 @@ public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, Fi
                 externalKey = RawSql.NullableString(reader, "ExternalKey"),
                 duplicateStatus = RawSql.String(reader, "DuplicateStatus"),
                 validationStatus = RawSql.String(reader, "ValidationStatus"),
-                validationError = RawSql.NullableString(reader, "ValidationError")
+                validationError = RawSql.NullableString(reader, "ValidationError"),
+                reviewNote = RawSql.NullableString(reader, "ReviewNote")
             });
         return rows;
     }
@@ -167,13 +173,13 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,@status,@source,@ready,0,0,@errors,@
         foreach (var candidate in candidates)
         {
             await using var cmd = RawSql.Command(connection, """
-INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate","Amount","Currency","Counterparty","Description","CategoryText","ExternalKey","RowFingerprint","DuplicateStatus","ValidationStatus","ValidationError")
-VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,@external,@fingerprint,'new',@status,@error)
+INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate","Amount","Currency","Counterparty","Description","CategoryText","ExternalKey","RowFingerprint","DuplicateStatus","ValidationStatus","ValidationError","ReviewNote")
+VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,@external,@fingerprint,'new',@status,@error,@review)
 """, ("@id", candidate.Id), ("@job", jobId), ("@account", candidate.SourceAccount), ("@date", candidate.Date),
                 ("@amount", candidate.Amount), ("@currency", candidate.Currency), ("@party", candidate.Counterparty),
                 ("@description", candidate.Description), ("@category", candidate.Category),
                 ("@external", candidate.ExternalKey), ("@fingerprint", candidate.Fingerprint),
-                ("@status", candidate.Status), ("@error", candidate.Error));
+                ("@status", candidate.Status), ("@error", candidate.Error), ("@review", candidate.ReviewNote));
             await cmd.ExecuteNonQueryAsync(ct);
         }
 

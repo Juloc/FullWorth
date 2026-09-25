@@ -1,3 +1,4 @@
+using FullWorth.Backend.Documents;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Import;
@@ -21,7 +22,8 @@ public static class ImportDetectionEndpoints
     }
 
     private static async Task<IResult> Detect(
-        Guid fullWorthSpaceId, HttpRequest request, CurrentUserContext currentUser, SpaceAccess space, CancellationToken ct)
+        Guid fullWorthSpaceId, HttpRequest request, CurrentUserContext currentUser, SpaceAccess space,
+        IPdfWordSource pdf, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         // Erkennen heisst die Datei lesen. Wer hier nicht importieren duerfte, darf sie auch nicht
@@ -37,6 +39,16 @@ public static class ImportDetectionEndpoints
 
         await using var buffer = new MemoryStream(checked((int)file.Length));
         await file.CopyToAsync(buffer, ct);
-        return Results.Ok(ImportSourceDetector.Detect(file.FileName, buffer.ToArray()));
+        var bytes = buffer.ToArray();
+
+        // Ein PDF, das sich nicht lesen laesst, ist hier keine Fehlermeldung: die Erkennung sagt dann
+        // "Broker-PDF", und der Depot-Weg meldet sich selbst, wenn auch er es nicht lesen kann.
+        IReadOnlyList<IReadOnlyList<PdfLine>>? pages = null;
+        if (BankStatementPdf.IsPdf(bytes))
+        {
+            try { pages = await pdf.ReadLinesAsync(bytes, ct); }
+            catch (PdfWordsException) { }
+        }
+        return Results.Ok(ImportSourceDetector.Detect(file.FileName, bytes, pages));
     }
 }

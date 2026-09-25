@@ -1,3 +1,4 @@
+using FullWorth.Backend.Documents;
 using FullWorth.Backend.Validation;
 using System.Globalization;
 using System.Text;
@@ -7,6 +8,10 @@ using System.Xml.Linq;
 namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>One booking read off a bank statement file.</summary>
+/// <param name="ReviewNote">
+/// Why this row is put to the owner rather than taken as read - see <see cref="BankStatementPdf"/>.
+/// Such a row is shown unticked. MT940 and CAMT never set it: their amounts are data, not layout.
+/// </param>
 internal sealed record StatementEntry(
     DateOnly BookingDate,
     DateOnly? ValueDate,
@@ -14,7 +19,8 @@ internal sealed record StatementEntry(
     string Currency,
     string? Counterparty,
     string? Description,
-    string? ExternalKey);
+    string? ExternalKey,
+    string? ReviewNote = null);
 
 /// <summary>A balance the statement itself states, with the date it is valid for.</summary>
 internal sealed record StatementBalance(decimal Amount, string Currency, DateOnly AsOf);
@@ -24,11 +30,13 @@ internal sealed record StatementBalance(decimal Amount, string Currency, DateOnl
 /// belongs to — shown to the owner so they can see they are importing into the right account. It is
 /// never used to create an account: a statement import always targets one that already exists.
 /// </summary>
+/// <param name="Warnings">What the owner has to know about the file as a whole, as keys the page translates.</param>
 internal sealed record BankStatement(
     string AdapterKey,
     IReadOnlyList<StatementEntry> Entries,
     StatementBalance? ClosingBalance,
-    string? AccountIdentifier);
+    string? AccountIdentifier,
+    IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// Readers for the two statement formats every European bank can export even when it offers no API:
@@ -50,7 +58,20 @@ internal static class BankStatementFile
     internal const string CamtAdapter = "camt";
 
     /// <summary>The file extensions handled here, for the upload endpoint's allow-list.</summary>
-    internal static readonly string[] Extensions = [".sta", ".mt940", ".940", ".txt", ".xml", ".camt"];
+    internal static readonly string[] Extensions = [".sta", ".mt940", ".940", ".txt", ".xml", ".camt", ".pdf"];
+
+    /// <summary>
+    /// Like <see cref="Read"/>, and a PDF statement besides (#131, Abschnitt 11). Async because reading a
+    /// PDF runs a tool; the text formats stay synchronous and pure.
+    /// </summary>
+    internal static async Task<BankStatement> ReadAsync(byte[] bytes, IPdfWordSource pdf, CancellationToken ct)
+    {
+        if (!BankStatementPdf.IsPdf(bytes)) return Read(bytes);
+        IReadOnlyList<IReadOnlyList<PdfLine>> pages;
+        try { pages = await pdf.ReadLinesAsync(bytes, ct); }
+        catch (PdfWordsException exception) { throw new InvalidDataException(exception.Message, exception); }
+        return BankStatementPdf.Read(pages);
+    }
 
     /// <summary>
     /// Picks the reader from the content, not the extension: banks name MT940 files .txt, .sta, .940 and

@@ -36,9 +36,10 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
         Assert.Contains("id=\"stmt-candidates\"", html);
         Assert.Contains("id=\"stmt-commit\"", html);
 
-        // Must match BankStatementFile.Extensions in FullWorth.Backend.Modules.Parity by hand - there
+        // Must match BankStatementFile.Extensions in FullWorth.Backend.Modules.Import by hand - there
         // is no compile-time link between the backend's allow-list and this input's accept attribute.
-        Assert.Contains("accept=\".sta,.mt940,.940,.txt,.xml,.camt\"", html);
+        // .pdf since #131 (Abschnitt 11): Ikano and C24 statements go through this same flow.
+        Assert.Contains("accept=\".sta,.mt940,.940,.txt,.xml,.camt,.pdf\"", html);
     }
 
     [Fact]

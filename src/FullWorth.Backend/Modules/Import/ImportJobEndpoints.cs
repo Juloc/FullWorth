@@ -1,3 +1,4 @@
+using FullWorth.Backend.Documents;
 using FullWorth.Backend.Validation;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -38,15 +39,15 @@ public static class ImportJobEndpoints
         return app;
     }
 
-    private static async Task<IResult> Upload(Guid fullWorthSpaceId,HttpRequest request,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
+    private static async Task<IResult> Upload(Guid fullWorthSpaceId,HttpRequest request,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,IPdfWordSource pdf,CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await space.IsMemberAsync(uid,fullWorthSpaceId,ct))return Results.NotFound();if(!request.HasFormContentType)return Results.BadRequest(new{error="Expected multipart/form-data."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return Results.BadRequest(new{error="No file uploaded."});if(file.Length>MaxUploadBytes)return Results.BadRequest(new{error="Maximum file size is 25 MB."});var ext=Path.GetExtension(file.FileName).ToLowerInvariant();if(ext is not(".csv" or ".xlsx")&&!BankStatementFile.CouldBeStatement(ext))return Results.BadRequest(new{error="Supported formats are CSV, XLSX, MT940 and CAMT XML."});
+        var uid=currentUser.RequireUserId();if(!await space.IsMemberAsync(uid,fullWorthSpaceId,ct))return Results.NotFound();if(!request.HasFormContentType)return Results.BadRequest(new{error="Expected multipart/form-data."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return Results.BadRequest(new{error="No file uploaded."});if(file.Length>MaxUploadBytes)return Results.BadRequest(new{error="Maximum file size is 25 MB."});var ext=Path.GetExtension(file.FileName).ToLowerInvariant();if(ext is not(".csv" or ".xlsx")&&!BankStatementFile.CouldBeStatement(ext))return Results.BadRequest(new{error="Supported formats are CSV, XLSX, MT940, CAMT XML and PDF statements."});
         await using var ms=new MemoryStream(checked((int)file.Length));await file.CopyToAsync(ms,ct);var bytes=ms.ToArray();var sha=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         // A statement file (MT940 / CAMT) is not a table of rows, and it carries what a CSV export
         // almost never does: the closing balance with the date it is valid for. It goes through the same
         // job, review and commit as every other import - only the reading differs.
         if(BankStatementFile.CouldBeStatement(ext))
-            return await UploadStatementAsync(fullWorthSpaceId,uid,file.FileName,bytes,sha,store,ct);
+            return await UploadStatementAsync(fullWorthSpaceId,uid,file.FileName,bytes,sha,store,pdf,ct);
         List<Dictionary<string,string>> rows;try{rows=ImportTabularFile.Read(file.FileName,bytes);}catch(Exception e) when(e is InvalidDataException or FormatException){return Results.BadRequest(new{error=e.Message});}if(rows.Count==0)return Results.BadRequest(new{error="No data rows found."});
         var mapping=ImportTabularFile.SuggestColumns(rows[0].Keys);if(mapping.Date.Length==0||mapping.Amount.Length==0)return Results.BadRequest(new{error="Could not detect date and amount columns. Rename columns or use common names such as Date/Datum and Amount/Betrag."});var jobId=Guid.NewGuid();var now=DateTimeOffset.UtcNow;var candidates=new List<Candidate>();var errors=0;
         // A file without a currency column states no currency, so the space's own base currency is the
@@ -69,10 +70,11 @@ public static class ImportJobEndpoints
         byte[] bytes,
         string sha,
         ImportJobStore store,
+        IPdfWordSource pdf,
         CancellationToken ct)
     {
         BankStatement statement;
-        try { statement = BankStatementFile.Read(bytes); }
+        try { statement = await BankStatementFile.ReadAsync(bytes, pdf, ct); }
         catch (Exception exception) when (exception is InvalidDataException or FormatException)
         {
             return Results.BadRequest(new { error = exception.Message });
@@ -93,7 +95,8 @@ public static class ImportJobEndpoints
                 entry.ExternalKey,
                 Fingerprint(entry.BookingDate, entry.Amount, entry.Currency, entry.Counterparty, entry.Description, entry.ExternalKey),
                 "ready",
-                null))
+                null,
+                entry.ReviewNote))
             .ToList();
 
         // A statement with a balance but no bookings is a legitimate file: it anchors the account.
@@ -112,6 +115,9 @@ public static class ImportJobEndpoints
             ready = candidates.Count,
             errors = 0,
             statementAccount = statement.AccountIdentifier,
+            // Was man ueber die Datei als Ganzes wissen muss - etwa, dass ein PDF rechnerisch nicht
+            // aufgeht und deshalb keine Zeile vorgewaehlt ist (#131, Abschnitt 11).
+            warnings = statement.Warnings ?? [],
             statementBalance = statement.ClosingBalance is null
                 ? null
                 : new

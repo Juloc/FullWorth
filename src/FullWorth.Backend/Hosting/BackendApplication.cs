@@ -1,3 +1,4 @@
+using FullWorth.Backend.Documents;
 using FullWorth.Backend.Modules.DataErasure;
 using FullWorth.Backend.Modules.Reconciliation;
 using System.Security.Cryptography;
@@ -333,6 +334,7 @@ public static class BackendApplication
         builder.Services.AddScoped<FullWorth.Backend.Modules.Budgets.Suggestions.BudgetSuggestionStore>();
         builder.Services.AddScoped<ImportMappingStore>();
         builder.Services.AddScoped<ImportSourceAccountStore>();
+        builder.Services.AddSingleton<IPdfWordSource, PopplerPdfWordSource>();
         builder.Services.AddScoped<ImportMappingCommitService>();
         builder.Services.AddScoped<ImportJobStore>();
         builder.Services.Configure<ImportStagingRetentionOptions>(builder.Configuration.GetSection(ImportStagingRetentionOptions.SectionName));

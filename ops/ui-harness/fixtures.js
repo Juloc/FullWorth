@@ -12,8 +12,24 @@
   // Quellkonten: eines, das beim letzten Import schon zugeordnet wurde, und eines ohne Erinnerung -
   // nur so ist im Harness zu sehen, dass die Vorauswahl der Erinnerung folgt und nicht dem Raten.
   const MAPPING_JOB = '7f000000-0000-4000-8000-000000000132';
+  // Ein PDF-Kontoauszug (#131, Abschnitt 11): ein erfundener Ikano-Auszug im Aufbau des echten - drei
+  // echte Bewegungen, vier interne Umbuchungen zwischen Karte und Ratenkauf, die abgewaehlt dastehen.
+  const STATEMENT_JOB = '7f000000-0000-4000-8000-000000000133';
+  // Derselbe Auszug, falsch gelesen: er geht nicht auf, jede Zeile steht zur Pruefung da.
+  const STATEMENT_JOB_UNSURE = '7f000000-0000-4000-8000-000000000134';
+  const statementRows = note => [
+    { id: '5a000000-0000-4000-8000-000000000001', bookingDate: iso('2026-09-01'), amount: 50, currency: 'EUR', counterparty: 'Lastschrifteinzug', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note },
+    { id: '5a000000-0000-4000-8000-000000000002', bookingDate: iso('2026-09-01'), amount: 20, currency: 'EUR', counterparty: 'ONLINESHOP GUTSCHRIFT LU', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note },
+    { id: '5a000000-0000-4000-8000-000000000003', bookingDate: iso('2026-09-01'), amount: -20, currency: 'EUR', counterparty: 'Automatische Saldenkorrektur', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note || 'internal_transfer' },
+    { id: '5a000000-0000-4000-8000-000000000004', bookingDate: iso('2026-09-01'), amount: 20, currency: 'EUR', counterparty: 'Automatische Saldenkorrektur', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note || 'internal_transfer' },
+    { id: '5a000000-0000-4000-8000-000000000005', bookingDate: iso('2026-09-11'), amount: -120, currency: 'EUR', counterparty: 'MOEBELHAUS BEISPIEL MUSTERSTADT DE', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note },
+    { id: '5a000000-0000-4000-8000-000000000006', bookingDate: iso('2026-09-12'), amount: 120, currency: 'EUR', counterparty: 'UMBUCHUNG IN RATENKAUF - MOEBELHAUS', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note || 'internal_transfer' },
+    { id: '5a000000-0000-4000-8000-000000000007', bookingDate: iso('2026-09-12'), amount: -120, currency: 'EUR', counterparty: 'RATENKAUF, 003 MONATE - MOEBELHAUS', duplicateStatus: 'new', validationStatus: 'ready', reviewNote: note || 'internal_transfer' }
+  ];
 
   const FIXTURES = {
+    [`import-jobs/${STATEMENT_JOB}/candidates`]: statementRows(null),
+    [`import-jobs/${STATEMENT_JOB_UNSURE}/candidates`]: statementRows('not_reconciled'),
     [`import-mapping/jobs/${MAPPING_JOB}/summary`]: {
       sourceAccounts: [
         { source: 'Tagesgeld', count: 12, rememberedAccountId: 'a1' },
@@ -1545,6 +1561,18 @@
     // #131: der Schritt NACH der Erkennung. Ohne eigene Antwort bekam die Spaltenzuordnung den
     // allgemeinen Schreib-Echo ({id:'stub'}) und brach mit "headers is not iterable" ab - der Weg vom
     // Waehlen der Datei bis zur Vorschau liess sich im Harness also nie am Stueck ansehen.
+    // Der Upload eines Kontoauszugs. Ein Dateiname mit "unsicher" liefert den Auszug, der nicht aufgeht.
+    if (after.startsWith('import-jobs/upload')) {
+      const uploaded = init?.body instanceof FormData ? init.body.get('file') : null;
+      const unsure = /unsicher/i.test(uploaded?.name || '');
+      return { status: 200, body: {
+        jobId: unsure ? STATEMENT_JOB_UNSURE : STATEMENT_JOB, fileName: uploaded?.name || 'abrechnung.pdf',
+        adapter: 'ikano_pdf', sourceRows: 7, ready: 7, errors: 0,
+        statementAccount: 'Ikano •••• 1234',
+        warnings: unsure ? ['not_reconciled'] : [],
+        statementBalance: { amount: -1050, currency: 'EUR', asOf: iso('2026-09-23') }
+      } };
+    }
     if (after.startsWith('import-mapping/upload'))
       return { status: 200, body: { jobId: MAPPING_JOB, sourceRows: 15, ready: 15, errors: 0 } };
     if (/^import-mapping\/jobs\/[^/]+\/duplicate-preview/.test(after))
@@ -1621,7 +1649,9 @@
       const fileName = uploaded && typeof uploaded.name === 'string' ? uploaded.name : 'datei.csv';
       const extension = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
       const detected =
-        extension === '.pdf' ? { adapter: 'broker-pdf', confidence: 'likely', reasonKey: 'pdf', rows: 0, accounts: [] }
+        extension === '.pdf' && /kontoauszug|ikano|abrechnung/i.test(fileName)
+          ? { adapter: 'statement', confidence: 'certain', reasonKey: 'ikano_pdf', rows: 7, accounts: ['Ikano •••• 1234'], from: iso('2026-09-01'), to: iso('2026-09-23') }
+        : extension === '.pdf' ? { adapter: 'broker-pdf', confidence: 'likely', reasonKey: 'pdf', rows: 0, accounts: [] }
         : extension === '.xlsx' ? { adapter: 'finanzguru', confidence: 'certain', reasonKey: 'finanzguruHeaders', rows: 312, accounts: ['C24 Girokonto', 'PayPal', 'DKB Girokonto'], from: iso('2024-01-01'), to: iso('2026-09-13') }
         : ['.xml', '.sta', '.mt940', '.940', '.camt', '.txt'].includes(extension) ? { adapter: 'statement', confidence: 'certain', reasonKey: 'camt', rows: 24, accounts: ['DE02120300000000202051'], from: iso('2026-08-01'), to: iso('2026-08-31') }
         : extension === '.csv' ? { adapter: 'transactions', confidence: 'likely', reasonKey: 'tabularColumns', rows: 48, accounts: [], headers: ['Buchungstag', 'Betrag', 'Empfänger'], suggestedMapping: { date: 'Buchungstag', amount: 'Betrag', counterparty: 'Empfänger' } }

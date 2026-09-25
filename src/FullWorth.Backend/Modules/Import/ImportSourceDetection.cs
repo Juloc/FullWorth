@@ -1,3 +1,4 @@
+using FullWorth.Backend.Documents;
 namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>
@@ -51,15 +52,27 @@ public static class ImportSourceDetector
     private static readonly string[] InvestmentColumns =
         ["isin", "wkn", "stueck", "stueckzahl", "shares", "anteile", "quantity", "assetclass", "wertpapier", "ticker"];
 
-    public static ImportSourceDetection Detect(string fileName, byte[] bytes)
+    /// <param name="pdfPages">
+    /// Die Zeilen eines PDF, wenn es eines ist - vom Aufrufer gelesen, weil das ein Werkzeug startet und
+    /// diese Erkennung selbst nichts ausfuehrt. <c>null</c> heisst: kein PDF, oder nicht lesbar.
+    /// </param>
+    public static ImportSourceDetection Detect(
+        string fileName, byte[] bytes, IReadOnlyList<IReadOnlyList<PdfLine>>? pdfPages = null)
     {
         var name = Path.GetFileName(fileName);
 
-        // Ein PDF ist an seinen ersten fuenf Bytes zu erkennen und an nichts sonst. Welches PDF es ist
-        // (Depotabrechnung oder Kontoauszug) entscheidet der Depot-Weg selbst - er ist heute der
-        // einzige, der PDFs ueberhaupt liest.
-        if (bytes.Length >= 5 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F' && bytes[4] == '-')
+        // Ein PDF ist an seinen ersten fuenf Bytes zu erkennen. Welches PDF es ist, sagt sein Inhalt: ein
+        // Kontoauszug, den der Statement-Leser kennt (#131, Abschnitt 11), geht dorthin; alles andere
+        // bleibt beim Depot-Weg, der Broker-Abrechnungen liest.
+        if (BankStatementPdf.IsPdf(bytes))
+        {
+            if (pdfPages is not null && BankStatementPdf.Recognises(pdfPages))
+            {
+                try { return FromStatement(BankStatementPdf.Read(pdfPages), name); }
+                catch (Exception exception) when (exception is InvalidDataException or FormatException) { }
+            }
             return Empty(AdapterBrokerPdf, Likely, "pdf", name);
+        }
 
         // Ein Finanzguru-Export ist eine Arbeitsmappe mit vierzehn festen Kopfzeilen. Trifft das zu, ist
         // die Antwort sicher - und die Datei sagt dann auch gleich, welche Konten und welcher Zeitraum
@@ -87,16 +100,7 @@ public static class ImportSourceDetector
         // MT940 und CAMT erkennt der Statement-Leser an seinem eigenen Inhalt. Er wirft, wenn es keines
         // von beiden ist - genau das ist hier die Antwort "nein", nicht ein Fehler.
         var statement = TryReadStatement(bytes);
-        if (statement is not null)
-        {
-            var dates = statement.Entries.Select(entry => entry.BookingDate).ToArray();
-            return new ImportSourceDetection(
-                AdapterStatement, Certain, statement.AdapterKey, name, statement.Entries.Count,
-                statement.AccountIdentifier is null ? [] : [statement.AccountIdentifier],
-                dates.Length == 0 ? statement.ClosingBalance?.AsOf : dates.Min(),
-                dates.Length == 0 ? statement.ClosingBalance?.AsOf : dates.Max(),
-                [], null);
-        }
+        if (statement is not null) return FromStatement(statement, name);
 
         if (!ImportTabularFile.CouldBeTable(Path.GetExtension(name)))
             return Empty(AdapterUnknown, Unknown, "unreadable", name);
@@ -118,6 +122,17 @@ public static class ImportSourceDetector
             return new ImportSourceDetection(AdapterTransactions, Likely, "tabularColumns", name, rows.Count, [], null, null, headers, mapping);
 
         return new ImportSourceDetection(AdapterUnknown, Unknown, "unmappedColumns", name, rows.Count, [], null, null, headers, mapping);
+    }
+
+    private static ImportSourceDetection FromStatement(BankStatement statement, string name)
+    {
+        var dates = statement.Entries.Select(entry => entry.BookingDate).ToArray();
+        return new ImportSourceDetection(
+            AdapterStatement, Certain, statement.AdapterKey, name, statement.Entries.Count,
+            statement.AccountIdentifier is null ? [] : [statement.AccountIdentifier],
+            dates.Length == 0 ? statement.ClosingBalance?.AsOf : dates.Min(),
+            dates.Length == 0 ? statement.ClosingBalance?.AsOf : dates.Max(),
+            [], null);
     }
 
     private static ImportSourceDetection Empty(string adapter, string confidence, string reasonKey, string fileName) =>

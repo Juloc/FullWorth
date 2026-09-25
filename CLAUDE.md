@@ -151,7 +151,8 @@ applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerSeparationT
 3. **A store method does one thing and is named after it.** `AddSnapshotAsync` adds a snapshot. Not
    "save and compute and notify". What happens next is the caller's decision.
 4. **No module knows another sideways.** What two need belongs to the module it belongs to, or to a
-   layer without domain knowledge (`Validation/`, `Security/`, `Data/`). This is not theory — it was
+   layer without domain knowledge (`Validation/`, `Security/`, `Data/`, `Documents/` - the PDF
+   word reader the statement import reads with). This is not theory — it was
    measured: 13 module cycles at the start of 2026-09-14, 4 at the end, and every one that fell fell
    because a piece of code sat in a module it did not belong to. `ModuleBoundaryTests` counts them.
 5. **Nothing unnecessary.** No code for a case that does not occur, no check that repeats another, no
