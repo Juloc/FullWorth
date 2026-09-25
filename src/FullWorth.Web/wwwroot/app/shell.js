@@ -132,10 +132,10 @@ export function createShell({
   function openTopbarMenu() {
     const entries = [
       ['privacy', get('privacy.toggle'),
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+        `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-eye')}"></use></svg>`,
         () => togglePrivacy()],
       ['refresh', get('common.refresh'),
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>',
+        `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-refresh')}"></use></svg>`,
         () => reload()]
     ];
     const items = entries

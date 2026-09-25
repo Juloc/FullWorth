@@ -13,6 +13,7 @@ export { categoryIconInner };
 // Modul, und sectionCard hier benutzt ihn. Das hat kein Test gemeldet - nur die Browserkonsole,
 // mit "esc is not defined" auf jeder Seite, die eine Abschnittskarte zeichnet.
 import { esc } from '../core/html.js';
+import { spriteHref } from '../components/sprite.js';
 export { esc };
 
 // Deterministic hue (0–359) from a name, so a merchant/category keeps the same monogram tint everywhere.
@@ -71,8 +72,8 @@ function brandLogoPath(name) {
 // das "Konto hinzufuegen"-Symbol (pages/accounts/page.html) bzw. der Umbenennen-Knopf in
 // pages/merchants/page.js - keine dritte Symbolzeichnung fuer dieselbe Bedeutung.
 const PRIMARY_ACTION_GLYPH = Object.freeze({
-  add: '<path d="M12 5v14M5 12h14"/>',
-  edit: '<path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/>'
+  add: 'ui-plus',
+  edit: 'ui-edit'
 });
 
 /**
@@ -95,7 +96,7 @@ export function setPrimaryAction(button, label, kind = 'add') {
   if (!button) return;
   const glyph = PRIMARY_ACTION_GLYPH[kind] || PRIMARY_ACTION_GLYPH.add;
   button.innerHTML = `<span class="btn-primary-label">${esc(label)}</span>`
-    + `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg>`;
+    + `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="${spriteHref(glyph)}"></use></svg>`;
   button.dataset.mobileKind = kind;
   // Mobile shows the glyph alone, so the label has to survive as the accessible name.
   if (label) button.setAttribute('aria-label', label);

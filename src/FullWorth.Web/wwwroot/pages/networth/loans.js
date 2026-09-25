@@ -5,6 +5,7 @@
 // instead of a misleading number. Loans render as a panel inside the net-worth screen.
 
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { spriteHref } from '../../components/sprite.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
@@ -53,7 +54,7 @@ function loanRowMeta(l) {
 
 // Monochrome "stacked balance" glyph for the row identity chip (stroke = currentColor via .fw-ident).
 function loanIcon() {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.6 3.1 3 7 3s7-1.4 7-3V6"/><path d="M5 12v6c0 1.6 3.1 3 7 3s7-1.4 7-3v-6"/></svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="${spriteHref('ui-coins')}"></use></svg>`;
 }
 
 async function openAmortization(loan) {

@@ -88,7 +88,8 @@ that argues back.
 5. **Files by fingerprint.** In markup, write `href="~/styles/x.css"` / `src="~/pages/x/entry.js"`:
    `MapStaticAssets` turns that into the fingerprinted, `immutable` address. Icons are symbols in
    `wwwroot/icons/sprite.svg` (`<use href>`, via `IconSprite` in C# and `components/sprite.js` in
-   the browser); `IconSpriteTests` checks every id, because a missing one draws nothing silently.
+   the browser); `IconSpriteTests` checks every id, because a missing one draws nothing silently,
+   and turns red on any new icon drawn inline instead.
    The dev stack sets `FullWorthWeb:LiveStaticFiles=true` to read `wwwroot` from disk instead.
 6. **Nothing unnecessary.** No CSS property that changes nothing, no rule that only overrides another,
    no duplicated code, no check for cases that do not occur. The base inherits; a component only adds

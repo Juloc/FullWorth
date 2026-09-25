@@ -61,8 +61,13 @@ dark-mode block, no token layer loaded. It is the one page that does not use des
 server-rendered navigation; the layout puts it on `<body data-sprite>`, and `components/sprite.js`
 (`spriteHref(symbol)`) reads it for everything the browser draws. Symbol ids are `nav-*` (navigation),
 `cat-*` (category icons, mapped from category keys and their German aliases in `components/icons.js`)
-and `ui-*`. A `<use>` on a missing id draws nothing without any error, so `IconSpriteTests` checks
-every id the navigation and `icons.js` name. Other icons are still inline SVG in the page modules.
+and `ui-*` (everything else: toggles, actions, account kinds, empty states; one drawing per meaning).
+The static documents (`auth/`) point at the plain name and carry `data-sprite="/icons/sprite.svg"`, so
+`spriteHref` has one rule everywhere. A `<use>` on a missing id draws nothing without any error, so
+`IconSpriteTests` checks every id named anywhere — and `No_icon_is_drawn_inline` keeps a second
+catalogue from growing back: an `<svg>` whose content has no placeholder is a fixed picture and belongs
+in the sprite. Charts build their geometry from data and stay inline; the one illustration that is not
+an icon (the chart preview in Einstellungen) is named there.
 
 ## Boot order of a page
 

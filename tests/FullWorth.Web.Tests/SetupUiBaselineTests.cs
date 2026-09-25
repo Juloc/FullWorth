@@ -101,9 +101,14 @@ public sealed class SetupUiBaselineTests
         Assert.DoesNotContain("pw-eye", auth, StringComparison.Ordinal);
         Assert.Contains("type=\"password\"", auth, StringComparison.Ordinal);
 
-        // The module owns the button, and the auth page has no imports of the app bundle to rely on.
+        // The module owns the button, and the auth page has no app bundle to rely on. Its one import is
+        // the sprite reference (#154), a leaf that imports nothing and reads the address the auth page
+        // puts on its <body>.
         Assert.Contains("export function enhancePasswordInputs", module, StringComparison.Ordinal);
-        Assert.DoesNotContain("import ", module, StringComparison.Ordinal);
+        Assert.Equal(["import { spriteHref } from './sprite.js';"],
+            module.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith("import ", StringComparison.Ordinal)));
+        Assert.DoesNotContain("import ", ReadSource(Path.Combine("components", "sprite.js")), StringComparison.Ordinal);
+        Assert.Contains("data-sprite=\"/icons/sprite.svg\"", auth, StringComparison.Ordinal);
 
         // And a dialog field of kind Password gets it without the caller doing anything.
         Assert.Contains("Password: 'password'", formDialog, StringComparison.Ordinal);

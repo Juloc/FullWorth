@@ -7,6 +7,7 @@
 
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { spriteHref } from '../../components/sprite.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
 
 let ctx = null;
@@ -35,7 +36,7 @@ export async function renderRules(context) {
   list.innerHTML = '';
   if (!rows.length) {
     list.innerHTML = `<div class="row state-empty rules-empty"><div class="rules-empty-inner">
-      <svg class="rules-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="7" cy="17" r="2"/></svg>
+      <svg class="rules-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-rules')}"></use></svg>
       <div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>
     </div></div>`;
     return;

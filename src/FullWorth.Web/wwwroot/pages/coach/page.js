@@ -2,6 +2,7 @@ import { api as sharedApi } from '../../core/services.js';
 import { state } from '../../core/state.js';
 import { navigate } from '../../core/navigation.js';
 import { emitAppEvent, onAppEvent } from '../../core/event-bus.js';
+import { spriteHref } from '../../components/sprite.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -655,8 +656,8 @@ function updateSendButtons() {
     button.setAttribute('aria-label', label);
     button.title = label;
     button.innerHTML = responding
-      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1"/></svg>'
-      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>';
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-stop') + '"></use></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-send') + '"></use></svg>';
   });
 }
 

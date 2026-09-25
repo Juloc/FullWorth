@@ -1,4 +1,6 @@
-const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+import { spriteHref } from './sprite.js';
+
+const CLOSE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-close')}"></use></svg>`;
 
 function ensureHeader(dlg, card, closeLabel) {
   // A dialog whose header is not a `.panel-head` can mark it with `data-dialog-head`. Without that, we

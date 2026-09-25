@@ -15,20 +15,19 @@
  * it after a partial re-render enhances only what is new.
  */
 
+import { spriteHref } from './sprite.js';
+
 const ENHANCED = 'passwordToggle';
 
 const EYE_OPEN =
   '<svg class="pw-eye pw-eye-open" viewBox="0 0 24 24" width="20" height="20" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
-  'aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/>' +
-  '<circle cx="12" cy="12" r="3"/></svg>';
+  'aria-hidden="true"><use href="' + spriteHref('ui-eye') + '"></use></svg>';
 
 const EYE_OFF =
   '<svg class="pw-eye pw-eye-off" viewBox="0 0 24 24" width="20" height="20" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
-  'aria-hidden="true"><path d="m3 3 18 18"/><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/>' +
-  '<path d="M9.9 5.2A9.4 9.4 0 0 1 12 5c6.4 0 10 7 10 7a17.3 17.3 0 0 1-3.1 3.9"/>' +
-  '<path d="M6.1 6.1A17.2 17.2 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 3-.5"/></svg>';
+  'aria-hidden="true"><use href="' + spriteHref('ui-eye-off') + '"></use></svg>';
 
 /**
  * @param root      element to search, or document

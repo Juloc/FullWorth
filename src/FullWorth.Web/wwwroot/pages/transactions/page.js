@@ -16,6 +16,7 @@ import { selectionListHtml, createSelectionList } from '../../components/selecti
 import { openBulkEdit } from './bulk-edit.js';
 import { openLearnCategory, canLearnFrom } from './learn-category.js';
 import { registerRowSelection } from '../../components/mobile-interactions.js';
+import { spriteHref } from '../../components/sprite.js';
 import { state } from '../../core/state.js';
 
 let ctx = null;
@@ -1133,7 +1134,7 @@ function txEmptyState(filtered, reason = 'filters') {
     ? deLabel('Passe Suche oder Filter an.', 'Try adjusting your search or filters.')
     : deLabel('Sobald Buchungen vorliegen, erscheinen sie hier.', 'Bookings show up here once they arrive.');
   return `<div class="tx-empty"><div class="tx-empty-box">` +
-    `<span class="tx-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>` +
+    `<span class="tx-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="${spriteHref('ui-list')}"></use></svg></span>` +
     `<span class="tx-empty-title">${ctx.esc(title)}</span>` +
     `<span class="tx-empty-hint">${ctx.esc(hint)}</span>` +
     `</div></div>`;
@@ -1154,8 +1155,8 @@ function accountCell(x) {
   if (!name) return `<div class="tx-acct"></div>`;
   const card = /kredit|card|karte|visa|master|amex/i.test(name);
   const icon = card
-    ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>`
-    : `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10 12 4l8 6M5 10v8m4-8v8m6-8v8m4-8v8M3.5 19h17"/></svg>`;
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="${spriteHref('ui-card')}"></use></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="${spriteHref('ui-bank')}"></use></svg>`;
   return `<div class="tx-acct"><span class="tx-acct-ic" aria-hidden="true">${icon}</span><span class="tx-acct-name">${ctx.esc(name)}</span></div>`;
 }
 
@@ -1589,7 +1590,7 @@ async function openDetail(listItem) {
       }).join('')}</div>`
     : '';
   const dlg = ctx.dialog(`<form class="dialog-card tx-detail" method="dialog">
-    <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(transactionDate(t))} · ${ctx.esc(displayAccountName(t.account || ''))}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(transactionDate(t))} · ${ctx.esc(displayAccountName(t.account || ''))}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-close')}"></use></svg></button></div>
     <div class="tx-amount ${moneyClass(transactionMoneyVariant(t))}">${ctx.money(t.amount, t.currency)}</div>
     ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${(t.firstSeenAt || t.updatedAt) ? `<div class="row-sub tx-detail-timestamps">${t.firstSeenAt ? `${ctx.esc(ctx.get('transactions.firstSeenAt'))}: ${ctx.esc(ctx.dateTime(t.firstSeenAt))}` : ''}${t.firstSeenAt && t.updatedAt ? ' · ' : ''}${t.updatedAt ? `${ctx.esc(ctx.get('transactions.updatedAt'))}: ${ctx.esc(ctx.dateTime(t.updatedAt))}` : ''}</div>` : ''}

@@ -9,6 +9,7 @@ import { emptyRow } from '../../components/empty.js';
 import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../../features/ux-kit.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
+import { spriteHref } from '../../components/sprite.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
@@ -304,10 +305,10 @@ function miniSparkline(vals) {
 }
 
 // Scoped-navigation helper for drillable widget rows (Overview → scoped bookings, UX rework §3).
-const DASH_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/></svg>';
+const DASH_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="' + spriteHref('ui-folder') + '"></use></svg>';
 // Muted drill affordance on grouped account headers (mirrors the reference overview's ">"): monochrome,
 // only signals the header opens the group's bookings — never a strong hue.
-const DASH_CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+const DASH_CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="' + spriteHref('nav-chevron') + '"></use></svg>';
 function bindDrill(ctx, el, queryFn) {
   const go = () => ctx.navScope('transactions', queryFn());
   el.addEventListener('click', go);

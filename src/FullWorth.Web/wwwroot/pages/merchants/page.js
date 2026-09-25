@@ -5,14 +5,15 @@
 // add/remove. All writes require the space Owner role.
 
 import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
+import { spriteHref } from '../../components/sprite.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
-const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
-const editIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
-const mergeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v6a4 4 0 0 0 4 4h6"/><path d="M7 20V10"/><path d="m14 11 3 3-3 3"/></svg>';
+const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-trash') + '"></use></svg>';
+const editIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-edit') + '"></use></svg>';
+const mergeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-merge') + '"></use></svg>';
 // Line-art storefront for the friendly empty state (monochrome, matches the icon set).
-const storefrontIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16M5 9 6 4h12l1 5M6 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M4 9a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0"/></svg>';
+const storefrontIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-store') + '"></use></svg>';
 
 // Placeholder skeleton rows shown while the merchant list loads, so navigation lands on a calm layout
 // instead of an empty flash. Purely decorative (aria-hidden); replaced once the data resolves.

@@ -89,14 +89,14 @@
             </div>
             <div class="topbar-actions">
                 <button id="global-search" class="icon-button" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-search")"></use></svg>
                 </button>
                 <button id="privacy-toggle" class="icon-button" type="button" aria-pressed="false" data-i18n-title="privacy.toggle" title="Privatmodus umschalten" aria-label="Privacy">
-                    <svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.2A9.9 9.9 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.2 6.2A17 17 0 0 0 2 12s3.5 7 10 7a9.9 9.9 0 0 0 3.4-.6"/></svg>
+                    <svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye")"></use></svg>
+                    <svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye-off")"></use></svg>
                 </button>
                 <button id="topbar-more" class="icon-button" type="button" data-i18n-title="nav.more" title="Mehr" aria-label="More">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-more")"></use></svg>
                 </button>
                 @* Versteckt im Markup und nicht weggelassen: die Seite meldet ihre Hauptaktion beim
                    Start an, und ein Knopf, der erst dann ins Markup kaeme, schoebe die Leiste. *@
@@ -112,7 +112,7 @@
    Beides stand bis zum Ende von #154 nur in index.html - also in der alten Huelle. Mit ihr waere es
    ersatzlos verschwunden: der Coach haette auf KEINER Seite mehr eine Sprechblase gehabt. Hier
    gehoert es hin, denn es schwebt ueber jeder Seite, nicht nur ueber einer. *@
-<button id="coach-launcher" class="coach-launcher" type="button" data-i18n-title="coach.open" title="Coach öffnen" aria-label="Coach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg></button>
+<button id="coach-launcher" class="coach-launcher" type="button" data-i18n-title="coach.open" title="Coach öffnen" aria-label="Coach"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-coach")"></use></svg></button>
 <aside id="coach-dock" class="coach-dock" aria-label="FullWorth Coach" hidden>
   <div id="coach-dock-resizer" class="coach-dock-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Coach" tabindex="0"></div>
   <header class="coach-dock-header">
@@ -135,9 +135,9 @@
         <label class="coach-model-picker" for="coach-dock-model">
           <span class="sr-only" data-i18n="coach.model">KI-Modell</span>
           <select id="coach-dock-model"><option value="" data-i18n="coach.automatic">Automatisch</option></select>
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-chevron-down")"></use></svg>
         </label>
-        <button id="coach-dock-send" type="submit" class="btn btn-primary coach-send" data-i18n-title="coach.send" title="Senden" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg></button>
+        <button id="coach-dock-send" type="submit" class="btn btn-primary coach-send" data-i18n-title="coach.send" title="Senden" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-send")"></use></svg></button>
       </div>
     </form>
   </div>

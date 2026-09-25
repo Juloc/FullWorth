@@ -5,6 +5,8 @@
 // pages. Action strings are stable technical identifiers (e.g. "budget.created"); we humanize them for
 // display and for the filter dropdown labels rather than maintaining a per-action translation.
 
+import { spriteHref } from '../../components/sprite.js';
+
 let ctx = null;
 // Cursor of the last-loaded (oldest shown) row for the keyset "load older" fetch; null when at the end.
 let cursor = null;
@@ -76,7 +78,7 @@ async function fetchPage(append) {
     lastDay = null;
     if (!events.length) {
       list.innerHTML = `<div class="audit-empty state-empty">`
-        + `<svg class="audit-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h6l4 4v12H6V6"/><path d="M14 4v4h4"/><path d="M9.5 13h5M9.5 16.5h3"/></svg>`
+        + `<svg class="audit-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="${spriteHref('ui-document')}"></use></svg>`
         + `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`
         + `</div>`;
     }

@@ -56,6 +56,66 @@ public sealed class IconSpriteTests(FullWorthWebFactory factory) : IClassFixture
         Assert.True(missing.Length == 0, "the sprite has no symbol for: " + string.Join(", ", missing));
     }
 
+    /// <summary>
+    /// Alle anderen Stellen: die ui-Symbole der Seiten und Komponenten (auch die Tabellen wie das
+    /// Kontosymbol in pages/accounts/presentation.js), jeder spriteHref-Aufruf, jeder Verweis in einer
+    /// Razor-Seite und in den eigenstaendigen Dokumenten. Ein "cat-" oder "nav-" in Anfuehrungszeichen
+    /// ist in JS oft eine CSS-Klasse - die zaehlen hier nur als spriteHref-Argument.
+    /// </summary>
+    [Fact]
+    public void Every_symbol_anything_else_names_is_in_the_sprite()
+    {
+        var web = Path.Combine(WebSources.RepoRoot, "src", "FullWorth.Web");
+        var named = new HashSet<string>(StringComparer.Ordinal);
+        void Collect(string root, string pattern, string regex)
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(web, root), pattern, SearchOption.AllDirectories))
+                foreach (Match match in Regex.Matches(File.ReadAllText(file), regex))
+                    named.Add(match.Groups["id"].Value);
+        }
+        Collect("wwwroot", "*.js", """'(?<id>ui-[a-z-]+)'""");
+        Collect("wwwroot", "*.js", """spriteHref\('(?<id>[\w-]+)'\)""");
+        Collect("wwwroot", "*.html", """sprite\.svg#(?<id>[\w-]+)""");
+        Collect("Pages", "*.cshtml", """IconSprite\.Href\(ViewContext\.HttpContext, "(?<id>[\w-]+)"\)""");
+
+        Assert.Contains("ui-search", named);
+        Assert.Contains("ui-wallet", named);
+        Assert.Contains("ui-globe", named);
+        var symbols = Symbols();
+        var missing = named.Where(id => !symbols.Contains(id)).Order(StringComparer.Ordinal).ToArray();
+        Assert.True(missing.Length == 0, "the sprite has no symbol for: " + string.Join(", ", missing));
+    }
+
+    /// <summary>
+    /// Kein Icon wird mehr inline gezeichnet (#154: ein kanonischer Katalog, keine konkurrierenden).
+    /// Ein &lt;svg&gt;, dessen Inhalt ganz ohne Platzhalter auskommt, ist ein festes Bild - also ein
+    /// Symbol, das ins Sprite gehoert. Diagramme bauen ihre Geometrie aus Daten und bleiben inline.
+    /// Die eine Ausnahme ist eine Illustration, kein Icon: die Diagramm-Vorschau der Einstellungen.
+    /// </summary>
+    [Fact]
+    public void No_icon_is_drawn_inline()
+    {
+        var web = Path.Combine(WebSources.RepoRoot, "src", "FullWorth.Web");
+        var files = Directory.EnumerateFiles(Path.Combine(web, "wwwroot"), "*.*", SearchOption.AllDirectories)
+            .Where(file => file.EndsWith(".js", StringComparison.Ordinal) || file.EndsWith(".html", StringComparison.Ordinal))
+            .Concat(Directory.EnumerateFiles(Path.Combine(web, "Pages"), "*.cshtml", SearchOption.AllDirectories));
+
+        var inline = new List<string>();
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            foreach (Match svg in Regex.Matches(text, """<svg\b(?<attrs>[^>]*)>(?<inner>[\s\S]*?)</svg>"""))
+            {
+                var inner = svg.Groups["inner"].Value.Trim();
+                if (inner.StartsWith("<use", StringComparison.Ordinal) || inner.Contains("${", StringComparison.Ordinal) || inner.Contains('@')) continue;
+                if (svg.Groups["attrs"].Value.Contains("appearance-preview-chart", StringComparison.Ordinal)) continue;
+                inline.Add($"{Path.GetRelativePath(web, file)}:{text[..svg.Index].Count(c => c == '\n') + 1}");
+            }
+        }
+
+        Assert.True(inline.Count == 0, "these icons are drawn inline instead of from icons/sprite.svg:" + Environment.NewLine + string.Join(Environment.NewLine, inline));
+    }
+
     /// <summary>Die Geometrie steht im Sprite und nur dort - Katalog und Symboltabelle nennen die ID.</summary>
     [Fact]
     public void The_catalogues_name_symbols_instead_of_carrying_geometry()
