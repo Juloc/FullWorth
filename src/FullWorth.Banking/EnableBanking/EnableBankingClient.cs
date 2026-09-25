@@ -102,6 +102,8 @@ public sealed class EnableBankingClient
     private readonly EnableBankingOptions _options;
     private readonly EnableBankingRequestPolicy _requestPolicy;
     private readonly EnableBankingCredentials? _credentials;
+    // The sync's clock: a Retry-After delta becomes an absolute time the sync then compares to its own "now".
+    private readonly TimeProvider _clock;
 
     // Legacy/global DI constructor.
     // The typed-HttpClient DI activator must use this constructor (global credentials); the per-user
@@ -111,8 +113,9 @@ public sealed class EnableBankingClient
     public EnableBankingClient(
         HttpClient http,
         IOptions<EnableBankingOptions> options,
-        EnableBankingRequestPolicy requestPolicy)
-        : this(http, options, requestPolicy, null)
+        EnableBankingRequestPolicy requestPolicy,
+        TimeProvider clock)
+        : this(http, options, requestPolicy, null, clock)
     {
     }
 
@@ -121,12 +124,14 @@ public sealed class EnableBankingClient
         HttpClient http,
         IOptions<EnableBankingOptions> options,
         EnableBankingRequestPolicy requestPolicy,
-        EnableBankingCredentials? credentials)
+        EnableBankingCredentials? credentials,
+        TimeProvider clock)
     {
         _http = http;
         _options = options.Value;
         _requestPolicy = requestPolicy;
         _credentials = credentials;
+        _clock = clock;
     }
 
     public string ApplicationId => _credentials?.ApplicationId ?? _options.ApplicationId;
@@ -418,7 +423,7 @@ public sealed class EnableBankingClient
             }
 
             var errorCode = TryGetErrorCode(content);
-            var retryAt = GetRetryAt(response);
+            var retryAt = GetRetryAt(response, _clock.GetUtcNow());
 
             // Never blind-retry an ASPSP/API rate limit. The sync service persists a bank-aware cooldown.
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -428,7 +433,7 @@ public sealed class EnableBankingClient
                 throw new EnableBankingApiException(response.StatusCode, errorCode, content, retryAt);
 
             var delay = retryAt.HasValue
-                ? retryAt.Value - DateTimeOffset.UtcNow
+                ? retryAt.Value - _clock.GetUtcNow()
                 : TimeSpan.FromSeconds(Math.Pow(2, attempt + 1) + Random.Shared.NextDouble());
             if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
             if (delay > TimeSpan.FromSeconds(30)) delay = TimeSpan.FromSeconds(30);
@@ -443,11 +448,11 @@ public sealed class EnableBankingClient
         HttpStatusCode.ServiceUnavailable or
         HttpStatusCode.GatewayTimeout;
 
-    private static DateTimeOffset? GetRetryAt(HttpResponseMessage response)
+    private static DateTimeOffset? GetRetryAt(HttpResponseMessage response, DateTimeOffset now)
     {
         var retry = response.Headers.RetryAfter;
         if (retry?.Date is not null) return retry.Date;
-        if (retry?.Delta is not null) return DateTimeOffset.UtcNow.Add(retry.Delta.Value);
+        if (retry?.Delta is not null) return now.Add(retry.Delta.Value);
         return null;
     }
 
@@ -469,7 +474,7 @@ public sealed class EnableBankingClient
 
     private string CreateJwt()
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
         var header = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object>
         {
             ["typ"] = "JWT",

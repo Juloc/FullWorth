@@ -75,6 +75,35 @@ public sealed class BankSyncFlowTests
     }
 
     [Fact]
+    public async Task RetryAfter_delta_is_counted_from_the_sync_clock()
+    {
+        // The client turns a delta into an absolute time and the sync compares that time to its own
+        // "now". When the client read the wall clock and the sync its TimeProvider, the two disagreed.
+        using var environment = new TestBankingEnvironment(Clock);
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: Now.AddDays(-1), now: Now));
+        var provider = new RecordingHttpMessageHandler((_, _, _) =>
+        {
+            var response = TestBankingEnvironment.JsonResponse(
+                "{\"error_code\":\"ASPSP_RATE_LIMIT_EXCEEDED\"}",
+                HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMinutes(500));
+            return Task.FromResult(response);
+        });
+        var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
+        {
+            MinimumBackgroundSyncIntervalMinutes = 365,
+            RateLimitCooldownMinutes = 365
+        });
+
+        var result = await service.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Failed);
+        Assert.Equal(Now.AddMinutes(500), backend.Upserts.Last().NextSyncAllowedAt);
+    }
+
+    [Fact]
     public async Task Simultaneous_sync_attempt_is_skipped_not_queued_into_a_second_bank_run()
     {
         using var environment = new TestBankingEnvironment(Clock);

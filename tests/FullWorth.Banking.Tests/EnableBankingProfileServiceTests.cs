@@ -190,7 +190,8 @@ public sealed class EnableBankingProfileServiceTests
                 new SingleClientFactory(_providerHttp),
                 options,
                 new EnableBankingRequestPolicy(),
-                backend);
+                backend,
+                TimeProvider.System);
 
             Service = new EnableBankingProfileService(resolver, backend, options);
         }

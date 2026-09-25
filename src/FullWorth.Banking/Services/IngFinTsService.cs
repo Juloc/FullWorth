@@ -91,7 +91,8 @@ public sealed class IngFinTsService(
     IOptionsMonitor<FinTsOptions> options,
     IOptions<BankingSyncOptions> syncOptions,
     BankSyncConcurrencyGate syncGate,
-    ILogger<IngFinTsService> logger)
+    ILogger<IngFinTsService> logger,
+    TimeProvider clock)
 {
     private readonly IOptionsMonitor<FinTsOptions> _options = options;
     private readonly BankingSyncOptions _sync = syncOptions.Value;
@@ -142,9 +143,9 @@ public sealed class IngFinTsService(
             SessionKey(caller.FullWorthSpaceId, credentials.UserId),
             status,
             null,
-            DateTimeOffset.UtcNow,
+            clock.GetUtcNow(),
             null,
-            DateTimeOffset.UtcNow.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes)),
+            clock.GetUtcNow().AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes)),
             0,
             // Die Verbindung wartet auf die Auswahl. Bis dahin holt sie nichts - weder hier noch im
             // Hintergrund - und die Zeile bietet "Auswahl abschliessen" an statt "Neu verbinden".
@@ -379,7 +380,7 @@ public sealed class IngFinTsService(
     {
         if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase)) return connection;
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         if (!bypassCadence && connection.NextSyncAllowedAt is { } next && next > now) return connection;
         var startedAt = now;
 
@@ -444,7 +445,7 @@ public sealed class IngFinTsService(
                 cashAccounts, depots, Shape(session.Parameters.Accounts));
             var completed = await backend.UpsertConnectionAsync(ToWrite(connection,
                 authorizationId: JsonSerializer.Serialize(secret, Json), status: "AUTHORIZED",
-                lastSyncedAt: DateTimeOffset.UtcNow, nextSyncAllowedAt: nextAllowed, consecutiveFailures: 0, lastError: null), ct);
+                lastSyncedAt: clock.GetUtcNow(), nextSyncAllowedAt: nextAllowed, consecutiveFailures: 0, lastError: null), ct);
             await RecordSyncHistorySafeAsync(connection.Id, startedAt, "success", null, CancellationToken.None, trigger);
             return completed;
         }
@@ -502,7 +503,7 @@ public sealed class IngFinTsService(
         {
             await backend.RecordSyncHistoryAsync(
                 connectionId,
-                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode, trigger, "fints"),
+                new BankSyncHistoryWrite(startedAt, clock.GetUtcNow(), result, errorCode, trigger, "fints"),
                 ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -530,7 +531,7 @@ public sealed class IngFinTsService(
 
         var allTransactions = new List<FinTsTransaction>();
         string? touchdown = null;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
         var from = today.AddDays(-Math.Clamp(_options.CurrentValue.HistoryDays, 1, 90));
         for (var page = 0; page < Math.Max(1, _options.CurrentValue.MaxPages); page++)
         {
@@ -544,7 +545,7 @@ public sealed class IngFinTsService(
         var hash = AccountHash(account);
         var providerAccountId = "fints:" + hash;
         var balances = balance is null ? Array.Empty<BalanceBatchItem>() :
-            [new BalanceBatchItem(hash, balance.Amount, balance.Currency, "closingBooked", balance.Date, DateTimeOffset.UtcNow)];
+            [new BalanceBatchItem(hash, balance.Amount, balance.Currency, "closingBooked", balance.Date, clock.GetUtcNow())];
         var transactions = allTransactions.Select(tx => new TransactionBatchItem(
             hash,
             "fints:" + tx.ExternalKey,
@@ -562,7 +563,7 @@ public sealed class IngFinTsService(
         var product = account.ProductName;
         var type = product?.Contains("Extra", StringComparison.OrdinalIgnoreCase) == true ? "savings" : "checking";
         await backend.IngestAsync(new FinanceIngestBatch(
-            new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, DateTimeOffset.UtcNow, null),
+            new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, clock.GetUtcNow(), null),
             [new AccountBatchItem(hash, providerAccountId, "ING", product ?? "ING Konto", product, type,
                 account.Currency, Last4(account.Iban), visible, true, [hash], "private", "enabled")],
             balances,
@@ -625,7 +626,7 @@ public sealed class IngFinTsService(
         // Salden schickt dieser Aufruf keine. Die Bank nennt fuer ein Depot keinen Saldo; sein Wert
         // ist die Bewertung der Positionen und wird dort geschrieben, wo sie entsteht.
         await backend.IngestAsync(new FinanceIngestBatch(
-            new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, DateTimeOffset.UtcNow, null),
+            new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, clock.GetUtcNow(), null),
             [new AccountBatchItem(depotKey, "fints:" + depotKey, "ING", depotName, depot.ProductName, "securities",
                 depot.Currency, DepotLast4(depot), visible, true, [depotKey], "private", "enabled")],
             [],
@@ -636,7 +637,7 @@ public sealed class IngFinTsService(
             depotKey,
             depotName,
             depot.Currency,
-            DateOnly.FromDateTime(DateTime.UtcNow),
+            DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime),
             holdings.Select(h => new FinTsHoldingSnapshotDto(
                 HoldingKey(h), h.Name, h.Isin, h.Wkn,
                 h.PriceCurrency ?? h.MarketValueCurrency ?? depot.Currency,
@@ -745,7 +746,7 @@ public sealed class IngFinTsService(
 
     private async Task<BankConnectionDto> FailAsync(BankConnectionDto connection, string code, CancellationToken ct)
     {
-        var next = DateTimeOffset.UtcNow.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
+        var next = clock.GetUtcNow().AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
         return await backend.UpsertConnectionAsync(ToWrite(connection, nextSyncAllowedAt: next,
             consecutiveFailures: connection.ConsecutiveFailures + 1, lastError: code), ct);
     }

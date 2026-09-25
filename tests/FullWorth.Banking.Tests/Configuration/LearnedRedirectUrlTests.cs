@@ -84,7 +84,8 @@ public sealed class LearnedRedirectUrlTests
             new StubHttpClientFactory(),
             options,
             new EnableBankingRequestPolicy(),
-            backend: null!);
+            backend: null!,
+            TimeProvider.System);
 
         Assert.False(resolver.LegacyConfigured);   // no application id yet
 

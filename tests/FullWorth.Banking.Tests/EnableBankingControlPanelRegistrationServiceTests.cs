@@ -83,6 +83,7 @@ public sealed class EnableBankingControlPanelRegistrationServiceTests
         services.AddSingleton<IOptionsMonitor<EnableBankingOptions>>(options);
         services.AddSingleton(new EnableBankingRequestPolicy());
         services.AddSingleton(backend);
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<EnableBankingClientResolver>();
         services.AddScoped<EnableBankingProfileService>();
         using var providerServices = services.BuildServiceProvider();

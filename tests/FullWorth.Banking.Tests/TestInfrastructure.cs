@@ -229,7 +229,7 @@ internal sealed class TestBankingEnvironment : IDisposable
             MinimumRequestSpacingMilliseconds = spacingMilliseconds,
             TransientRetryCount = retryCount
         });
-        return new EnableBankingClient(http, options, policy ?? new EnableBankingRequestPolicy());
+        return new EnableBankingClient(http, options, policy ?? new EnableBankingRequestPolicy(), _clock);
     }
 
     public static FullWorthBackendClient CreateBackend(FakeBackendHandler handler)
@@ -260,7 +260,7 @@ internal sealed class TestBankingEnvironment : IDisposable
         };
 
         var providerHttp = new HttpClient(providerHandler) { BaseAddress = new Uri("https://provider.test/") };
-        var provider = new EnableBankingClient(providerHttp, Options.Create(providerOptions), new EnableBankingRequestPolicy());
+        var provider = new EnableBankingClient(providerHttp, Options.Create(providerOptions), new EnableBankingRequestPolicy(), _clock);
         var backend = CreateBackend(backendHandler);
 
         return new BankSyncService(

@@ -16,7 +16,8 @@ public sealed class FinTsOptionsReloadTests
             monitor,
             Options.Create(new BankingSyncOptions()),
             new BankSyncConcurrencyGate(),
-            null!);
+            null!,
+            TimeProvider.System);
 
         // This models the admin menu publishing FinTs:ProductId after options were first resolved.
         // The old IOptions<T> snapshot kept the empty value until restart; IOptionsMonitor must not.

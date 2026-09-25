@@ -14,7 +14,8 @@ public sealed class EnableBankingClientResolver(
     IHttpClientFactory httpClientFactory,
     IOptionsMonitor<EnableBankingOptions> options,
     EnableBankingRequestPolicy requestPolicy,
-    FullWorthBackendClient backend)
+    FullWorthBackendClient backend,
+    TimeProvider clock)
 {
     // See EnableBankingProfileService: a snapshot cached in a field is why a learned RedirectUrl
     // needed a restart to take effect.
@@ -84,12 +85,13 @@ public sealed class EnableBankingClientResolver(
             http,
             Options.Create(_options),
             requestPolicy,
-            new EnableBankingCredentials(applicationId, privateKeyPem));
+            new EnableBankingCredentials(applicationId, privateKeyPem),
+            clock);
     }
 
     private EnableBankingClient CreateLegacy()
     {
         var http = httpClientFactory.CreateClient("enable-banking");
-        return new EnableBankingClient(http, Options.Create(_options), requestPolicy);
+        return new EnableBankingClient(http, Options.Create(_options), requestPolicy, clock);
     }
 }

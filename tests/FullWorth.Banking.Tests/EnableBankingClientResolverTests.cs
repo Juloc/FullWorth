@@ -51,7 +51,8 @@ public sealed class EnableBankingClientResolverTests
             new SingleClientFactory(providerHttp),
             options,
             new EnableBankingRequestPolicy(),
-            backend);
+            backend,
+            TimeProvider.System);
 
         var connection = new BankConnectionDto(
             Guid.NewGuid(),
