@@ -116,16 +116,25 @@ public sealed class PensionDocumentTests
         Assert.Null(detail.Draft);
 
         // A missing external tool is the one failure a self-hoster can act on, so it is its own category.
-        harness.Text.Failure = new FileNotFoundException("tesseract not found at /usr/bin/tesseract");
+        // The failure is the one the real text source throws: the store once matched only raw
+        // FileNotFound/Win32 exceptions, which the text source never lets out, and filed every missing
+        // tesseract and every scan without text as "unsupported".
+        harness.Text.Failure = new BavDocumentTextException(BavDocumentTextException.ToolMissing,
+            "Lokales Extraktionswerkzeug 'tesseract' ist nicht verfügbar.");
         var missing = await harness.UploadAsync(scenario.Owner, scenario.Space, Pdf("no-tool"));
         Assert.Equal(BavExtractionErrors.ToolMissing, ((BavDocumentDetailView)missing.Value!).Document.ExtractionError);
+
+        harness.Text.Failure = new BavDocumentTextException(BavDocumentTextException.NoText,
+            "Im Dokument wurde kein lesbarer Text gefunden.");
+        var scan = await harness.UploadAsync(scenario.Owner, scenario.Space, Pdf("blank-scan"));
+        Assert.Equal(BavExtractionErrors.NoText, ((BavDocumentDetailView)scan.Value!).Document.ExtractionError);
 
         // And the bytes are still there, which is the whole point of storing them before extracting.
         await harness.Factory.SeedAsync(async db =>
         {
             var rows = await db.BavDocuments.AsNoTracking()
                 .Where(x => x.FullWorthSpaceId == scenario.Space).ToListAsync();
-            Assert.Equal(2, rows.Count);
+            Assert.Equal(3, rows.Count);
             Assert.All(rows, row =>
             {
                 Assert.NotNull(row.StoragePath);

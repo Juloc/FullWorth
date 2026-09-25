@@ -215,15 +215,14 @@ public sealed class PensionDocumentStore(
     }
 
     /// <summary>
-    /// A missing external tool is the one failure a self-hoster can act on, so it gets its own
-    /// category. Everything else collapses into <c>unsupported</c> rather than into a message whose
-    /// text this code does not control.
+    /// The text source names its own category - a missing external tool is the one failure a
+    /// self-hoster can act on, so it is one of them. Everything else collapses into <c>unsupported</c>
+    /// rather than into a message whose text this code does not control.
     /// </summary>
     private static string Categorize(Exception error) => error switch
     {
+        BavDocumentTextException text => text.Category,
         OutOfMemoryException => BavExtractionErrors.TooLarge,
-        FileNotFoundException or DllNotFoundException or System.ComponentModel.Win32Exception
-            => BavExtractionErrors.ToolMissing,
         _ => BavExtractionErrors.Unsupported
     };
 
