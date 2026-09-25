@@ -412,7 +412,17 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseStaticFiles();
+// Statische Dateien (#154): MapStaticAssets statt UseStaticFiles. Es liefert jede Datei mit dem
+// Fingerabdruck und der Groesse aus, die beim Build feststanden, komprimiert beim Publish vor, und
+// schickt Cache-Control/ETag so, dass ein Release nie altes JS mit neuem HTML mischt - was
+// UseStaticFiles ohne Cache-Control dem Browser ueberliess.
+//
+// Der Schalter FullWorthWeb:LiveStaticFiles gilt fuer genau einen Fall: einen Stack, der wwwroot live
+// ins Image bindet (Finance/local). Dort stimmen Groesse und Fingerabdruck aus dem Build nicht mehr,
+// sobald eine Datei bearbeitet wird - die Antwort kaeme abgeschnitten, eine neue Datei gar nicht. Mit
+// dem Schalter liest der Server wie frueher direkt von der Platte.
+var liveStaticFiles = app.Configuration.GetValue<bool>("FullWorthWeb:LiveStaticFiles");
+if (liveStaticFiles) app.UseStaticFiles();
 app.UseAuthorization();
 app.UseFullWorthAntiforgery();
 
@@ -583,7 +593,20 @@ if (!unifiedHost)
         .AllowAnonymous();
 }
 
-app.MapRazorPages();
+if (liveStaticFiles)
+{
+    app.MapRazorPages();
+}
+else
+{
+    // AllowAnonymous ist hier keine Lockerung, sondern der Stand von vorher: UseStaticFiles lief als
+    // Middleware VOR der Autorisierung, MapStaticAssets sind Endpunkte - und die FallbackPolicy oben
+    // verlangt fuer jeden Endpunkt eine Anmeldung. Ohne diese Zeile braeuchte auch das Stylesheet der
+    // Anmeldeseite eine Anmeldung, und niemand kaeme mehr hinein. Geheime Inhalte liegen nicht in
+    // wwwroot; alles dort ist dieselbe Oberflaeche fuer jeden.
+    app.MapStaticAssets().AllowAnonymous();
+    app.MapRazorPages().WithStaticAssets();
+}
 
 // Kein Rueckfall mehr. Jede Adresse der angemeldeten Anwendung IST eine Razor-Seite (#154 ist damit
 // fertig), also sagt eine unbekannte Adresse jetzt, dass es sie nicht gibt, statt wortlos die
