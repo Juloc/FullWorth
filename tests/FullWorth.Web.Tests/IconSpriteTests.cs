@@ -36,12 +36,34 @@ public sealed class IconSpriteTests(FullWorthWebFactory factory) : IClassFixture
         Assert.True(missing.Length == 0, "the sprite has no symbol for: " + string.Join(", ", missing));
     }
 
-    /// <summary>Die Geometrie steht im Sprite und nur dort - der Katalog nennt die ID.</summary>
+    /// <summary>
+    /// Die Kategorie-Symbole: components/icons.js ordnet Schluessel Symbolen zu. Auch ein deutscher
+    /// Alias zeigt nur auf eine ID - fehlt die im Sprite, bleibt das Symbol jeder Buchung dieser
+    /// Kategorie leer, ohne dass irgendwo ein Fehler steht.
+    /// </summary>
     [Fact]
-    public void The_catalogue_names_symbols_instead_of_carrying_geometry()
+    public void Every_symbol_the_category_icons_name_is_in_the_sprite()
+    {
+        var symbols = Symbols();
+        var named = Regex.Matches(WebSources.Asset("components", "icons.js"), """'(?<id>(?:cat|ui)-[a-z-]+)'""")
+            .Select(match => match.Groups["id"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Contains("cat-groceries", named);
+        Assert.Contains("ui-trash", named);
+        var missing = named.Where(id => !symbols.Contains(id)).ToArray();
+        Assert.True(missing.Length == 0, "the sprite has no symbol for: " + string.Join(", ", missing));
+    }
+
+    /// <summary>Die Geometrie steht im Sprite und nur dort - Katalog und Symboltabelle nennen die ID.</summary>
+    [Fact]
+    public void The_catalogues_name_symbols_instead_of_carrying_geometry()
     {
         Assert.All(NavigationCatalog.Entries, entry => Assert.Matches("^nav-[a-z-]+$", entry.Icon));
         Assert.DoesNotContain("<path", WebSources.Asset("app", "menu.js"), StringComparison.Ordinal);
+        Assert.DoesNotContain("<path", WebSources.Asset("components", "icons.js"), StringComparison.Ordinal);
+        Assert.DoesNotMatch("""'M[\d.]""", WebSources.Asset("components", "icons.js"));
     }
 
     /// <summary>

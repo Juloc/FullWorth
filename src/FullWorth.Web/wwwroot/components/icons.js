@@ -7,19 +7,42 @@
 //
 // Der Bestand liegt jetzt in components/, weil components/ weder eine Seite noch den Server kennen
 // darf - features/ux-kit.js holt ihn sich von hier, nicht umgekehrt.
+//
+// Die Geometrie steht in icons/sprite.svg (#154); hier steht nur, welcher Schluessel welches Symbol
+// zeigt. IconSpriteTests haelt fest, dass jedes genannte Symbol dort existiert - ein <use> auf eine
+// fehlende ID zeichnet sonst still nichts.
+
+import { spriteHref } from './sprite.js';
 
 // A small set of category glyphs keyed by stable semantic category keys (or the last/first segment of a
 // dotted key). Used as the middle identity tier when a booking has no brand logo but a known category
 // icon. Unknown keys fall through to the monogram. Line-art matching the rest of the icon set.
 const CATEGORY_ICONS = {
-  income: 'M12 5v14M5 12l7-7 7 7', salary: 'M12 5v14M5 12l7-7 7 7',
-  housing: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5', rent: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5', mortgage: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5',
-  groceries: 'M6 6h15l-1.5 9h-12L6 6ZM6 6 5 3H2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2m8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2', food: 'M6 3v8a3 3 0 0 0 6 0V3M9 3v18M17 3c-1.5 0-2 2-2 5s.5 5 2 5v8', restaurants: 'M6 3v8a3 3 0 0 0 6 0V3M9 3v18M17 3c-1.5 0-2 2-2 5s.5 5 2 5v8',
-  transport: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2', car: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2', fuel: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2',
-  electricity: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z', utilities: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z', internet: 'M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19h.01',
-  health: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21Z', shopping: 'M6 6h12v14l-3-2-3 2-3-2-3 2Z', leisure: 'M4 5h16v11H4zM8 20h8M12 16v4',
-  savings: 'M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8ZM8 11h.01', insurance: 'M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z', travel: 'M2 16l20-7-7 20-3-8-8-3Z',
-  vehicle: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2', subscriptions: 'M5 7h14v10H5zM9 21h6M12 17v4', education: 'M3 9l9-5 9 5-9 5-9-5Zm4 3v5c3 2 7 2 10 0v-5', pets: 'M8 11c-2 0-3-2-2-3s3 0 3 2m7 1c2 0 3-2 2-3s-3 0-3 2m-3 1c-3 0-5 3-3 6 1 2 5 2 6 0 2-3 0-6-3-6Z', fees: 'M4 6h16v12H4zM8 10h8M8 14h5', taxes: 'M5 3h14v18H5zM8 8h8M8 12h8M8 16h5', donations: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21Z', debt: 'M4 8h16v12H4zM8 4h8v4M8 13h8', transfers: 'M5 8h12m0 0-3-3m3 3-3 3M19 16H7m0 0 3-3m-3 3 3 3', cash: 'M3 6h18v12H3zM7 12h.01M17 12h.01M12 9v6', family: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 20c0-4 2-6 5-6s5 2 5 6m-2 0c0-4 2-6 5-6s5 2 5 6', other: 'M5 12h.01M12 12h.01M19 12h.01',
+  income: 'cat-income', salary: 'cat-income',
+  housing: 'cat-housing', rent: 'cat-housing', mortgage: 'cat-housing',
+  groceries: 'cat-groceries',
+  food: 'cat-food', restaurants: 'cat-food',
+  transport: 'cat-transport', car: 'cat-transport', fuel: 'cat-transport', vehicle: 'cat-transport',
+  electricity: 'cat-electricity', utilities: 'cat-electricity',
+  internet: 'cat-internet',
+  health: 'cat-health', donations: 'cat-health',
+  shopping: 'cat-shopping',
+  leisure: 'cat-leisure',
+  savings: 'cat-savings',
+  insurance: 'cat-insurance',
+  travel: 'cat-travel',
+  subscriptions: 'cat-subscriptions',
+  education: 'cat-education',
+  pets: 'cat-pets',
+  fees: 'cat-fees',
+  taxes: 'cat-taxes',
+  debt: 'cat-debt',
+  transfers: 'cat-transfers',
+  cash: 'cat-cash',
+  family: 'cat-family',
+  other: 'cat-other',
+  // Keine Kategorie oder eine ohne eigenes Symbol: das Etikett, das die Buchungsliste dann zeigt.
+  untagged: 'cat-untagged',
 };
 
 // resolve just like the English ones. No new colours/fonts.
@@ -49,8 +72,8 @@ export function isEmoji(s) { try { return EMOJI_RE.test(String(s || '')); } catc
 export function categoryGlyph(iconKey) {
   if (!iconKey) return null;
   const key = String(iconKey).trim();
-  const path = CATEGORY_ICONS[key] || CATEGORY_ICONS[key.toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/).pop().toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/)[0].toLowerCase()];
-  return path ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>` : null;
+  const symbol = CATEGORY_ICONS[key] || CATEGORY_ICONS[key.toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/).pop().toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/)[0].toLowerCase()];
+  return symbol ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="${spriteHref(symbol)}"></use></svg>` : null;
 }
 
 /**
@@ -136,4 +159,4 @@ export function selectedIconKey(pickerElement) {
  * Handlung braucht dasselbe Symbol.
  */
 export const TRASH_ICON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
+  `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-trash')}"></use></svg>`;

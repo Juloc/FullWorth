@@ -7,6 +7,7 @@ import { attachCategoryPicker, openCategoryPicker } from './category-picker.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
 import { keepListPosition } from '../../components/list-position.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
+import { categoryGlyph } from '../../components/icons.js';
 import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
@@ -1143,7 +1144,7 @@ function txEmptyState(filtered, reason = 'filters') {
 function categoryCell(x, cat) {
   const idx = (monogramHue(cat) % 8) + 1;
   const inner = categoryIconInner(x.categoryIconKey)
-    || `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01"/></svg>`;
+    || categoryGlyph('untagged');
   return `<div class="tx-cat"><button type="button" class="tx-cat-chip" data-cat-edit aria-label="${ctx.esc(deLabel('Kategorie ändern', 'Change category'))}"><span class="tx-cat-ic" data-cat="${idx}">${inner}</span><span class="tx-cat-name">${ctx.esc(cat)}</span><span class="tx-cat-caret" aria-hidden="true">▾</span></button></div>`;
 }
 
