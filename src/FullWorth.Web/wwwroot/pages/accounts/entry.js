@@ -9,7 +9,7 @@ import { renderAccounts, bindAccounts, openAddAccount } from './page.js';
 // bindAccounts nimmt einen zweiten Weg entgegen: "Bankverbindung oeffnen" aus der Kontoliste. Der
 // fuehrt in einen Dialog dieser Seite, nicht auf die Bankverbindungs-Seite - deshalb wird er hier
 // hineingereicht und nicht zu einer Navigation.
-import { openBankConnection } from '../settings/bank-connections/page.js';
+import { openBankConnection } from '../../features/bank-connections.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite. Der Kontext steht erst fest, wenn
 // gezeichnet wird - der Knopf wird aber vorher beschriftet, also merkt ihn sich der

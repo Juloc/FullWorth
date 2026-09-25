@@ -188,11 +188,11 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var wrapper = await GetAsync("/pages/networth/real-estate.js");
         var adapter = await GetAsync("/pages/networth/investment-consolidation.js");
-        var portfolioUi = await GetAsync("/pages/networth/investment-performance-ui.js");
+        var portfolioUi = await GetAsync("/features/investment-performance.js");
         var css = await GetAsync("/pages/networth/page.css") + await GetAsync("/styles/app.css");
 
         Assert.Contains("investment-consolidation.js", wrapper);
-        Assert.Contains("investment-performance-ui.js", adapter);
+        Assert.Contains("investment-performance.js", adapter);
         // Der Dialog trägt seine Depotkennung selbst. Vorher merkte sie sich dieses Modul in einem
         // Klick-Lauscher, der vor dem der Depot-Oberfläche registriert sein musste - die ruft
         // stopImmediatePropagation -, und genau dafür lud es zur Laufzeit nach.
@@ -224,7 +224,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task DetectedPurchasesGetTheirOwnTabAndNeverApplyWithoutAClick()
     {
-        var js = await GetAsync("/pages/networth/investment-performance-ui.js");
+        var js = await GetAsync("/features/investment-performance.js");
 
         Assert.Contains("api/reconciliation/securities-bookings?portfolioId=", js);
         Assert.Contains("api/reconciliation/securities-bookings/${path}", js);
@@ -270,7 +270,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task PerformanceTabSurvivesWiringItsPeriodButtonsInsteadOfErroringOutOnEveryOpen()
     {
-        var js = await GetAsync("/pages/networth/investment-performance-ui.js");
+        var js = await GetAsync("/features/investment-performance.js");
         // "$$(...)" contains "$(...)" as a literal substring, so a DoesNotContain check on the single-$
         // call would be a false negative here - regex anchors on the character right before the call.
         Assert.Contains("$$('[data-ip-period]',container).forEach(button=>button.onclick=", js);
@@ -347,7 +347,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
                      "'/pages/networth/investment-consolidation.js'",
                      "'/pages/networth/page.css'",
                      "'/features/wealth-portability.js'",
-                     "'/pages/networth/investment-performance-ui.js'",
+                     "'/features/investment-performance.js'",
                      "'/pages/networth/page.css'",
                      "'/pages/purchases/receipt-imports.js'",
                      "'/components/accessibility-release.js'"

@@ -115,6 +115,10 @@ Beyond those:
   `font-display: optional`, so a cached font paints immediately and an uncached one falls back for that
   load without ever swapping mid-paint — but which of the two happens still depends on the browser's
   font cache, so only a full reload gives you the same starting state on both sides of the comparison.
+- What two areas under `pages/` need lives in `features/`, **with its stylesheet as
+  `styles/<name>.css`**, linked by every page that uses it — otherwise the second page draws it
+  unstyled (it happened to the dashboard's insights block, the depot dialog on /accounts and the
+  bank dialog outside /accounts).
 - `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and
   knows nothing visual.
 - The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and

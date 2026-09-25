@@ -5,7 +5,7 @@
 // alten Huelle, nur dass ihn jetzt die Seite erzeugt statt app.js fuer alle.
 
 import { startShellPage } from '../../../app/shell.js';
-import { renderBankConnections } from './page.js';
+import { renderBankConnections } from '../../../features/bank-connections.js';
 
 await startShellPage(async context => {
   await renderBankConnections(context);

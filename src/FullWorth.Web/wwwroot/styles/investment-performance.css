@@ -1,0 +1,401 @@
+/* Die Depot-Auswertung (features/investment-performance.js): geoeffnet aus Vermoegen und aus einem
+   Depotkonto. Sie stand in pages/networth/page.css, und auf der Kontenseite war der Dialog deshalb
+   ungestaltet. */
+.ip-dialog {
+  width: min(1040px,calc(100vw - 32px));
+  max-width: none
+}
+
+.ip-card {
+  width: 100%;
+  overflow: auto
+}
+
+.ip-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--surface,Canvas);
+  padding-bottom: 12px
+}
+
+.ip-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  position: sticky;
+  top: 64px;
+  z-index: 3;
+  background: var(--surface,Canvas);
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border)
+}
+
+.ip-tabs button,
+.ip-periods button {
+  white-space: nowrap
+}
+
+.ip-tabs button.active,
+.ip-periods button.active {
+  font-weight: 700;
+  border-color: currentColor
+}
+
+.ip-content {
+  padding-top: 16px
+}
+
+.ip-loading,
+.ip-error,
+.ip-warning {
+  padding: 14px;
+  border-radius: 12px
+}
+
+.ip-warning {
+  border: 1px solid var(--warning-border);
+  background: var(--warning-soft)
+}
+
+.ip-error {
+  border: 1px solid var(--danger)
+}
+
+.ip-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+  gap: 10px
+}
+
+.ip-metric {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2)
+}
+
+.ip-metric span {
+  display: block;
+  font-size: .84rem;
+  opacity: .72;
+  margin-bottom: 6px
+}
+
+.ip-metric strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem
+}
+
+.ip-section {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--surface-2)
+}
+
+.ip-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px
+}
+
+.ip-section-head h3 {
+  margin: 0
+}
+
+.ip-list {
+  display: grid;
+  gap: 2px
+}
+
+.ip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 4px;
+  border-bottom: 1px solid color-mix(in srgb,currentColor 10%,transparent)
+}
+
+.ip-row:last-child {
+  border-bottom: 0
+}
+
+.ip-row-value {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  font-variant-numeric: tabular-nums
+}
+
+.ip-row-value span {
+  font-size: .82rem;
+  opacity: .72
+}
+
+.ip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px
+}
+
+.ip-icon {
+  min-width: 34px;
+  padding-inline: 8px
+}
+
+.ip-periods {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 12px
+}
+
+.ip-chart-wrap {
+  min-height: 230px
+}
+
+.ip-chart-readout {
+  margin: 0 0 8px;
+  font-size: .86rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums
+}
+
+.ip-chart {
+  width: 100%;
+  height: auto;
+  display: block
+}
+
+.ip-line {
+  fill: none;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke
+}
+
+/* Portfolio-Performance (Hauptserie) und Benchmark-Vergleich sind zwei echte Datenreihen ohne
+   Identitaetsbedeutung - sie bekommen zwei unterscheidbare Datenpalettenfarben statt UI-Akzent bzw.
+   ein zufaelliges Grau zu leihen (Issue #149 §7). */
+.ip-line-main {
+  stroke: var(--data-1)
+}
+
+.ip-line-benchmark {
+  stroke: var(--data-2);
+  stroke-dasharray: 8 5
+}
+
+.ip-zero {
+  stroke: color-mix(in srgb,currentColor 24%,transparent);
+  stroke-width: 1
+}
+
+.ip-chart-legend {
+  display: flex;
+  gap: 18px;
+  font-size: .84rem;
+  margin-top: 8px
+}
+
+.ip-chart-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px
+}
+
+.ip-chart-legend i {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px
+}
+
+/* Legenden-Farben muessen zu .ip-line-main / .ip-line-benchmark passen. */
+.ip-chart-legend i.main {
+  background: var(--data-1)
+}
+
+.ip-chart-legend i.benchmark {
+  background: var(--data-2)
+}
+
+.ip-bars {
+  display: grid;
+  gap: 8px
+}
+
+.ip-bar-row {
+  display: grid;
+  grid-template-columns: 44px 1fr minmax(90px,auto);
+  align-items: center;
+  gap: 10px;
+  font-size: .84rem
+}
+
+.ip-bar-row>div {
+  height: 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb,currentColor 10%,transparent);
+  overflow: hidden
+}
+
+.ip-bar-row i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent)
+}
+
+.ip-bar-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums
+}
+
+.ip-small-dialog {
+  width: min(720px,calc(100vw - 32px));
+  max-width: none
+}
+
+/* Erkannte Kaeufe (Tab "bookings") und der Leerzustand, den die Performance-Tab dorthin verlinkt. */
+.ip-empty-cta {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  justify-items: start
+}
+
+.ip-booking-card {
+  margin-top: 12px
+}
+
+.ip-booking-card.ip-confident {
+  border-color: var(--positive);
+  background: var(--positive-soft)
+}
+
+.ip-booking-row {
+  cursor: pointer
+}
+
+.ip-booking-row input[type="checkbox"] {
+  margin-right: 12px
+}
+
+.ip-badge {
+  font-size: .78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--positive-soft);
+  border: 1px solid var(--positive);
+  color: var(--positive)
+}
+
+.ip-form {
+  display: grid;
+  gap: 14px
+}
+
+.ip-form label {
+  display: grid;
+  gap: 6px
+}
+
+.ip-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px
+}
+
+.ip-form input,
+.ip-form select,
+.ip-form textarea {
+  width: 100%
+}
+
+.ip-form textarea {
+  min-height: 80px;
+  resize: vertical
+}
+
+.privacy-on .ip-chart-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 230px
+}
+
+.privacy-on .ip-chart,
+.privacy-on .ip-chart-legend,
+.privacy-on .ip-chart-readout {
+  display: none
+}
+
+.privacy-on .ip-chart-wrap::after {
+  content: '••••';
+  font-variant-numeric: tabular-nums;
+  font-size: 1.35rem;
+  letter-spacing: .18em;
+  opacity: .72
+}
+
+.privacy-on .ip-row .fp-muted {
+  font-size: 0
+}
+
+.privacy-on .ip-row .fp-muted::after {
+  content: '••••';
+  font-size: .82rem;
+  letter-spacing: .12em
+}
+
+.privacy-on .ip-bar-row>div {
+  visibility: hidden
+}
+
+@media(max-width:720px) {
+  .ip-dialog,
+  .ip-small-dialog {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    max-height: none;
+    border: 0;
+    border-radius: 0
+  }
+  .ip-card,
+  .ip-form {
+    max-height: none;
+    height: 100%;
+    overflow: auto;
+    border-radius: 0
+  }
+  .ip-head {
+    top: 0
+  }
+  .ip-tabs {
+    top: 62px
+  }
+  .ip-form-grid {
+    grid-template-columns: 1fr
+  }
+  .ip-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface,Canvas);
+    padding: 10px 0
+  }
+  .ip-row {
+    align-items: flex-start
+  }
+  .ip-metrics {
+    grid-template-columns: repeat(2,minmax(0,1fr))
+  }
+
+}

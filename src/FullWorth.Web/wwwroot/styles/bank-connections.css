@@ -1,0 +1,37 @@
+/* Die Dialoge der Bankverbindung (features/bank-connections.js): Bank waehlen, Anbieterstatus,
+   Kontenauswahl, Sync-Verlauf. Sie oeffnen aus den Konten, der Uebersicht, den Einstellungen und der
+   Seite Bankverbindungen - ihre Regeln standen verteilt auf zwei dieser Seiten und fehlten auf den
+   anderen. createDialog haengt die Karten an document.body, deshalb ohne #view-Praefix. */
+/* Die Kontenauswahl beim Verbinden, unpräfixiert: createDialog hängt die Karte an document.body,
+   ein #view-Präfix träfe sie nie. Zeile, Titel, Unterzeile, Häkchen und Werkzeugleiste sind geteilte
+   Bausteine (.row, .row-main, .row-sub, label.check) — die Liste braucht nur eine Höhenbegrenzung,
+   damit acht Konten den Dialog nicht über den Bildschirmrand schieben. */
+.ing-select-list{max-height:min(60dvh,26rem);overflow-y:auto}
+/* Die Beschriftung IST das Ziel zum Antippen und wäre sonst 23 Pixel hoch — gemessen, nicht geschätzt. */
+.ing-select-row{min-height:44px}
+/* Der Fehlerbericht, wenn die Zwischenablage nicht darf: lesbar, auswählbar, sonst nichts. */
+.report-text{width:100%;font-family:var(--font-mono,monospace);font-size:12px;margin-top:var(--s3)}
+/* Eine Handlung darf einen Hinweis tragen: "Konten neu einlesen" kostet die PIN, und das gehoert
+   daneben, nicht in ein Erschrecken danach.
+
+   Ohne Praefix, und das ist kein Versehen: createDialog haengt den Dialog an document.body. Eine
+   Regel, die mit #view-bank-connections beginnt, trifft ihn nie - genau daran ist die Kontenauswahl
+   schon einmal gescheitert. Der Marker .connection-actions-sheet haelt sie beim Dialog der
+   Verbindungsaktionen und laesst die Kontenzeile in Ruhe. */
+.connection-actions-sheet .more-list button>span{display:grid;gap:2px}
+.connection-actions-sheet .more-list button .row-sub{font-size:13px;white-space:normal}
+/* #167: die Einzelheiten eines Sync-Laufs. Zugeklappt ist der Normalfall - wer die Liste
+   ueberfliegt, sucht erst einmal nur die eine rote Zeile. */
+.sync-history-details>summary{cursor:pointer;color:var(--cta);font-size:var(--text-caption-size)}
+.sync-history-details[open]>summary{margin-bottom:var(--s1)}
+
+.bank-status-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:7px 9px;border:1px solid transparent;border-radius:var(--radius-input)}
+.bank-status-tools.status-attention{border-color:var(--warning);background:var(--warning-soft);color:var(--text)}
+.bank-status-tools.status-active{color:var(--muted)}
+.bank-status-tools a{white-space:nowrap}
+.bank-status-tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font:inherit}
+.bank-status-tools button:hover{background:var(--surface-2)}
+.bank-status-warning{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12px}
+.bank-status-warning.possible strong{color:var(--warning)}
+.bank-status-warning.major strong{color:var(--negative)}
+.bank-status-warning span{color:var(--muted)}

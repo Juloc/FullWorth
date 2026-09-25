@@ -54,7 +54,7 @@ public sealed class SetupUiBaselineTests
     [Fact]
     public void A_codex_error_code_never_reaches_the_screen_as_a_token()
     {
-        var setup = ReadSource(Path.Combine("pages", "settings", "access-setup.js"));
+        var setup = ReadSource(Path.Combine("features", "access-setup.js"));
 
         Assert.Contains("codex_bridge_unavailable: 'aiAccess.codexNotDeployed'", setup, StringComparison.Ordinal);
         Assert.Contains("codexErrorText(error)", setup, StringComparison.Ordinal);
@@ -127,7 +127,7 @@ public sealed class SetupUiBaselineTests
     [Fact]
     public void TheSetupWizardAsksForTheCategoryLanguageFirst()
     {
-        var wizard = ReadSource(Path.Combine("pages", "settings", "access-setup.js"));
+        var wizard = ReadSource(Path.Combine("features", "access-setup.js"));
         var de = JsonDocument.Parse(ReadSource(Path.Combine("locales", "de.json")));
         var en = JsonDocument.Parse(ReadSource(Path.Combine("locales", "en.json")));
 
@@ -164,7 +164,7 @@ public sealed class SetupUiBaselineTests
     [Fact]
     public void TheSetupWizardOffersAMarketDataStepBetweenBankAndCloud()
     {
-        var wizard = ReadSource(Path.Combine("pages", "settings", "access-setup.js"));
+        var wizard = ReadSource(Path.Combine("features", "access-setup.js"));
         var de = JsonDocument.Parse(ReadSource(Path.Combine("locales", "de.json")));
         var en = JsonDocument.Parse(ReadSource(Path.Combine("locales", "en.json")));
 

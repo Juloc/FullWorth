@@ -6,11 +6,11 @@
 // Sache an einem Ort liegt und die andere Haelfte am anderen - die Kontenseite ruft nur noch
 // openBankConnection() auf, so wie app.js es ihr uebergibt.
 
-import { state } from '../../../core/state.js';
-import { emptyRow } from '../../../components/empty.js';
-import { ButtonRole, buttonClass } from '../../../components/buttons.js';
-import { createWizard } from '../../../components/wizard.js';
-import { selectionListHtml, createSelectionList } from '../../../components/selection-list.js';
+import { state } from '../core/state.js';
+import { emptyRow } from '../components/empty.js';
+import { ButtonRole, buttonClass } from '../components/buttons.js';
+import { createWizard } from '../components/wizard.js';
+import { selectionListHtml, createSelectionList } from '../components/selection-list.js';
 
 let ctx = null;
 

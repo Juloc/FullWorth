@@ -1,6 +1,6 @@
-import { secureFetch } from '../../security/secure-fetch.js';
-import { ButtonRole, buttonClass } from '../../components/buttons.js';
-import { createWizard, withBusyButtons } from '../../components/wizard.js';
+import { secureFetch } from '../security/secure-fetch.js';
+import { ButtonRole, buttonClass } from '../components/buttons.js';
+import { createWizard, withBusyButtons } from '../components/wizard.js';
 
 export function createAccessSetup(ctx, openBankingWizard) {
   const { api, bankApi, get, esc, toast, dialog, confirm: confirmAction, jsonBody } = ctx;

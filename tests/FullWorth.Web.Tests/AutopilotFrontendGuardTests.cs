@@ -49,9 +49,9 @@ public sealed class AutopilotFrontendGuardTests
     public void Deploy5InsightsAreSecondaryReadOnlyFeatureSurface()
     {
         var html = WebSources.Layout();
-        var feature = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "page.js"));
+        var feature = File.ReadAllText(Path.Combine(WwwRoot(), "features", "insights.js"));
         var appCss = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "app.css"));
-        var insightCssPath = Path.Combine(WwwRoot(), "pages", "insights", "page.css");
+        var insightCssPath = Path.Combine(WwwRoot(), "styles", "insights.css");
 
         // Die Hinweise haben zwei Orte, und das ist Absicht: ein Block auf der Startseite und eine
         // eigene Seite. Seit #154 liegt Letztere als Razor-Seite vor, der Block bleibt in der Huelle.
@@ -63,7 +63,7 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("id=\"insights-root\"", page);
 
         Assert.True(File.Exists(insightCssPath));
-        Assert.Contains("/pages/insights/page.css", page);
+        Assert.Contains("/styles/insights.css", page);
         Assert.DoesNotContain("Autopilot Deploy 5: read-only financial insights", appCss, StringComparison.Ordinal);
         Assert.Contains("mountInsights", entry);
         // Der Block auf der Startseite wird von deren Einstieg gezeichnet, seit es app.js nicht mehr
@@ -107,15 +107,15 @@ public sealed class AutopilotFrontendGuardTests
         Assert.DoesNotContain("ai-gradient", feature, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("IIntelligenceProvider", feature, StringComparison.Ordinal);
 
-        PwaAssert.Ships("'/pages/insights/page.js'");
-        PwaAssert.Ships("'/pages/insights/page.css'");
+        PwaAssert.Ships("'/features/insights.js'");
+        PwaAssert.Ships("'/styles/insights.css'");
     }
 
     [Fact]
     public void Deploy7ContractMergeExecutionRequiresPreviewTokenAndExplicitConfirmation()
     {
-        var feature = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "page.js"));
-        var css = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "page.css"));
+        var feature = File.ReadAllText(Path.Combine(WwwRoot(), "features", "insights.js"));
+        var css = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "insights.css"));
 
         Assert.Contains("contractPairIds", feature);
         Assert.Contains("api/contracts/merge-preview", feature);

@@ -142,8 +142,18 @@ for their tabs), and several `entry.js` files that drop a one-shot query paramet
 
 One page is one folder under `wwwroot/pages/`. A page may bring more modules than `page.js` — Käufe
 and Vermögen bring a dozen each — but they live in that folder and no other page imports them.
-`features/` is what is left over: three modules that genuinely belong to no single page
-(`ux-kit`, `data-completeness`, `wealth-portability`).
+`features/` holds what more than one area needs and what knows the server or the domain, so
+`components/` may not have it: `ux-kit`, `data-completeness`, `wealth-portability`, and — since the
+page split made it visible — `bank-connections` (the bank flows, opened from Konten, Übersicht,
+Einstellungen and their own page), `access-setup` (Einstellungen and the first start), `insights`
+(the page and the dashboard block) and `investment-performance` (Vermögen and a depot account).
+
+**A shared module takes its stylesheet with it**, as `styles/<name>.css`, and every page that uses
+the module links it in its `@section Styles`, before its own `page.css`. Those four used to style
+themselves from one page's `page.css`, so on the other page they drew unstyled: the "Wichtig für dich"
+block on the dashboard matched not a single rule. `A_page_does_not_reach_into_another_page` resolves
+every import (sibling paths and side-effect imports too — its first version saw neither) with the
+area under `pages/` as the boundary, so a subpage may still use its area's modules.
 
 The convention is a `renderX(ctx)` / `bindX(ctx)` pair: `entry.js` calls `bindX` once and `renderX`
 inside `startShellPage`.

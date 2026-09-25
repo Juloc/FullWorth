@@ -26,7 +26,7 @@ public sealed class SpacingRatchetTests
     /// </summary>
     private static readonly Dictionary<string, int> KnownRawPixelCounts = new()
     {
-        ["pages/accounts/page.css"] = 69,
+        ["pages/accounts/page.css"] = 60,
         ["pages/admin/page.css"] = 16,
         ["pages/analytics/page.css"] = 19,
         ["pages/audit/page.css"] = 2,
@@ -37,13 +37,12 @@ public sealed class SpacingRatchetTests
         ["pages/compensation/page.css"] = 228,
         ["pages/contracts/page.css"] = 103,
         ["pages/dashboard/page.css"] = 8,
-        ["pages/insights/page.css"] = 47,
-        ["pages/networth/page.css"] = 175,
+        ["styles/insights.css"] = 47,
+        ["pages/networth/page.css"] = 127,
         ["pages/notifications/page.css"] = 1,
         ["pages/pension/page.css"] = 9,
         ["pages/purchases/page.css"] = 221,
         ["pages/rules/page.css"] = 11,
-        ["pages/settings/bank-connections/page.css"] = 1,
         ["pages/settings/import/finanzguru/xlsx/page.css"] = 30,
         ["pages/settings/import/page.css"] = 26,
         ["pages/settings/intelligence/page.css"] = 58,
@@ -51,6 +50,8 @@ public sealed class SpacingRatchetTests
         ["pages/tax/page.css"] = 42,
         ["pages/transactions/page.css"] = 40,
         ["styles/app.css"] = 95,
+        ["styles/bank-connections.css"] = 10,
+        ["styles/investment-performance.css"] = 48,
         ["styles/components.css"] = 20,
         ["styles/design-depth.css"] = 8,
         ["styles/dialogs.css"] = 30,

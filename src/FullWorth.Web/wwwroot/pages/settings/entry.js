@@ -11,8 +11,8 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderSettings, bindSettings } from './page.js';
-import { createAccessSetup } from './access-setup.js';
-import { openBankingSetup, renderBankingSettings } from './bank-connections/page.js';
+import { createAccessSetup } from '../../features/access-setup.js';
+import { openBankingSetup, renderBankingSettings } from '../../features/bank-connections.js';
 
 let accessSetup;
 let bound = false;

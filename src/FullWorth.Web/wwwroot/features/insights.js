@@ -1,5 +1,5 @@
-import { confirmDialog } from '../../components/confirm.js';
-import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { confirmDialog } from '../components/confirm.js';
+import { ButtonRole, buttonClass } from '../components/buttons.js';
 
 const VIEW_API = { current: 'active', completed: 'resolved', hidden: 'hidden' };
 let dashboardRenderVersion = 0;

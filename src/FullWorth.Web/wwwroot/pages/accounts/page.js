@@ -16,7 +16,7 @@ import {
 // Vermoegensseite. Das reiche Depot-Dialog-Modul (Performance, TWR/XIRR, erkannte Kaeufe) lag
 // bisher tot da, weil es nur ueber ein modulepreload geladen, aber nie ausgefuehrt wurde - hier
 // ist der eigentliche Fehler: dieses Modul importierte niemand.
-import '../networth/investment-performance-ui.js';
+import '../../features/investment-performance.js';
 
 let ctx = null;
 let bound = false;

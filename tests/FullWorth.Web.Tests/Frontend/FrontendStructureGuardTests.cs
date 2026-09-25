@@ -22,6 +22,30 @@ public sealed class FrontendStructureGuardTests
         Path.GetRelativePath(WebRoot, path).Replace('\\', '/');
 
     /// <summary>
+    /// Der Bereich einer Datei unter pages/: pages/&lt;bereich&gt;. Unterseiten gehoeren zu ihrem Bereich -
+    /// die Kontodetails zeichnet bewusst dasselbe Modul wie die Kontenliste, und die Einstellungen
+    /// kennen ihre Unterseiten.
+    /// </summary>
+    private static string? PageOf(string relative)
+    {
+        var parts = relative.Split('/');
+        return parts.Length > 2 && parts[0] == "pages" ? parts[0] + '/' + parts[1] : null;
+    }
+
+    /// <summary>Ein relativer Import, aufgeloest gegen den Ordner des importierenden Moduls.</summary>
+    private static string Resolve(string importer, string specifier)
+    {
+        var segments = importer.Split('/').SkipLast(1).ToList();
+        foreach (var segment in specifier.Split('/'))
+        {
+            if (segment is "." or "") continue;
+            if (segment == "..") segments.RemoveAt(segments.Count - 1);
+            else segments.Add(segment);
+        }
+        return string.Join('/', segments);
+    }
+
+    /// <summary>
     /// Der Quelltext ohne Kommentare. Ein Wächter, der Prosa liest, meldet den Satz "The document
     /// import (step 2) lives in ..." als Verstoß — und das hat er getan.
     /// </summary>
@@ -106,6 +130,14 @@ public sealed class FrontendStructureGuardTests
     /// Was zwei Seiten brauchen, gehört nach components/ oder core/. Ein Verweis von Seite zu Seite
     /// ist der erste Schritt zu einem Knäuel, das man später nicht mehr auseinanderzieht.
     /// </summary>
+    /// <remarks>
+    /// Die erste Fassung suchte nach "pages/" im Importpfad. Von einer Seite zur anderen schreibt man
+    /// aber "../insights/page.js", und ein reiner Seiteneffekt-Import hat kein "from" - sie sah keinen
+    /// einzigen der fuenf Verweise, die die Startseite und die Konten in fremde Seiten hatten. Jetzt
+    /// wird jeder Import aufgeloest, und die Grenze ist der Bereich unter pages/. Was zwei Bereiche
+    /// brauchen, steht in features/ (die Bankverbindung, die Einrichtung, die Hinweise, die
+    /// Depot-Auswertung) - samt seinem Stylesheet unter styles/, sonst fehlt es der zweiten Seite.
+    /// </remarks>
     [Fact]
     public void A_page_does_not_reach_into_another_page()
     {
@@ -113,16 +145,46 @@ public sealed class FrontendStructureGuardTests
 
         foreach (var path in Scripts("pages"))
         {
-            var own = Path.GetDirectoryName(Relative(path))!.Replace('\\', '/');
-            foreach (Match match in Regex.Matches(File.ReadAllText(path), @"from\s+'([^']*pages/[^']+)'"))
+            var own = PageOf(Relative(path));
+            foreach (Match match in Regex.Matches(Code(path), @"(?:\bfrom|\bimport)\s*\(?\s*'(?<spec>\.{1,2}/[^']+)'"))
             {
-                var target = match.Groups[1].Value;
-                if (!target.Contains(own, StringComparison.Ordinal)) offenders.Add($"{Relative(path)} -> {target}");
+                var target = Resolve(Relative(path), match.Groups["spec"].Value);
+                var page = PageOf(target);
+                if (page is not null && page != own) offenders.Add($"{Relative(path)} -> {target}");
             }
         }
 
         Assert.True(offenders.Count == 0,
             "Diese Seiten greifen in eine andere:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// Ein geteiltes Modul bringt sein Stylesheet mit: erreicht eine Seite features/x.js und gibt es
+    /// styles/x.css, dann laedt die Seite es.
+    ///
+    /// Die Insights, die Depot-Auswertung und die Bankdialoge gestalteten sich aus dem page.css EINER
+    /// Seite. Auf der zweiten Seite fehlte es - das Hinweis-Widget der Startseite traf keine einzige
+    /// Regel. Kein Test sah es: der Import funktionierte, nur das Aussehen nicht.
+    /// </summary>
+    [Fact]
+    public void A_shared_module_brings_its_stylesheet_to_every_page()
+    {
+        var shared = Directory.EnumerateFiles(Path.Combine(WebRoot, "features"), "*.js")
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(name => File.Exists(Path.Combine(WebRoot, "styles", name + ".css")))
+            .ToArray();
+        Assert.Contains("insights", shared);
+
+        var missing = new List<string>();
+        foreach (var page in Directory.EnumerateFiles(Path.Combine(WebRoot, "..", "Pages"), "Index.cshtml", SearchOption.AllDirectories))
+        {
+            var loaded = WebSources.Reachable(File.ReadAllText(page) + WebSources.Layout());
+            foreach (var name in shared)
+                if (loaded.Contains($"/features/{name}.js") && !loaded.Contains($"/styles/{name}.css"))
+                    missing.Add($"{Path.GetRelativePath(Path.Combine(WebRoot, ".."), page).Replace('\\', '/')} uses features/{name}.js without styles/{name}.css");
+        }
+
+        Assert.True(missing.Count == 0, string.Join(Environment.NewLine, missing));
     }
 
     /// <summary>

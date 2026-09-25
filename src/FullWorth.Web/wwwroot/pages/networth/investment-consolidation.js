@@ -5,7 +5,7 @@ import { state } from '../../core/state.js';
 import { createDialog } from '../../components/dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 // Statisch: die Ladereihenfolge trägt nichts mehr, seit der Dialog seine Depotkennung selbst trägt.
-import './investment-performance-ui.js';
+import '../../features/investment-performance.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];

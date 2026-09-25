@@ -5,7 +5,7 @@
 // alten Huelle, nur dass ihn jetzt die Seite erzeugt statt app.js fuer alle.
 
 import { startShellPage } from '../../app/shell.js';
-import { mountInsights } from './page.js';
+import { mountInsights } from '../../features/insights.js';
 
 await startShellPage(async context => {
   await mountInsights(context);

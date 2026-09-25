@@ -15,9 +15,9 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit } from './page.js';
-import { renderDashboardInsights } from '../insights/page.js';
-import { createAccessSetup } from '../settings/access-setup.js';
-import { openBankingSetup } from '../settings/bank-connections/page.js';
+import { renderDashboardInsights } from '../../features/insights.js';
+import { createAccessSetup } from '../../features/access-setup.js';
+import { openBankingSetup } from '../../features/bank-connections.js';
 
 // Bevor irgendetwas gezeichnet wird: die Antwort der Bank gehoert auf die Kontenseite. Ein Umweg
 // ueber das erste Bild hier waere ein sichtbares Aufblitzen der Startseite.

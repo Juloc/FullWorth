@@ -2,13 +2,6 @@
    ist der Zustand einer Verbindung, der rechts neben dem Namen steht und auf schmalen Geräten sonst
    mit den Knöpfen in eine Zeile rutscht. */
 #view-bank-connections .row-side{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:var(--s2)}
-/* Die Kontenauswahl beim Verbinden, unpräfixiert: createDialog hängt die Karte an document.body,
-   ein #view-Präfix träfe sie nie. Zeile, Titel, Unterzeile, Häkchen und Werkzeugleiste sind geteilte
-   Bausteine (.row, .row-main, .row-sub, label.check) — die Liste braucht nur eine Höhenbegrenzung,
-   damit acht Konten den Dialog nicht über den Bildschirmrand schieben. */
-.ing-select-list{max-height:min(60dvh,26rem);overflow-y:auto}
-/* Die Beschriftung IST das Ziel zum Antippen und wäre sonst 23 Pixel hoch — gemessen, nicht geschätzt. */
-.ing-select-row{min-height:44px}
 
 /* Eine Verbindung hat rechts Status plus bis zu drei Aktionen. Die globale .row ist zweispaltig;
    auf einem Telefon würde die auto-Spalte deshalb den Text links bis auf wenige Zeichen zusammendrücken.
@@ -21,21 +14,3 @@
   #view-bank-connections .row-side>.btn-icon{flex:0 0 44px}
   #view-bank-connections .row-sub{overflow-wrap:break-word;word-break:normal}
 }
-/* Der Fehlerbericht, wenn die Zwischenablage nicht darf: lesbar, auswählbar, sonst nichts. */
-.report-text{width:100%;font-family:var(--font-mono,monospace);font-size:12px;margin-top:var(--s3)}
-
-/* Eine Handlung darf einen Hinweis tragen: "Konten neu einlesen" kostet die PIN, und das gehoert
-   daneben, nicht in ein Erschrecken danach.
-
-   Ohne Praefix, und das ist kein Versehen: createDialog haengt den Dialog an document.body. Eine
-   Regel, die mit #view-bank-connections beginnt, trifft ihn nie - genau daran ist die Kontenauswahl
-   schon einmal gescheitert. Der Marker .connection-actions-sheet haelt sie trotzdem bei dieser
-   Seite und laesst die Kontenzeile in Ruhe. */
-.connection-actions-sheet .more-list button>span{display:grid;gap:2px}
-.connection-actions-sheet .more-list button .row-sub{font-size:13px;white-space:normal}
-
-/* #167: die Einzelheiten eines Sync-Laufs. Zugeklappt ist der Normalfall - wer die Liste
-   ueberfliegt, sucht erst einmal nur die eine rote Zeile. */
-.sync-history-details>summary{cursor:pointer;color:var(--cta);font-size:var(--text-caption-size)}
-
-.sync-history-details[open]>summary{margin-bottom:var(--s1)}

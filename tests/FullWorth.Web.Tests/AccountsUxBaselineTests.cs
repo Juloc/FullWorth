@@ -91,7 +91,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         // Der Bankdialog gehoert seit #125 zu den Bankverbindungen, nicht zur Kontenseite - die Regel
         // ist dieselbe geblieben, nur die Datei ist eine andere.
-        var connections = ReadAsset("pages", "settings", "bank-connections", "page.js");
+        var connections = ReadAsset("features", "bank-connections.js");
         var ux = ReadAsset("pages", "accounts", "presentation.js");
 
         Assert.Contains("logo.className='bank-option-logo'", connections);
@@ -149,7 +149,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void Ing_DefaultsToOwnedFinTs_WithoutRequiringEnableBanking()
     {
-        var connections = ReadAsset("pages", "settings", "bank-connections", "page.js");
+        var connections = ReadAsset("features", "bank-connections.js");
         var de = ReadAsset("locales", "de.json");
 
         Assert.Contains("fullworthProvider:'fints'", connections);
@@ -197,7 +197,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task BankPicker_ExplainsThatOnlyEnabledInstitutionsAppear()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
 
         Assert.Contains("bankingSetup.bankMissingHint", js);
         Assert.Contains("https://enablebanking.com/cp/applications", js);
@@ -215,7 +215,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ConnectingABank_SaysSomething_AndAsksWhichAccountsAreWanted()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
 
         // Der Knopf war tot: die Seite hat ihn gesucht und nie etwas an ihn gehaengt.
         Assert.Contains("addButton.onclick", js);
@@ -244,7 +244,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void TheImportSummaryCountsInWholeWords()
     {
-        var js = ReadAsset("pages", "settings", "bank-connections", "page.js");
+        var js = ReadAsset("features", "bank-connections.js");
         var de = ReadAsset("locales", "de.json");
         var en = ReadAsset("locales", "en.json");
 
@@ -295,7 +295,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AnAbortedImportIsNeverPresentedAsFinished()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
         var de = ReadAsset("locales", "de.json");
         var en = ReadAsset("locales", "en.json");
 
@@ -327,7 +327,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AFailedSyncOffersARetryAndNotAFullReconnect()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
 
         Assert.Contains("health==='error'||health==='partial_history'", js);
         Assert.Contains("data-retry-sync", js);
@@ -348,7 +348,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AConnectionErrorIsVisibleAndCanBeCopiedForAnIssue()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
 
         Assert.Contains("const errorCode=x.lastError?", js);
         Assert.Contains("data-copy-report", js);
@@ -415,7 +415,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AHealthyConnectionStillOffersAWayToReadItsAccountsAgain()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
 
         Assert.Contains("data-connection-more", js);
         Assert.Contains("function openConnectionActionsDialog", js);
@@ -442,7 +442,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task TheRawBankResponseIsReadableInTheAppAndAbsentFromTheIssueReport()
     {
-        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var js = await GetAsync("/features/bank-connections.js");
 
         Assert.Contains("function openRawResponses", js);
         Assert.Contains("raw-responses", js);
@@ -559,7 +559,8 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     /// trotzdem tot da: <c>index.html</c> trug nur ein <c>modulepreload</c>, das die Datei abruft, aber
     /// nie ausfuehrt, und weder diese Seite noch die Vermoegensseite importierten sie. Die
     /// Vermoegensseite haengt seit laengerem indirekt daran (real-estate.js -> investment-consolidation.js
-    /// -> investment-performance-ui.js, siehe WealthUiBaselineTests) - nur die Kontenseite fehlte.
+    /// -> investment-performance-ui.js, siehe WealthUiBaselineTests) - nur die Kontenseite fehlte. Seit
+    /// beide es brauchen, heisst es features/investment-performance.js, und sein Stylesheet laden beide.
     /// Der Seiteneffekt-Import registriert den globalen <c>[data-portfolio]</c>-Klick-Lauscher; der neue
     /// Knopf im Depot-Dialog liefert die Depotkennung, mit der der Lauscher den reichen Dialog oeffnet.
     /// </summary>
@@ -568,11 +569,11 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var js = await GetAsync("/pages/accounts/page.js");
 
-        Assert.Contains("import '../networth/investment-performance-ui.js';", js);
+        Assert.Contains("import '../../features/investment-performance.js';", js);
         Assert.Contains("data-portfolio=\"${esc(portfolio.id)}\"", js);
         Assert.Contains("get('accounts.depotHistory')", js);
         // Bereits gecacht, weil die Vermoegensseite dieselbe Datei laedt (WealthUiBaselineTests);
         // die Kontenseite braucht keinen zweiten Eintrag.
-        PwaAssert.Ships("'/pages/networth/investment-performance-ui.js'");
+        PwaAssert.Ships("'/features/investment-performance.js'");
     }
 }
