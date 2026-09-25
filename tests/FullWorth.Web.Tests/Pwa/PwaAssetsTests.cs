@@ -5,9 +5,8 @@ namespace FullWorth.Web.Tests.Pwa;
 
 /// <summary>
 /// Structural guards (Wave K1) for the PWA assets. Pure file checks (no server/DB): the manifest is
-/// valid and installable, and the service worker precaches only the static shell while never caching
-/// sensitive paths (finance API, BFF, auth, receipts) — so no financial data can leak into the
-/// offline cache via a future edit.
+/// valid and installable, and the service worker stores nothing but the page it shows without a
+/// connection - so no financial data can leak into its cache via a future edit.
 /// </summary>
 public sealed class PwaAssetsTests
 {
@@ -28,40 +27,29 @@ public sealed class PwaAssetsTests
             Assert.False(string.IsNullOrWhiteSpace(icon.GetProperty("src").GetString()));
     }
 
+    /// <summary>
+    /// Der Worker legt nichts ab ausser der Hinweisseite ohne Verbindung: kein cache.put, keine
+    /// Antwort des Netzes im Cache. Damit kann keine Aenderung hier Finanzdaten in den Cache bringen,
+    /// ohne diesen Test zu brechen - frueher musste er dafuer eine Liste verbotener Praefixe pflegen.
+    /// </summary>
     [Fact]
-    public void ServiceWorkerPrecachesOnlyStaticShell_NeverSensitivePaths()
+    public void ServiceWorkerStoresNothingButTheOfflinePage()
     {
         var sw = File.ReadAllText(Asset("sw.js"));
 
-        // Versioned cache so a new shell purges the old one.
         Assert.Matches(new Regex(@"const\s+VERSION\s*=", RegexOptions.None, TimeSpan.FromSeconds(1)), sw);
-
-        // The precache list must not contain any sensitive/dynamic path. Note /share is the receipt
-        // share-target ingress (manifest action "/share/receipt"); we forbid the "/share" prefix rather
-        // than a bare "/receipt" substring, which would also match the legitimate static
-        // /features/receipt-scan-*.js shell modules that must stay precached for offline use.
-        // Each forbidden prefix is anchored to the start of a shell entry (right after the opening
-        // quote) rather than matched anywhere in the blob: the architecture cleanup introduced the
-        // legitimate static module core/api.js into the shell, whose path contains the substring
-        // "/api" without being the sensitive /api route.
-        var shell = Between(sw, "const APP_SHELL = [", "];");
-        foreach (var forbidden in new[] { "/api", "/bff", "/auth", "/connect", "/share" })
-            Assert.DoesNotMatch(new Regex($@"'{Regex.Escape(forbidden)}"), shell);
-
-        // The runtime guard must treat those prefixes as network-only (uncached) — mirroring isSensitive().
-        foreach (var guard in new[] { "'/api'", "'/bff'", "'/auth'", "'/share'" })
-            Assert.Contains(guard, sw);
-
-        // Only GET is handled; non-GET must be passed through.
-        Assert.Contains("request.method !== 'GET'", sw);
+        Assert.DoesNotContain(".put(", sw);
+        Assert.Contains("cache.addAll(OFFLINE_ASSETS)", sw);
+        // Nur Seitenaufrufe, und von denen nur der gescheiterte: alles andere geht am Worker vorbei.
+        Assert.Contains("if (request.mode !== 'navigate') return;", sw);
+        Assert.Contains("fetch(request).catch(", sw);
     }
 
-
     [Fact]
-    public void ServiceWorkerShellEntriesExistOnDisk()
+    public void ServiceWorkerOfflineAssetsExistOnDisk()
     {
         var sw = File.ReadAllText(Asset("sw.js"));
-        var shell = Between(sw, "const APP_SHELL = [", "];");
+        var shell = Between(sw, "const OFFLINE_ASSETS = [", "];");
         var entries = Regex.Matches(
                 shell,
                 @"['""](?<path>/[^'""]+)['""]",
@@ -77,7 +65,7 @@ public sealed class PwaAssetsTests
             var relative = entry.TrimStart('/');
             Assert.True(
                 File.Exists(AssetPath(relative)),
-                $"service worker shell references missing asset: {entry}");
+                $"service worker offline list references missing asset: {entry}");
         }
     }
 
@@ -87,7 +75,7 @@ public sealed class PwaAssetsTests
         var index = WebSources.Layout();
         var references = Regex.Matches(
                 index,
-                @"(?:src|href)=""(?<path>/[^""?#]+\.(?:js|mjs|css|json|svg|png|woff2?))(?:[?#][^""]*)?""",
+                @"(?:src|href)=""~?(?<path>/[^""?#]+\.(?:js|mjs|css|json|svg|png|woff2?))(?:[?#][^""]*)?""",
                 RegexOptions.IgnoreCase,
                 TimeSpan.FromSeconds(1))
             .Select(match => match.Groups["path"].Value)

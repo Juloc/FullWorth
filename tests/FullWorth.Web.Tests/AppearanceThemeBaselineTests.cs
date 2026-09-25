@@ -184,31 +184,18 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     }
 
     [Fact]
-    public async Task PwaShell_PrecachesAppearanceWithoutMascotAssetsOrSensitiveRoutes()
+    public async Task Appearance_ships_without_mascot_assets()
     {
-        var sw = await GetAsync("/sw.js");
+        // Die Frage hiess einmal "steht es im Vorrat des Service Workers". Den Vorrat gibt es nicht
+        // mehr (#154), und dass er nichts Sensibles cacht, haelt PwaAssetsTests fuer alle fest.
+        foreach (var asset in new[] { "/styles/appearance.css", "/styles/tokens.css", "/styles/reset.css",
+                     "/styles/shell.css", "/styles/components.css", "/app/theme.js", "/app/appearance.js",
+                     "/pages/networth/real-estate.js", "/pages/networth/page.css" })
+            PwaAssert.Ships(asset);
 
-        Assert.Contains("'/styles/appearance.css'", sw);
-        Assert.Contains("'/styles/tokens.css'", sw);
-        Assert.Contains("'/styles/reset.css'", sw);
-        Assert.Contains("'/styles/shell.css'", sw);
-        Assert.Contains("'/styles/components.css'", sw);
-        Assert.DoesNotContain("/parity-completion.css", sw);
-        Assert.Contains("'/app/theme.js'", sw);
-        Assert.Contains("'/app/appearance.js'", sw);
-        Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        PwaAssert.Ships("'/pages/networth/real-estate.js'", sw);
-        PwaAssert.Ships("'/pages/networth/page.css'", sw);
+        var sw = await GetAsync("/sw.js");
         Assert.False(sw.Contains("/mascots/", StringComparison.OrdinalIgnoreCase));
         Assert.False(sw.Contains("mascot-scenes", StringComparison.OrdinalIgnoreCase));
-
-        var appShellStart = sw.IndexOf("const APP_SHELL", StringComparison.Ordinal);
-        var appShellEnd = sw.IndexOf("];", appShellStart, StringComparison.Ordinal);
-        Assert.True(appShellStart >= 0 && appShellEnd > appShellStart);
-        var shell = sw[appShellStart..appShellEnd];
-        Assert.False(shell.Contains("/bff/", StringComparison.OrdinalIgnoreCase));
-        Assert.False(shell.Contains("/api/", StringComparison.OrdinalIgnoreCase));
-        Assert.False(shell.Contains("/auth/", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

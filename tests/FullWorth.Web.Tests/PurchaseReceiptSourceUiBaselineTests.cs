@@ -52,17 +52,13 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     }
 
     [Fact]
-    public void Service_worker_precaches_review_and_bulk_import_modules_but_never_caches_sensitive_content()
+    public void The_review_and_bulk_import_modules_ship()
     {
-        var sw = Read("sw.js");
-
-        Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        PwaAssert.Ships("/pages/purchases/receipt-source-review.js", sw);
-        PwaAssert.Ships("/pages/purchases/receipt-imports.js", sw);
-        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js", sw);
-        PwaAssert.Ships("/pages/purchases/page.css", sw);
-        Assert.Contains("url.pathname.startsWith('/share')", sw);
-        Assert.Contains("url.pathname.startsWith('/bff')", sw);
+        // Dass der Service Worker nichts davon cacht, haelt PwaAssetsTests fuer alle Seiten fest.
+        PwaAssert.Ships("/pages/purchases/receipt-source-review.js");
+        PwaAssert.Ships("/pages/purchases/receipt-imports.js");
+        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js");
+        PwaAssert.Ships("/pages/purchases/page.css");
     }
 
     private string Read(params string[] path)

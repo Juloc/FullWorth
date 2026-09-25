@@ -140,7 +140,6 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task FinanceUxModulesArePrecachedAndTouchTargetsAreAccessible()
     {
-        var sw = await GetAsync("/sw.js");
         foreach (var asset in new[]
                  {
                      "'/pages/transactions/page.js'",
@@ -148,7 +147,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
                      "'/pages/contracts/page.js'",
                      "'/features/ux-kit.js'"
                  })
-            PwaAssert.Ships(asset, sw);
+            PwaAssert.Ships(asset);
 
         var css = await GetAsync("/styles/components.css") + await GetAsync("/styles/app.css")
             + await GetAsync("/pages/networth/page.css") + await GetAsync("/pages/transactions/page.css")

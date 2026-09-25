@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f6f7">
+  <title>FullWorth – Keine Verbindung</title>
+  <link rel="icon" type="image/svg+xml" href="/pwa/icon.svg">
+  <!-- Ein eigenes Dokument, wie auth/: ohne Netz gibt es keine Sitzung und keinen Rahmen. Der
+       Service Worker liefert es aus seinem Vorrat, wenn eine Seite nicht geladen werden kann - er
+       cacht nie das HTML der Anwendung, es traegt persoenliche Daten. Alles, was diese Seite laedt,
+       steht in sw.js unter OFFLINE_PAGE; PwaOfflinePageTests haelt beides zusammen. -->
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/reset.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/offline/offline.css">
+  <script src="/app/theme.js"></script>
+</head>
+<body class="offline-body">
+  <main class="offline-main">
+    <img class="offline-logo" src="/pwa/icon.svg" alt="" width="56" height="56">
+    <h1 class="offline-title" data-en="No connection">Keine Verbindung</h1>
+    <p class="offline-text" data-en="FullWorth needs a connection to your server. Your data stays there - as soon as the connection is back, you can carry on.">FullWorth braucht eine Verbindung zu deinem Server. Deine Daten bleiben dort – sobald die Verbindung zurück ist, geht es weiter.</p>
+    <button class="btn btn-primary" type="button" data-retry data-en="Try again">Erneut versuchen</button>
+  </main>
+  <script src="/offline/offline.js"></script>
+</body>
+</html>

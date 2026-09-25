@@ -27,15 +27,13 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     public PensionDocumentUxBaselineTests(FullWorthWebFactory factory) => _factory = factory;
 
     /// <summary>
-    /// The module has to be served, mounted as the fourth tab with its own route, and precached —
-    /// pension.js imports it statically, so an installed PWA that cold-starts offline fails on that
-    /// import if `sw.js` does not list it.
+    /// The module has to be served, mounted as the fourth tab with its own route, and loaded by the page -
+    /// pension.js imports it statically.
     /// </summary>
     [Fact]
     public void DocumentsTabIsServedRegisteredAndPrecached()
     {
         var pension = ReadAsset("pages", "pension", "page.js");
-        var sw = ReadAsset("sw.js");
 
         Assert.Contains("from './documents.js'", pension);
         Assert.Contains("renderPensionDocuments", pension);
@@ -43,7 +41,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
         Assert.Contains("path: '/pension/dokumente'", pension);
         Assert.Contains("data-pension-documents", pension);
 
-        PwaAssert.Ships("/pages/pension/documents.js", sw);
+        PwaAssert.Ships("/pages/pension/documents.js");
 
         // Flat in features/, never a features/<name>/ subfolder (CLAUDE.md).
         var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();

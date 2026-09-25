@@ -1,0 +1,4 @@
+.offline-body{min-height:100dvh;display:grid;place-items:center;padding:var(--s4);background:var(--bg);color:var(--text)}
+.offline-main{display:grid;justify-items:center;gap:var(--s3);max-width:420px;text-align:center}
+.offline-title{margin:0;font-size:1.5rem}
+.offline-text{margin:0;color:var(--muted)}

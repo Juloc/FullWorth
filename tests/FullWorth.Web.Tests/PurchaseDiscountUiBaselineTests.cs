@@ -80,7 +80,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
         var sw = Read("sw.js");
 
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        PwaAssert.Ships("/pages/purchases/discount-actions.js", sw);
+        PwaAssert.Ships("/pages/purchases/discount-actions.js");
         Assert.DoesNotContain("/api/purchases", sw);
     }
 

@@ -1,157 +1,60 @@
 // FullWorth service worker.
-// Strategy: cache ONLY the static app shell (css/js/locales/manifest/icon). Everything dynamic or
-// sensitive — the finance API (/api), the BFF proxy (/bff), auth (/auth), share inbox and connector
-// flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
-// Bump VERSION to ship a new shell; old caches are purged on activate.
+//
+// Er cacht genau eine Sache: die Hinweisseite ohne Verbindung (offline/). Scheitert das Laden einer
+// Seite am Netz, antwortet er mit ihr statt mit der Fehlerseite des Browsers. Sonst tut er nichts -
+// jede Anfrage geht ans Netz, wie ohne ihn, und nichts von der Anwendung landet in seinem Cache.
+//
+// Warum nicht mehr: eine Seite ist HTML, und das HTML der Anwendung cacht er nie - es traegt
+// persoenliche Daten. Ohne ihr HTML oeffnet keine Seite offline, also haette ein Vorrat ihrer Module
+// nichts gerettet. Bis #154 stand hier trotzdem ein Vorrat von ueber hundert Dateien, und der traf
+// nicht einmal: die Seiten verlangen ihre Dateien seit MapStaticAssets unter der Adresse mit
+// Fingerabdruck, der Vorrat hielt sie unter ihrem Namen. Auch Gehalt, das als Ausnahme galt, rechnet
+// auf dem Server (api/compensation/calculate) und kann ohne Netz nichts.
+//
+// Fuer Geschwindigkeit sorgt der Browser-Cache: Dateien mit Fingerabdruck sind immutable.
+// Push-Benachrichtigungen (unten) sind der andere Grund, dass es diesen Worker gibt.
+//
+// VERSION erhoehen, wenn sich die Hinweisseite aendert; alte Caches raeumt activate weg.
 
-const VERSION = 'v154';
-const SHELL_CACHE = `fullworth-shell-${VERSION}`;
+const VERSION = 'v155';
+const OFFLINE_CACHE = `fullworth-offline-${VERSION}`;
 
-// Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
-const APP_SHELL = [
-  // Everything below is imported by the shell itself, so an offline cold start needs all of it. The
-  // fetch handler is network-first with a cache fallback, which hides a gap here while online and
-  // only fails once there is no connection - PwaOfflineShellCoverageTests walks the real import
-  // graph so the list cannot fall behind again.
-  '/security/secure-fetch.js',
-  '/components/money.js',
-  '/components/empty.js',
-  '/components/balance-meaning.js',
-  // The Gehalt page is its own HTML page rather than an SPA view, so the shell import graph above
-  // does not reach it. It is precached because the payroll engine is pure client-side maths and
-  // genuinely works offline. Auth, admin, intelligence and passkeys are deliberately NOT here: every
-  // one of them needs the server to do anything, so caching them would only fake availability.
-  // Seiten stehen hier NICHT (#154, Abschnitt 12). Eine Razor-Seite ist HTML, und HTML cacht dieser
-  // Worker nie - es traegt persoenliche Finanzdaten. Ohne ihr HTML oeffnet eine Seite offline also
-  // ohnehin nicht, und ihr JS im Vorrat haette nichts gerettet; es haette nur jede Installation dazu
-  // gebracht, im Hintergrund die Module saemtlicher Seiten herunterzuladen. Was eine Seite braucht,
-  // landet beim ersten Besuch im Cache (der Fetch-Handler unten legt jedes geladene Asset ab).
-  //
-  // Die eine Ausnahme ist Gehalt: die Lohnrechnung ist reine Rechnung im Browser.
-  // PwaOfflineShellCoverageTests haelt beides fest - das Layout und Gehalt vollstaendig, und
-  // keine weitere Seite.
-  '/pages/compensation/entry.js',
-  '/app/lock.js',
-  '/components/privacy.js',
-  '/components/sprite.js',
-  '/components/combobox.js',
-  '/components/category-combobox.js',
-  '/components/icons.js',
-  '/components/list-position.js',
-  '/components/chart-scrubber.js',
-  '/components/topbar-metrics.js',
-  '/push/push.js',
-  '/passkeys/passkeys.js',
-  '/passkeys/base64url.js',
+// Die Hinweisseite und alles, was sie laedt. PwaOfflinePageTests prueft, dass die Liste genau das ist.
+const OFFLINE_PAGE = '/offline/index.html';
+const OFFLINE_ASSETS = [
+  OFFLINE_PAGE,
+  '/offline/offline.css',
+  '/offline/offline.js',
   '/styles/tokens.css',
   '/styles/reset.css',
-  '/styles/shell.css',
   '/styles/components.css',
-  '/styles/app.css',
-  '/styles/responsive.css',
-  '/styles/appearance.css',
-  '/styles/design-depth.css',
-  '/styles/dialogs.css',
-  '/core/api.js',
-  '/core/html.js',
-  '/core/state.js',
-  '/core/i18n.js',
-  '/core/services.js',
-  '/core/navigation.js',
-  '/core/event-bus.js',
-  '/components/toast.js',
-  '/app/global-search.js',
-  '/components/buttons.js',
-  '/components/confirm.js',
-  '/components/dialog.js',
-  '/components/form-dialog.js',
-  '/components/password-toggle.js',
-  '/components/wizard.js',
-  '/components/selection-list.js',
-  '/components/mobile-interactions.js',
-  '/features/ux-kit.js',
-  '/features/data-completeness.js',
-  '/features/wealth-portability.js',
-  '/styles/coach.css',
-  
-  '/components/accessibility-release.js',
   '/app/theme.js',
-  '/app/appearance.js',
-  '/app/boot.js',
-  '/pwa/register-sw.js',
-  '/app/menu.js',
-  '/app/routes.js',
-  '/app/shell.js',
-  '/app/page-context.js',
-  '/pages/compensation/page.js',
-  '/pages/compensation/page.css',
-  '/pages/compensation/shared.js',
-  '/pages/compensation/extended.js',
-  '/pages/compensation/history.js',
-  '/pages/compensation/other-income.js',
-  '/pages/compensation/benchmarks.js',
-  '/app/nav-state.js',
-  '/pwa/standalone-init.js',
-  '/manifest.json',
   '/pwa/icon.svg',
-  '/pwa/icon-192.png',
-  '/pwa/icon-512.png',
-  '/pwa/apple-touch-icon-180.png',
-  // Die einzige Anwendungsschrift, selbst gehostet (styles/tokens.css). Ohne diesen Eintrag hätte ein
-  // Kaltstart offline keine Schrift zum Nachladen - font-display:optional verhindert nur den
-  // Nachtausch, nicht das Fehlen der Datei.
+  // Die Schrift, die tokens.css per @font-face nennt.
   '/fonts/nunito-variable.woff2',
-  '/locales/de.json',
-  '/locales/en.json',
 ];
 
-function isSensitive(url) {
-  return url.pathname.startsWith('/api')
-    || url.pathname.startsWith('/bff')
-    || url.pathname.startsWith('/auth')
-    || url.pathname.startsWith('/share')
-    || url.pathname.startsWith('/connect');
-}
-
-function isStaticAsset(url) {
-  return /\.(css|js|mjs|json|svg|png|woff2?)$/i.test(url.pathname);
-}
-
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(OFFLINE_CACHE).then((cache) => cache.addAll(OFFLINE_ASSETS)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key !== OFFLINE_CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET') return;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-  if (isSensitive(url)) return;
-  if (!isStaticAsset(url)) return;
-  event.respondWith(
-    caches.open(SHELL_CACHE).then(async (cache) => {
-      try {
-        // Prefer the current deployment when online. Serving cached JS first can combine a fresh
-        // index.html with stale modules after a release and crash the installed PWA.
-        const response = await fetch(request);
-        if (response && response.ok) await cache.put(request, response.clone());
-        return response;
-      } catch {
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        throw new Error(`FullWorth offline shell miss: ${url.pathname}`);
-      }
-    })
-  );
+  if (request.mode !== 'navigate') return;
+  // Die Antwort des Netzes wird durchgereicht und nie abgelegt - auch eine 404 oder 500 ist eine
+  // Antwort. Nur wenn es gar keine gibt, kommt die Hinweisseite, unter der Adresse, die geladen
+  // werden sollte: "Erneut versuchen" ist dann ein schlichtes Neuladen.
+  event.respondWith(fetch(request).catch(async () =>
+    (await caches.match(OFFLINE_PAGE)) || Response.error()));
 });
 
 self.addEventListener('push', (event) => {

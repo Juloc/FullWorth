@@ -50,7 +50,6 @@ public sealed class AutopilotFrontendGuardTests
     {
         var html = WebSources.Layout();
         var feature = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "page.js"));
-        var serviceWorker = File.ReadAllText(Path.Combine(WwwRoot(), "sw.js"));
         var appCss = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "app.css"));
         var insightCssPath = Path.Combine(WwwRoot(), "pages", "insights", "page.css");
 
@@ -108,8 +107,8 @@ public sealed class AutopilotFrontendGuardTests
         Assert.DoesNotContain("ai-gradient", feature, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("IIntelligenceProvider", feature, StringComparison.Ordinal);
 
-        PwaAssert.Ships("'/pages/insights/page.js'", serviceWorker);
-        PwaAssert.Ships("'/pages/insights/page.css'", serviceWorker);
+        PwaAssert.Ships("'/pages/insights/page.js'");
+        PwaAssert.Ships("'/pages/insights/page.css'");
     }
 
     [Fact]

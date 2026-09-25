@@ -282,7 +282,6 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var wrapper = await GetAsync("/pages/networth/real-estate.js");
         var portability = await GetAsync("/features/wealth-portability.js");
-        var sw = await GetAsync("/sw.js");
 
         Assert.Contains("portability.js", wrapper);
         // Der Kopfzeilenwert steht nicht mehr als Literal im Downloadpfad: seit CSV und XLSX
@@ -298,10 +297,9 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         // with a single owned listener, and FrontendArchitectureGuardTests.NoNewPatchLayerFileNames
         // blocks reintroducing that kind of patch layer, so the double-fire this guarded against is
         // structurally impossible now.
-        Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("'/features/wealth-portability.js'", sw);
-        Assert.Contains("url.pathname.startsWith('/bff')", sw);
-        Assert.DoesNotContain("/bff/backend/api/export/wealth-backup", sw);
+        // Dass keine Sicherung im Cache landet, haelt PwaAssetsTests fuer alle fest: der Service
+        // Worker legt nichts ab ausser der Hinweisseite ohne Verbindung.
+        PwaAssert.Ships("/features/wealth-portability.js");
     }
 
     [Fact]
@@ -309,14 +307,13 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var wrapper = await GetAsync("/pages/networth/real-estate.js");
         var accessibility = await GetAsync("/components/accessibility-release.js");
-        var sw = await GetAsync("/sw.js");
 
         Assert.Contains("../components/accessibility-release.js", wrapper);
         Assert.Contains("Buchungen durchsuchen", accessibility);
         Assert.Contains("Search transactions", accessibility);
         Assert.Contains("setAttribute('aria-label', t.close)", accessibility);
         Assert.Contains("MutationObserver", accessibility);
-        Assert.Contains("'/components/accessibility-release.js'", sw);
+        PwaAssert.Ships("/components/accessibility-release.js");
     }
 
     [Fact]
@@ -355,7 +352,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
                      "'/pages/purchases/receipt-imports.js'",
                      "'/components/accessibility-release.js'"
                  })
-            PwaAssert.Ships(path, sw);
+            PwaAssert.Ships(path);
     }
 
     [Fact]

@@ -6,10 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
-/// The Altersvorsorge area has to be reachable and offline-cacheable like every other feature: a view
-/// section in the shell, a nav entry, a route in the registry, and both assets in the service-worker
-/// shell list. A feature that renders correctly but is missing from `sw.js` breaks only after the PWA
-/// is installed, which is exactly when nobody is looking.
+/// The Altersvorsorge area has to be reachable like every other feature: its own page, a nav entry,
+/// and both assets loaded by that page.
 /// </summary>
 public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
 {
@@ -26,7 +24,6 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
         // ihn führen, sonst fängt die alte Hülle seine Links weiter ab.
         var page = WebSources.Page("Pension");
         var entry = ReadAsset("pages", "pension", "entry.js");
-        var sw = ReadAsset("sw.js");
 
         Assert.Contains("@page \"/pension\"", page);
         Assert.Contains("id=\"view-pension\"", page);
@@ -41,8 +38,8 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
         // kennt sie, und es gibt eine Razor-Seite dafuer.
         Assert.Contains(NavigationCatalog.Entries, entry => entry.View == "pension");
 
-        PwaAssert.Ships("/pages/pension/page.js", sw);
-        PwaAssert.Ships("/pages/pension/page.css", sw);
+        PwaAssert.Ships("/pages/pension/page.js");
+        PwaAssert.Ships("/pages/pension/page.css");
     }
 
     /// <summary>

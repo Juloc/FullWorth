@@ -20,7 +20,7 @@ public sealed class IntelligenceDigestUiTests
         Assert.Contains("api/intelligence/digests", Modul(), StringComparison.Ordinal);
         Assert.Contains("id=\"digest-list\"", WebSources.Page("Settings/Intelligence"), StringComparison.Ordinal);
         Assert.Contains("renderIntelligenceDigests", WebSources.Asset("pages", "settings", "intelligence", "page.js"), StringComparison.Ordinal);
-        PwaAssert.Ships("/pages/settings/intelligence/digests.js", WebSources.Asset("sw.js"));
+        PwaAssert.Ships("/pages/settings/intelligence/digests.js");
     }
 
     /// <summary>

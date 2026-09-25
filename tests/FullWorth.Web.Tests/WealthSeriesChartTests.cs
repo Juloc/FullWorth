@@ -33,7 +33,7 @@ public sealed class WealthSeriesChartTests
         })
             Assert.Contains($"key: '{key}'", quelle, StringComparison.Ordinal);
 
-        PwaAssert.Ships("/pages/networth/history-series.js", WebSources.Asset("sw.js"));
+        PwaAssert.Ships("/pages/networth/history-series.js");
         Assert.Contains("bindSeriesChart", WebSources.Asset("pages", "networth", "page.js"), StringComparison.Ordinal);
     }
 

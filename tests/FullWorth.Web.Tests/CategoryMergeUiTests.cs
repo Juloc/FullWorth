@@ -24,7 +24,7 @@ public sealed class CategoryMergeUiTests
 
         Assert.Contains("openCategoryMerge", seite, StringComparison.Ordinal);
         Assert.Contains("data-merge", seite, StringComparison.Ordinal);
-        PwaAssert.Ships("/pages/categories/merge.js", WebSources.Asset("sw.js"));
+        PwaAssert.Ships("/pages/categories/merge.js");
     }
 
     [Fact]

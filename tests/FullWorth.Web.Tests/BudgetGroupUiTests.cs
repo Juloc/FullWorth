@@ -92,6 +92,6 @@ public sealed class BudgetGroupUiTests
     [Fact]
     public void The_manager_is_precached()
     {
-        PwaAssert.Ships("/pages/budgets/groups.js", WebSources.Asset("sw.js"));
+        PwaAssert.Ships("/pages/budgets/groups.js");
     }
 }

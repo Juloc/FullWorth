@@ -29,14 +29,12 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
 
     /// <summary>
     /// The tab has to exist, carry its own route so Back and Forward work between the tabs, be mounted
-    /// by pension.js, and be precached — pension.js imports it statically, so an installed PWA that
-    /// cold-starts offline fails on that import if `sw.js` does not list it.
+    /// by pension.js, and be loaded by the page - pension.js imports it statically.
     /// </summary>
     [Fact]
     public void SimulationTabIsServedRegisteredAndPrecached()
     {
         var pension = ReadAsset("pages", "pension", "page.js");
-        var sw = ReadAsset("sw.js");
 
         Assert.Contains("from './projection.js'", pension);
         Assert.Contains("renderPensionProjection", pension);
@@ -50,7 +48,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
         // different ways.
         Assert.Contains("percent, reload: () => renderPension(ctx)", pension);
 
-        PwaAssert.Ships("/pages/pension/projection.js", sw);
+        PwaAssert.Ships("/pages/pension/projection.js");
 
         // Flat in features/, never a features/<name>/ subfolder (CLAUDE.md).
         var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();

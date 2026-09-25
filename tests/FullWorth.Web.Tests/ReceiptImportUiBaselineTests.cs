@@ -74,7 +74,6 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
     {
         var details = Read("pages", "purchases", "receipt-import-batch-details.js");
         var css = Read("pages", "purchases", "page.css");
-        var sw = Read("sw.js");
 
         Assert.Contains("data-import-batch-details", details);
         Assert.Contains("data-import-item-status-filter", details);
@@ -83,7 +82,7 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("api/purchases/${encodeURIComponent(purchaseId)}/receipt", details);
         Assert.Contains("target=\"_blank\"", details);
         Assert.Contains("receipt-import-batch-detail", css);
-        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js");
     }
 
     [Fact]

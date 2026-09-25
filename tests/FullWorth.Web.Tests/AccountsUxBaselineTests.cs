@@ -21,16 +21,15 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         // Seit #154 hat die Kontenseite ihr eigenes Markup - das Stylesheet steht dort im Abschnitt
         // "Styles" und wird nur noch von IHR geladen, nicht mehr von jeder Seite.
         var html = WebSources.Page("Accounts");
-        var sw = ReadAsset("sw.js");
 
         var accounts = ReadAsset("pages", "accounts", "page.js");
         Assert.DoesNotContain("/features/accounts-ux.js", html);
         Assert.Contains("/pages/accounts/page.css", html);
         Assert.Contains("from './presentation.js'", accounts);
 
-        PwaAssert.Ships("/pages/accounts/page.js", sw);
-        PwaAssert.Ships("/pages/accounts/presentation.js", sw);
-        PwaAssert.Ships("/pages/accounts/page.css", sw);
+        PwaAssert.Ships("/pages/accounts/page.js");
+        PwaAssert.Ships("/pages/accounts/presentation.js");
+        PwaAssert.Ships("/pages/accounts/page.css");
     }
 
     private string ReadAsset(params string[] path)
@@ -568,13 +567,12 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task DepotDialogOpensTheRichPerformanceDialogInsteadOfLeavingItUnreachable()
     {
         var js = await GetAsync("/pages/accounts/page.js");
-        var sw = await GetAsync("/sw.js");
 
         Assert.Contains("import '../networth/investment-performance-ui.js';", js);
         Assert.Contains("data-portfolio=\"${esc(portfolio.id)}\"", js);
         Assert.Contains("get('accounts.depotHistory')", js);
         // Bereits gecacht, weil die Vermoegensseite dieselbe Datei laedt (WealthUiBaselineTests);
         // die Kontenseite braucht keinen zweiten Eintrag.
-        PwaAssert.Ships("'/pages/networth/investment-performance-ui.js'", sw);
+        PwaAssert.Ships("'/pages/networth/investment-performance-ui.js'");
     }
 }

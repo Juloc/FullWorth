@@ -20,7 +20,7 @@ public sealed class LearnCategoryUiTests
         var quelle = Modul();
 
         Assert.Contains("api/category-intelligence/learn", quelle, StringComparison.Ordinal);
-        PwaAssert.Ships("/pages/transactions/learn-category.js", WebSources.Asset("sw.js"));
+        PwaAssert.Ships("/pages/transactions/learn-category.js");
         Assert.Contains("openLearnCategory", WebSources.Asset("pages", "transactions", "page.js"), StringComparison.Ordinal);
     }
 
