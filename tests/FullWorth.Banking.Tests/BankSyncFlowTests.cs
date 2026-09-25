@@ -7,13 +7,21 @@ namespace FullWorth.Banking.Tests;
 
 public sealed class BankSyncFlowTests
 {
+    // One instant for the test and the sync it runs. Each used to read the wall clock on its own: a CI
+    // run at 2026-09-25T00:00:00Z computed "today" as the 24th, the sync as the 25th, and the narrowed
+    // date_from came out 2026-06-27 instead of 2026-06-26. A fixed date in the past also means a sync
+    // that goes back to the wall clock fails these tests on every run, not only across midnight.
+    private static readonly DateTimeOffset Now = new(2026, 9, 24, 23, 59, 59, 999, TimeSpan.Zero);
+    private static readonly DateOnly Today = DateOnly.FromDateTime(Now.UtcDateTime);
+    private static readonly FixedTimeProvider Clock = new(Now);
+
     [Fact]
     public async Task Rate_limit_failure_applies_at_least_the_360_minute_local_cooldown()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler();
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
         var provider = new RecordingHttpMessageHandler((_, _, _) => Task.FromResult(
             TestBankingEnvironment.JsonResponse(
                 "{\"error_code\":\"ASPSP_RATE_LIMIT_EXCEEDED\"}",
@@ -23,7 +31,7 @@ public sealed class BankSyncFlowTests
             MinimumBackgroundSyncIntervalMinutes = 1,
             RateLimitCooldownMinutes = 1
         });
-        var started = DateTimeOffset.UtcNow;
+        var started = Now;
 
         var result = await service.SyncAllAsync(CancellationToken.None);
 
@@ -38,11 +46,11 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task RetryAfter_later_than_local_cooldown_is_persisted()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler();
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
-        var retryAt = DateTimeOffset.UtcNow.AddMinutes(500);
+            lastAttemptAt: Now.AddDays(-1), now: Now));
+        var retryAt = Now.AddMinutes(500);
         var provider = new RecordingHttpMessageHandler((_, _, _) =>
         {
             var response = TestBankingEnvironment.JsonResponse(
@@ -69,10 +77,10 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task Simultaneous_sync_attempt_is_skipped_not_queued_into_a_second_bank_run()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler();
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
         var enteredProvider = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseProvider = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var provider = new RecordingHttpMessageHandler(async (request, _, ct) =>
@@ -103,11 +111,11 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task BackgroundSyncPreservesPendingReauthorizationStateExpiry()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler();
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(12);
+        var expiresAt = Now.AddMinutes(12);
         var connection = TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)) with
+            lastAttemptAt: Now.AddDays(-1), now: Now) with
         {
             AuthorizationState = "pending-reauth-state",
             AuthorizationStateExpiresAt = expiresAt
@@ -133,10 +141,10 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task BackgroundSyncSendsNoPsuHeaders()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler();
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
         var provider = new RecordingHttpMessageHandler((request, _, _) =>
         {
             Assert.DoesNotContain(
@@ -158,13 +166,13 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task Continuation_pages_keep_date_range_and_continue_after_an_empty_intermediate_page()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler
         {
-            SyncState = new AccountSyncState(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-3))
+            SyncState = new AccountSyncState(Today.AddDays(-3))
         };
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
 
         var transactionPage = 0;
         var provider = new RecordingHttpMessageHandler((request, _, _) =>
@@ -215,12 +223,11 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task Ongoing_sync_starts_from_latest_booking_date_minus_overlap_not_full_history()
     {
-        using var environment = new TestBankingEnvironment();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var latest = today.AddDays(-2);
+        using var environment = new TestBankingEnvironment(Clock);
+        var latest = Today.AddDays(-2);
         var backend = new FakeBackendHandler { SyncState = new AccountSyncState(latest) };
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
         var provider = StandardAccountProvider(includeAccountDetails: false);
         var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
         {
@@ -234,21 +241,20 @@ public sealed class BankSyncFlowTests
         var transactionRequest = provider.Requests.Single(x => x.Uri.AbsolutePath == "/accounts/account-1/transactions");
         var query = TestBankingEnvironment.Query(transactionRequest.Uri);
         Assert.Equal(latest.AddDays(-7).ToString("yyyy-MM-dd"), query["date_from"]);
-        Assert.Equal(today.ToString("yyyy-MM-dd"), query["date_to"]);
+        Assert.Equal(Today.ToString("yyyy-MM-dd"), query["date_to"]);
         Assert.Equal("default", query["strategy"]);
     }
 
     [Fact]
     public async Task WrongTransactionsPeriodNarrowsOnceAndDoesNotRepeatRejectedRange()
     {
-        using var environment = new TestBankingEnvironment();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler
         {
-            SyncState = new AccountSyncState(today.AddDays(-180))
+            SyncState = new AccountSyncState(Today.AddDays(-180))
         };
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
 
         var transactionCalls = 0;
         var provider = new RecordingHttpMessageHandler((request, _, _) =>
@@ -285,9 +291,9 @@ public sealed class BankSyncFlowTests
 
         var rejected = TestBankingEnvironment.Query(requests[0].Uri);
         var fallback = TestBankingEnvironment.Query(requests[1].Uri);
-        Assert.Equal(today.AddDays(-187).ToString("yyyy-MM-dd"), rejected["date_from"]);
-        Assert.Equal(today.AddDays(-90).ToString("yyyy-MM-dd"), fallback["date_from"]);
-        Assert.Equal(today.ToString("yyyy-MM-dd"), fallback["date_to"]);
+        Assert.Equal(Today.AddDays(-187).ToString("yyyy-MM-dd"), rejected["date_from"]);
+        Assert.Equal(Today.AddDays(-90).ToString("yyyy-MM-dd"), fallback["date_from"]);
+        Assert.Equal(Today.ToString("yyyy-MM-dd"), fallback["date_to"]);
         Assert.Equal("default", fallback["strategy"]);
         Assert.False(fallback.ContainsKey("continuation_key"));
     }
@@ -295,11 +301,10 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task First_import_uses_longest_strategy_without_date_bounds()
     {
-        using var environment = new TestBankingEnvironment();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler { SyncState = null };
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
         var provider = StandardAccountProvider(includeAccountDetails: true);
         var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
         {
@@ -320,10 +325,10 @@ public sealed class BankSyncFlowTests
     [Fact]
     public async Task Page_limit_marks_history_partial_and_does_not_advance_success_timestamp()
     {
-        using var environment = new TestBankingEnvironment();
+        using var environment = new TestBankingEnvironment(Clock);
         var backend = new FakeBackendHandler { SyncState = null };
         backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
-            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+            lastAttemptAt: Now.AddDays(-1), now: Now));
         var provider = new RecordingHttpMessageHandler((request, _, _) =>
         {
             var path = request.RequestUri!.AbsolutePath;

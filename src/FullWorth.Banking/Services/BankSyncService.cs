@@ -111,6 +111,9 @@ public sealed class BankSyncService(
     IOptionsMonitor<EnableBankingOptions> providerOptions,
     IOptions<BankingSyncOptions> syncOptions,
     ILogger<BankSyncService> logger,
+    // The one clock for every "now" and "today" of a sync. With the wall clock read in twenty places,
+    // a caller's "today" and the sync's own "today" could fall on different days across midnight UTC.
+    TimeProvider clock,
     EnableBankingClientResolver? providerResolver = null,
     IngFinTsService? finTs = null)
 {
@@ -208,10 +211,10 @@ public sealed class BankSyncService(
         var requested = TimeSpan.FromDays(Math.Clamp(request.ValidDays ?? 365, 1, 365));
         var providerMaximum = TimeSpan.FromSeconds(maxSeconds);
         var validity = requested < providerMaximum ? requested : providerMaximum;
-        var validUntil = DateTimeOffset.UtcNow.Add(validity);
+        var validUntil = clock.GetUtcNow().Add(validity);
 
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        var stateExpiresAt = DateTimeOffset.UtcNow.AddMinutes(
+        var stateExpiresAt = clock.GetUtcNow().AddMinutes(
             Math.Clamp(_providerOptions.AuthorizationStateTtlMinutes, 1, 60));
         var language = NormalizeLanguage(request.Language);
         var psuId = BuildPseudonymousPsuId(caller.UserId, client.ApplicationId);
@@ -421,7 +424,7 @@ public sealed class BankSyncService(
         // connection can sit unsynced for weeks without anything saying so.
         foreach (var connection in connections)
         {
-            if (ClassifySkip(connection, DateTimeOffset.UtcNow) is { } reason)
+            if (ClassifySkip(connection, clock.GetUtcNow()) is { } reason)
             {
                 skips.Add(new BankSyncSkip(
                     connection.Id,
@@ -487,7 +490,7 @@ public sealed class BankSyncService(
         var connection = await FindConnectionAsync(connectionId, ct);
         if (connection is null) return new(ManualSyncStatus.NotFound);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         // Asked BEFORE the authorization check: a connection parked on a TAN is not authorized, so it was
         // answered with "reconnect needed" - and reconnecting discards the challenge the bank is waiting
         // for. The user has to be pointed at the TAN instead.
@@ -507,7 +510,7 @@ public sealed class BankSyncService(
         if (lease is null) return new(ManualSyncStatus.AlreadyRunning);
 
         var current = await FindConnectionAsync(connectionId, ct) ?? connection;
-        if (current.NextSyncAllowedAt is { } currentNext && currentNext > DateTimeOffset.UtcNow &&
+        if (current.NextSyncAllowedAt is { } currentNext && currentNext > clock.GetUtcNow() &&
             (!force || string.Equals(current.LastError, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)))
             return new(ManualSyncStatus.Cooldown, currentNext);
 
@@ -641,7 +644,7 @@ public sealed class BankSyncService(
             throw new InvalidOperationException("FinTS transaction details are already part of the imported transaction.");
         if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(connection.ProviderSessionId) ||
-            (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= DateTimeOffset.UtcNow))
+            (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= clock.GetUtcNow()))
             throw new BankReauthorizationRequiredException();
 
         var client = await ResolveProviderForConnectionAsync(connection, ct);
@@ -764,7 +767,7 @@ public sealed class BankSyncService(
             if (finTs is not null)
                 return await finTs.SyncConnectionAsync(connection, bypassCadence, ct, trigger);
 
-            var missingStartedAt = DateTimeOffset.UtcNow;
+            var missingStartedAt = clock.GetUtcNow();
             var missing = await backend.UpsertConnectionAsync(ToWrite(
                 connection,
                 consecutiveFailures: connection.ConsecutiveFailures + 1,
@@ -774,7 +777,7 @@ public sealed class BankSyncService(
             return missing;
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         if (!bypassCadence && !CanBackgroundSync(connection, now))
             return connection;
 
@@ -848,7 +851,7 @@ public sealed class BankSyncService(
                 status: status,
                 // A partial account/history result must not advance the user-visible successful-sync
                 // timestamp. Preserve the previous completed sync until every account finishes.
-                lastSyncedAt: error is null ? DateTimeOffset.UtcNow : connection.LastSyncedAt,
+                lastSyncedAt: error is null ? clock.GetUtcNow() : connection.LastSyncedAt,
                 nextSyncAllowedAt: nextAllowed,
                 consecutiveFailures: error is null ? 0 : connection.ConsecutiveFailures + 1,
                 lastError: error), ct);
@@ -903,7 +906,7 @@ public sealed class BankSyncService(
         {
             await backend.RecordSyncHistoryAsync(
                 connectionId,
-                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode, trigger, connector),
+                new BankSyncHistoryWrite(startedAt, clock.GetUtcNow(), result, errorCode, trigger, connector),
                 ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -920,7 +923,7 @@ public sealed class BankSyncService(
 
     private async Task HandleProviderFailureAsync(BankConnectionDto connection, EnableBankingApiException ex, CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         var classification = EnableBankingErrorClassifier.Classify(ex);
 
         var terminalStatus = classification.Category switch
@@ -973,7 +976,7 @@ public sealed class BankSyncService(
 
     private async Task MarkFailureAsync(BankConnectionDto connection, string error, CancellationToken ct)
     {
-        var retryAt = DateTimeOffset.UtcNow.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
+        var retryAt = clock.GetUtcNow().AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
         await backend.UpsertConnectionAsync(ToWrite(
             connection,
             nextSyncAllowedAt: retryAt,
@@ -1035,7 +1038,7 @@ public sealed class BankSyncService(
 
         var balancesJson = await client.GetBalancesAsync(
             account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
-        var balanceResult = ParseBalances(account, balancesJson);
+        var balanceResult = ParseBalances(account, balancesJson, clock.GetUtcNow());
         var balances = balanceResult.Items;
 
         // The currency the money actually arrived in, when the provider did not name one. Last resort
@@ -1052,7 +1055,7 @@ public sealed class BankSyncService(
             account = account with { Currency = reported ?? "EUR" };
         }
 
-        var now = DateOnly.FromDateTime(DateTime.UtcNow);
+        var now = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
         DateOnly? from = syncState?.LatestBookingDate is { } latest
             ? latest.AddDays(-Math.Max(0, _sync.OverlapDays))
             : null;
@@ -1124,7 +1127,7 @@ public sealed class BankSyncService(
             {
                 await backend.IngestAsync(new(
                     new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
-                        connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                        connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, clock.GetUtcNow(), null),
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
                         true, account.HasDetails, AccountIdentificationHashes(account),
@@ -1138,7 +1141,7 @@ public sealed class BankSyncService(
             {
                 await backend.IngestAsync(new(
                     new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
-                        connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                        connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, clock.GetUtcNow(), null),
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
                         true, account.HasDetails, AccountIdentificationHashes(account),
@@ -1160,7 +1163,7 @@ public sealed class BankSyncService(
         if (!pageLimitReached)
             await backend.IngestAsync(new(
                 new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
-                    connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                    connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, clock.GetUtcNow(), null),
                 [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                     account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
                     true, account.HasDetails, AccountIdentificationHashes(account),
@@ -1394,7 +1397,7 @@ public sealed class BankSyncService(
 
     private static string? RealCurrencyOrNull(string? currency) => IsRealCurrency(currency) ? currency : null;
 
-    private static BalanceParseResult ParseBalances(AccountState account, JsonElement json)
+    private static BalanceParseResult ParseBalances(AccountState account, JsonElement json, DateTimeOffset captured)
     {
         var result = new List<BalanceBatchItem>();
         if (json.ValueKind != JsonValueKind.Object ||
@@ -1402,7 +1405,6 @@ public sealed class BankSyncService(
             array.ValueKind != JsonValueKind.Array)
             return new(result, 0);
 
-        var captured = DateTimeOffset.UtcNow;
         var unreadable = 0;
         foreach (var item in array.EnumerateArray())
         {

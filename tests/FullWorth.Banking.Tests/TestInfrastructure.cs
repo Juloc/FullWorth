@@ -195,12 +195,20 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
     };
 }
 
+/// <summary>A clock that never moves, so a test and the sync it runs agree on "now" and "today".</summary>
+internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => now;
+}
+
 internal sealed class TestBankingEnvironment : IDisposable
 {
     private readonly string _privateKeyPath;
+    private readonly TimeProvider _clock;
 
-    public TestBankingEnvironment()
+    public TestBankingEnvironment(TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         _privateKeyPath = Path.Combine(Path.GetTempPath(), $"fullworth-banking-tests-{Guid.NewGuid():N}.pem");
         using var rsa = RSA.Create(2048);
         File.WriteAllText(_privateKeyPath, rsa.ExportPkcs8PrivateKeyPem());
@@ -261,13 +269,15 @@ internal sealed class TestBankingEnvironment : IDisposable
             gate ?? new BankSyncConcurrencyGate(),
             StaticOptionsMonitor.For(providerOptions),
             Options.Create(sync ?? new BankingSyncOptions()),
-            NullLogger<BankSyncService>.Instance);
+            NullLogger<BankSyncService>.Instance,
+            _clock);
     }
 
     public static BankConnectionDto AuthorizedConnection(
         DateTimeOffset? lastAttemptAt = null,
         DateTimeOffset? nextSyncAllowedAt = null,
-        string sessionId = "session-1") => new(
+        string sessionId = "session-1",
+        DateTimeOffset? now = null) => new(
             Guid.NewGuid(),
             "enable-banking",
             "Test Bank",
@@ -276,7 +286,7 @@ internal sealed class TestBankingEnvironment : IDisposable
             null,
             sessionId,
             "AUTHORIZED",
-            DateTimeOffset.UtcNow.AddDays(30),
+            (now ?? DateTimeOffset.UtcNow).AddDays(30),
             lastAttemptAt,
             null,
             nextSyncAllowedAt,

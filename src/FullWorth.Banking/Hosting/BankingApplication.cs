@@ -5,6 +5,7 @@ using FullWorth.Banking.Backend;
 using FullWorth.Banking.EnableBanking;
 using FullWorth.Banking.Services;
 using FullWorth.FinTs;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace FullWorth.Banking.Hosting;
@@ -70,6 +71,8 @@ public static class BankingApplication
         builder.Services.AddScoped<EnableBankingProfileService>();
         builder.Services.AddSingleton<EnableBankingControlPanelRegistrationService>();
         builder.Services.AddSingleton<EnableBankingControlPanelStatusService>();
+        // TryAdd: in the unified host FullWorth.Web has registered TimeProvider.System already.
+        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddScoped<BankSyncService>();
         builder.Services.AddHostedService<BankSyncWorker>();
         builder.Services.AddHostedService<BankingProviderStatusWorker>();
