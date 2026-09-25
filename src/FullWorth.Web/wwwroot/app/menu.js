@@ -1,19 +1,16 @@
-// Die Menüdefinition. Einzige Quelle.
+// Die Menüdefinition im Browser - der Spiegel von Navigation/NavigationCatalog.cs.
 //
-// Aus dieser Datei entstehen alle drei Darstellungen: die Seitenleiste am Desktop, die vier
-// Schnellziele der unteren Leiste und der komplette Baum hinter „Mehr". Sie unterscheiden sich in
-// der Form, nie im Inhalt — ein Test vergleicht sie gegen genau diese Liste.
-//
-// Die Seitenleiste und die untere Leiste stehen als fertiges Markup in index.html, damit beim Laden
-// nichts eingefügt wird und nichts springt. `ops/generate-menu.mjs` schreibt dieses Markup aus der
-// Definition hier; MenuParityTests hält beides zusammen.
+// Die Seitenleiste und die untere Leiste schreibt der Server aus NavigationCatalog (#154), fertig
+// im Markup, damit beim Laden nichts eingefügt wird und nichts springt. Diese Liste brauchen die
+// zwei Stellen, die kein C# ausführen können: das "Mehr"-Menü, das der Browser baut, und
+// ops/ui-harness. NavigationCatalogParityTests hält beide Listen gleich, MenuParityTests die drei
+// Darstellungen gegen die eine Definition.
 
 // icon ist die ID eines Symbols in wwwroot/icons/sprite.svg - dieselbe, die NavigationCatalog nennt
 // (#154). Die Geometrie steht nur dort; NavigationCatalogParityTests haelt die IDs zusammen.
 
-// view: der Name der Ansicht. admin: der Eintrag bleibt verborgen, solange die Sitzung keine
-// Adminrechte hat. Ein href gibt es nicht mehr — jeder Eintrag führt in dieselbe Hülle.
-// admin: true blendet den Eintrag aus, solange die Sitzung keine Adminrechte hat.
+// view: der Name der Ansicht, und /<view> ihre Adresse (app/routes.js). admin: true blendet den
+// Eintrag aus, solange die Sitzung keine Adminrechte hat.
 export const MENU = [
   { id: 'overview', label: 'nav.group.overview', items: [
     { view: 'dashboard', label: 'nav.start', icon: 'nav-dashboard' },

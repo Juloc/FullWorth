@@ -1,166 +1,147 @@
 # FullWorth frontend architecture
 
-Reference for `src/FullWorth.Web/wwwroot`. It describes what the frontend *is* and which rules hold,
-including the places where the code knowingly breaks a rule. Rules without a guard are conventions;
-rules with a guard are in `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs`.
+Reference for `src/FullWorth.Web/wwwroot` and the Razor pages in `src/FullWorth.Web/Pages`. It
+describes what the frontend *is* and which rules hold, including the places where the code knowingly
+breaks a rule. Rules without a guard are conventions; rules with a guard name it.
 
-Still-open frontend work lives in `docs/OPEN_ITEMS.md`, not here.
+Still-open frontend work lives in GitHub Issues, not here.
 
 ## Shape
 
 Vanilla ES modules, no build step, no bundler, no framework, no `node_modules`. The browser loads the
-same files that sit in the repo. The dev stack next to this repo bind-mounts `wwwroot`, so an edit is
-live on reload.
+same files that sit in the repo.
 
-**One page is one folder** under `wwwroot/pages/`, holding `page.html`, `page.css` and `page.js`. The
-folder path is the address: `pages/settings/security/passkeys` answers `/settings/security/passkeys`.
-`ops/generate-shell.mjs` writes the menu and every `page.html` into `index.html` between markers;
-`--check` fails when the file and the folder tree have drifted apart. There is one document, and it is
-generated, not maintained by hand.
+**Every address is a Razor page** (#154). There is no client-side router and no fallback: an address
+without a page answers 404. A page is two halves that belong together:
 
-The only frontend HTML that is *not* a page in `wwwroot/pages/`:
+| Half | Where | Holds |
+| --- | --- | --- |
+| markup | `Pages/<Area>/Index.cshtml` | `@page "/address"`, the page's static markup, its `@section Styles` (`page.css`) and `@section Scripts` (`entry.js`) |
+| behaviour | `wwwroot/pages/<area>/` | `entry.js` (the page's one module script), `page.js` and whatever else the page brings, `page.css` |
+
+`Pages/Shared/_Layout.cshtml` is the frame every page shares: the `<head>` with the stylesheet chain,
+the sidebar (`_Navigation.cshtml`) and the bottom bar (`_BottomNavigation.cshtml`), both rendered on
+the server so nothing is inserted after the first paint. Tabs with their own address (`/pension/*`,
+`/tax/review`) answer with their page through extra routes in `Program.cs`;
+`SubpageAddressTests` reads those addresses out of the page modules and requests every one.
+
+The only frontend HTML that is *not* a Razor page:
 
 | Route | Source | Why |
 | --- | --- | --- |
-| `/auth`, `/auth/login`, … | `auth/index.html` | there is no session yet, so there is no shell |
+| `/auth`, `/auth/login`, … | `auth/index.html` | there is no session yet, so there is no frame |
 | `/account/deletion` | `account-deletion/index.html` | the account is switched off; a menu there would lead nowhere |
-| `/share/receipt/{token}` | `Modules/Purchases/ShareReceiptEndpoints.cs` | a public link, opened without an account |
+| — | `offline/index.html` | shown by the service worker when a page cannot be loaded at all (see [Service worker](#service-worker)) |
+| `/share/receipt/{token}` | `Modules/Purchases/ShareReceiptEndpoints.cs` + `share-receipt/share-receipt.css` | a public link, opened without an account |
 
-The three import pages used to belong on that list: they kept their `<head>` and body in C# raw string
-literals, repeated the whole stylesheet chain by hand, and `ops/ui-harness/server.mjs` parsed those
-literals so an edited page arrived edited. They are ordinary pages under `pages/settings/import/` now,
-and both the guard that pinned their stylesheet chain and the harness's parser are gone.
-
-`ShareReceiptEndpoints.Page()` is a different animal: a self-contained mini page with an inline
-`<style>` block. That block is blocked by the CSP (see [CSP](#csp)), so those pages render unstyled.
-
-## Shells
-
-| Shell | Route | Own scripts |
-| --- | --- | --- |
-| `index.html` | `/` + every view path (`MapFallbackToFile`) | `app.js`, `app/motion.js` |
-| `auth/index.html` | `/auth`, `/auth/login`, `/auth/register`, … (`Program.cs`) | `auth/auth.js` |
-| `account-deletion/index.html` | `/account/deletion` | `account-deletion/deletion.js` |
-
-Admin, Passkeys, Gehalt, Import and Intelligence were shells of their own once. Each had no side menu,
-and the old `compensation.html` carried a hand-copied nav bar that had already fallen behind the real one.
-They are pages of this shell now.
-
-`index.html` carries every view container and toggles `.active` on one of them. The rule that makes
-that hold is `.view:not(.active){display:none}` in `styles/shell.css`: two classes of specificity, so
-a page stylesheet loaded later cannot win by accident — which is exactly what happened when
-`.import-center-view{display:grid}` showed the import page on top of every other screen.
-
-`Program.cs` does not call `UseDefaultFiles()`, so a directory shell has to be requested by its full
-path.
-
-Three small scripts are shared across shells rather than owned by one:
-
-- `app/boot.js` — classic script in `<head>`, deliberately not a module. It writes everything that has
-  to be true before the first paint onto `<html>`: theme, brand colours, font, typography, the
-  collapsed state and width of the sidebar, the privacy flag. Whatever this file does not do is a
-  layout shift.
-- `security/browser-fetch.js` — the `window.fetch` antiforgery patch (see [Core services](#core-services--wwwrootcore)).
-- `pwa/register-sw.js` — registers `sw.js`, nothing else. It used to pull the Coach in with an
-  `import()` after the first paint; the Coach is a page now and `app.js` loads it with everything else.
-
-`account-deletion/deletion.css` is deliberately self-contained: hardcoded hex colours, Inter, its own
+`account-deletion/deletion.css` is deliberately self-contained: hardcoded hex colours, its own
 dark-mode block, no token layer loaded. It is the one page that does not use design tokens.
 
-## Bootstrap — `app.js`
+## Static files
 
-447 lines. It owns bootstrap, shell and composition, and nothing else:
+`Program.cs` serves `wwwroot` through **`MapStaticAssets()`**, and the Razor pages through
+`MapRazorPages().WithStaticAssets()`:
 
-- session/capability boot (`/auth/capabilities`), space loading, locale/theme application
-- the shell: sidebar collapse + drag-resize, responsive auto-collapse, topbar overflow menu, mobile
-  More sheet, layout reset, global-search key binding
-- `showView()` — view activation, nav active state, page header, `fullworth:view-change`
-- the shared `ctx` object and the feature registry table
+- In markup, `href="~/styles/tokens.css"` and `src="~/pages/pension/entry.js"` resolve to the
+  fingerprinted address (`/styles/tokens.892ywcc37e.css`), served `immutable`. A release names new
+  addresses, so a stale file in any cache matches none of them. The plain name still answers, with
+  `no-cache` and an ETag. Everything is precompressed (br/gzip).
+- Modules import each other by relative path (`../../app/shell.js`), i.e. by plain name.
+- Kept plain on purpose: the font preload (the stylesheet loads the font by its plain name; a
+  fingerprinted preload would download it twice), `manifest.json?v=` and the `/pwa/*` icons.
+- `MapStaticAssets()` carries `.AllowAnonymous()`: static assets are endpoints now, and the fallback
+  authorization policy would otherwise put the login page's own stylesheet behind a login.
+  `StaticAssetsTests` requests them anonymously.
+- **`FullWorthWeb:LiveStaticFiles=true`** switches back to plain `UseStaticFiles` for the dev stack in
+  `../local`, which bind-mounts `wwwroot`: MapStaticAssets reads a build-time manifest and would not
+  see an edit. `LiveStaticFilesTests` covers that mode.
 
-Feature rendering must not come back into it. `SettingsWorkflowsStayOutOfAppBootstrap` and
-`BootstrapLivesInApp_NotInFeatureOwners` guard both directions.
+**Icons** come from one SVG sprite, `wwwroot/icons/sprite.svg`, referenced with
+`<use href="…sprite.<hash>.svg#id">`. `IconSprite` (C#) builds the fingerprinted address for the
+server-rendered navigation; the layout puts it on `<body data-sprite>`, and `components/sprite.js`
+(`spriteHref(symbol)`) reads it for everything the browser draws. Symbol ids are `nav-*` (navigation),
+`cat-*` (category icons, mapped from category keys and their German aliases in `components/icons.js`)
+and `ui-*`. A `<use>` on a missing id draws nothing without any error, so `IconSpriteTests` checks
+every id the navigation and `icons.js` name. Other icons are still inline SVG in the page modules.
 
-`ctx` is what features receive: `api`, `bankApi`, `get` (i18n), `esc`, `date`, `dateTime`, `toast`,
-`dialog`, `money`, `isPrivate`, `categoryOptions`, `jsonBody`, `empty`, `skeleton`, `reload`,
-`confirm`, `bffUrl`, `navScope`, `showView`.
+## Boot order of a page
+
+1. **Classic scripts in `<head>`**, deliberately not modules: `pwa/standalone-init.js`, `app/theme.js`
+   (the one theme engine, `window.FullWorthTheme`), `app/boot.js` (theme, brand colours, sidebar width
+   and collapsed state, privacy flag — everything that has to be true before the first paint; whatever
+   it does not do is a layout shift), `pwa/register-sw.js`. `_Navigation.cshtml` adds
+   `app/nav-state.js` right after the sidebar markup, so the group state is restored while parsing.
+2. **The page's `entry.js`**, the only module script:
+
+   ```js
+   import { startShellPage } from '../../app/shell.js';
+   import { renderPension, bindPension } from './page.js';
+   await startShellPage(async context => { … });
+   ```
+
+3. **`app/shell.js::startShellPage(render)`** — the same for every page: installs navigation, loads
+   the locale and applies it, renders the page header, binds topbar, theme and privacy toggles, the
+   overflow menus, global search and the "Mehr" sheet, loads the session
+   (`/auth/capabilities`, spaces), then calls `render(ctx)` and starts the inactivity lock.
+
+`ctx` (built in `app/page-context.js::createPageContext`) is what a page receives: `api`, `bankApi`,
+`get` (i18n), `esc`, `date`, `dateTime`, `toast`, `dialog`, `money`, `isPrivate`, `categoryOptions`,
+`jsonBody`, `empty`, `skeleton`, `reload`, `confirm`, `bffUrl`, `apiText`, `navScope`, `showView`.
 
 ## Core services — `wwwroot/core/`
 
 | Module | Owns |
 | --- | --- |
-| `api.js` | the only BFF client. `/bff/backend/…` and `/bff/banking/…` URL construction, `fullWorthSpaceId` injection, JSON parsing, `error.status`/`error.detail`, in-flight GET de-duplication (2 s TTL, 200-entry cap), cache flush on any non-GET |
+| `api.js` | the only BFF client. `/bff/backend/…` and `/bff/banking/…` URL construction, `fullWorthSpaceId` injection, JSON parsing, `error.status`/`error.detail`, in-flight GET de-duplication (2 s TTL, 200-entry cap), cache flush on any non-GET. Antiforgery and upload snapshots come from `security/secure-fetch.js` |
 | `services.js` | the singletons: `apiClient`, `api`, `bankApi`, `i18n` |
-| `router.js` | URL writes. `pathForView`, `viewFromPath`, `write()` (`pushState`/`replaceState`). It does not mount or clean up anything |
-| `navigation.js` | `installNavigation(handler)` / `navigate(view, options)` — the module-level navigation entry point features use |
-| `feature-registry.js` | `register` / `activate` / `refresh` / `unmount` |
+| `navigation.js` | `installNavigation(handler)` / `navigate(view, options)`. `startShellPage` installs a handler that turns a view into an address (`app/routes.js`) and assigns it |
 | `state.js` | global state only: `lang`, `theme`, `messages`, `view`, `spaces`, `space`, `capabilities` |
 | `event-bus.js` | `onAppEvent` / `emitAppEvent` over a private `EventTarget`; the unsubscribe function is the return value |
 | `i18n.js` | `/locales/{de,en}.json` loading, dotted-path `get()`, `apply()` over `data-i18n`, `data-i18n-placeholder`, `data-i18n-title` |
+| `html.js` | `esc` and the other markup helpers |
 
 `api.js` has no dedicated AbortController support, but `signal` passes through `requestOptions` to
 `fetch` — `pages/insights/page.js` uses that. Note the interaction with GET de-duplication: aborting a
 deduped GET rejects the shared promise for every caller inside the 2 s window.
 
-Two near-identical antiforgery layers ship side by side. `security/secure-fetch.js` is the ES module
-`core/api.js` uses; it captures `nativeFetch` at module load and never patches anything.
-`security/browser-fetch.js` is a classic script loaded before `app.js` on every shell and *does*
-replace `window.fetch`. Because the classic script runs first, `secure-fetch.js` captures the already
-patched function, so a BFF write attaches the CSRF header twice from two independent token caches.
-`browser-fetch.js` is the single entry on the `NoNewGlobalFetchMonkeyPatches` allow-list.
+`core/router.js`, `core/feature-registry.js` and the `window.fetch` patch `security/browser-fetch.js`
+belonged to the one-document shell and are gone. With the patch went the old oddity that a BFF write
+attached its CSRF header twice from two independent token caches.
 
-## Routing
+## Navigation
 
-Views (`wwwroot/app/menu.js`, the single menu source): `dashboard`, `insights`, `coach`, `accounts`,
-`transactions`, `purchases`, `merchants`, `budgets`, `contracts`, `compensation`, `pension`, `tax`,
-`analytics`, `networth`, `categories`, `rules`, `notifications`, `audit`, `settings`, `admin`.
-`dashboard` is `/`; every other view is `/<view>`.
+**Menu source.** The server renders the navigation from `Navigation/NavigationCatalog.cs`.
+`wwwroot/app/menu.js` is its mirror for the two places that cannot run C#: the "Mehr" sheet the
+browser builds, and `ops/ui-harness`. `NavigationCatalogParityTests` keeps the two identical, and
+`MenuParityTests` compares sidebar, bottom bar and "Mehr" against the one definition. Nothing is added
+to the menu at runtime.
 
-Below some of them sit subpages with an address but no menu entry, because a menu with everything in
-it is no menu: `/settings/security/passkeys`, `/settings/import`,
-`/settings/import/finanzguru/xlsx`, `/settings/import/broker-pdf`, `/settings/intelligence`. They mark
-their parent in the menu.
-
-`MapFallbackToFile("index.html")` serves the shell for all of them and the app resolves the view from
-`location.pathname` on boot, so reload, back/forward and deep links work.
+Subpages with an address but no menu entry — `/settings/security/passkeys`, `/settings/import`,
+`/settings/import/finanzguru/xlsx`, `/settings/import/broker-pdf`, `/settings/intelligence`,
+`/settings/bank-connections`, the account detail — mark their parent in the menu. `app/routes.js`
+lists them for the browser, `NavigationCatalog` for the server.
 
 Rules:
 
-- `core/router.js` performs the URL write; `showView()` calls it.
 - Pages navigate through `core/navigation.js` (`navigate`, or `ctx.navScope(view, query)`), never by
-  triggering another control's `.click()`.
+  triggering another control's `.click()`. A navigation is a real page load.
 - No `window.fw*` navigation bridges. `NoGlobalFeatureNavigationBridgeReturns` guards this.
-- Account/group/category/merchant scope belongs in URL-backed route state.
-- Nothing is added to the menu at runtime. Coach and the accounts subtree used to be inserted after
-  the first paint; that made the delivered order different from the markup and was a shift source.
-  `MenuParityTests` compares sidebar, phone bar and the "Mehr" sheet against the one definition.
+- Account/group/category/merchant scope belongs in the query string.
+- After a save, a page emits `surface:reload`; the shell answers with `ctx.reload`.
 
-**Exceptions, unguarded:** three pages write history themselves instead of going through the router —
-`pages/contracts/page.js` (`replaceState` for its filter query), `pages/tax/page.js` and
-`pages/pension/page.js` (`pushState` for their own detail path).
-
-The synthetic-click refresh is gone. Ten call sites did
-`document.querySelector('#refresh')?.click()` after a save; there is no `#refresh` element in this
-document, so the optional chaining swallowed it and the reload never happened. They emit
-`surface:reload` now and `app.js` answers with `loadCurrent()`.
+**Exceptions, unguarded:** a few pages write history themselves — `pages/contracts/page.js`
+(`replaceState` for its filter query), `pages/tax/page.js` and `pages/pension/page.js` (`pushState`
+for their tabs), and several `entry.js` files that drop a one-shot query parameter after reading it.
 
 ## Page ownership
 
-One page is one folder under `pages/`. A page may bring more modules than the three files — Käufe and
-Vermögen bring a dozen each — but they live in that folder and no other page imports them.
+One page is one folder under `wwwroot/pages/`. A page may bring more modules than `page.js` — Käufe
+and Vermögen bring a dozen each — but they live in that folder and no other page imports them.
 `features/` is what is left over: three modules that genuinely belong to no single page
-(`ux-kit`, `data-completeness`, `wealth-portability`). It held seven; `category-picker` went to
-Buchungen, `access-setup` and `sharing` to Einstellungen, and `global-search` to `app/` — each of
-them had exactly one owner and only looked shared.
+(`ux-kit`, `data-completeness`, `wealth-portability`).
 
-The shipped convention is a `renderX(ctx)` / `bindX(ctx)` pair: `bindX` is called once from `app.js`
-`bind()` and wires static listeners; `renderX` is registered with the feature registry and runs on every
-activation and every refresh.
-
-`createFeatureRegistry().activate(name, ctx)` is also the refresh path. Cleanup only runs when the
-active page *name* changes; re-activating the same page runs the handler first and disposes the
-previous cleanup afterwards. Only `pages/insights/page.js::mountInsights` returns a cleanup callback
-(it aborts its in-flight request and drops its click handler). Everything else returns nothing, so the
-"explicit lifecycle" is available but almost unused.
+The convention is a `renderX(ctx)` / `bindX(ctx)` pair: `entry.js` calls `bindX` once and `renderX`
+inside `startShellPage`.
 
 Rules, and `FrontendStructureGuardTests` is the version that argues back:
 
@@ -168,7 +149,8 @@ Rules, and `FrontendStructureGuardTests` is the version that argues back:
 - a page never imports another page; `components/` knows neither a page nor the server
 - a module never re-exports a name it calls itself — `export { x } from …` does not bind `x` here,
   and that shipped as `esc is not defined` on five pages
-- no `<link>` from JavaScript and no `import()`; everything is there at the first paint
+- no `<link>` from JavaScript and no `import()` in a page; everything is there at the first paint
+  (`app/boot.js`, a classic script, is the one place that uses `import()`)
 - no retry/poll loop waiting for another renderer or a freshly created entity
 - no new `*-installer.js`, `*-final-ui.js`, `*-parity-ui.js`, `*-completion-ui.js` module names
   (`NoNewPatchLayerFileNames`)
@@ -176,36 +158,28 @@ Rules, and `FrontendStructureGuardTests` is the version that argues back:
 **Exception:** `pages/accounts/presentation.js` decorates the account rows after the bundle arrives.
 That decoration is why the accounts list was the worst shift in the app (a row grew from 73 to 125
 pixels); it now happens on a list that is still detached, and the finished list is inserted once.
-`bindAccountsPresentation()` registers a `fullworth:view-change` listener with no cleanup path.
 
 ## Global observers — the documented exception
 
-Three `MutationObserver`s remain, and they are the entire allow-list of
-`NoNewGlobalDomPatchObservers`:
-
-- `app/appearance.js` (`initAppearance`) — re-injects and re-syncs the colour/typography controls into
-  `#view-settings .settings-grid` on any body mutation (rAF-coalesced), plus a second observer on
-  `documentElement[lang]` that rebuilds them on a language switch.
-- `components/accessibility-release.js` — sets `aria-label` on the Transactions filters, `scope="col"`
-  on its table headers, and an accessible name on dialog close buttons.
-- `app/motion.js` — animates `characterData` changes of `.metric strong`, `.widget-metric strong` and
-  `.budget-detail .kv strong` so numbers count up instead of snapping.
+One `MutationObserver` remains, and it is the entire allow-list of `NoNewGlobalDomPatchObservers`:
+`components/accessibility-release.js` sets `aria-label` on the Transactions filters, `scope="col"` on
+its table headers, and an accessible name on dialog close buttons.
 
 The rule is narrower than "no global observers": **no new** ones, and none from a page module. Fixing
-one of the three means moving its work into the owning renderer, not adding a fourth. Four more were
-removed rather than allowed — on the transactions list, the tax panels, the primary action's label and
-the category circles — and each one's replacement is written down where it used to sit.
+the one that is left means moving its work into the owning renderer, not adding a second. Two went
+recently: `app/appearance.js` (the colour panel is static markup now) and `app/motion.js`, which made
+figures count up by watching their text — figures stand at once, one paint and no change after it.
 
 ## Shared UI — `wwwroot/components/`
 
 `dialog.js`, `confirm.js`, `buttons.js`, `money.js`, `toast.js`, `privacy.js`, `empty.js`,
 `form-dialog.js`, `combobox.js`, `password-toggle.js`, `balance-meaning.js`, `chart-scrubber.js`,
-`topbar-metrics.js`, `accessibility-release.js`, `mobile-interactions.js`.
+`topbar-metrics.js`, `accessibility-release.js`, `mobile-interactions.js`, `icons.js`, `sprite.js`.
 
 - **Dialogs.** Only `components/dialog.js` may call `createElement('dialog')`
   (`OnlySharedDialogModuleMayIntroduceNewNativeDialogs`, single-entry allow-list).
-  `createDialog(html, {mobileMode:'sheet'})` adds `.fw-dialog--sheet`; `app.js` wraps it as
-  `ctx.dialog` with the localized close label.
+  `createDialog(html, {mobileMode:'sheet'})` adds `.fw-dialog--sheet`; `app/page-context.js` wraps it
+  as `ctx.dialog` with the localized close label.
 - **Confirm.** `components/confirm.js` / `ctx.confirm`. Native `confirm()` is banned with an **empty**
   allow-list (`NoNewNativeConfirmCalls`) — there are no legacy exceptions left.
 - **Buttons.** `components/buttons.js` exports `ButtonRole` (Primary / Secondary / Danger),
@@ -287,8 +261,8 @@ matching is a search fallback, not the aggregation identity. Merchant rows carry
 resolve server-side.
 
 `identityIcon()` is the single resolver: transfer glyph → installed brand logo (explicit
-`logoAssetPath`, else the official brand-alias catalog) → category icon (emoji or the `CATEGORY_ICONS`
-line-art, with German key aliases) → category-tinted monogram. Transactions, contracts and recent
+`logoAssetPath`, else the official brand-alias catalog) → category icon (emoji or a `cat-*` symbol of the sprite,
+with German key aliases) → category-tinted monogram. Transactions, contracts and recent
 bookings must not re-implement icon logic.
 
 Category overview is root-only and disjoint: `pages/analytics/page.js::fillCategory` filters
@@ -324,21 +298,21 @@ its markup strings there when it became a page, and the rest of its module is th
 ## CSS
 
 `src/FullWorth.Web/Security/Headers/SecurityHeadersPolicy.cs` forbids `<style>` blocks, so every rule is
-a `.css` file. The chain `index.html` loads, in order:
+a `.css` file. The chain `Pages/Shared/_Layout.cshtml` loads, in order:
 
 | # | File | Owns |
 | --- | --- | --- |
 | 1 | `styles/tokens.css` | colours, spacing, radii, shadows, typography vars; light plus `[data-theme=dark]` |
 | 2 | `styles/reset.css` | element normalization, base font/number features, PWA touch rules |
 | 3 | `styles/appearance.css` | the two user-chosen brand colours. Loads third *on purpose* so it can never win against `app.css`; it only sets what the user picked |
-| 4 | `styles/shell.css` | shell grid, sidebar, topbar, bottom nav, `.primary-action`, `.view:not(.active)` |
+| 4 | `styles/shell.css` | shell grid, sidebar, topbar, bottom nav, `.primary-action` |
 | 5 | `styles/components.css` | metrics, panels, rows, `.btn` roles, money variants, `.amount` defaults, the one shimmer and the one `.sr-only` |
 | 6 | `styles/app.css` | what is still shared across pages and has not found its layer yet |
 | 7 | `styles/responsive.css` | the central breakpoints |
 | 8 | `styles/design-depth.css` | shadows, depth, easing, motion — visual only |
 | 9 | `styles/dialogs.css` | `dialog`, `::backdrop`, `.dialog-card`, `.dialog-actions` |
-| 10 | `pages/*/page.css` | one per page, written into the document by `ops/generate-shell.mjs` |
-| 11 | `styles/mobile-polish.css` | the phone layer, last on purpose |
+| 10 | `styles/coach.css` | the Coach dock, which floats over every page — so the frame loads it, at the place it used to have as page CSS |
+| 11 | `pages/<area>/page.css` | the page's own sheet, through its `@section Styles` |
 
 `SharedCssLayersAreExplicitAndOrdered` pins positions 1–6 and the existence of the `styles/` files.
 `FrontendStructureGuardTests.The_root_collects_no_stylesheets` insists the `wwwroot` root holds no
@@ -396,21 +370,29 @@ born in JavaScript template strings and C# raw strings. Its
 
 ## Service worker
 
-`sw.js` caches **only** the static shell. `/api`, `/bff`, `/auth`, `/share` and `/connect` are always
-network and never cached, so no financial data lands in the cache. Strategy is network-first with a
-cache fallback: serving cached JS first once combined a fresh `index.html` with stale modules and crashed
-the installed PWA. Bump `VERSION` to ship a new shell; old caches are purged on activate.
+`sw.js` caches **one thing**: the page shown without a connection, `offline/index.html`, and the
+files it loads (`OFFLINE_ASSETS`). When loading a page fails at the network, the worker answers with
+it instead of the browser's error page; "Erneut versuchen" reloads, and so does the `online` event.
+Every other request goes past the worker, and nothing it receives is ever stored — no `cache.put`
+anywhere, which `PwaAssetsTests` pins. Push notifications are the worker's other job.
 
-`APP_SHELL` is a hand-maintained list, and `Pwa/PwaOfflineShellCoverageTests` walks the real import
-graph from `index.html` to insist that everything the shell reaches is in it — both directions, so a
-moved file fails the test instead of quietly breaking a cold offline start. It was 52 entries short
-when that test was written.
+Why no more: a page is HTML, and the application's HTML is never cached because it carries personal
+data. Without its HTML no page opens offline, so a precache of modules saves nothing. Until #154 the
+worker held more than a hundred files for an offline cold start that could never succeed — and since
+MapStaticAssets the pages request their files by fingerprint, so the precache would not even have
+matched. Gehalt, long listed as the exception, calculates on the server (`api/compensation/calculate`).
+Speed comes from the browser cache instead: fingerprinted files are `immutable`.
+
+`Pwa/PwaOfflinePageTests` holds the list and the page together: the list is exactly what the page
+loads (including the font its stylesheet names), the page asks no server, and every listed file comes
+without signing in — `cache.addAll` fails on a single redirect to the login, and then the worker never
+installs. Bump `VERSION` when the offline page changes; `activate` purges older caches.
 
 ## Window globals
 
-Feature-integration globals are gone. Three assignments remain and have **zero** consumers anywhere in
-the repo — `window.FullWorthAppearance` (`app/appearance.js`), `window.financeAntiforgery` and
-`window.financeFileUpload` (`security/browser-fetch.js`). The antiforgery/upload replacements are the
+Feature-integration globals are gone. `window.FullWorthTheme` (`app/theme.js`) is the one that is
+meant: classic scripts that run before any module need the theme engine. `window.FullWorthAppearance`
+(`app/appearance.js`) remains and has **zero** consumers. Antiforgery and upload snapshots are the
 module exports `refreshAntiforgeryToken()` and `snapshotUploadFile()` in `security/secure-fetch.js`.
 
 ## Verification
@@ -419,10 +401,10 @@ There is **no linter and no formatter** in this repo, and until the layout-stabi
 automated browser test either. What exists:
 
 - syntax check: `cp file.js /tmp/c.mjs && node --check /tmp/c.mjs`
-- `node ops/generate-shell.mjs` after adding a page; `--check` fails when `index.html` and the folder
-  tree have drifted apart
 - `ops/ui-harness/server.mjs` (`node ops/ui-harness/server.mjs`, port 8095) renders the real `wwwroot`
-  against canned fixtures with no login and no database. See `ops/ui-harness/README.md` for its
+  and the Razor pages (`ops/ui-harness/razor.mjs`, which knows exactly the constructs `_Layout` uses
+  and throws on anything else) against canned fixtures with no login and no database. It serves plain
+  names, not fingerprints, and caches modules — restart it after an edit. See `ops/ui-harness/README.md` for its
   fixture rules and the `X-Harness-Fallback` header.
 - live check against the running app: the dev stack next to this repo bind-mounts `wwwroot`; reload and
   read the browser console after any refactor.

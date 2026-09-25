@@ -75,16 +75,21 @@ that argues back.
    `<script>` in `<head>`, deliberately not a module.
 2. **No loading afterwards.** No `<link>` from JavaScript, no `import()`. Everything is there at the
    first paint or it does not belong.
-3. **One page is one folder** under `pages/`, holding `page.html`, `page.css` and `page.js`. The folder
-   path is the address: `pages/settings/security/passkeys` answers `/settings/security/passkeys`.
-   Anything two pages share goes to `components/` or `styles/`. This replaces the old rule against
-   `features/<name>/` subfolders.
-4. **One menu source**, `wwwroot/app/menu.js`. The sidebar, the four quick targets and the whole tree
-   behind "Mehr" are three renderings of that one list, never three lists. Nothing is added to the
+3. **One page is one Razor page plus one folder** (#154). `Pages/<Area>/Index.cshtml` holds
+   `@page "/address"`, the static markup and the two sections (`page.css`, `entry.js`);
+   `wwwroot/pages/<area>/` holds `entry.js` (calls `startShellPage` from `app/shell.js`), `page.js`
+   and `page.css`. Every address is a page — there is no fallback, an unknown address is 404. Tabs
+   with their own address get an extra route in `Program.cs` (`SubpageAddressTests`). Anything two
+   pages share goes to `components/` or `styles/`; no `features/<name>/` subfolders.
+4. **One menu source**, `Navigation/NavigationCatalog.cs`: the server renders the sidebar and the
+   bottom bar from it. `wwwroot/app/menu.js` is its mirror for the "Mehr" sheet and the UI harness,
+   which cannot run C#; `NavigationCatalogParityTests` keeps them identical. Nothing is added to the
    menu at runtime.
-5. **One document.** A new page is a page inside the shell, not a standalone HTML file.
-   `ops/generate-shell.mjs` writes the menu and every page into `index.html`; run it after adding a
-   page and `--check` keeps the file and the folder tree together.
+5. **Files by fingerprint.** In markup, write `href="~/styles/x.css"` / `src="~/pages/x/entry.js"`:
+   `MapStaticAssets` turns that into the fingerprinted, `immutable` address. Icons are symbols in
+   `wwwroot/icons/sprite.svg` (`<use href>`, via `IconSprite` in C# and `components/sprite.js` in
+   the browser); `IconSpriteTests` checks every id, because a missing one draws nothing silently.
+   The dev stack sets `FullWorthWeb:LiveStaticFiles=true` to read `wwwroot` from disk instead.
 6. **Nothing unnecessary.** No CSS property that changes nothing, no rule that only overrides another,
    no duplicated code, no check for cases that do not occur. The base inherits; a component only adds
    the difference. A page that has moved is *shorter* than it was — otherwise it was only relocated.
@@ -93,9 +98,9 @@ Beyond those:
 
 - Vanilla ES modules in `wwwroot`, **no build step**. Syntax-check with:
   `cp file.js /tmp/c.mjs && node --check /tmp/c.mjs`
-- Every stylesheet is under `styles/` or belongs to a page. The order `index.html` loads them in:
+- Every stylesheet is under `styles/` or belongs to a page. The order `_Layout.cshtml` loads them in:
   `tokens` → `reset` → `appearance` → `shell` → `components` → `app` → `responsive` → `design-depth`
-  → `dialogs`, then every page's own `page.css`, then `styles/mobile-polish.css` last.
+  → `dialogs` → `coach`, then the page's own `page.css` from its `@section Styles`.
   `styles/features/` is gone and so is the `wwwroot` root. `styles/app.css` was the collecting bucket —
   1 056 rules, 791 of them for exactly one page; those live with their page now. What stayed is what is
   genuinely shared, plus the rules a later sheet overrides: moved to a `page.css` they would win where
@@ -117,7 +122,7 @@ Beyond those:
   just as much as in a `.html` file — two such places lived in the tree for months because the guard
   only read `.html`. `SecurityHeadersSourceAuditTests` reads all three now.
 - **Buttons: use the shared module roles only** — `.btn` + `.btn-primary` / `.btn-secondary` / `.btn-danger` (`styles/components.css`). Do not hand-roll button styling. (`.primary-action` in `shell.css` is the older variant still used app-wide.)
-- **Alles Markup liegt in `wwwroot`.** Die drei Import-Seiten hielten ihr HTML einmal in C#-Rohstringen, und `ops/ui-harness` las sie von dort; seit sie unter `pages/settings/import/` liegen, ist beides weg. Eigenständige Dokumente gibt es noch zwei, beide mit Grund: `auth/` (dort gibt es noch keine Sitzung) und `account-deletion/` (dort ist das Konto abgeschaltet, ein Menü führte ins Leere).
+- **Markup liegt in Razor-Seiten.** Ausnahmen, alle mit Grund: die öffentliche Belegfreigabe `/share/receipt/{token}` (`ShareReceiptEndpoints.Page()`, ohne Konto geöffnet) und drei eigenständige Dokumente in `wwwroot`: `auth/` (noch keine Sitzung), `account-deletion/` (das Konto ist abgeschaltet, ein Menü führte ins Leere) und `offline/` (die Hinweisseite, die der Service Worker ohne Verbindung zeigt - das Einzige, was er cacht; HTML der Anwendung cacht er nie).
 
 ### Live UI verification (use this!)
 Two ways, neither needs credentials:
