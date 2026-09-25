@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,9 +28,9 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("/pages/accounts/page.css", html);
         Assert.Contains("from './presentation.js'", accounts);
 
-        Assert.Contains("/pages/accounts/page.js", sw);
-        Assert.Contains("/pages/accounts/presentation.js", sw);
-        Assert.Contains("/pages/accounts/page.css", sw);
+        PwaAssert.Ships("/pages/accounts/page.js", sw);
+        PwaAssert.Ships("/pages/accounts/presentation.js", sw);
+        PwaAssert.Ships("/pages/accounts/page.css", sw);
     }
 
     private string ReadAsset(params string[] path)
@@ -574,6 +575,6 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("get('accounts.depotHistory')", js);
         // Bereits gecacht, weil die Vermoegensseite dieselbe Datei laedt (WealthUiBaselineTests);
         // die Kontenseite braucht keinen zweiten Eintrag.
-        Assert.Contains("'/pages/networth/investment-performance-ui.js'", sw);
+        PwaAssert.Ships("'/pages/networth/investment-performance-ui.js'", sw);
     }
 }

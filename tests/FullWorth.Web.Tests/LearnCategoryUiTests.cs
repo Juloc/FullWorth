@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -19,7 +20,7 @@ public sealed class LearnCategoryUiTests
         var quelle = Modul();
 
         Assert.Contains("api/category-intelligence/learn", quelle, StringComparison.Ordinal);
-        Assert.Contains("/pages/transactions/learn-category.js", WebSources.Asset("sw.js"), StringComparison.Ordinal);
+        PwaAssert.Ships("/pages/transactions/learn-category.js", WebSources.Asset("sw.js"));
         Assert.Contains("openLearnCategory", WebSources.Asset("pages", "transactions", "page.js"), StringComparison.Ordinal);
     }
 

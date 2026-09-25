@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
@@ -354,7 +355,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
                      "'/pages/purchases/receipt-imports.js'",
                      "'/components/accessibility-release.js'"
                  })
-            Assert.Contains(path, sw);
+            PwaAssert.Ships(path, sw);
     }
 
     [Fact]

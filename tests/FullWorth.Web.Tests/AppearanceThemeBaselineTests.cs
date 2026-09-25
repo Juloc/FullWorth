@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -195,8 +196,8 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("'/app/theme.js'", sw);
         Assert.Contains("'/app/appearance.js'", sw);
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("'/pages/networth/real-estate.js'", sw);
-        Assert.Contains("'/pages/networth/page.css'", sw);
+        PwaAssert.Ships("'/pages/networth/real-estate.js'", sw);
+        PwaAssert.Ships("'/pages/networth/page.css'", sw);
         Assert.False(sw.Contains("/mascots/", StringComparison.OrdinalIgnoreCase));
         Assert.False(sw.Contains("mascot-scenes", StringComparison.OrdinalIgnoreCase));
 

@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -98,7 +99,7 @@ public sealed class CategoryOrderAndColourUiTests
     {
         Assert.Contains("data-action=\"arrange-categories\"", WebSources.Page("Categories"), StringComparison.Ordinal);
         Assert.Contains("data-action=\"arrange-categories\"", Seite(), StringComparison.Ordinal);
-        Assert.Contains("/pages/categories/arrange.js", WebSources.Asset("sw.js"), StringComparison.Ordinal);
+        PwaAssert.Ships("/pages/categories/arrange.js", WebSources.Asset("sw.js"));
 
         foreach (var sprache in new[] { "de", "en" })
         {

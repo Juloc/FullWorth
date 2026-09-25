@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -82,7 +83,7 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("api/purchases/${encodeURIComponent(purchaseId)}/receipt", details);
         Assert.Contains("target=\"_blank\"", details);
         Assert.Contains("receipt-import-batch-detail", css);
-        Assert.Contains("/pages/purchases/receipt-import-batch-details.js", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js", sw);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using FullWorth.Web.Navigation;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,8 +41,8 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
         // kennt sie, und es gibt eine Razor-Seite dafuer.
         Assert.Contains(NavigationCatalog.Entries, entry => entry.View == "pension");
 
-        Assert.Contains("/pages/pension/page.js", sw);
-        Assert.Contains("/pages/pension/page.css", sw);
+        PwaAssert.Ships("/pages/pension/page.js", sw);
+        PwaAssert.Ships("/pages/pension/page.css", sw);
     }
 
     /// <summary>

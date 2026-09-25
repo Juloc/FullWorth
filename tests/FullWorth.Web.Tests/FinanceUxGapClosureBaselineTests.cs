@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWebFactory>
@@ -147,7 +148,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
                      "'/pages/contracts/page.js'",
                      "'/features/ux-kit.js'"
                  })
-            Assert.Contains(asset, sw);
+            PwaAssert.Ships(asset, sw);
 
         var css = await GetAsync("/styles/components.css") + await GetAsync("/styles/app.css")
             + await GetAsync("/pages/networth/page.css") + await GetAsync("/pages/transactions/page.css")

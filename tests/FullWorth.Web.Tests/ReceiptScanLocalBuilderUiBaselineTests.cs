@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -112,7 +113,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     {
         var sw = Read("sw.js");
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("/pages/purchases/receipt-scan-set.js", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-scan-set.js", sw);
     }
 
     private string Read(params string[] path)

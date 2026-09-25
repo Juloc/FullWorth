@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -49,7 +50,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
         // different ways.
         Assert.Contains("percent, reload: () => renderPension(ctx)", pension);
 
-        Assert.Contains("/pages/pension/projection.js", sw);
+        PwaAssert.Ships("/pages/pension/projection.js", sw);
 
         // Flat in features/, never a features/<name>/ subfolder (CLAUDE.md).
         var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();

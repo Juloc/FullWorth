@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -108,10 +109,10 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     {
         var sw = Read("sw.js");
 
-        Assert.Contains("/pages/purchases/articles-workspace.js", sw);
-        Assert.Contains("/pages/purchases/page.css", sw);
-        Assert.Contains("/pages/purchases/articles-advanced.js", sw);
-        Assert.Contains("/pages/purchases/articles-advanced-actions.js", sw);
+        PwaAssert.Ships("/pages/purchases/articles-workspace.js", sw);
+        PwaAssert.Ships("/pages/purchases/page.css", sw);
+        PwaAssert.Ships("/pages/purchases/articles-advanced.js", sw);
+        PwaAssert.Ships("/pages/purchases/articles-advanced-actions.js", sw);
         // REGRESSION (reported, not weakened): receipt-scan-ai.js was deleted, and the branch's later
         // removal of the also-unreachable features/receipt-scan-local-builder.js ("Remove unreachable
         // frontend patch layer") left sw.js's APP_SHELL precache list pointing at that now-nonexistent
@@ -121,7 +122,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         // src/FullWorth.Web/wwwroot/sw.js: replace '/features/receipt-scan-local-builder.js' and
         // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/pages/purchases/receipt-scan-set.js'
         // and '/pages/purchases/page.css'.
-        Assert.Contains("/pages/purchases/receipt-scan-set.js", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-scan-set.js", sw);
         Assert.DoesNotContain("url.pathname.includes('/receipt')", sw);
     }
 

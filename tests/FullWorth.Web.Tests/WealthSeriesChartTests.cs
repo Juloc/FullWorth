@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -32,7 +33,7 @@ public sealed class WealthSeriesChartTests
         })
             Assert.Contains($"key: '{key}'", quelle, StringComparison.Ordinal);
 
-        Assert.Contains("/pages/networth/history-series.js", WebSources.Asset("sw.js"), StringComparison.Ordinal);
+        PwaAssert.Ships("/pages/networth/history-series.js", WebSources.Asset("sw.js"));
         Assert.Contains("bindSeriesChart", WebSources.Asset("pages", "networth", "page.js"), StringComparison.Ordinal);
     }
 

@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -56,10 +57,10 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
         var sw = Read("sw.js");
 
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("/pages/purchases/receipt-source-review.js", sw);
-        Assert.Contains("/pages/purchases/receipt-imports.js", sw);
-        Assert.Contains("/pages/purchases/receipt-import-batch-details.js", sw);
-        Assert.Contains("/pages/purchases/page.css", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-source-review.js", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-imports.js", sw);
+        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js", sw);
+        PwaAssert.Ships("/pages/purchases/page.css", sw);
         Assert.Contains("url.pathname.startsWith('/share')", sw);
         Assert.Contains("url.pathname.startsWith('/bff')", sw);
     }

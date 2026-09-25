@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using FullWorth.Web.Navigation;
 namespace FullWorth.Web.Tests;
 
@@ -107,8 +108,8 @@ public sealed class AutopilotFrontendGuardTests
         Assert.DoesNotContain("ai-gradient", feature, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("IIntelligenceProvider", feature, StringComparison.Ordinal);
 
-        Assert.Contains("'/pages/insights/page.js'", serviceWorker);
-        Assert.Contains("'/pages/insights/page.css'", serviceWorker);
+        PwaAssert.Ships("'/pages/insights/page.js'", serviceWorker);
+        PwaAssert.Ships("'/pages/insights/page.css'", serviceWorker);
     }
 
     [Fact]

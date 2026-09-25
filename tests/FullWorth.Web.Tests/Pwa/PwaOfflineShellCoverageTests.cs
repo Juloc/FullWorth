@@ -1,6 +1,4 @@
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FullWorth.Web.Tests.Pwa;
 
@@ -17,12 +15,8 @@ namespace FullWorth.Web.Tests.Pwa;
 /// Feature pages that are loaded on demand are deliberately NOT required here — they are not needed for
 /// the shell to come up, and precaching every screen would trade offline breadth for install weight.
 /// </summary>
-public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFactory>
+public sealed class PwaOfflineShellCoverageTests
 {
-    private readonly FullWorthWebFactory factory;
-
-    public PwaOfflineShellCoverageTests(FullWorthWebFactory factory) => this.factory = factory;
-
     [Fact]
     public void Every_module_the_shell_imports_is_precached()
     {
@@ -72,7 +66,7 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
         // entry.js statt index.html. Die Frage bleibt dieselbe - was diese Seite laedt, muss im
         // Vorrat liegen -, nur die Wurzel des Importgraphen hat gewechselt.
         var precached = PrecachedPaths();
-        var reachable = ReachableFromMarkup(WebSources.Page("Compensation"))
+        var reachable = WebSources.Reachable(WebSources.Page("Compensation"))
             .Where(path => path.StartsWith("/pages/compensation/", StringComparison.Ordinal))
             .ToArray();
 
@@ -84,9 +78,36 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
             + string.Join(Environment.NewLine, missing));
     }
 
-    private HashSet<string> PrecachedPaths()
+    /// <summary>
+    /// Die Gegenrichtung (#154, Abschnitt 12): keine weitere Seite im Vorrat. Waehrend der
+    /// Razor-Umstellung standen hier 126 Seitendateien, von denen die Offline-Pruefung acht brauchte -
+    /// jede frische Installation lud im Hintergrund die Module saemtlicher Seiten, und keine davon
+    /// haette offline geoeffnet, weil der Worker das HTML einer Seite nie cacht. Was eine Seite braucht,
+    /// landet beim ersten Besuch im Cache.
+    /// </summary>
+    [Fact]
+    public void No_page_is_precached_beyond_what_works_offline()
     {
-        var sw = File.ReadAllText(AssetPath("sw.js"));
+        var allowed = ReachableFromIndex()
+            .Concat(WebSources.Reachable(WebSources.Page("Compensation"))
+                .Where(path => path.StartsWith("/pages/compensation/", StringComparison.Ordinal)))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var surplus = PrecachedPaths()
+            .Where(path => path.StartsWith("/pages/", StringComparison.Ordinal) && !allowed.Contains(path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            surplus.Length == 0,
+            "the service worker precaches these page files, but no page opens offline without its HTML, "
+            + "which is never cached - they only make every install download the whole app:"
+            + Environment.NewLine + string.Join(Environment.NewLine, surplus));
+    }
+
+    private static HashSet<string> PrecachedPaths()
+    {
+        var sw = WebSources.Asset("sw.js");
         var shell = sw[(sw.IndexOf("const APP_SHELL = [", StringComparison.Ordinal) + 1)..];
         shell = shell[..shell.IndexOf("];", StringComparison.Ordinal)];
         return Regex.Matches(shell, """['"](?<path>/[^'"]+)['"]""")
@@ -94,64 +115,6 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// Walks the real import graph from the modules index.html loads. Both static and dynamic import
-    /// specifiers count: a dynamically imported module is still needed the moment that code path runs.
-    /// </summary>
-    private HashSet<string> ReachableFromIndex() => ReachableFromMarkup(WebSources.Layout());
-
-    private HashSet<string> ReachableFrom(string pageFile) =>
-        ReachableFromMarkup(File.ReadAllText(AssetPath(pageFile)));
-
-    private HashSet<string> ReachableFromMarkup(string index)
-    {
-        var queue = new Queue<string>(Regex
-            .Matches(index, """<script[^>]+type="module"[^>]+src="(?<path>/[^"?#]+)""")
-            .Select(match => match.Groups["path"].Value)
-            .Concat(Regex
-                .Matches(index, """<link[^>]+rel="stylesheet"[^>]+href="(?<path>/[^"?#]+)""")
-                .Select(match => match.Groups["path"].Value)));
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        while (queue.Count > 0)
-        {
-            var path = queue.Dequeue();
-            if (!seen.Add(path)) continue;
-            var file = AssetPath(path.TrimStart('/'));
-            if (!File.Exists(file)) continue;
-            foreach (var specifier in Regex
-                         .Matches(File.ReadAllText(file), """(?:from|import)\s*\(?\s*['"](?<spec>\.{1,2}/[^'"]+)['"]""")
-                         .Select(match => match.Groups["spec"].Value))
-            {
-                var resolved = Resolve(path, specifier);
-                if (resolved is not null) queue.Enqueue(resolved);
-            }
-        }
-
-        return seen;
-    }
-
-    /// <summary>Resolves a relative specifier against the importing module's directory.</summary>
-    private static string? Resolve(string importer, string specifier)
-    {
-        var segments = new List<string>(importer.TrimStart('/').Split('/'));
-        segments.RemoveAt(segments.Count - 1);
-        foreach (var segment in specifier.Split('/'))
-        {
-            if (segment is "." or "") continue;
-            if (segment == "..")
-            {
-                if (segments.Count == 0) return null;
-                segments.RemoveAt(segments.Count - 1);
-                continue;
-            }
-            segments.Add(segment);
-        }
-        return '/' + string.Join('/', segments);
-    }
-
-    private string AssetPath(string relative) =>
-        Path.Combine(
-            factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath,
-            relative.Replace('/', Path.DirectorySeparatorChar));
+    /// <summary>Was das gemeinsame Layout laedt - der Graph selbst steht in <see cref="WebSources.Reachable"/>.</summary>
+    private static HashSet<string> ReachableFromIndex() => WebSources.Reachable(WebSources.Layout());
 }

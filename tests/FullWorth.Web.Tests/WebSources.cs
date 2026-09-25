@@ -44,6 +44,72 @@ public static class WebSources
         File.ReadAllText(Path.Combine(Web(), "Pages", "Shared", name));
 
     /// <summary>
+    /// Was ein Markup laedt: seine Module und Stilblaetter und alles, was diese Module importieren -
+    /// statisch wie dynamisch, denn ein dynamisch importiertes Modul wird gebraucht, sobald sein Pfad laeuft.
+    /// </summary>
+    public static HashSet<string> Reachable(string markup)
+    {
+        var queue = new Queue<string>(System.Text.RegularExpressions.Regex
+            .Matches(markup, """<script[^>]+type="module"[^>]+src="(?<path>/[^"?#]+)""")
+            .Select(match => match.Groups["path"].Value)
+            .Concat(System.Text.RegularExpressions.Regex
+                .Matches(markup, """<link[^>]+rel="stylesheet"[^>]+href="(?<path>/[^"?#]+)""")
+                .Select(match => match.Groups["path"].Value)));
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (queue.Count > 0)
+        {
+            var path = queue.Dequeue();
+            if (!seen.Add(path)) continue;
+            var file = Path.Combine(Web(), "wwwroot", path.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(file)) continue;
+            foreach (var specifier in System.Text.RegularExpressions.Regex
+                         .Matches(File.ReadAllText(file), """(?:from|import)\s*\(?\s*['"](?<spec>\.{1,2}/[^'"]+)['"]""")
+                         .Select(match => match.Groups["spec"].Value))
+            {
+                var resolved = Resolve(path, specifier);
+                if (resolved is not null) queue.Enqueue(resolved);
+            }
+        }
+        return seen;
+    }
+
+    /// <summary>
+    /// Ob irgendeine Seite dieses Asset laedt. Seit #154 ist das die Frage, die "steht es im Vorrat des
+    /// Service Workers" einmal meinte: gehoert das Modul zur Anwendung, oder liegt es nur herum? Der
+    /// Vorrat haelt keine Seiten mehr (Abschnitt 12); eine Seite legt ihre Module beim ersten Besuch
+    /// selbst in den Cache. Diese Pruefung ist die strengere - sie faengt auch ein Modul, das zwar
+    /// gelistet, aber von nichts importiert war.
+    /// </summary>
+    public static bool LoadedByAPage(string path) => PageLoadGraph.Value.Contains(path);
+
+    private static readonly Lazy<HashSet<string>> PageLoadGraph = new(() =>
+        Directory.EnumerateFiles(Path.Combine(Web(), "Pages"), "Index.cshtml", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .Append(Layout())
+            .SelectMany(Reachable)
+            .ToHashSet(StringComparer.Ordinal));
+
+    /// <summary>Loest einen relativen Import gegen das Verzeichnis des importierenden Moduls auf.</summary>
+    private static string? Resolve(string importer, string specifier)
+    {
+        var segments = new List<string>(importer.TrimStart('/').Split('/'));
+        segments.RemoveAt(segments.Count - 1);
+        foreach (var segment in specifier.Split('/'))
+        {
+            if (segment is "." or "") continue;
+            if (segment == "..")
+            {
+                if (segments.Count == 0) return null;
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+            segments.Add(segment);
+        }
+        return '/' + string.Join('/', segments);
+    }
+
+    /// <summary>
     /// Die Wurzel des Arbeitsbaums. Ein Test, der ueber das Web-Projekt hinaussieht - etwa in die
     /// aufgezeichnete Routenflaeche -, braucht sie; sie noch einmal zu suchen waere der zweite Leser,
     /// den diese Klasse gerade abschafft.

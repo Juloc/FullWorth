@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -23,7 +24,7 @@ public sealed class CategoryMergeUiTests
 
         Assert.Contains("openCategoryMerge", seite, StringComparison.Ordinal);
         Assert.Contains("data-merge", seite, StringComparison.Ordinal);
-        Assert.Contains("/pages/categories/merge.js", WebSources.Asset("sw.js"), StringComparison.Ordinal);
+        PwaAssert.Ships("/pages/categories/merge.js", WebSources.Asset("sw.js"));
     }
 
     [Fact]

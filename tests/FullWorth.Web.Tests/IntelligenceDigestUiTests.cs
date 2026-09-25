@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -19,7 +20,7 @@ public sealed class IntelligenceDigestUiTests
         Assert.Contains("api/intelligence/digests", Modul(), StringComparison.Ordinal);
         Assert.Contains("id=\"digest-list\"", WebSources.Page("Settings/Intelligence"), StringComparison.Ordinal);
         Assert.Contains("renderIntelligenceDigests", WebSources.Asset("pages", "settings", "intelligence", "page.js"), StringComparison.Ordinal);
-        Assert.Contains("/pages/settings/intelligence/digests.js", WebSources.Asset("sw.js"), StringComparison.Ordinal);
+        PwaAssert.Ships("/pages/settings/intelligence/digests.js", WebSources.Asset("sw.js"));
     }
 
     /// <summary>

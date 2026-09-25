@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
@@ -91,6 +92,6 @@ public sealed class BudgetGroupUiTests
     [Fact]
     public void The_manager_is_precached()
     {
-        Assert.Contains("/pages/budgets/groups.js", WebSources.Asset("sw.js"), StringComparison.Ordinal);
+        PwaAssert.Ships("/pages/budgets/groups.js", WebSources.Asset("sw.js"));
     }
 }

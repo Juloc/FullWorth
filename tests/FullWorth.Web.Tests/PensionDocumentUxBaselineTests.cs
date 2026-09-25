@@ -1,3 +1,4 @@
+using FullWorth.Web.Tests.Pwa;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -42,7 +43,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
         Assert.Contains("path: '/pension/dokumente'", pension);
         Assert.Contains("data-pension-documents", pension);
 
-        Assert.Contains("/pages/pension/documents.js", sw);
+        PwaAssert.Ships("/pages/pension/documents.js", sw);
 
         // Flat in features/, never a features/<name>/ subfolder (CLAUDE.md).
         var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
