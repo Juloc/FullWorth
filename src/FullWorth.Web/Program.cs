@@ -144,7 +144,15 @@ builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 // die FallbackPolicy darunter automatisch angemeldet - eine eigene Autorisierungsregel je Seite gibt
 // es bewusst nicht, sonst haette jede Seite eine zweite Stelle, an der sie falsch sein kann.
 builder.Services.AddRazorPages(options =>
-    options.Conventions.ConfigureFilter(new Microsoft.AspNetCore.Mvc.ServiceFilterAttribute(typeof(FullWorth.Web.Navigation.NavigationPageFilter))));
+{
+    options.Conventions.ConfigureFilter(new Microsoft.AspNetCore.Mvc.ServiceFilterAttribute(typeof(FullWorth.Web.Navigation.NavigationPageFilter)));
+    // Reiter mit eigener Adresse: die Seite schreibt sie per pushState, also muss das Neuladen dieselbe
+    // Seite liefern. Die alte Huelle beantwortete jede Adresse mit index.html; seit es keinen Rueckfall
+    // mehr gibt, endeten diese fuenf in einer 404. Nur die Reiter, die es gibt - SubpageAddressTests
+    // liest sie aus den Seitenmodulen und prueft beide Richtungen.
+    options.Conventions.AddPageRoute("/Pension/Index", "/pension/{tab:regex(^(vertraege|verlauf|simulation|dokumente)$)}");
+    options.Conventions.AddPageRoute("/Tax/Index", "/tax/{tab:regex(^review$)}");
+});
 builder.Services.AddScoped<FullWorth.Web.Navigation.NavigationPageFilter>();
 // Einmal gelesen und dann gehalten: die Ueberschriften stehen in den Sprachdateien und aendern sich
 // nur mit einem neuen Abbild.

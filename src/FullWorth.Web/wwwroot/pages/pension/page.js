@@ -1,9 +1,9 @@
 // Altersvorsorge (bAV) — the occupational-pension area, per docs/PENSION.md.
 //
-// Four tabs behind one registered view, the way features/tax.js does it: core/router.js resolves a
-// view from the FIRST path segment only, so /pension, /pension/vertraege, /pension/verlauf and
-// /pension/dokumente all land on the 'pension' view and this module reads the full pathname itself to
-// pick the active tab. Back and Forward therefore work between the tabs without a second router.
+// Tabs with their own address, the way pages/tax/page.js does it: /pension, /pension/vertraege,
+// /pension/verlauf, /pension/simulation and /pension/dokumente all answer with the one Razor page
+// (the extra routes are in Program.cs), and this module reads the full pathname itself to pick the
+// active tab. Back and Forward therefore work between the tabs without a second router.
 //
 // Copy lives in this module (like features/networth.js and pages/contracts/page.js — contracts.js) rather than in the
 // shared locale files, so the area ships without touching them.

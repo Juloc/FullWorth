@@ -3,10 +3,9 @@
 // potentially tax-relevant expenses detected from transactions/purchases/documents so the owner can
 // confirm/reject each candidate before it counts toward a tax year.
 //
-// Two URLs share one view: /tax (overview) and /tax/review (open candidates only). core/router.js
-// resolves a view from only the first path segment, so both land on the registered 'tax' view; this
-// module reads the full pathname itself (like contracts.js's own history.pushState use for its
-// filter/sort state) to pick the active tab and to keep Back/Forward working between them.
+// Two URLs share one page: /tax (overview) and /tax/review (open candidates only). Both answer with
+// the one Razor page (the extra route is in Program.cs); this module reads the full pathname itself
+// to pick the active tab and to keep Back/Forward working between them.
 //
 // Year-review checklist, CSV/JSON export, per-candidate document upload and the advanced analysis
 // toggles live in tax-review-extra.js and are composed in directly below — no MutationObserver
