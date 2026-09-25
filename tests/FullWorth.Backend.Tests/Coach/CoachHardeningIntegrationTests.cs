@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Coach;
 using FullWorth.Backend.Modules.Contracts;
@@ -244,7 +245,10 @@ public sealed class CoachHardeningIntegrationTests
         var serialized = JsonSerializer.Serialize(provider.LastRequest);
         Assert.DoesNotContain(privateNote, serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("Other Space Only", serialized, StringComparison.Ordinal);
-        Assert.DoesNotContain("9876", serialized, StringComparison.Ordinal);
+        // The other space's amount, looked for everywhere except inside ids: "9876" is also a valid hex
+        // group, and CI run 36186033912 failed on a random GUID "…-4394-9876-…" that carried no amount.
+        var withoutIds = Regex.Replace(serialized, "[0-9a-fA-F]{8}-?(?:[0-9a-fA-F]{4}-?){3}[0-9a-fA-F]{12}", "<id>");
+        Assert.DoesNotContain("9876", withoutIds, StringComparison.Ordinal);
         Assert.Contains("Shared Wallet", serialized, StringComparison.Ordinal);
         Assert.Contains("Coach Internet", serialized, StringComparison.Ordinal);
         Assert.Equal(100m, provider.LastRequest!.Context.Outgoing);
