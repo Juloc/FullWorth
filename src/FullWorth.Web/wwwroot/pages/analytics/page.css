@@ -89,8 +89,6 @@
 
 .an-builder-actions{display:flex;gap:var(--s3);justify-content:flex-end;margin-bottom:var(--s3)}
 
-.an-toolbar{margin-bottom:var(--s3)}
-
 /* War 12px - exakt --text-caption (Scheibe 11 Teil 2, derselbe Drift wie bei den vorigen Seiten). */
 .an-legend{display:flex;gap:16px;font-size:var(--text-caption-size);color:var(--muted);margin-bottom:6px}
 

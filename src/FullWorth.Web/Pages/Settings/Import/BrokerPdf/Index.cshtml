@@ -39,8 +39,11 @@
       </article>
     </section>
 
+@* Die Seite hat kein eigenes Stylesheet: sie ist ein Schritt der Import-Zentrale und traegt deren
+   Arbeitsablauf-Bausteine (.import-workflow, .import-form-grid, .workflow-actions). Der Verweis auf ein
+   broker-pdf/page.css zeigte auf eine Datei, die es nie gab. *@
 @section Styles {
-    <link rel="stylesheet" href="~/pages/settings/import/broker-pdf/page.css">
+    <link rel="stylesheet" href="~/pages/settings/import/page.css">
 }
 
 @section Scripts {

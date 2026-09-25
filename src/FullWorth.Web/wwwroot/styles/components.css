@@ -238,3 +238,24 @@ dialog.combobox-popover-host::backdrop{background:transparent}
     padding-bottom:calc(var(--s3) + env(safe-area-inset-bottom,0px))}
   dialog.combobox-popover-host::backdrop{background:rgba(11,15,20,.42)}
 }
+
+/* Bausteine, die mehrere Bereiche zeichnen (#154): die Markierung neben einem Titel (Kategorien,
+   Vertraege, Regeln, Vermoegen, Verwaltung), der Platz fuer ein Identitaetssymbol und die Werkzeugleiste
+   ueber einer Liste. Sie standen im page.css der Seite, die sie zuerst hatte - auf den anderen fehlten
+   sie, seit jede Seite nur noch ihr eigenes Stylesheet laedt. */
+/* War schon bei 12px - exakt --text-caption (Scheibe 11 Teil 2), jetzt auch so benannt statt einer
+   Zufallszahl, die sich zufaellig mit der Rolle deckt (gleiches Vorgehen wie .nw-alloc-cap). */
+.tx-marker{display:inline-block;font-size:var(--text-caption-size);line-height:1;padding:2px 6px;border-radius:999px;margin-left:6px;background:var(--surface-2);color:var(--muted);vertical-align:middle}
+
+.tx-marker.pending{background:var(--surface-2);color:var(--text)}
+
+/* Transfer badge: a compact circular-arrow chip (Finanzguru-style), not a wordy text chip. Die eigene
+   font-size:12px war eine Wiederholung von .tx-marker - dieselbe Zeichengroesse kommt jetzt schon von
+   dort, ein zweites Mal hingeschrieben aendert nichts (Regel 6, "nichts Unnoetiges"). */
+.tx-marker.tx-marker-icon{padding:0;width:18px;height:18px;display:inline-grid;place-items:center;line-height:1;background:var(--surface-3);color:var(--text)}
+
+.tx-marker.tx-marker-icon.transfer{color:var(--k1)}
+
+/* Merchant/category identity + booking-date grouping (UX rework §4) */
+.tx-ident-slot{display:inline-flex;vertical-align:middle;margin-right:11px}
+.an-toolbar{margin-bottom:var(--s3)}

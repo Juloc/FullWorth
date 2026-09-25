@@ -153,7 +153,16 @@ the module links it in its `@section Styles`, before its own `page.css`. Those f
 themselves from one page's `page.css`, so on the other page they drew unstyled: the "Wichtig für dich"
 block on the dashboard matched not a single rule. `A_page_does_not_reach_into_another_page` resolves
 every import (sibling paths and side-effect imports too — its first version saw neither) with the
-area under `pages/` as the boundary, so a subpage may still use its area's modules.
+area under `pages/` as the boundary, so a subpage may still use its area's modules — and its area's
+stylesheet: the broker PDF import links the import centre's `page.css`, the passkeys page the
+settings one. Small building blocks several areas draw (`.tx-marker`, `.tx-ident-slot`,
+`.an-toolbar`) live in `styles/components.css`.
+
+Two more guards hold the rest: `A_page_loads_the_rules_for_its_own_markup` (every class in a Razor
+page's markup that is styled anywhere is styled in a sheet that page loads) and
+`Every_file_a_page_links_exists`. For classes that modules create at runtime, the check is the
+browser: for every page, list the classes in the DOM that match no loaded rule but are styled in
+some other file of the repo. That audit found all of the above.
 
 The convention is a `renderX(ctx)` / `bindX(ctx)` pair: `entry.js` calls `bindX` once and `renderX`
 inside `startShellPage`.

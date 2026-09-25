@@ -188,6 +188,67 @@ public sealed class FrontendStructureGuardTests
     }
 
     /// <summary>
+    /// Die Klassen im Markup einer Seite sind auf dieser Seite gestaltet: steht eine Regel fuer sie in
+    /// irgendeinem Stylesheet, dann in einem, das die Seite laedt.
+    ///
+    /// Im einen Dokument galt jedes Stylesheet ueberall. Seit jede Seite nur ihr eigenes laedt, stand die
+    /// Broker-PDF-Seite ohne ihr Layout da (ihre Bausteine lagen im Stylesheet der Import-Zentrale, ihr
+    /// eigener Verweis zeigte auf eine Datei, die es nie gab) und die Passkeys ohne das Raster der
+    /// Einstellungen. Gemessen im Browser; dieser Test ist die statische Haelfte davon - er liest das
+    /// Markup der Razor-Seiten. Was Module zur Laufzeit erzeugen, prueft er nicht.
+    /// </summary>
+    [Fact]
+    public void A_page_loads_the_rules_for_its_own_markup()
+    {
+        var styledIn = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var sheet in Directory.EnumerateFiles(Path.Combine(WebRoot, "styles"), "*.css", SearchOption.AllDirectories)
+                     .Concat(Directory.EnumerateFiles(Path.Combine(WebRoot, "pages"), "*.css", SearchOption.AllDirectories)))
+        {
+            var css = Regex.Replace(File.ReadAllText(sheet), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+            foreach (Match match in Regex.Matches(css, @"\.(?<name>[a-zA-Z][\w-]*)"))
+            {
+                if (!styledIn.TryGetValue(match.Groups["name"].Value, out var set))
+                    styledIn[match.Groups["name"].Value] = set = new HashSet<string>(StringComparer.Ordinal);
+                set.Add("/" + Relative(sheet));
+            }
+        }
+        Assert.Contains("/styles/components.css", styledIn["tx-marker"]);
+
+        var unstyled = new List<string>();
+        foreach (var page in Directory.EnumerateFiles(Path.Combine(WebRoot, "..", "Pages"), "Index.cshtml", SearchOption.AllDirectories))
+        {
+            var markup = Regex.Replace(File.ReadAllText(page), @"@\*.*?\*@", string.Empty, RegexOptions.Singleline);
+            var loaded = WebSources.Reachable(markup + WebSources.Layout());
+            var classes = Regex.Matches(markup, "class=\"(?<list>[^\"@{}]*)\"")
+                .SelectMany(match => match.Groups["list"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .Distinct(StringComparer.Ordinal);
+            foreach (var name in classes)
+                if (styledIn.TryGetValue(name, out var sheets) && !sheets.Any(loaded.Contains))
+                    unstyled.Add($"{Path.GetRelativePath(Path.Combine(WebRoot, ".."), page).Replace('\\', '/')}: .{name} (only in {string.Join(", ", sheets)})");
+        }
+
+        Assert.True(unstyled.Count == 0, "these classes are styled, but not on the page that uses them:"
+            + Environment.NewLine + string.Join(Environment.NewLine, unstyled));
+    }
+
+    /// <summary>
+    /// Jede Datei, auf die eine Razor-Seite verweist, gibt es. Die Broker-PDF-Seite verwies seit ihrer
+    /// Umstellung auf ein Stylesheet, das nie angelegt wurde - der Browser bekam eine 404, und niemand
+    /// merkte es, weil die Seite ohnehin nichts davon erwartete.
+    /// </summary>
+    [Fact]
+    public void Every_file_a_page_links_exists()
+    {
+        var missing = new List<string>();
+        foreach (var page in Directory.EnumerateFiles(Path.Combine(WebRoot, "..", "Pages"), "*.cshtml", SearchOption.AllDirectories))
+            foreach (Match match in Regex.Matches(File.ReadAllText(page), "(?:href|src)=\"~?/(?<path>[^\"?#@]+\\.(?:css|js|svg|png|woff2|json))(?=[\"?#])"))
+                if (!File.Exists(Path.Combine(WebRoot, match.Groups["path"].Value)))
+                    missing.Add($"{Path.GetFileName(Path.GetDirectoryName(page))}/{Path.GetFileName(page)} -> /{match.Groups["path"].Value}");
+
+        Assert.True(missing.Count == 0, string.Join(Environment.NewLine, missing));
+    }
+
+    /// <summary>
     /// Keine Stylesheets in der Wurzel. Keine einzige.
     ///
     /// Sie ist der Ort, an dem etwas landet, wenn niemand entscheidet, wohin es gehört. Vier lagen
