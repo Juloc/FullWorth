@@ -29,7 +29,9 @@ public sealed record FinanzguruImportResult(
     int CategoriesCreated,
     int CategoriesMatched,
     int CategoriesUnmapped,
-    int SplitTransactions);
+    int SplitTransactions,
+    /// <summary>Konten, die ihren Kontostand aus der Datei bekommen haben (<see cref="FinanzguruBalance"/>).</summary>
+    int BalancesAnchored = 0);
 
 public sealed class FinanzguruImportConflictException(string message) : Exception(message);
 
@@ -303,6 +305,19 @@ WHERE "Id"=@id
             }
         }
 
+        await db.SaveChangesAsync(ct);
+
+        // Der Kontostand aus der Datei (FinanzguruBalance): erst jetzt, weil ein Importkonto seine
+        // eben geschriebenen Buchungen fuer die Verlaufskurve freigeschaltet bekommt.
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var balancesAnchored = 0;
+        foreach (var accountGroup in parentRows.GroupBy(row => AccountKey(row), StringComparer.Ordinal))
+        {
+            if (FinanzguruBalance.Anchor(accountGroup.ToList(), today) is { } anchor
+                && await AnchorBalanceAsync(accounts.BySourceKey[accountGroup.Key].Account, anchor, now, ct))
+                balancesAnchored++;
+        }
+
         audit.Record(fullWorthSpaceId, userId, "finanzguru.imported", "FullWorthSpace", fullWorthSpaceId);
         await db.SaveChangesAsync(ct);
 
@@ -326,7 +341,57 @@ WHERE "Id"=@id
             categoryResolver.Created,
             categoryResolver.Matched,
             categoryResolver.Unmapped,
-            splitTransactions);
+            splitTransactions,
+            balancesAnchored);
+    }
+
+    /// <summary>
+    /// Verankert ein Konto mit dem Stand aus der Datei - nach derselben Regel wie ein Kontoauszug
+    /// (<see cref="StatementBalanceAnchor"/>): ein neuerer Stand der Bank oder von Hand bleibt, und
+    /// derselbe Stand ein zweites Mal aendert nichts.
+    ///
+    /// Ein Finanzguru-Importkonto wird damit ein Konto wie jedes andere: aktiv, im Vermoegen, und seine
+    /// Buchungen tragen die Verlaufskurve - genau das, was es bisher erst nach einem von Hand
+    /// eingetragenen Kontostand wurde (AccountStore). Bei einem verbundenen Bankkonto bleibt die
+    /// Kurve Sache der Bank.
+    /// </summary>
+    private async Task<bool> AnchorBalanceAsync(FinanceAccount account, StatementBalance anchor, DateTimeOffset now, CancellationToken ct)
+    {
+        var existing = await db.BalanceSnapshots.AsNoTracking()
+            .Where(balance => balance.AccountId == account.Id)
+            .Select(balance => new { balance.Source, balance.Currency, balance.ReferenceDate, balance.CapturedAt })
+            .ToListAsync(ct);
+        var outcome = StatementBalanceAnchor.Decide(anchor, account.Currency,
+            existing.Select(balance => new StatementBalanceAnchor.ExistingBalance(
+                balance.Source, balance.Currency,
+                balance.ReferenceDate ?? DateOnly.FromDateTime(balance.CapturedAt.UtcDateTime))));
+        if (outcome != StatementBalanceOutcome.Apply) return false;
+
+        db.BalanceSnapshots.Add(new BalanceSnapshot
+        {
+            AccountId = account.Id,
+            Amount = anchor.Amount,
+            Currency = anchor.Currency,
+            BalanceType = "closingBooked",
+            Source = BalanceSources.Import,
+            Note = "Finanzguru",
+            ReferenceDate = anchor.AsOf,
+            CapturedAt = now
+        });
+
+        if (account.Provider == Provider)
+        {
+            var tracked = await db.Accounts.SingleAsync(row => row.Id == account.Id, ct);
+            tracked.IsActive = true;
+            tracked.IncludeInNetWorth = true;
+            tracked.UpdatedAt = now;
+            await db.Transactions
+                .Where(transaction => transaction.AccountId == account.Id && !transaction.UseForBalanceHistory)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(transaction => transaction.UseForBalanceHistory, true)
+                    .SetProperty(transaction => transaction.UpdatedAt, now), ct);
+        }
+        return true;
     }
 
     /// <summary>

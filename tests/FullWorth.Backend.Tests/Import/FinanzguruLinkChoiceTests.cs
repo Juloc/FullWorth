@@ -125,6 +125,70 @@ public sealed class FinanzguruLinkChoiceTests
         Assert.True(await db.Transactions.AsNoTracking().AnyAsync(t => t.Id == s.TargetRow));
     }
 
+    /// <summary>
+    /// Finanzguru und die Bank nennen denselben Empfaenger verschieden - "Moebelhaus Beispiel GmbH" und
+    /// "MOEBELHAUS BEISPIEL MUSTERSTADT". Gleiches Geld am Tag danach ist trotzdem dieselbe Buchung: die
+    /// Vorschau nennt das Paar als "vermutlich", und nach dem Verbinden steht sie einmal da, nicht zweimal.
+    /// </summary>
+    [Fact]
+    public async Task EinAndererNameIstTrotzdemDieselbeBuchung()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var s = await SeedAsync(db, withExtraRow: false);
+        var imported = Guid.NewGuid();
+        var bank = Guid.NewGuid();
+        db.Transactions.AddRange(
+            Buchung(imported, s.Import, "finanzguru:moebel", new DateOnly(2026, 8, 10), null, -120m, "Möbelhaus Beispiel GmbH"),
+            Buchung(bank, s.Target, "enable-banking:moebel", new DateOnly(2026, 8, 11), null, -120m, "MOEBELHAUS BEISPIEL MUSTERSTADT"));
+        await db.SaveChangesAsync();
+
+        var preview = await Service(db).PreviewLinkAsync(s.User, s.Space, s.Import, s.Target, CancellationToken.None);
+        var probable = Assert.Single(preview!.Matches, match => match.ImportTransactionId == imported);
+        Assert.Equal(bank, probable.TargetTransactionId);
+        Assert.Equal("probable", probable.Kind);
+        Assert.Equal("MOEBELHAUS BEISPIEL MUSTERSTADT", probable.TargetCounterparty);
+        Assert.Equal(new DateOnly(2026, 8, 11), probable.TargetDate);
+        Assert.Equal(0, preview.MovedWithoutMatch);
+
+        var result = await Service(db).LinkExplicitAsync(s.User, s.Space, s.Import, s.Target, null, null, CancellationToken.None);
+
+        Assert.Equal(2, result!.TransactionsMerged);
+        Assert.Equal(0, result.TransactionsMoved);
+        Assert.Equal(1, await db.Transactions.AsNoTracking().CountAsync(t => t.AccountId == s.Target && t.Amount == -120m));
+    }
+
+    /// <summary>
+    /// Der Betrag allein darf dem Namen nie etwas wegnehmen. Zwei Abos zu 9,99 an benachbarten Tagen: der
+    /// gleichnamige Treffer (auch einen Tag daneben) geht vor, und nur was danach uebrig ist, paart sich
+    /// nach dem Betrag. Pro Zeile entschieden haette Spotify die taggleiche Netflix-Zeile bekommen.
+    /// </summary>
+    [Fact]
+    public async Task DerGleicheNameGehtDemGleichenBetragVor()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var s = await SeedAsync(db, withExtraRow: false);
+        var spotify = Guid.NewGuid();
+        var netflix = Guid.NewGuid();
+        var bankSpotify = Guid.NewGuid();
+        var bankNetflix = Guid.NewGuid();
+        db.Transactions.AddRange(
+            Buchung(spotify, s.Import, "finanzguru:spotify", new DateOnly(2026, 8, 5), null, -9.99m, "Spotify"),
+            Buchung(netflix, s.Import, "finanzguru:netflix", new DateOnly(2026, 8, 6), null, -9.99m, "Netflix"),
+            Buchung(bankNetflix, s.Target, "enable-banking:netflix", new DateOnly(2026, 8, 5), null, -9.99m, "NETFLIX INTERNATIONAL B.V."),
+            Buchung(bankSpotify, s.Target, "enable-banking:spotify", new DateOnly(2026, 8, 6), null, -9.99m, "Spotify"));
+        await db.SaveChangesAsync();
+
+        var preview = await Service(db).PreviewLinkAsync(s.User, s.Space, s.Import, s.Target, CancellationToken.None);
+
+        var bySource = preview!.Matches.ToDictionary(match => match.ImportTransactionId);
+        Assert.Equal(bankSpotify, bySource[spotify].TargetTransactionId);
+        Assert.Equal("near", bySource[spotify].Kind);
+        Assert.Equal(bankNetflix, bySource[netflix].TargetTransactionId);
+        Assert.Equal("probable", bySource[netflix].Kind);
+    }
+
     /// <summary>Ohne Kontostand geht das Zuordnen trotzdem - das Feld ist optional.</summary>
     [Fact]
     public async Task OhneKontostandLaesstSichTrotzdemZuordnen()
@@ -201,17 +265,18 @@ public sealed class FinanzguruLinkChoiceTests
         Currency = "EUR"
     };
 
-    private static FinanceTransaction Buchung(Guid id, Guid account, string key, DateOnly date, Guid? category) => new()
+    private static FinanceTransaction Buchung(
+        Guid id, Guid account, string key, DateOnly date, Guid? category, decimal amount = -30m, string counterparty = "Amazon") => new()
     {
         Id = id,
         AccountId = account,
         ExternalKey = key,
         BookingDate = date,
         ValueDate = date,
-        Amount = -30m,
+        Amount = amount,
         Currency = "EUR",
-        Counterparty = "Amazon",
-        NormalizedCounterparty = MerchantNormalization.Normalize("Amazon"),
+        Counterparty = counterparty,
+        NormalizedCounterparty = MerchantNormalization.Normalize(counterparty),
         Description = "Test",
         Status = "BOOK",
         CategoryId = category,

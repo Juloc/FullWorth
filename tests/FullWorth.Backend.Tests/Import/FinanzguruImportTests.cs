@@ -114,6 +114,62 @@ public sealed class FinanzguruImportTests
         });
     }
 
+    /// <summary>
+    /// Der Export traegt den Kontostand nach jeder Buchung (#131). Geht er auf - Stand nach der
+    /// juengsten Buchung gleich Stand davor plus deren Betrag -, bekommt das Importkonto ihn: mit dem
+    /// Datum dieser Buchung, als Import, und seine Buchungen tragen die Verlaufskurve. Damit ist es ein
+    /// Konto wie jedes andere, ohne dass jemand "Kontostand ergaenzen" muss. Derselbe Export noch einmal
+    /// legt keinen zweiten Stand an.
+    /// </summary>
+    [Fact]
+    public async Task TheStatedBalanceMakesTheImportedAccountARealAccount()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory, addLiveAccount: false);
+        using var client = factory.CreateClient();
+        // Neueste zuerst, wie der echte Export: 250 = 262,34 - 12,34.
+        var workbook = Create(
+            Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "bal-2", balance: 250m),
+            Row("20.08.2026", 100m, "Arbeitgeber", "Lohn", "Einnahmen", "Gehalt", "bal-1", balance: 262.34m));
+
+        using var response = await SendImportAsync(client, scenario.Space, scenario.User, workbook);
+        var result = await response.Content.ReadFromJsonAsync<FinanzguruImportResult>();
+        Assert.Equal(1, result!.BalancesAnchored);
+        using var again = await SendImportAsync(client, scenario.Space, scenario.User, workbook);
+        Assert.Equal(0, (await again.Content.ReadFromJsonAsync<FinanzguruImportResult>())!.BalancesAnchored);
+
+        await factory.SeedAsync(async db =>
+        {
+            var account = await db.Accounts.SingleAsync(item => item.FullWorthSpaceId == scenario.Space && item.Provider == "finanzguru-import");
+            var balance = await db.BalanceSnapshots.SingleAsync(item => item.AccountId == account.Id);
+            Assert.Equal(250m, balance.Amount);
+            Assert.Equal(new DateOnly(2026, 8, 28), balance.ReferenceDate);
+            Assert.Equal(BalanceSources.Import, balance.Source);
+            Assert.True(await db.Transactions.Where(item => item.AccountId == account.Id).AllAsync(item => item.UseForBalanceHistory));
+        });
+    }
+
+    /// <summary>
+    /// Ein Stand, der sich nicht nachrechnen laesst, kommt nicht an: hier fehlt zwischen den beiden
+    /// Zeilen offenbar eine Buchung. Ein falscher Kontostand waere schlimmer als keiner.
+    /// </summary>
+    [Fact]
+    public async Task AStatedBalanceThatDoesNotAddUpIsNotTaken()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory, addLiveAccount: false);
+        using var client = factory.CreateClient();
+        var workbook = Create(
+            Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "gap-2", balance: 240m),
+            Row("20.08.2026", 100m, "Arbeitgeber", "Lohn", "Einnahmen", "Gehalt", "gap-1", balance: 262.34m));
+
+        using var response = await SendImportAsync(client, scenario.Space, scenario.User, workbook);
+        Assert.Equal(0, (await response.Content.ReadFromJsonAsync<FinanzguruImportResult>())!.BalancesAnchored);
+        await factory.SeedAsync(async db =>
+            Assert.False(await db.BalanceSnapshots.AnyAsync(item => db.Accounts.Any(account =>
+                account.Id == item.AccountId && account.FullWorthSpaceId == scenario.Space))));
+    }
+
     [Fact]
     public async Task NonMemberCannotImportIntoForeignSpace()
     {

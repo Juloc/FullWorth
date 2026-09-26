@@ -49,6 +49,11 @@ public sealed record FinanzguruAttachedHistoryView(
     bool HasCurrentBalance);
 
 /// <summary>Ein Paar, das dasselbe meint: eine importierte Zeile und eine des Zielkontos.</summary>
+/// <param name="Kind">
+/// Wie das Paar gefunden wurde: <c>exact</c> (gleicher Tag, Betrag, Name), <c>near</c> (gleicher Name,
+/// bis zu drei Tage daneben) oder <c>probable</c> (gleicher Betrag bis zu drei Tage daneben, aber anders
+/// benannt - Finanzguru und die Bank schreiben denselben Empfaenger oft verschieden).
+/// </param>
 public sealed record FinanzguruDuplicateMatchView(
     Guid ImportTransactionId,
     Guid TargetTransactionId,
@@ -59,7 +64,10 @@ public sealed record FinanzguruDuplicateMatchView(
     string? ImportDescription,
     string? TargetDescription,
     string? ImportCategoryName,
-    string? TargetCategoryName);
+    string? TargetCategoryName,
+    string Kind = "exact",
+    string? TargetCounterparty = null,
+    DateOnly? TargetDate = null);
 
 /// <summary>
 /// Was das Zuordnen tun WUERDE, bevor es etwas tut: welche Zeilen zusammenfallen und welche als eigene
@@ -231,25 +239,21 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             .ToDictionaryAsync(category => category.Id, category => category.Name, ct);
         string? Name(Guid? id) => id.HasValue && categories.TryGetValue(id.Value, out var name) ? name : null;
 
-        var bySignature = live.GroupBy(Signature)
-            .ToDictionary(group => group.Key, group => new Queue<FinanceTransaction>(group));
-
-        var matches = new List<FinanzguruDuplicateMatchView>();
-        var moved = 0;
-        foreach (var row in imported)
-        {
-            if (bySignature.TryGetValue(Signature(row), out var candidates) && candidates.Count > 0)
+        var pairs = Pair(imported, live, excluded: null);
+        var matches = imported
+            .Where(row => pairs.ContainsKey(row.Id))
+            .Select(row =>
             {
-                var counterpart = candidates.Dequeue();
-                matches.Add(new FinanzguruDuplicateMatchView(
+                var (counterpart, kind) = pairs[row.Id];
+                return new FinanzguruDuplicateMatchView(
                     row.Id, counterpart.Id, row.BookingDate ?? row.ValueDate, row.Amount, row.Currency,
                     row.Counterparty, row.Description, counterpart.Description,
-                    Name(row.CategoryId), Name(counterpart.CategoryId)));
-            }
-            else moved++;
-        }
+                    Name(row.CategoryId), Name(counterpart.CategoryId),
+                    kind, counterpart.Counterparty, counterpart.BookingDate ?? counterpart.ValueDate);
+            })
+            .ToList();
 
-        return new FinanzguruLinkPreviewView(matches, moved);
+        return new FinanzguruLinkPreviewView(matches, imported.Count - matches.Count);
     }
 
     public async Task<FinanzguruReconciliationResult> ReconcileAsync(
@@ -527,32 +531,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             .OrderBy(transaction => transaction.BookingDate)
             .ThenBy(transaction => transaction.Id)
             .ToListAsync(ct);
-        var liveBySignature = live
-            .GroupBy(Signature)
-            .ToDictionary(group => group.Key, group => new Queue<FinanceTransaction>(group));
-
-        // Der zweite Durchgang: dieselbe Buchung, nur ein paar Tage daneben. Bank und Export nennen
-        // oft verschiedene Tage fuer denselben Vorgang, und ohne dieses Fenster wurde daraus zweimal
-        // dasselbe Geld. Exakt zuerst, Fenster danach - so gewinnt nie eine ungefaehre Uebereinstimmung
-        // gegen eine genaue.
-        var liveByLoose = live
-            .GroupBy(row => Loose(Signature(row)))
-            .ToDictionary(group => group.Key, group => group.ToList());
-        var consumed = new HashSet<Guid>();
-
-        FinanceTransaction? NearMatch(TransactionSignature signature)
-        {
-            if (signature.Date is null) return null;
-            if (!liveByLoose.TryGetValue(Loose(signature), out var candidates)) return null;
-            return candidates
-                .Where(row => !consumed.Contains(row.Id))
-                .Select(row => (Row: row, Date: row.BookingDate ?? row.ValueDate))
-                .Where(entry => entry.Date.HasValue
-                                && Math.Abs(entry.Date!.Value.DayNumber - signature.Date.Value.DayNumber) <= MatchToleranceDays)
-                .OrderBy(entry => Math.Abs(entry.Date!.Value.DayNumber - signature.Date.Value.DayNumber))
-                .Select(entry => entry.Row)
-                .FirstOrDefault();
-        }
+        var pairs = Pair(imported, live, excludedImportTransactionIds);
 
         var moved = 0;
         var merged = 0;
@@ -563,23 +542,10 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         var connection = await RawSql.OpenAsync(db, ct);
         foreach (var historical in imported)
         {
-            var signature = Signature(historical);
-            FinanceTransaction? counterpart = null;
-            if (excludedImportTransactionIds?.Contains(historical.Id) != true)
-            {
-                if (liveBySignature.TryGetValue(signature, out var exact))
-                    while (exact.Count > 0 && counterpart is null)
-                    {
-                        var candidate = exact.Dequeue();
-                        if (!consumed.Contains(candidate.Id)) counterpart = candidate;
-                    }
-                counterpart ??= NearMatch(signature);
-            }
-
+            var counterpart = pairs.TryGetValue(historical.Id, out var pair) ? pair.Live : null;
             if (counterpart is not null
                 && await TransactionMergeService.CanMergeAsync(db, historical.Id, counterpart.Id, ct))
             {
-                consumed.Add(counterpart.Id);
                 await MergeIntoLiveTransactionAsync(historical, counterpart, tracked, preferImport, ct);
                 merged++;
             }
@@ -704,13 +670,77 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         return string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
     }
 
+    /// <summary>
+    /// Welche importierte Zeile welche Bankzeile meint - eine Stelle fuer die Vorschau und das
+    /// Zusammenfuehren, damit die Liste sagt, was danach passiert.
+    ///
+    /// Drei Durchgaenge ueber ALLE Zeilen, jeder nur mit dem, was der vorige uebrig liess - so nimmt nie
+    /// eine ungefaehre Uebereinstimmung einer genauen die Bankzeile weg:
+    /// <list type="number">
+    /// <item><c>exact</c>: gleicher Tag, Betrag, Waehrung und Name.</item>
+    /// <item><c>near</c>: gleicher Name, bis zu <see cref="MatchToleranceDays"/> Tage daneben - Bank und
+    /// Export nennen oft den Buchungs- und den Wertstellungstag.</item>
+    /// <item><c>probable</c>: gleicher Betrag und gleiche Waehrung im selben Fenster, aber anders benannt.
+    /// Finanzguru schreibt "Moebelhaus Beispiel GmbH", die Bank "MOEBELHAUS BEISPIEL MUSTERSTADT", und
+    /// ohne diesen Durchgang zog die Zeile als zweite Buchung mit um: dasselbe Geld zweimal. Uebrig
+    /// bleiben dafuer nur Zeilen, die im Zeitraum beider Quellen auf keiner Seite ein Gegenstueck mit
+    /// gleichem Namen haben - dort ist "gleicher Betrag, gleiche Tage" fast immer dieselbe Buchung. Die
+    /// Vorschau zeigt diese Paare ausdruecklich, und wer eines abwaehlt, behaelt beide Zeilen.</item>
+    /// </list>
+    /// Je Durchgang gewinnt die zeitlich naechste Bankzeile.
+    /// </summary>
+    private static Dictionary<Guid, (FinanceTransaction Live, string Kind)> Pair(
+        IReadOnlyList<FinanceTransaction> imported, IReadOnlyList<FinanceTransaction> live, IReadOnlySet<Guid>? excluded)
+    {
+        var pairs = new Dictionary<Guid, (FinanceTransaction Live, string Kind)>();
+        var consumed = new HashSet<Guid>();
+        var open = imported.Where(row => excluded?.Contains(row.Id) != true).ToList();
+
+        // 1. exakt
+        var bySignature = live.GroupBy(Signature).ToDictionary(group => group.Key, group => new Queue<FinanceTransaction>(group));
+        foreach (var row in open)
+        {
+            if (!bySignature.TryGetValue(Signature(row), out var queue)) continue;
+            while (queue.Count > 0)
+            {
+                var candidate = queue.Dequeue();
+                if (!consumed.Add(candidate.Id)) continue;
+                pairs[row.Id] = (candidate, "exact");
+                break;
+            }
+        }
+
+        // 2. und 3. im Fenster - erst mit gleichem Namen, dann nur nach Betrag. Die Bankzeilen einmal
+        // nach Betrag und Waehrung abgelegt: sonst normalisierte jeder Vergleich beide Namen neu.
+        var byAmount = live
+            .Select(candidate => (Row: candidate, Signature: Signature(candidate)))
+            .GroupBy(entry => (entry.Signature.Amount, entry.Signature.Currency))
+            .ToDictionary(group => group.Key, group => group.ToList());
+        foreach (var (kind, sameParty) in new[] { ("near", true), ("probable", false) })
+        {
+            foreach (var row in open.Where(row => !pairs.ContainsKey(row.Id)))
+            {
+                var signature = Signature(row);
+                if (signature.Date is not { } day) continue;
+                if (!byAmount.TryGetValue((signature.Amount, signature.Currency), out var sameAmount)) continue;
+                var best = sameAmount
+                    .Where(entry => !consumed.Contains(entry.Row.Id)
+                                    && (!sameParty || entry.Signature.Party == signature.Party)
+                                    && entry.Signature.Date is { } date
+                                    && Math.Abs(date.DayNumber - day.DayNumber) <= MatchToleranceDays)
+                    .OrderBy(entry => Math.Abs(entry.Signature.Date!.Value.DayNumber - day.DayNumber))
+                    .ThenBy(entry => entry.Row.Id)
+                    .Select(entry => entry.Row)
+                    .FirstOrDefault();
+                if (best is null) continue;
+                consumed.Add(best.Id);
+                pairs[row.Id] = (best, kind);
+            }
+        }
+        return pairs;
+    }
+
     private sealed record TransactionSignature(DateOnly? Date, decimal Amount, string Currency, string? Party);
-
-    /// <summary>Dieselbe Signatur ohne das Datum - fuer den zweiten Durchgang mit Toleranzfenster.</summary>
-    private sealed record LooseSignature(decimal Amount, string Currency, string? Party);
-
-    private static LooseSignature Loose(TransactionSignature signature) =>
-        new(signature.Amount, signature.Currency, signature.Party);
 
     /// <summary>
     /// Wie weit zwei Buchungen auseinanderliegen duerfen und trotzdem dieselbe sind. Bank und Export

@@ -278,11 +278,25 @@ duplicate what the bank already delivered.
 
 **Persisted.** `FinanceTransaction` with `Status='BOOK'`, both dates set to `Buchungstag`, `Amount` and
 `Currency` from the file, `ProviderTransactionId` = `Buchungs-ID`, `EntryReference` = `E-Ref`,
-`IsTransfer` from `Analyse-Umbuchung='ja'`, `UseForBalanceHistory=false`, and `RawJson` =
+`IsTransfer` from `Analyse-Umbuchung='ja'`, `UseForBalanceHistory=false` (until the balance below
+anchors the account), and `RawJson` =
 `FieldCipher`-protected JSON containing the full source row and its split children.
 `Analyse-Hauptkategorie`/`-Unterkategorie` resolve to a parent/child category pair, created as
 `finanzguru-<hash>` keys only when the caller is the space owner; unresolved pairs are counted
 (`CategoriesUnmapped`) and leave the transaction uncategorised.
+
+**The balance comes from the file** (`FinanzguruBalance`). The export carries a `Kontostand` column —
+the balance after every booking — and it used to be thrown away, so an imported account had no value,
+was missing from net worth and asked for "Kontostand ergänzen". Now, per source account, the balance
+after the newest booking up to today anchors it, dated that booking's day, source `import`: recalculated,
+not believed — it must equal the balance before plus that booking's amount, or nothing is anchored.
+Bookings dated after today (Finanzguru already shows pending ones) carry a balance the account does not
+have yet and do not count. The same rule as a statement decides (`StatementBalanceAnchor`): a newer bank
+or hand-entered balance stays, and the same balance again changes nothing. On a `finanzguru-import`
+account the anchor also switches its bookings to `UseForBalanceHistory=true` — exactly what a
+hand-entered balance did — so the account is an account like any other: in net worth, with a history
+curve. Checked against a real export: 13 accounts, 400 days each, the back-cast daily balance equal to
+the file's `Kontostand` on every single day. The result reports `balancesAnchored`.
 
 **Account linking** (`FinanzguruAccountReconciliationService.cs`) attaches that history to a real
 account once it exists.
@@ -304,11 +318,21 @@ carries the key the bank recognises it by, so deleting it would simply have it r
 sync, without the work that hung on it. Excluded matches are not merged at all; they move across and
 stay separate bookings.
 
-**Matching runs twice.** First on the exact `Signature` (date, amount, currency, normalised
-counterparty), then over what is left with a **three-day tolerance** on the date — a bank and an export
-often name different days for the same event, one the booking date and the other the value date, and a
-single day's difference used to turn one booking into two. Exact first, window second, so an
-approximate match can never beat a precise one.
+**Matching runs in three passes** over all rows (`Pair`, one method for the preview and the link, so the
+list says what follows). Each pass only sees what the previous left, so an approximate match can never
+take a bank row from a precise one:
+
+1. `exact` — the `Signature`: date, amount, currency, normalised counterparty.
+2. `near` — same counterparty, up to **three days** apart: a bank and an export often name different
+   days for the same event, one the booking date and the other the value date.
+3. `probable` — same amount and currency in the same window, **named differently**. Finanzguru writes
+   "Möbelhaus Beispiel GmbH", the bank "MOEBELHAUS BEISPIEL MUSTERSTADT", and without this pass the row
+   moved across as a second booking: the same money twice, created by linking. What is left for it are
+   rows that, within the period both sources cover, have no same-named counterpart on either side — and
+   there "same amount, same days" is almost always the same booking. The preview names such a pair with
+   both names (`kind`, `targetCounterparty`, `targetDate`), and unticking it keeps both rows.
+
+Within a pass the closest bank row wins.
 
 Both require the same currency on both sides, set `UseForBalanceHistory=true` on the affected rows,
 deactivate the container, set `IncludeInNetWorth=true` on the target and then rebuild net-worth history

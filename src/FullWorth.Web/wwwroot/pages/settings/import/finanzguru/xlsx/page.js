@@ -15,7 +15,7 @@ const text={
     file:'Finanzguru .xlsx Export',submit:'Importieren',cancel:'Abbrechen',working:'Import läuft …',confirm:'Diese Datei jetzt importieren?',
     done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Quellzeilen',imported:'Neue Buchungen',
     existing:'Bereits importiert',matched:'Mit bestehenden Buchungen abgeglichen',accounts:'Konten zugeordnet',
-    createdAccounts:'Historienkonten erstellt',splits:'Split-Buchungen',
+    createdAccounts:'Konten angelegt',balances:'Kontostand übernommen (Konten)',probableMatch:'vermutlich dieselbe – Bank: {name}, {date}',splits:'Split-Buchungen',
     previewTitle:'Das wird passieren',previewNew:'Neu',previewExisting:'Schon vorhanden',
     previewMatched:'Deckt sich mit der Bank',previewPeriod:'Zeitraum',previewAccountNew:'wird angelegt',
     previewAccountLinked:'verknüpftes Konto',previewAccountImport:'Importkonto',
@@ -53,7 +53,7 @@ const text={
     file:'Finanzguru .xlsx export',submit:'Import',cancel:'Cancel',working:'Importing …',confirm:'Import this file now?',
     done:'Import completed.',error:'Import failed.',rows:'Source rows',imported:'New transactions',
     existing:'Already imported',matched:'Matched existing transactions',accounts:'Accounts matched',
-    createdAccounts:'History accounts created',splits:'Split transactions',
+    createdAccounts:'Accounts created',balances:'Balance taken over (accounts)',probableMatch:'probably the same – bank: {name}, {date}',splits:'Split transactions',
     previewTitle:'What will happen',previewNew:'New',previewExisting:'Already there',
     previewMatched:'Matches the bank',previewPeriod:'Period',previewAccountNew:'will be created',
     previewAccountLinked:'linked account',previewAccountImport:'import account',
@@ -291,7 +291,12 @@ function buildImportLinkCard(item){
         if(box.checked)excluded.delete(row.importTransactionId);
         else excluded.add(row.importTransactionId);
       });
-      const label=[row.date,row.counterparty||row.importDescription||'',`${row.amount} ${row.currency}`]
+      // Ein vermutliches Paar (gleicher Betrag, anders benannt) nennt auch die Bankseite - sonst stuende
+      // da nur der eine Name, und niemand saehe, womit er zusammengelegt wird.
+      const other=row.kind==='probable'
+        ? text.probableMatch.replace('{name}',row.targetCounterparty||row.targetDescription||'—').replace('{date}',row.targetDate||'')
+        : null;
+      const label=[row.date,row.counterparty||row.importDescription||'',`${row.amount} ${row.currency}`,other]
         .filter(Boolean).join(' · ');
       line.append(box,node('span','',label));
       matches.append(line);
@@ -609,7 +614,7 @@ async function commit(candidateIds){
 function renderResult(data){
   const rows=[
     [text.rows,data.sourceRows],[text.imported,data.transactionsImported],[text.existing,data.alreadyImported],
-    [text.matched,data.matchedExistingTransactions],[text.accounts,data.accountsMatched],[text.createdAccounts,data.accountsCreated],[text.splits,data.splitTransactions]
+    [text.matched,data.matchedExistingTransactions],[text.accounts,data.accountsMatched],[text.createdAccounts,data.accountsCreated],[text.balances,data.balancesAnchored||0],[text.splits,data.splitTransactions]
   ];
   if(data.enrichedExistingTransactions>0) rows.splice(4,0,[text.enriched,data.enrichedExistingTransactions]);
   result.innerHTML='';

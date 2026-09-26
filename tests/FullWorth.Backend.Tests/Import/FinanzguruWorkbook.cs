@@ -19,7 +19,7 @@ internal static class FinanzguruWorkbook
         "Buchungstag", "Referenzkonto", "Name Referenzkonto", "Betrag", "Waehrung",
         "Beguenstigter/Auftraggeber", "Verwendungszweck", "E-Ref",
         "Analyse-Hauptkategorie", "Analyse-Unterkategorie", "Analyse-Umbuchung",
-        "Buchungs-ID", "Referenz-Original-ID", "Split-Typ"
+        "Buchungs-ID", "Referenz-Original-ID", "Split-Typ", "Kontostand"
     ];
 
     internal static Dictionary<string, string?> Row(
@@ -34,7 +34,8 @@ internal static class FinanzguruWorkbook
         string? splitType = null,
         bool isTransfer = false,
         string reference = "DE65500105175456601426",
-        string referenceName = "Girokonto") => new(StringComparer.Ordinal)
+        string referenceName = "Girokonto",
+        decimal? balance = null) => new(StringComparer.Ordinal)
     {
         ["Buchungstag"] = date,
         ["Referenzkonto"] = reference,
@@ -49,7 +50,9 @@ internal static class FinanzguruWorkbook
         ["Analyse-Umbuchung"] = isTransfer ? "ja" : "nein",
         ["Buchungs-ID"] = bookingId,
         ["Referenz-Original-ID"] = originalId,
-        ["Split-Typ"] = splitType
+        ["Split-Typ"] = splitType,
+        // Der Stand nach dieser Buchung, wie ihn der echte Export fuehrt - leer, wenn ein Test ihn nicht braucht.
+        ["Kontostand"] = balance?.ToString(CultureInfo.InvariantCulture)
     };
 
     internal static byte[] Create(params Dictionary<string, string?>[] dataRows)
