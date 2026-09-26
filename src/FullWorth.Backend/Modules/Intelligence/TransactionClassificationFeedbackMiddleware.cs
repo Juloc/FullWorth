@@ -103,9 +103,7 @@ public sealed class TransactionClassificationFeedbackMiddleware(RequestDelegate 
             ct,
             cloudMerchantAlias,
             category?.Key,
-            category?.Name,
-            category is { IsSystem: false },
-            context.Request.Headers.AcceptLanguage.ToString());
+            category?.Name);
     }
 
     private static bool IsClassificationPatch(HttpRequest request, out Guid transactionId)

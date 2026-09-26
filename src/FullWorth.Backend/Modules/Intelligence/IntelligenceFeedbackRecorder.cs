@@ -45,22 +45,7 @@ public sealed class IntelligenceFeedbackRecorder(
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        CloudOutboxProjection? projection = null;
-        if (cloudEligible)
-        {
-            projection = new CloudOutboxProjection(
-                "product_alias_observed",
-                JsonSerializer.Serialize(new
-                {
-                    productAlias = cloudAlias,
-                    locale = "und",
-                    canonicalKey = NormalizePublicProductCanonicalKey(publicProductKey),
-                    confidence = 1m,
-                    observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
-                }));
-        }
-
-        return TryRecordAsync(feedback, ct, projection);
+        return TryRecordAsync(feedback, ct);
     }
 
     public Task<bool> RecordContractDecisionAsync(
@@ -101,21 +86,7 @@ public sealed class IntelligenceFeedbackRecorder(
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        CloudOutboxProjection? projection = null;
-        if (cloudEligible)
-        {
-            projection = new CloudOutboxProjection(
-                "provider_alias_observed",
-                JsonSerializer.Serialize(new
-                {
-                    providerAlias = cloudAlias,
-                    locale = "und",
-                    confidence = 1m,
-                    observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
-                }));
-        }
-
-        return TryRecordAsync(feedback, ct, projection);
+        return TryRecordAsync(feedback, ct);
     }
 
     /// <summary>
@@ -135,9 +106,7 @@ public sealed class IntelligenceFeedbackRecorder(
         CancellationToken ct,
         string? cloudMerchantAlias = null,
         string? categoryKey = null,
-        string? categoryName = null,
-        bool categoryIsCustom = false,
-        string? categoryLocale = null)
+        string? categoryName = null)
     {
         var normalizedMerchant = MerchantNormalization.Normalize(normalizedCounterparty);
         var normalizedDirection = NormalizeDirection(direction);
@@ -162,11 +131,7 @@ public sealed class IntelligenceFeedbackRecorder(
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        var projection = cloudEligible
-            ? MerchantMappingProjection(cloudAlias!, normalizedDirection!, categoryKey!, categoryName!, categoryIsCustom, categoryLocale, "corrected")
-            : null;
-
-        return TryRecordAsync(feedback, ct, projection);
+        return TryRecordAsync(feedback, ct);
     }
 
     /// <summary>
@@ -189,9 +154,7 @@ public sealed class IntelligenceFeedbackRecorder(
         string? categoryKey,
         string? categoryName,
         string eventType,
-        CancellationToken ct,
-        bool categoryIsCustom = false,
-        string? categoryLocale = null)
+        CancellationToken ct)
     {
         var normalizedMerchant = MerchantNormalization.Normalize(normalizedCounterparty);
         var normalizedDirection = NormalizeDirection(direction);
@@ -215,78 +178,24 @@ public sealed class IntelligenceFeedbackRecorder(
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        var projection = cloudEligible
-            ? MerchantMappingProjection(normalizedMerchant!, normalizedDirection!, categoryKey!, categoryName!, categoryIsCustom, categoryLocale, "confirmed")
-            : null;
-
-        return TryRecordAsync(feedback, ct, projection);
+        return TryRecordAsync(feedback, ct);
     }
-
-    private static CloudOutboxProjection MerchantMappingProjection(
-        string alias,
-        string direction,
-        string categoryKey,
-        string categoryName,
-        bool categoryIsCustom,
-        string? categoryLocale,
-        string action) =>
-        new("merchant_mapping",
-            JsonSerializer.Serialize(new
-            {
-                alias,
-                mapping = new
-                {
-                    categoryKey = categoryKey.Trim(),
-                    categoryAlias = categoryName.Trim(),
-                    categoryLocale = NormalizeLocale(categoryLocale),
-                    categoryIsCustom
-                },
-                direction,
-                action,
-                confidence = 1m,
-                observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
-            }));
 
     private async Task<bool> TryRecordAsync(
         IntelligenceFeedbackEvent feedback,
-        CancellationToken ct,
-        CloudOutboxProjection? cloudProjection = null)
+        CancellationToken ct)
     {
         try
         {
             db.IntelligenceFeedbackEvents.Add(feedback);
 
-            if (feedback.CloudEligible && cloudProjection is not null)
-            {
-                var state = await db.CloudConnectionStates.AsNoTracking()
-                    .SingleOrDefaultAsync(x =>
-                        x.ScopeKey == CloudConnectionState.InstanceScopeKey &&
-                        x.Mode == CloudIntelligenceModes.Enabled, ct);
-                if (state is not null)
-                {
-                    var hasCurrentConsent = await db.CloudIntelligenceConsents.AsNoTracking().AnyAsync(x =>
-                        x.InstanceId == state.InstanceId &&
-                        x.PolicyVersion == CloudIntelligencePolicy.CurrentVersion &&
-                        x.RevokedAt == null, ct);
-                    if (hasCurrentConsent)
-                    {
-                        db.CloudSubmissionOutbox.Add(new CloudSubmissionOutbox
-                        {
-                            InstanceId = state.InstanceId,
-                            FeedbackEventId = feedback.Id,
-                            IdempotencyKey = $"feedback:{feedback.Id:N}:schema:{CloudIntelligencePolicy.SubmissionSchemaVersion}",
-                            SchemaVersion = CloudIntelligencePolicy.SubmissionSchemaVersion,
-                            EventType = cloudProjection.EventType,
-                            PayloadJson = cloudProjection.PayloadJson,
-                            Status = CloudSubmissionStatuses.Queued,
-                            CreatedAt = DateTimeOffset.UtcNow
-                        });
-                    }
-                }
-            }
-
-            // Feedback + outbox commit together. The primary FinanceDb mutation that triggered this
-            // recorder remains intentionally independent and is never rolled back by cloud persistence.
+            // Hier stand die Projektion in die Ausgangswarteschlange: dieselbe Erkenntnis noch einmal,
+            // nur minimiert und fuer fremde Augen. Sie ist weg, das Flag daneben nicht - "diese
+            // Zuordnung gilt ueber diesen Haushalt hinaus" bleibt die Bedingung, unter der aus einer
+            // Bestaetigung spaeter instanzweites Wissen werden darf.
+            //
+            // Die primaere Finanzmutation, die diesen Aufruf ausgeloest hat, ist weiterhin
+            // unabhaengig und wird nie zurueckgerollt, wenn das hier scheitert.
             await db.SaveChangesAsync(ct);
             return true;
         }
@@ -382,17 +291,4 @@ public sealed class IntelligenceFeedbackRecorder(
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : Normalize(value);
 
-    private static string NormalizeLocale(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return "und";
-        var primary = value.Split(',', StringSplitOptions.RemoveEmptyEntries)[0]
-            .Split(';', StringSplitOptions.RemoveEmptyEntries)[0]
-            .Trim()
-            .Replace('_', '-')
-            .ToLowerInvariant();
-        if (primary.Length is < 2 or > 20) return "und";
-        return primary.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-') ? primary : "und";
-    }
-
-    private sealed record CloudOutboxProjection(string EventType, string PayloadJson);
 }

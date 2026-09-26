@@ -116,8 +116,7 @@ public sealed class IntelligenceSuggestionReviewService(
             category.Key,
             category.Name,
             "ai_suggestion_accepted",
-            ct,
-            categoryIsCustom: !category.IsSystem);
+            ct);
 
         return new(true, null, suggestion);
     }

@@ -84,8 +84,16 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.Equal(expected, actual);
     }
 
+    /// <summary>
+    /// Ein angenommener Vertrag ist verallgemeinerbares Wissen - "1&amp;1 ist ein Anbieter" gilt nicht
+    /// nur fuer diesen Haushalt. Das Flag sagt das weiterhin. Was es NICHT mehr ausloest, ist eine
+    /// Zeile in der Ausgangswarteschlange: die Cloud, die sie abgeholt hat, gibt es nicht mehr.
+    ///
+    /// Die leere Warteschlange ist der eigentliche Gegenstand dieses Tests. Sie ist die Zusicherung,
+    /// dass aus einer Bestaetigung nichts mehr entsteht, das die Maschine verlassen koennte.
+    /// </summary>
     [Fact]
-    public async Task Public_product_alias_queues_minimized_cloud_event_with_current_consent()
+    public async Task Accepted_contract_is_generalizable_but_queues_nothing()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -111,59 +119,6 @@ public sealed class IntelligenceFeedbackRecorderTests
         await db.SaveChangesAsync();
 
         var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
-        var productId = Guid.NewGuid();
-        var oldCategoryId = Guid.NewGuid();
-        var newCategoryId = Guid.NewGuid();
-
-        Assert.True(await recorder.RecordProductCategoryAsync(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            productId,
-            "Coca Cola Zero 1500ml",
-            oldCategoryId,
-            newCategoryId,
-            CancellationToken.None,
-            publicProductKey: "gtin:4006381333931",
-            semanticCategoryKey: "food.drinks"));
-
-        var outbox = await db.CloudSubmissionOutbox.SingleAsync();
-        Assert.Equal("product_alias_observed", outbox.EventType);
-        Assert.Contains("COCA COLA ZERO 1500ML", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.DoesNotContain(productId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(oldCategoryId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(newCategoryId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("4006381333931", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.DoesNotContain("food.drinks", outbox.PayloadJson, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Accepted_contract_queues_only_safe_provider_alias()
-    {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
-        await using var db = new IntelligenceDbContext(options);
-        await db.Database.EnsureCreatedAsync();
-
-        var state = new CloudConnectionState
-        {
-            ScopeKey = CloudConnectionState.InstanceScopeKey,
-            Mode = CloudIntelligenceModes.Enabled,
-            SetupDecisionAt = DateTimeOffset.UtcNow
-        };
-        db.CloudConnectionStates.Add(state);
-        db.CloudIntelligenceConsents.Add(new CloudIntelligenceConsent
-        {
-            InstanceId = state.InstanceId,
-            AcceptedByUserId = Guid.NewGuid(),
-            PolicyVersion = CloudIntelligencePolicy.CurrentVersion,
-            Locale = "de",
-            ClientVersion = "test"
-        });
-        await db.SaveChangesAsync();
-
-        var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
-        var contractId = Guid.NewGuid();
 
         Assert.True(await recorder.RecordContractDecisionAsync(
             Guid.NewGuid(),
@@ -171,7 +126,7 @@ public sealed class IntelligenceFeedbackRecorderTests
             "1&1 Telecom GmbH",
             "EUR",
             true,
-            contractId,
+            Guid.NewGuid(),
             "monthly",
             1,
             CancellationToken.None));
@@ -179,12 +134,8 @@ public sealed class IntelligenceFeedbackRecorderTests
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
         Assert.True(feedback.CloudEligible);
 
-        var outbox = await db.CloudSubmissionOutbox.SingleAsync();
-        Assert.Equal("provider_alias_observed", outbox.EventType);
-        Assert.Contains("1 1 TELECOM GMBH", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.DoesNotContain(contractId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("EUR", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.DoesNotContain("monthly", outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        // Zustimmung erteilt, Zustand aktiv, Ereignis geeignet - und trotzdem nichts zu senden.
+        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Fact]
@@ -240,93 +191,6 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.Contains("EUR", feedback.NewValueJson, StringComparison.Ordinal);
         Assert.False(feedback.CloudEligible);
     }
-
-    [Fact]
-    public async Task Eligible_manual_category_correction_queues_minimized_cloud_event_with_current_consent()
-    {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
-        await using var db = new IntelligenceDbContext(options);
-        await db.Database.EnsureCreatedAsync();
-
-        var state = new CloudConnectionState
-        {
-            ScopeKey = CloudConnectionState.InstanceScopeKey,
-            Mode = CloudIntelligenceModes.Enabled,
-            SetupDecisionAt = DateTimeOffset.UtcNow
-        };
-        db.CloudConnectionStates.Add(state);
-        db.CloudIntelligenceConsents.Add(new CloudIntelligenceConsent
-        {
-            InstanceId = state.InstanceId,
-            AcceptedByUserId = Guid.NewGuid(),
-            PolicyVersion = CloudIntelligencePolicy.CurrentVersion,
-            Locale = "de",
-            ClientVersion = "test"
-        });
-        await db.SaveChangesAsync();
-
-        var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
-        var spaceId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var transactionId = Guid.NewGuid();
-        var categoryId = Guid.NewGuid();
-
-        var recorded = await recorder.RecordCategoryDecisionAsync(
-            spaceId,
-            userId,
-            transactionId,
-            "REWE MARKT",
-            "expense",
-            null,
-            categoryId,
-            "category_changed",
-            CancellationToken.None,
-            cloudMerchantAlias: "REWE MARKT",
-            categoryKey: "food.groceries",
-            categoryName: "Lebensmittel",
-            categoryIsCustom: false,
-            categoryLocale: "de-DE");
-
-        Assert.True(recorded);
-        var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
-        Assert.True(feedback.CloudEligible);
-
-        var outbox = await db.CloudSubmissionOutbox.SingleAsync();
-        Assert.Equal("merchant_mapping", outbox.EventType);
-        Assert.Equal(state.InstanceId, outbox.InstanceId);
-        Assert.Contains("REWE MARKT", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.Contains("food.groceries", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.Contains("Lebensmittel", outbox.PayloadJson, StringComparison.Ordinal);
-        Assert.DoesNotContain(userId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(transactionId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(spaceId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task Eligible_feedback_does_not_queue_when_cloud_has_no_current_consent()
-    {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
-        await using var db = new IntelligenceDbContext(options);
-        await db.Database.EnsureCreatedAsync();
-
-        var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
-        var recorded = await recorder.RecordCategoryDecisionAsync(
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "REWE", "expense",
-            null, Guid.NewGuid(), "category_changed", CancellationToken.None,
-            cloudMerchantAlias: "REWE",
-            categoryKey: "food.groceries",
-            categoryName: "Lebensmittel",
-            categoryLocale: "de");
-
-        Assert.True(recorded);
-        Assert.True((await db.IntelligenceFeedbackEvents.SingleAsync()).CloudEligible);
-        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
-    }
-
     [Fact]
     public async Task Category_feedback_is_local_with_no_ai_settings_credentials_or_cloud_identity()
     {

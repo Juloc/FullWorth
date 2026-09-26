@@ -60,9 +60,9 @@
 #                       Oberflaeche haette keine Luecke gefuellt, sondern eine Unwahrheit gezeigt.
 #
 #   Immer so            "Kuenftig alle von REWE so kategorisieren" war gebaut und unerreichbar - und
-#                       nur dieser Weg meldet die bestaetigte Haendler-zu-Kategorie-Zuordnung an die
-#                       Cloud weiter. Eine dritte Massenaenderung fuer Buchungen lag daneben, konnte
-#                       weniger als die verbliebene und ist geloescht statt verdrahtet.
+#                       nur dieser Weg markiert die bestaetigte Haendler-zu-Kategorie-Zuordnung als
+#                       verallgemeinerbar. Eine dritte Massenaenderung fuer Buchungen lag daneben,
+#                       konnte weniger als die verbliebene und ist geloescht statt verdrahtet.
 #
 #   Zusammenfuehren     Wer zwei Kategorien fuer dieselbe Sache hatte - nach jedem Import der
 #                       Normalfall -, konnte sie nur an jeder Buchung einzeln umhaengen. Der Dialog

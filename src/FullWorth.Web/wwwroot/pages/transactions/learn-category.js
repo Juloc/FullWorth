@@ -8,10 +8,10 @@
 //
 //   one       Nur diese Buchung. Dasselbe wie die Auswahl im Detail, also hier nicht angeboten.
 //   existing  Alle bisherigen desselben Händlers in derselben Richtung.
-//   future    Dazu eine Regel, damit künftige gleich richtig landen — und NUR in diesem Fall meldet
-//             der Server die Zuordnung an die Cloud weiter. „REWE ist Lebensmittel" gilt für jeden;
-//             „diese eine Buchung gehört zu Urlaub" gilt nur hier. Das ist die Grenze, an der die
-//             Auswahl hängt, und sie steht deshalb auch im Dialog.
+//   future    Dazu eine Regel, damit künftige gleich richtig landen — und NUR in diesem Fall merkt
+//             der Server die Zuordnung als verallgemeinerbar vor. „REWE ist Lebensmittel" gilt für
+//             jeden; „diese eine Buchung gehört zu Urlaub" gilt nur hier. Das ist die Grenze, an der
+//             die Auswahl hängt, und sie steht deshalb auch im Dialog.
 //
 // Richtung heisst Vorzeichen: Ausgaben und Einnahmen desselben Händlers sind zwei Fälle (Gehalt vs.
 // Rückzahlung), und der Server trennt sie. Der Dialog sagt das nicht extra — er nennt den Händler,

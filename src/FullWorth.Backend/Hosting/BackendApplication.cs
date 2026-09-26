@@ -117,8 +117,6 @@ public static class BackendApplication
         // Singleton, because remembering a failed registration across requests is the whole point.
         builder.Services.AddSingleton<CloudRegistrationCooldown>();
         builder.Services.AddScoped<CloudCredentialAcquisition>();
-        builder.Services.AddScoped<CloudLearningOutboxUploader>();
-        builder.Services.AddHostedService<CloudLearningOutboxWorker>();
         builder.Services.AddScoped<KnowledgePackTrustStore>();
         builder.Services.AddScoped<KnowledgePackSyncService>();
         builder.Services.AddScoped<CloudOperationalRegistryResolver>();
