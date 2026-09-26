@@ -157,7 +157,7 @@ Return only JSON matching the supplied schema.
 
         VerifiedBrandBlob verified;
         try { verified = BrandAssetVerifier.VerifySvg(fetched.Bytes, fetched.MediaType); }
-        catch (KnowledgePackVerificationException)
+        catch (BrandAssetVerificationException)
         {
             // Etwas kam an, aber es ist kein Logo, das FullWorth ausliefern wuerde. Kein Fehler -
             // eine Antwort.

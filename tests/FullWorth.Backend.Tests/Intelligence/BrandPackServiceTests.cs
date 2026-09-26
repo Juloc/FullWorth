@@ -130,7 +130,7 @@ public sealed class BrandPackServiceTests
                 [new CustomBrandAssetImport("unsafe", "Unsafe", null, "image/svg+xml", unsafeSvg, null, null, null, null)],
                 [new CustomBrandAliasImport("UNSAFE", "unsafe", null)]), CancellationToken.None));
 
-        Assert.Equal("knowledge_pack_brand_svg_unsafe", ex.Message);
+        Assert.Equal("brand_svg_unsafe", ex.Message);
         Assert.Empty(await db.CustomBrandPacks.ToListAsync());
         Assert.Empty(await db.BrandAssetBlobs.ToListAsync());
     }

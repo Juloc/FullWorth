@@ -66,7 +66,7 @@ public static class BrandCatalogEndpoints
             {
                 _ = BrandAssetVerifier.VerifySvg(bytes, blob.MediaType, hash, blob.ByteLength);
             }
-            catch (KnowledgePackVerificationException)
+            catch (BrandAssetVerificationException)
             {
                 return Results.NotFound();
             }

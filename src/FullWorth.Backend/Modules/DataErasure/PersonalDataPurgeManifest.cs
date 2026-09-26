@@ -129,7 +129,6 @@ public static class PersonalDataPurgeManifest
         typeof(KnowledgePackInstallation),
         // The verification key this installation pinned for its Cloud. A public key with no person in
         // it, and re-pinning it on every account deletion would reopen the one moment of trust.
-        typeof(KnowledgePackTrustedKey),
         // Instance configuration and machinery.
         typeof(AiInstanceSettings),
         typeof(CloudInstanceCredential),

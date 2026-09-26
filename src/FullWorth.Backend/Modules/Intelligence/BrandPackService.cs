@@ -13,7 +13,8 @@ public sealed record VerifiedBrandBlob(
 
 public static class BrandAssetVerifier
 {
-    public const int MaximumAssetBytes = FullWorthCloudClient.MaximumBrandAssetBytes;
+    /// <summary>256 kB. Ein Markenlogo, das groesser ist, ist kein Markenlogo.</summary>
+    public const int MaximumAssetBytes = 256 * 1024;
 
     public static VerifiedBrandBlob VerifySvg(
         byte[] bytes,
@@ -25,28 +26,28 @@ public static class BrandAssetVerifier
             ? "image/svg+xml"
             : mediaType.Trim().ToLowerInvariant();
         if (normalizedMediaType != "image/svg+xml" || bytes.Length is <= 0 or > MaximumAssetBytes)
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+            throw new BrandAssetVerificationException("brand_asset_invalid");
 
         if (expectedByteLength > 0 && bytes.Length != expectedByteLength)
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_size_mismatch");
+            throw new BrandAssetVerificationException("brand_asset_size_mismatch");
 
         var actualHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(expectedSha256))
         {
             var expected = expectedSha256.Trim().ToLowerInvariant();
             if (expected.Length != 64 || !expected.All(Uri.IsHexDigit))
-                throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+                throw new BrandAssetVerificationException("brand_asset_invalid");
             if (!CryptographicOperations.FixedTimeEquals(
                     Encoding.ASCII.GetBytes(actualHash),
                     Encoding.ASCII.GetBytes(expected)))
-                throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_hash_mismatch");
+                throw new BrandAssetVerificationException("brand_asset_hash_mismatch");
         }
 
         string svg;
         try { svg = new UTF8Encoding(false, true).GetString(bytes); }
         catch (DecoderFallbackException)
         {
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+            throw new BrandAssetVerificationException("brand_asset_invalid");
         }
 
         var lowered = svg.ToLowerInvariant();
@@ -63,7 +64,7 @@ public static class BrandAssetVerifier
             lowered.Contains("href='http", StringComparison.Ordinal) ||
             lowered.Contains("url(http", StringComparison.Ordinal) ||
             lowered.Contains("xlink:href=", StringComparison.Ordinal))
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_svg_unsafe");
+            throw new BrandAssetVerificationException("brand_svg_unsafe");
 
         return new VerifiedBrandBlob(
             actualHash,
@@ -75,11 +76,11 @@ public static class BrandAssetVerifier
     public static string NormalizeBrandKey(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+            throw new BrandAssetVerificationException("brand_asset_invalid");
         var normalized = value.Trim().ToLowerInvariant();
         if (normalized.Length > 120 ||
             !normalized.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-'))
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+            throw new BrandAssetVerificationException("brand_asset_invalid");
         return normalized;
     }
 
@@ -87,7 +88,7 @@ public static class BrandAssetVerifier
     {
         var normalized = MerchantNormalization.Normalize(value);
         if (normalized is null || normalized.Length > 300)
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_alias_invalid");
+            throw new BrandAssetVerificationException("brand_alias_invalid");
         return normalized;
     }
 
@@ -108,7 +109,7 @@ public static class BrandAssetVerifier
         if (trimmed.Length > 1000 ||
             !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
             uri.Scheme != Uri.UriSchemeHttps)
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+            throw new BrandAssetVerificationException("brand_asset_invalid");
         return trimmed;
     }
 }
@@ -232,7 +233,7 @@ public sealed class BrandPackService(IntelligenceDbContext db)
                     input.ContentSha256,
                     0);
             }
-            catch (KnowledgePackVerificationException ex)
+            catch (BrandAssetVerificationException ex)
             {
                 throw new ArgumentException(ex.ErrorCode);
             }
@@ -264,7 +265,7 @@ public sealed class BrandPackService(IntelligenceDbContext db)
                 alias = BrandAssetVerifier.NormalizeAlias(input.AliasKey);
                 brandKey = BrandAssetVerifier.NormalizeBrandKey(input.BrandKey);
             }
-            catch (KnowledgePackVerificationException ex)
+            catch (BrandAssetVerificationException ex)
             {
                 throw new ArgumentException(ex.ErrorCode);
             }
@@ -497,6 +498,19 @@ public sealed class BrandPackService(IntelligenceDbContext db)
     private static string? NormalizeSourceUrlForImport(string? value)
     {
         try { return BrandAssetVerifier.NormalizeSourceUrl(value); }
-        catch (KnowledgePackVerificationException ex) { throw new ArgumentException(ex.ErrorCode); }
+        catch (BrandAssetVerificationException ex) { throw new ArgumentException(ex.ErrorCode); }
     }
+}
+
+/// <summary>
+/// Ein Markenbild hat die Pruefung nicht bestanden - Hash, Laenge, Medientyp oder die SVG-Haertung.
+///
+/// Die Ausnahme hiess einmal KnowledgePackVerificationException und lebte in der Paketsynchronisation,
+/// weil die Logos aus einem signierten Paket kamen. Mit dem Paket ist die Datei verschwunden, die
+/// Pruefung nicht: sie gilt weiter fuer jedes eigene Paket, jedes mitgelieferte und jedes selbst
+/// recherchierte Bild. Deshalb steht sie jetzt dort, wo sie geworfen wird.
+/// </summary>
+public sealed class BrandAssetVerificationException(string errorCode) : Exception(errorCode)
+{
+    public string ErrorCode { get; } = errorCode;
 }
