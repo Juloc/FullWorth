@@ -208,6 +208,29 @@ A statement may create its target account (`newAccountName`); a balance-only fil
 a legitimate import that merely anchors the account. Such a file creates no provenance links, so it
 cannot be rolled back — there is nothing to remove.
 
+### PDF statements (Ikano, C24)
+
+A `.pdf` goes the same way; only the reading differs. `Documents/PdfWords.cs` gets the words of every
+page with their coordinates from `pdftotext -bbox-layout` and assembles them into lines by their
+vertical middle — the plain `-layout` text misaligns amounts. `BankStatementPdf` picks the reader by
+content. The rule that matters more here than anywhere else: **a PDF is recalculated, not believed.**
+
+- **Ikano** (IKEA credit card): opening + Σ signed rows = closing. Unsigned rows are the instalment plan
+  and are skipped; the transfers between card and financing net to zero and arrive unticked
+  (`internal_transfer`). The account identifier is the card number, not the header IBAN (that is the
+  checking account the rate is debited from). The balance holds if the rows reconcile or the credit
+  limit minus the available amount confirms it.
+- **C24** (Smartkonto): one row per booking — booking day and value day without a year (the year comes
+  from the statement period, split correctly across a turn of the year), kind, signed amount — with the
+  counterparty and purpose on the following lines. The table ends at the summary or the page footer,
+  so neither address nor legal text of a following page ends up in a booking. The rows must reach the
+  end balance from the start balance **and** match debits and credits separately; the balance itself
+  needs the summary and the header balance to agree.
+
+When the rows do not reconcile, every row arrives unticked with `not_reconciled`; an unknown row format
+reports `rows_not_read` and imports only the balance. Tests use invented statements that copy the
+layout of the real ones — real statements never go into the repository.
+
 ## Finanzguru workbook import
 
 `POST /api/import/finanzguru` (`FinanzguruImportEndpoints.cs`), `.xlsx` only, max 25 MB.

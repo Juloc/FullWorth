@@ -46,7 +46,7 @@ internal static partial class BankStatementPdf
         var lines = pages.SelectMany(page => page).ToList();
         var text = string.Join('\n', lines.Select(line => line.Text));
         if (Ikano.Matches(text)) return Ikano.Read(lines, text);
-        if (C24.Matches(text)) return C24.Read(text);
+        if (C24.Matches(text)) return C24.Read(pages, text);
         throw new InvalidDataException(
             "FullWorth cannot read this PDF statement yet. Supported are Ikano and C24 statements.");
     }
@@ -193,22 +193,26 @@ internal static partial class BankStatementPdf
     }
 
     /// <summary>
-    /// C24 Smartkonto. Gelesen werden Kontostand, Zeitraum und die Zusammenfassung; die Buchungszeilen
-    /// noch nicht - dafuer fehlt ein Auszug, der welche enthaelt. Ein solcher wird nicht still halb
-    /// gelesen: er meldet <see cref="RowsNotRead"/>, und uebernommen wird dann nur der Kontostand.
+    /// C24 Smartkonto. Die Transaktionsuebersicht hat je Buchung eine Zeile "Buchung Valuta Art Betrag"
+    /// - die Daten ohne Jahr, das steht nur im Zeitraum - und darunter ihre Einzelheiten: bei einer
+    /// Kartenzahlung der Haendler, bei einer Ueberweisung Name, Verwendungszweck und IBAN. Die
+    /// Zusammenfassung nennt Start- und Endsaldo, Belastungen und Gutschriften; alle vier werden gegen
+    /// die gelesenen Zeilen nachgerechnet.
     /// </summary>
     internal static partial class C24
     {
         internal static bool Matches(string text) =>
             text.Contains("C24 Bank", StringComparison.Ordinal) && text.Contains("Kontoauszug", StringComparison.Ordinal);
 
-        internal static BankStatement Read(string text)
+        internal static BankStatement Read(IReadOnlyList<IReadOnlyList<PdfLine>> pages, string text)
         {
             var warnings = new List<string>();
-            var asOf = PeriodPattern().Match(text) is { Success: true } period
-                ? Date(period.Groups["to"].Value)
-                : throw new InvalidDataException("The C24 statement states no period.");
+            var period = PeriodPattern().Match(text);
+            if (!period.Success) throw new InvalidDataException("The C24 statement states no period.");
+            var from = Date(period.Groups["from"].Value);
+            var asOf = Date(period.Groups["to"].Value);
             var identifier = IbanPattern().Match(text) is { Success: true } iban ? iban.Groups["iban"].Value : null;
+            var entries = Rows(pages, from, asOf);
 
             decimal? Summary(Regex pattern) =>
                 pattern.Match(text) is { Success: true } match ? Amount(match.Groups["amount"].Value) : null;
@@ -224,18 +228,115 @@ internal static partial class BankStatementPdf
             var reconciled = start is not null && debits is not null && credits is not null && end is not null
                 && start.Value + credits.Value + debits.Value == end.Value
                 && (stated is null || stated.Value == end.Value);
-            if (!reconciled) warnings.Add(NotReconciled);
+            // Die Zeilen gegen die Zusammenfassung: zusammen vom Start- zum Endsaldo, und Belastungen wie
+            // Gutschriften je fuer sich - ein vertauschtes Vorzeichen gleicht sich in der Summe sonst aus.
+            var rowsReconcile = reconciled
+                && entries.Sum(entry => entry.Amount) == end!.Value - start!.Value
+                && entries.Where(entry => entry.Amount > 0).Sum(entry => entry.Amount) == credits!.Value
+                && entries.Where(entry => entry.Amount < 0).Sum(entry => entry.Amount) == debits!.Value;
 
             var noRows = text.Contains("Keine Transaktionen im Zeitraum vorhanden", StringComparison.Ordinal);
-            if (!noRows) warnings.Add(RowsNotRead);
+            if (entries.Count == 0 && !noRows)
+            {
+                // Der Auszug hat Buchungen, aber keine Zeile hat das bekannte Format.
+                warnings.Add(RowsNotRead);
+                if (!reconciled) warnings.Add(NotReconciled);
+            }
+            else if (!rowsReconcile)
+            {
+                warnings.Add(NotReconciled);
+                entries = [.. entries.Select(entry => entry with { ReviewNote = NotReconciled })];
+            }
 
+            // Der Kontostand haengt an der Zusammenfassung und dem Kopf, nicht an den Zeilen: das sind
+            // zwei unabhaengige Angaben des Auszugs, die uebereinstimmen muessen.
             return new BankStatement(
                 C24Adapter,
-                [],
+                entries,
                 reconciled ? new StatementBalance(end!.Value, "EUR", asOf) : null,
                 identifier,
                 warnings);
         }
+
+        /// <summary>
+        /// Die Buchungen der Transaktionsuebersicht. Je Seite beginnt die Tabelle nach ihrer Kopfzeile und
+        /// endet an der Zusammenfassung oder am Seitenfuss - so geraten weder Anschrift noch Rechtstext
+        /// einer Folgeseite in die Einzelheiten einer Buchung.
+        /// </summary>
+        private static List<StatementEntry> Rows(IReadOnlyList<IReadOnlyList<PdfLine>> pages, DateOnly from, DateOnly to)
+        {
+            var entries = new List<StatementEntry>();
+            foreach (var page in pages)
+            {
+                var inTable = false;
+                (Match Row, List<string> Details)? open = null;
+                foreach (var line in page)
+                {
+                    var content = line.Text.Trim();
+                    if (TableHeaderPattern().IsMatch(content)) { inTable = true; continue; }
+                    if (!inTable) continue;
+                    if (content.StartsWith("Zusammenfassung", StringComparison.Ordinal) || FooterPattern().IsMatch(content))
+                    {
+                        inTable = false;
+                        continue;
+                    }
+                    var row = RowPattern().Match(content);
+                    if (row.Success)
+                    {
+                        if (open is { } done) entries.Add(Entry(done.Row, done.Details, from, to));
+                        open = (row, []);
+                    }
+                    else if (open is { } current && content.Length > 0)
+                    {
+                        current.Details.Add(content);
+                    }
+                }
+                if (open is { } last) entries.Add(Entry(last.Row, last.Details, from, to));
+            }
+            return entries;
+        }
+
+        /// <summary>
+        /// Die erste Zeile der Einzelheiten ist die Gegenseite - Haendler oder Name -, der Rest mit der Art
+        /// der Buchung davor die Beschreibung. Ohne Einzelheiten ist die Art selbst die Gegenseite.
+        /// </summary>
+        private static StatementEntry Entry(Match row, List<string> details, DateOnly from, DateOnly to)
+        {
+            var kind = row.Groups["kind"].Value.Trim();
+            var counterparty = details.Count > 0 ? details[0] : kind;
+            var description = string.Join(" · ", new[] { kind }.Concat(details.Skip(1)));
+            return new StatementEntry(
+                DayOf(row.Groups["booked"].Value, from, to),
+                DayOf(row.Groups["value"].Value, from, to),
+                Amount(row.Groups["amount"].Value),
+                "EUR",
+                counterparty,
+                description,
+                null);
+        }
+
+        /// <summary>
+        /// "18.08." im Zeitraum eines Auszugs: das Jahr des Zeitraums. Reicht er ueber einen Jahreswechsel
+        /// (Dezember bis Januar), gehoert ein Monat vor dem Beginn ins zweite Jahr.
+        /// </summary>
+        private static DateOnly DayOf(string text, DateOnly from, DateOnly to)
+        {
+            if (text.Length == 10) return Date(text);
+            var day = int.Parse(text[..2], CultureInfo.InvariantCulture);
+            var month = int.Parse(text.Substring(3, 2), CultureInfo.InvariantCulture);
+            var year = from.Year == to.Year || month >= from.Month ? from.Year : to.Year;
+            return new DateOnly(year, month, day);
+        }
+
+        [GeneratedRegex(@"^Buchung\s+Valuta\s+Transaktionsinformation\s+Betrag$")]
+        private static partial Regex TableHeaderPattern();
+
+        [GeneratedRegex(@"C24 Bank GmbH|Seite \d+ von \d+")]
+        private static partial Regex FooterPattern();
+
+        /// <summary>Buchungstag, Valuta (je ohne oder mit Jahr), Art der Buchung, Betrag mit Vorzeichen.</summary>
+        [GeneratedRegex(@"^(?<booked>\d{2}\.\d{2}\.(?:\d{4})?)\s+(?<value>\d{2}\.\d{2}\.(?:\d{4})?)\s+(?<kind>.+?)\s+(?<amount>[+-]\d{1,3}(?:\.\d{3})*,\d{2})\s*€$")]
+        private static partial Regex RowPattern();
 
         [GeneratedRegex(@"(?<from>\d{2}\.\d{2}\.\d{4})\s*-\s*(?<to>\d{2}\.\d{2}\.\d{4})")]
         private static partial Regex PeriodPattern();

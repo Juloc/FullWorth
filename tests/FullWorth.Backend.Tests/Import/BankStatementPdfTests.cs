@@ -130,24 +130,38 @@ public sealed class BankStatementPdfTests
 
     private static IReadOnlyList<IReadOnlyList<PdfLine>> C24(
         string start = "250,00 €", string debits = "-0,00 €", string credits = "+0,00 €", string end = "250,00 €",
-        bool withBookings = false) =>
+        string[]? rows = null, string period = "01.09.2026 - 25.09.2026") =>
     [
-        Page(
+        Page([
             "C24 Smartkonto",
             "Girokonto",
             "IBAN: DE00999999990000000001",
             // Der Kontostand im Kopf ist der Endsaldo - steht dort etwas anderes, ist eine Zahl falsch gelesen.
             "Vorläufiger Kontoauszug 09/2026 Kontostand " + end,
-            "01.09.2026 - 25.09.2026",
+            period,
             "Transaktionsübersicht",
             "Buchung Valuta Transaktionsinformation Betrag",
-            withBookings ? "02.09.2026 02.09.2026 Irgendeine Buchung -12,00 €" : "Keine Transaktionen im Zeitraum vorhanden",
+            .. rows ?? ["Keine Transaktionen im Zeitraum vorhanden"],
             "Zusammenfassung",
             "Startsaldo " + start,
             "Kontobelastungen " + debits,
             "Kontogutschriften " + credits,
             "Endsaldo " + end,
-            "09/2026 C24 Bank GmbH Seite 1 von 2"),
+            "C24 Bank GmbH",
+            "09/2026 Musterstraße 1, 00000 Musterstadt Seite 1 von 2"]),
+    ];
+
+    /// <summary>Drei Buchungen wie auf dem echten Auszug: Kartenzahlung, Ueberweisung, Erstattung.</summary>
+    private static readonly string[] ThreeBookings =
+    [
+        "18.09. 18.09. Online-Kartenzahlung -15,00 €",
+        "SHOP *BEISPIEL",
+        "17.09. 16.09. Echtzeitüberweisung +40,00 €",
+        "Erika Musterfrau",
+        "Urlaub",
+        "IBAN: DE00999999990000000002 / BIC: TESTDEFF",
+        "12.09. 12.09. Rückerstattung +5,00 €",
+        "Versandhaus",
     ];
 
     [Fact]
@@ -164,13 +178,122 @@ public sealed class BankStatementPdfTests
     }
 
     /// <summary>
-    /// C24-Buchungszeilen kann der Leser noch nicht - dafuer fehlt ein echter Auszug mit Buchungen. Ein
-    /// solcher wird nicht still halb gelesen: er sagt es, und nur der Kontostand kommt an.
+    /// Die Buchungen eines C24-Auszugs: Datum ohne Jahr (es kommt aus dem Zeitraum), die Gegenseite aus
+    /// der ersten Zeile der Einzelheiten, der Rest samt Art der Buchung als Beschreibung. Sie gehen auf
+    /// den Cent auf - also wird keine zur Pruefung vorgelegt.
     /// </summary>
     [Fact]
-    public void AC24StatementWithBookingsSaysTheyAreNotReadYet()
+    public void AC24StatementReadsItsBookings()
     {
-        var statement = BankStatementPdf.Read(C24(debits: "-12,00 €", end: "238,00 €", withBookings: true));
+        var statement = BankStatementPdf.Read(C24(debits: "-15,00 €", credits: "+45,00 €", end: "280,00 €", rows: ThreeBookings));
+
+        Assert.Empty(statement.Warnings ?? []);
+        Assert.Equal(280.00m, statement.ClosingBalance!.Amount);
+        Assert.Collection(statement.Entries,
+            card =>
+            {
+                Assert.Equal(new DateOnly(2026, 9, 18), card.BookingDate);
+                Assert.Equal(-15.00m, card.Amount);
+                Assert.Equal("SHOP *BEISPIEL", card.Counterparty);
+                Assert.Equal("Online-Kartenzahlung", card.Description);
+                Assert.Null(card.ReviewNote);
+            },
+            transfer =>
+            {
+                Assert.Equal(new DateOnly(2026, 9, 17), transfer.BookingDate);
+                Assert.Equal(new DateOnly(2026, 9, 16), transfer.ValueDate);
+                Assert.Equal(40.00m, transfer.Amount);
+                Assert.Equal("Erika Musterfrau", transfer.Counterparty);
+                Assert.Equal("Echtzeitüberweisung · Urlaub · IBAN: DE00999999990000000002 / BIC: TESTDEFF", transfer.Description);
+            },
+            refund =>
+            {
+                Assert.Equal(5.00m, refund.Amount);
+                Assert.Equal("Versandhaus", refund.Counterparty);
+            });
+    }
+
+    /// <summary>
+    /// Die Summe allein genuegt nicht: -20 und +8 ergeben dieselben -12 wie eine einzige Belastung. Ein
+    /// falsch gelesenes Vorzeichen faellt erst an Belastungen und Gutschriften je fuer sich auf.
+    /// </summary>
+    [Fact]
+    public void AC24StatementWhoseSidesDoNotMatchPutsEveryRowToReview()
+    {
+        var statement = BankStatementPdf.Read(C24(debits: "-12,00 €", end: "238,00 €", rows:
+        [
+            "03.09. 03.09. Lastschrift -20,00 €",
+            "Stadtwerke",
+            "04.09. 04.09. Gutschrift +8,00 €",
+            "Erika Musterfrau",
+        ]));
+
+        Assert.Contains(BankStatementPdf.NotReconciled, statement.Warnings ?? []);
+        Assert.All(statement.Entries, entry => Assert.Equal(BankStatementPdf.NotReconciled, entry.ReviewNote));
+        // Der Kontostand haengt an Zusammenfassung und Kopf - die stimmen ueberein, er kommt an.
+        Assert.Equal(238.00m, statement.ClosingBalance!.Amount);
+    }
+
+    /// <summary>
+    /// Ein Auszug von Dezember bis Januar: "20.12." gehoert ins alte Jahr, "05.01." ins neue.
+    /// </summary>
+    [Fact]
+    public void AC24StatementAcrossTheTurnOfTheYearDatesEachBookingInItsYear()
+    {
+        var statement = BankStatementPdf.Read(C24(debits: "-10,00 €", credits: "+10,00 €", period: "15.12.2026 - 14.01.2027", rows:
+        [
+            "20.12. 20.12. Online-Kartenzahlung -10,00 €",
+            "SHOP *BEISPIEL",
+            "05.01. 05.01. Gutschrift +10,00 €",
+            "Erika Musterfrau",
+        ]));
+
+        Assert.Equal(new DateOnly(2026, 12, 20), statement.Entries[0].BookingDate);
+        Assert.Equal(new DateOnly(2027, 1, 5), statement.Entries[1].BookingDate);
+    }
+
+    /// <summary>
+    /// Geht die Tabelle auf der naechsten Seite weiter, stehen dazwischen Seitenfuss und die Anschrift
+    /// der Folgeseite. Keines davon darf in die Einzelheiten der letzten Buchung geraten.
+    /// </summary>
+    [Fact]
+    public void AC24TableOverTwoPagesKeepsFooterAndAddressOutOfTheBookings()
+    {
+        var first = C24(debits: "-15,00 €", credits: "+45,00 €", end: "280,00 €", rows: ThreeBookings[..6])[0]
+            .Where(line => !line.Text.StartsWith("Zusammenfassung") && !line.Text.StartsWith("Startsaldo")
+                && !line.Text.StartsWith("Kontobelastungen") && !line.Text.StartsWith("Kontogutschriften")
+                && !line.Text.StartsWith("Endsaldo"))
+            .ToList();
+        var second = Page([
+            "Erika Musterfrau",
+            "Musterweg 2",
+            "C24 Smartkonto",
+            "Buchung Valuta Transaktionsinformation Betrag",
+            .. ThreeBookings[6..],
+            "Zusammenfassung",
+            "Startsaldo 250,00 €",
+            "Kontobelastungen -15,00 €",
+            "Kontogutschriften +45,00 €",
+            "Endsaldo 280,00 €",
+            "C24 Bank GmbH",
+            "09/2026 Musterstraße 1, 00000 Musterstadt Seite 2 von 2"]);
+
+        var statement = BankStatementPdf.Read([first, second]);
+
+        Assert.Empty(statement.Warnings ?? []);
+        Assert.Equal(3, statement.Entries.Count);
+        Assert.Equal("Echtzeitüberweisung · Urlaub · IBAN: DE00999999990000000002 / BIC: TESTDEFF", statement.Entries[1].Description);
+        Assert.Equal("Versandhaus", statement.Entries[2].Counterparty);
+    }
+
+    /// <summary>
+    /// Hat der Auszug Buchungen in einem Format, das der Leser nicht kennt, liest er sie nicht halb: er
+    /// sagt es, und nur der Kontostand kommt an.
+    /// </summary>
+    [Fact]
+    public void AC24StatementWithUnreadableBookingsSaysSo()
+    {
+        var statement = BankStatementPdf.Read(C24(debits: "-12,00 €", end: "238,00 €", rows: ["Irgendeine Buchung in neuem Format 12,00"]));
 
         Assert.Contains(BankStatementPdf.RowsNotRead, statement.Warnings ?? []);
         Assert.Empty(statement.Entries);
