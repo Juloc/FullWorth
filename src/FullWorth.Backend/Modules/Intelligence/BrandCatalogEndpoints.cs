@@ -20,13 +20,10 @@ public static class BrandCatalogEndpoints
             CancellationToken ct) =>
         {
             _ = currentUser.RequireUserId();
-            var installation = await db.KnowledgePackInstallations.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.ScopeKey == KnowledgePackProtocol.InstallationScopeKey, ct);
             var catalog = await brandPacks.GetEffectiveCatalogAsync(ct);
 
             return Results.Ok(new
             {
-                packVersion = installation?.Version,
                 assets = catalog.Assets.Select(x => new
                 {
                     x.BrandKey,

@@ -54,7 +54,6 @@ public sealed class IngestionService(
     FullWorth.Backend.Modules.Notifications.BudgetNotificationService? budgetNotifications = null,
     FinanzguruAccountReconciliationService? finanzguruReconciliation = null,
     IntelligenceDbContext? intelligenceDb = null,
-    CloudOntologyResolver? cloudOntologyResolver = null,
     TransferDetectionService? transferDetection = null)
 {
     private readonly FullWorth.Backend.Security.FieldCipher cipher = fieldCipher ?? FullWorth.Backend.Security.FieldCipher.Null;
@@ -441,17 +440,11 @@ public sealed class IngestionService(
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && !x.IsArchived)
             .Select(x => new { x.Key, x.Name, x.Id })
             .ToListAsync(ct);
+        // Hier erweiterte einmal eine Ontologie aus dem Wissenspaket die Kategorieschluessel um
+        // gelernte Synonyme. Ihre Tabellen hatten nach dem Wegfall der Paketsynchronisation keinen
+        // Schreiber mehr - drei Abfragen je Stapel, die nur noch leer zurueckkommen konnten.
         IReadOnlyDictionary<string, Guid> activeCategoryIdsByKey = activeCategoryRows
             .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
-        if (cloudOntologyResolver is not null && intelligenceDb is not null)
-        {
-            activeCategoryIdsByKey = await cloudOntologyResolver.ExpandCategoryMapAsync(
-                activeCategoryRows
-                    .Select(x => new LocalCategorySemanticCandidate(x.Id, x.Key, x.Name))
-                    .ToList(),
-                country,
-                ct);
-        }
         var activeCategoryIds = activeCategoryRows.Select(x => x.Id).ToArray();
 
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings = Array.Empty<LearnedMerchantCategoryMapping>();

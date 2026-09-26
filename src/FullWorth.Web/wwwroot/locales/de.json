@@ -1346,8 +1346,6 @@
     "back": "Zurück",
     "finish": "Einrichtung abschließen",
     "done": "Einrichtung abgeschlossen. Alle Zugänge bleiben später in den Einstellungen änderbar.",
-    "cloudTitle": "FullWorth Cloud Intelligence",
-    "cloudText": "Verbessert Händler-, Kategorie- und Vertragszuordnungen gemeinsam und ermöglicht anonyme Vergleichswerte.",
     "categoriesTitle": "Standardkategorien",
     "categoriesText": "In welcher Sprache sollen die mitgelieferten Kategorien heißen? Die automatische Zuordnung hängt am Schlüssel, nicht am Namen – du kannst jede Kategorie später umbenennen, ohne dass etwas kaputtgeht.",
     "categoriesGerman": "Deutsch (Lebensmittel, Wohnen, Verkehr …)",
@@ -1360,20 +1358,6 @@
     "marketDataYahooHint": "Ohne Schlüssel. Findet Papiere über die ISIN. Inoffiziell und für den privaten Gebrauch.",
     "marketDataCustom": "Eigene Vorlage",
     "marketDataCustomHint": "Weitere Angaben (URL, Pfade, Schlüssel) in den Einstellungen unter Marktdaten."
-  },
-  "cloudIntelligence": {
-    "diagnostics": "Verbindungsdiagnose öffnen (Endpunkt, Warteschlange)",
-    "title": "FullWorth Cloud Intelligence",
-    "manage": "Cloud Intelligence verwalten",
-    "loading": "Cloud-Status wird geprüft…",
-    "enabled": "Aktiv",
-    "disabled": "Deaktiviert",
-    "explain": "FullWorth nutzt gemeinsames, versioniertes Wissen für bessere automatische Zuordnungen und Vergleichswerte.",
-    "shared": "Geteilt werden nur benötigte, minimierte Lern- und Statistikdaten, z. B. erkannte Händler, Kategorie-Aliase, bestätigte Provider-/Produkt-Aliase, kanonische Provider-Schlüssel für anonyme Vertragsvergleiche, pseudonyme Merchant-Schlüssel mit aggregierten Monatsausgaben, anonymisierte Produktpreise, aggregierte Vertragskosten und Sparquote sowie grobe Vergleichs-Buckets. Keine einzelnen Buchungen, vollständigen Warenkörbe, Einkommensbeträge, IBAN, Kontonummer, E-Mail, Benutzer-ID, Notizen oder Bankzugangsdaten.",
-    "useCloud": "FullWorth Cloud Intelligence verwenden",
-    "localWins": "Manuelle Entscheidungen und lokale Regeln haben immer Vorrang vor Cloud-Wissen.",
-    "savedEnabled": "Cloud Intelligence aktiviert.",
-    "savedDisabled": "Cloud Intelligence deaktiviert."
   },
   "twoFactor": {
     "title": "Zwei-Faktor-Authentifizierung",

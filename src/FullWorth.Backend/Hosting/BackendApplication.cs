@@ -85,9 +85,6 @@ public static class BackendApplication
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(60);
         });
-        builder.Services.AddHttpClient<FullWorthCloudClient>();
-        builder.Services.AddScoped<IFullWorthCloudClient>(services => services.GetRequiredService<FullWorthCloudClient>());
-        builder.Services.AddHostedService<CloudEndpointStartupLogger>();
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiIntelligenceProvider>());
         builder.Services.AddScoped<OpenAiCompatibleIntelligenceProvider>();
         builder.Services.AddScoped<CodexBridgeIntelligenceProvider>();
@@ -113,15 +110,9 @@ public static class BackendApplication
         builder.Services.AddScoped<IntelligenceAdminAuthorizer>();
         builder.Services.AddScoped<IntelligenceManualJobService>();
         builder.Services.AddScoped<IntelligenceFeedbackRecorder>();
-        builder.Services.AddScoped<CloudIntelligenceStateService>();
-        builder.Services.AddScoped<CloudInstanceCredentialStore>();
         // Singleton, because remembering a failed registration across requests is the whole point.
-        builder.Services.AddSingleton<CloudRegistrationCooldown>();
-        builder.Services.AddScoped<CloudCredentialAcquisition>();
-        builder.Services.AddScoped<CloudOperationalRegistryResolver>();
         builder.Services.AddScoped<BrandPackService>();
         builder.Services.AddScoped<BundledBrandCatalogInstaller>();
-        builder.Services.AddScoped<CloudOntologyResolver>();
         builder.Services.AddScoped<AiBudgetGuard>();
         builder.Services.AddScoped<AiCostEstimator>();
         builder.Services.AddScoped<IntelligenceJobLeaseService>();

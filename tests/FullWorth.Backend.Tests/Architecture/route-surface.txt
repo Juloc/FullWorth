@@ -184,7 +184,6 @@ GET              /api/intelligence/access/codex/login/{sessionId:guid}
 GET              /api/intelligence/access/codex/models
 GET              /api/intelligence/admin/audit
 GET              /api/intelligence/admin/brand-packs/custom/
-GET              /api/intelligence/admin/cloud
 GET              /api/intelligence/admin/credentials
 GET              /api/intelligence/admin/jobs
 GET              /api/intelligence/admin/overview
@@ -429,8 +428,6 @@ POST             /api/intelligence/access/codex/login
 POST             /api/intelligence/access/codex/logout
 POST             /api/intelligence/access/test
 POST             /api/intelligence/admin/brand-packs/custom/
-POST             /api/intelligence/admin/cloud/disable
-POST             /api/intelligence/admin/cloud/enable
 POST             /api/intelligence/admin/credentials
 POST             /api/intelligence/admin/credentials/{id:guid}/test
 POST             /api/intelligence/admin/jobs/{type}/enqueue

@@ -65,7 +65,7 @@ function brandLogoPath(name) {
   return null;
 }
 
-// Left identity (UX rework §4): installed cloud/custom brand logo → category icon → category-tinted monogram,
+// Left identity (UX rework §4): installed brand logo → category icon → category-tinted monogram,
 // with a transfer glyph override. No third-party logo lookup happens from transaction rendering.
 // `opts`: {logoAssetPath, categoryIconKey, isTransfer, isSavings}.
 // Plus- und Stift-Strich fuer #primary-action auf dem Telefon (Scheibe 13): dieselben Pfaddaten wie

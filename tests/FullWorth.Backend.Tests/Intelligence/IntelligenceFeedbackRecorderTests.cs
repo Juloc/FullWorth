@@ -70,7 +70,6 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.Equal("product_category_corrected", feedback.EventType);
         Assert.True(feedback.CloudEligible);
         Assert.DoesNotContain(rawAlias, feedback.SubjectFingerprint, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Theory]
@@ -86,37 +85,22 @@ public sealed class IntelligenceFeedbackRecorderTests
 
     /// <summary>
     /// Ein angenommener Vertrag ist verallgemeinerbares Wissen - "1&amp;1 ist ein Anbieter" gilt nicht
-    /// nur fuer diesen Haushalt. Das Flag sagt das weiterhin. Was es NICHT mehr ausloest, ist eine
-    /// Zeile in der Ausgangswarteschlange: die Cloud, die sie abgeholt hat, gibt es nicht mehr.
+    /// nur fuer diesen Haushalt, anders als "diese Buchung gehoert zu Urlaub". Das Flag unterscheidet
+    /// die beiden, und es bleibt: daraus soll spaeter instanzweites Wissen werden.
     ///
-    /// Die leere Warteschlange ist der eigentliche Gegenstand dieses Tests. Sie ist die Zusicherung,
-    /// dass aus einer Bestaetigung nichts mehr entsteht, das die Maschine verlassen koennte.
+    /// Was es nicht mehr ausloest, ist eine Zeile in einer Ausgangswarteschlange. Die gibt es nicht
+    /// mehr - und dass es sie nicht mehr gibt, steht seit dem Wegfall des Cloud-Clients im
+    /// Datenmodell selbst: diese Datei wuerde nicht uebersetzen, wenn jemand sie wieder einfuehrte,
+    /// ohne die Entscheidung erneut zu treffen.
     /// </summary>
     [Fact]
-    public async Task Accepted_contract_is_generalizable_but_queues_nothing()
+    public async Task Accepted_contract_is_marked_generalizable()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
         await using var db = new IntelligenceDbContext(options);
         await db.Database.EnsureCreatedAsync();
-
-        var state = new CloudConnectionState
-        {
-            ScopeKey = CloudConnectionState.InstanceScopeKey,
-            Mode = CloudIntelligenceModes.Enabled,
-            SetupDecisionAt = DateTimeOffset.UtcNow
-        };
-        db.CloudConnectionStates.Add(state);
-        db.CloudIntelligenceConsents.Add(new CloudIntelligenceConsent
-        {
-            InstanceId = state.InstanceId,
-            AcceptedByUserId = Guid.NewGuid(),
-            PolicyVersion = CloudIntelligencePolicy.CurrentVersion,
-            Locale = "de",
-            ClientVersion = "test"
-        });
-        await db.SaveChangesAsync();
 
         var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
 
@@ -133,9 +117,11 @@ public sealed class IntelligenceFeedbackRecorderTests
 
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
         Assert.True(feedback.CloudEligible);
+        Assert.Equal("contract_candidate_accepted", feedback.EventType);
 
-        // Zustimmung erteilt, Zustand aktiv, Ereignis geeignet - und trotzdem nichts zu senden.
-        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
+        // Der rohe Gegenpartei-Name darf nirgends stehen; gespeichert ist nur sein Fingerabdruck.
+        Assert.DoesNotContain("1&1", feedback.NewValueJson, StringComparison.Ordinal);
+        Assert.StartsWith("sha256:", feedback.SubjectFingerprint, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -162,7 +148,6 @@ public sealed class IntelligenceFeedbackRecorderTests
 
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
         Assert.False(feedback.CloudEligible);
-        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Fact]

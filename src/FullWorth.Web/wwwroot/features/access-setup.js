@@ -408,78 +408,6 @@ export function createAccessSetup(ctx, openBankingWizard) {
     start();
   }
 
-  async function renderCloudSettings() {
-    const panel = document.querySelector('#cloud-intelligence-panel');
-    const row = document.querySelector('#cloud-intelligence-settings');
-    const sub = document.querySelector('#cloud-intelligence-status');
-    if (!panel || !row || !sub) return;
-
-    try {
-      const status = await api('api/intelligence/admin/cloud');
-      panel.hidden = false;
-      sub.textContent = status.requiresSetupDecision
-        ? get('cloudIntelligence.consentUpdateRequired')
-        : status.mode === 'enabled'
-          ? get('cloudIntelligence.enabled')
-          : get('cloudIntelligence.disabled');
-      if (status.lastErrorCode)
-        sub.textContent += ' · ' + status.lastErrorCode;
-      row.onclick = () => openCloudWizard(status);
-    } catch {
-      panel.hidden = true;
-    }
-  }
-
-  function openCloudWizard(initialStatus, options = {}) {
-    let status = initialStatus;
-    const dlg = dialog(
-      '<div class="dialog-card banking-setup cloud-intelligence-setup">' +
-      '<div class="panel-head"><h2></h2></div></div>');
-    const wizard = createWizard(dlg);
-    const step = wizard.body;
-    dlg.querySelector('h2').textContent = get('cloudIntelligence.title');
-    dlg.addEventListener('close', () => options.onClose?.(), { once: true });
-
-    const draw = () => {
-      const enabledByDefault = status?.requiresSetupDecision
-        ? true
-        : status?.mode === 'enabled';
-      step.innerHTML =
-        '<p>' + esc(get('cloudIntelligence.explain')) + '</p>' +
-        '<p class="row-sub">' + esc(get('cloudIntelligence.shared')) + '</p>' +
-        '<label class="check"><input type="checkbox" data-enabled ' + (enabledByDefault ? 'checked' : '') + '> ' +
-          esc(get('cloudIntelligence.useCloud')) + '</label>' +
-        '<p class="row-sub">' + esc(get('cloudIntelligence.localWins')) + '</p>' +
-        '<p class="row-sub"><a href="/settings/intelligence" data-view-jump="intelligence">' + esc(get('cloudIntelligence.diagnostics')) + ' \u2197</a></p>' +
-        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-cancel>' + esc(get('common.cancel')) + '</button>' +
-        '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-save>' + esc(get('common.save')) + '</button></div>';
-
-      step.querySelector('[data-cancel]').onclick = () => dlg.close();
-      step.querySelector('[data-save]').onclick = event => wizard.busy(event.currentTarget, async () => {
-        const enabled = step.querySelector('[data-enabled]').checked;
-        try {
-          if (enabled) {
-            status = await api('api/intelligence/admin/cloud/enable', jsonBody({
-              policyVersion: status.currentPolicyVersion,
-              locale: document.documentElement.lang || navigator.language || 'und',
-              clientVersion: 'web'
-            }));
-          } else {
-            status = await api('api/intelligence/admin/cloud/disable', jsonBody({}));
-          }
-          await renderCloudSettings();
-          dlg.close();
-          toast(get(enabled ? 'cloudIntelligence.savedEnabled' : 'cloudIntelligence.savedDisabled'));
-        } catch (error) {
-          toast(error.message || get('common.error'));
-        }
-      });
-    };
-
-    dlg.showModal();
-    draw();
-  }
-
   async function maybeOpenRegistrationOnboarding() {
     let onboarding;
     try { onboarding = await api('api/onboarding/status'); }
@@ -525,7 +453,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<div class="dialog-actions">' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
         '</div>',
-        { step: 1, total: 5 });
+        { step: 1, total: 4 });
 
       step.querySelector('[data-next]').onclick = event => {
         const picked = step.querySelector('[name="category-language"]:checked')?.value || current;
@@ -556,7 +484,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
           '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
         '</div>',
-        { step: 2, total: 5 });
+        { step: 2, total: 4 });
 
       step.querySelector('[data-setup]').onclick =
         () => openAiAccessWizard(ai, { onClose: aiStep });
@@ -586,7 +514,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
           '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
         '</div>',
-        { step: 3, total: 5 });
+        { step: 3, total: 4 });
 
       step.querySelector('[data-back]').onclick = aiStep;
       step.querySelector('[data-setup]').onclick =
@@ -597,13 +525,13 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
     // Marktdaten-Voreinstellung waehlen. Nur fuer Administratoren sichtbar: der Assistent laeuft fuer
     // jede neu registrierte Person, aber GET /auth/admin/instance-settings ist admin-only und
-    // antwortet Nicht-Admins mit 403 - genau wie categoryStep und cloudStep das schon fuer ihre
+    // antwortet Nicht-Admins mit 403 - genau wie categoryStep das schon fuer seine
     // eigenen admin-only Aufrufe behandeln, wird das hier zum stillen Uebergang zum naechsten Schritt,
     // statt einen leeren oder kaputten Schritt zu zeigen.
     const marketDataStep = async () => {
       let settings = null;
       try { settings = await instanceSettingsApi('/auth/admin/instance-settings'); }
-      catch { await cloudStep(); return; }
+      catch { await finish(); return; }
 
       const current = settings.find(setting => setting.key === 'MarketData:Provider')?.value || 'none';
 
@@ -625,63 +553,23 @@ export function createAccessSetup(ctx, openBankingWizard) {
           '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
         '</div>',
-        { step: 4, total: 5 });
+        { step: 4, total: 4 });
 
       step.querySelector('[data-back]').onclick = bankStep;
       step.querySelector('[data-next]').onclick = event => {
         const picked = step.querySelector('[name="market-data-provider"]:checked')?.value || current;
-        if (picked === current) return cloudStep();
+        if (picked === current) return finish();
         return wizard.busy(event.currentTarget, async () => {
           try {
             await instanceSettingsApi(
               '/auth/admin/instance-settings',
               jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT'));
-            await cloudStep();
+            await finish();
           } catch (error) {
             toast(error.message || get('common.error'));
           }
         });
       };
-    };
-
-    const cloudStep = async () => {
-      let cloud = null;
-      try { cloud = await api('api/intelligence/admin/cloud'); }
-      catch {
-        await finish();
-        return;
-      }
-
-      const checked = cloud.requiresSetupDecision ? true : cloud.mode === 'enabled';
-      wizard.render(
-        '<h3>' + esc(get('onboarding.cloudTitle')) + '</h3>' +
-        '<p>' + esc(get('onboarding.cloudText')) + '</p>' +
-        '<label class="check"><input type="checkbox" data-cloud ' + (checked ? 'checked' : '') + '> ' +
-          esc(get('cloudIntelligence.useCloud')) + '</label>' +
-        '<p class="row-sub">' + esc(get('cloudIntelligence.shared')) + '</p>' +
-        '<div class="dialog-actions">' +
-          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
-          '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
-        '</div>',
-        { step: 5, total: 5 });
-
-      step.querySelector('[data-back]').onclick = marketDataStep;
-      step.querySelector('[data-finish]').onclick = event => wizard.busy(event.currentTarget, async () => {
-        try {
-          if (step.querySelector('[data-cloud]').checked) {
-            await api('api/intelligence/admin/cloud/enable', jsonBody({
-              policyVersion: cloud.currentPolicyVersion,
-              locale: document.documentElement.lang || navigator.language || 'und',
-              clientVersion: 'web'
-            }));
-          } else {
-            await api('api/intelligence/admin/cloud/disable', jsonBody({}));
-          }
-          await finish();
-        } catch (error) {
-          toast(error.message || get('common.error'));
-        }
-      });
     };
 
     const finish = async () => {
@@ -701,8 +589,6 @@ export function createAccessSetup(ctx, openBankingWizard) {
   return {
     renderAiAccessSettings,
     openAiAccessWizard,
-    renderCloudSettings,
-    openCloudWizard,
     maybeOpenRegistrationOnboarding
   };
 }

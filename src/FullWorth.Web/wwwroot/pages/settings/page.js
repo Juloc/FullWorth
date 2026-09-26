@@ -200,7 +200,6 @@ export async function renderSettings(ctx, { accessSetup, renderBankingSettings }
   await Promise.all([
     renderSharing(ctx),
     renderBankingSettings?.(ctx),
-    accessSetup?.renderAiAccessSettings(),
-    accessSetup?.renderCloudSettings()
+    accessSetup?.renderAiAccessSettings()
   ]);
 }

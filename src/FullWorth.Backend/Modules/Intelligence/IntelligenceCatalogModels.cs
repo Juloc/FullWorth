@@ -2,169 +2,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence;
 
-public static class KnowledgePackProtocol
-{
-    public const string SchemaVersion = "2";
-    public const string LegacySchemaVersion = "1";
-    public const string SignatureAlgorithm = "RSA-PSS-SHA256";
-    public const string InstallationScopeKey = "instance";
-
-    /// <summary>
-    /// Official knowledge-pack verification key, shipped with FullWorth so an external self-hosted instance can
-    /// verify signed packs from the official Cloud without access to any private Cloud-server secret volume.
-    /// This is a PUBLIC key — it is meant to be distributed; the signing private key never leaves the Cloud.
-    ///
-    /// Signature verification stays pinned to this key. An explicit <c>FullWorthCloud:KnowledgePackPublicKeyPem</c>
-    /// / <c>…Path</c> / <c>…Base64</c> setting takes precedence, which is how private or self-signed Cloud
-    /// deployments (and existing same-host installs reading the shared secrets volume) keep working unchanged.
-    ///
-    /// Set this to the official Cloud's public key PEM at release time. That it is empty is NOT the hole it looks
-    /// like, and this comment exists because it has been read as one: <see cref="KnowledgePackTrustStore"/> fetches
-    /// the key from the Cloud the instance is already enrolled with (<c>GET /v1/knowledge-packs/public-key</c>,
-    /// instance-authenticated) and pins it, so a self-hoster needs neither this constant nor a shared secret volume.
-    /// This is the last fallback of three; if all three come up empty the sync fails closed with
-    /// <c>knowledge_pack_public_key_missing</c> rather than trusting anything.
-    /// </summary>
-    public const string OfficialPublicKeyPem = "";
-
-    public static string? ResolveOfficialPublicKeyPem() =>
-        string.IsNullOrWhiteSpace(OfficialPublicKeyPem) ? null : OfficialPublicKeyPem.Trim();
-
-    public static bool IsSupportedSchemaVersion(string? value) =>
-        value is LegacySchemaVersion or SchemaVersion;
-}
-
-public sealed record KnowledgePackManifest(
-    string PackId,
-    string Version,
-    string SchemaVersion,
-    string Region,
-    string ContentSha256,
-    string SignatureAlgorithm,
-    string SignatureBase64,
-    string? MinimumClientVersion);
-
-/// <summary>
-/// Transport-only binary delta from a base pack the client already holds to a newer target pack. The client
-/// reconstructs the full target bytes as <c>base[0..PrefixLength] + Middle + base[^SuffixLength..]</c> and then
-/// runs the UNCHANGED signed-hash + RSA-PSS verification against the target manifest. A wrong/malicious delta
-/// simply fails that verification and the client falls back to a full download, so this carries no new trust.
-/// </summary>
-public sealed record KnowledgePackDelta(
-    string PackId,
-    string Version,
-    string BaseVersion,
-    string BaseContentSha256,
-    string ContentSha256,
-    int PrefixLength,
-    int SuffixLength,
-    string MiddleBase64);
-
-public sealed record KnowledgePackMerchantPayload(
-    string AliasKey,
-    string Direction,
-    string CanonicalMerchantKey,
-    string CanonicalName,
-    string? CategoryKey,
-    string? Country,
-    decimal Confidence,
-    string? Domain,
-    string? LogoKey);
-
-public sealed record KnowledgePackOntologyEntityPayload(
-    string EntityType,
-    string CanonicalKey,
-    string DisplayName,
-    string? ParentCanonicalKey,
-    string Status,
-    int Version);
-
-public sealed record KnowledgePackOntologyAliasPayload(
-    string EntityType,
-    string CanonicalKey,
-    string Alias,
-    string NormalizedAlias,
-    string Locale,
-    string? Country,
-    decimal Confidence,
-    int DistinctInstances,
-    int Version);
-
-public sealed record KnowledgePackOntologyRedirectPayload(
-    string EntityType,
-    string FromCanonicalKey,
-    string ToCanonicalKey,
-    int Version);
-
-public sealed record KnowledgePackBrandAssetPayload(
-    string BrandKey,
-    string CanonicalName,
-    string LogoKey,
-    string MediaType,
-    string? ContentBase64,
-    string ContentSha256,
-    int ByteLength,
-    string? SourceName,
-    string? SourceUrl,
-    string? LicenseNote);
-
-public sealed record KnowledgePackBrandAliasPayload(
-    string AliasKey,
-    string BrandKey,
-    string? Country);
-
-public sealed record KnowledgePackPayload(
-    string PackId,
-    string Version,
-    string SchemaVersion,
-    string Region,
-    IReadOnlyList<KnowledgePackMerchantPayload> Merchants,
-    IReadOnlyList<KnowledgePackOntologyEntityPayload>? OntologyEntities = null,
-    IReadOnlyList<KnowledgePackOntologyAliasPayload>? OntologyAliases = null,
-    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? OntologyRedirects = null,
-    IReadOnlyList<KnowledgePackBrandAssetPayload>? BrandAssets = null,
-    IReadOnlyList<KnowledgePackBrandAliasPayload>? BrandAliases = null,
-    IReadOnlyList<KnowledgePackOntologyEntityPayload>? ProviderOntologyEntities = null,
-    IReadOnlyList<KnowledgePackOntologyAliasPayload>? ProviderOntologyAliases = null,
-    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProviderOntologyRedirects = null,
-    IReadOnlyList<KnowledgePackOntologyEntityPayload>? ProductOntologyEntities = null,
-    IReadOnlyList<KnowledgePackOntologyAliasPayload>? ProductOntologyAliases = null,
-    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProductOntologyRedirects = null,
-    IReadOnlyList<KnowledgePackContractProviderPayload>? ContractProviders = null,
-    IReadOnlyList<KnowledgePackContractSignaturePayload>? ContractSignatures = null,
-    IReadOnlyList<KnowledgePackProductPayload>? Products = null,
-    IReadOnlyList<KnowledgePackProductGtinPayload>? ProductGtins = null,
-    IReadOnlyList<KnowledgePackProductAliasPayload>? ProductAliases = null);
-
-public sealed class KnowledgePackInstallation
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string ScopeKey { get; set; } = KnowledgePackProtocol.InstallationScopeKey;
-    public string PackId { get; set; } = string.Empty;
-    public string Version { get; set; } = string.Empty;
-    public string SchemaVersion { get; set; } = string.Empty;
-    public string Region { get; set; } = string.Empty;
-    public string ContentSha256 { get; set; } = string.Empty;
-    public string SignatureAlgorithm { get; set; } = string.Empty;
-    public int MerchantMappingCount { get; set; }
-    public DateTimeOffset InstalledAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset LastCheckedAt { get; set; } = DateTimeOffset.UtcNow;
-    public string? LastErrorCode { get; set; }
-}
-
-public sealed class KnowledgePackArchive
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string PackId { get; set; } = string.Empty;
-    public string Version { get; set; } = string.Empty;
-    public string SchemaVersion { get; set; } = string.Empty;
-    public string Region { get; set; } = string.Empty;
-    public string ContentSha256 { get; set; } = string.Empty;
-    public string SignatureAlgorithm { get; set; } = string.Empty;
-    public string SignatureBase64 { get; set; } = string.Empty;
-    public string PayloadBase64 { get; set; } = string.Empty;
-    public DateTimeOffset VerifiedAt { get; set; } = DateTimeOffset.UtcNow;
-}
+// Die Nachschlagewerke dieser Instanz: Markenlogos und Haendlerzuordnungen.
+//
+// Sie standen bis zur Abschaffung der Cloud in KnowledgePackModels.cs, zusammen mit dem
+// Uebertragungsformat eines signierten Wissenspakets - Manifest, Delta, Nutzlast, Installation,
+// Archiv. Das Format ist weg, die Nachschlagewerke sind geblieben: der mitgelieferte Katalog
+// fuellt sie beim Start, eigene Pakete und die eigene Recherche schreiben daneben.
 
 public sealed class OfficialMerchantMapping
 {
@@ -303,40 +146,6 @@ public sealed class OfficialBrandAlias
     public string Country { get; set; } = "GLOBAL";
 }
 
-public sealed class OfficialOntologyEntity
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string EntityType { get; set; } = string.Empty;
-    public string CanonicalKey { get; set; } = string.Empty;
-    public string DisplayName { get; set; } = string.Empty;
-    public string? ParentCanonicalKey { get; set; }
-    public string Status { get; set; } = string.Empty;
-    public int Version { get; set; }
-}
-
-public sealed class OfficialOntologyAlias
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string EntityType { get; set; } = string.Empty;
-    public string CanonicalKey { get; set; } = string.Empty;
-    public string Alias { get; set; } = string.Empty;
-    public string NormalizedAlias { get; set; } = string.Empty;
-    public string Locale { get; set; } = "und";
-    public string Country { get; set; } = "GLOBAL";
-    public decimal Confidence { get; set; }
-    public int DistinctInstances { get; set; }
-    public int Version { get; set; }
-}
-
-public sealed class OfficialOntologyRedirect
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string EntityType { get; set; } = string.Empty;
-    public string FromCanonicalKey { get; set; } = string.Empty;
-    public string ToCanonicalKey { get; set; } = string.Empty;
-    public int Version { get; set; }
-}
-
 /// <summary>
 /// Read-only merchant-to-category mapping DTO consumed by the deterministic transaction rule engine.
 /// Only rows from the currently verified knowledge-pack installation are projected to this shape.
@@ -347,36 +156,11 @@ public sealed record OfficialMerchantCategoryMapping(
     string CategoryKey,
     decimal Confidence);
 
-public static class KnowledgePackModelConfiguration
+
+public static class IntelligenceCatalogModelConfiguration
 {
     public static void Configure(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<KnowledgePackInstallation>(entity =>
-        {
-            entity.HasIndex(x => x.ScopeKey).IsUnique();
-            entity.Property(x => x.ScopeKey).HasMaxLength(32);
-            entity.Property(x => x.PackId).HasMaxLength(120);
-            entity.Property(x => x.Version).HasMaxLength(80);
-            entity.Property(x => x.SchemaVersion).HasMaxLength(40);
-            entity.Property(x => x.Region).HasMaxLength(32);
-            entity.Property(x => x.ContentSha256).HasMaxLength(80);
-            entity.Property(x => x.SignatureAlgorithm).HasMaxLength(40);
-            entity.Property(x => x.LastErrorCode).HasMaxLength(120);
-        });
-
-        modelBuilder.Entity<KnowledgePackArchive>(entity =>
-        {
-            entity.HasIndex(x => new { x.PackId, x.Version }).IsUnique();
-            entity.Property(x => x.PackId).HasMaxLength(120);
-            entity.Property(x => x.Version).HasMaxLength(80);
-            entity.Property(x => x.SchemaVersion).HasMaxLength(40);
-            entity.Property(x => x.Region).HasMaxLength(32);
-            entity.Property(x => x.ContentSha256).HasMaxLength(80);
-            entity.Property(x => x.SignatureAlgorithm).HasMaxLength(40);
-            entity.Property(x => x.SignatureBase64).HasColumnType("text");
-            entity.Property(x => x.PayloadBase64).HasColumnType("text");
-        });
-
         modelBuilder.Entity<OfficialMerchantMapping>(entity =>
         {
             entity.HasIndex(x => new { x.AliasKey, x.Direction, x.Country }).IsUnique();
@@ -484,35 +268,5 @@ public static class KnowledgePackModelConfiguration
             entity.Property(x => x.Country).HasMaxLength(8);
         });
 
-        modelBuilder.Entity<OfficialOntologyEntity>(entity =>
-        {
-            entity.HasIndex(x => new { x.EntityType, x.CanonicalKey }).IsUnique();
-            entity.Property(x => x.EntityType).HasMaxLength(32);
-            entity.Property(x => x.CanonicalKey).HasMaxLength(180);
-            entity.Property(x => x.DisplayName).HasMaxLength(200);
-            entity.Property(x => x.ParentCanonicalKey).HasMaxLength(180);
-            entity.Property(x => x.Status).HasMaxLength(24);
-        });
-
-        modelBuilder.Entity<OfficialOntologyAlias>(entity =>
-        {
-            entity.HasIndex(x => new { x.EntityType, x.NormalizedAlias, x.Locale, x.Country });
-            entity.HasIndex(x => new { x.EntityType, x.CanonicalKey });
-            entity.Property(x => x.EntityType).HasMaxLength(32);
-            entity.Property(x => x.CanonicalKey).HasMaxLength(180);
-            entity.Property(x => x.Alias).HasMaxLength(200);
-            entity.Property(x => x.NormalizedAlias).HasMaxLength(200);
-            entity.Property(x => x.Locale).HasMaxLength(20);
-            entity.Property(x => x.Country).HasMaxLength(8);
-            entity.Property(x => x.Confidence).HasPrecision(6, 5);
-        });
-
-        modelBuilder.Entity<OfficialOntologyRedirect>(entity =>
-        {
-            entity.HasIndex(x => new { x.EntityType, x.FromCanonicalKey }).IsUnique();
-            entity.Property(x => x.EntityType).HasMaxLength(32);
-            entity.Property(x => x.FromCanonicalKey).HasMaxLength(180);
-            entity.Property(x => x.ToCanonicalKey).HasMaxLength(180);
-        });
     }
 }

@@ -1346,8 +1346,6 @@
     "back": "Back",
     "finish": "Finish setup",
     "done": "Setup complete. All access settings can still be changed later in Settings.",
-    "cloudTitle": "FullWorth Cloud Intelligence",
-    "cloudText": "Improves merchant, category, and contract mappings collaboratively and enables anonymous benchmarks.",
     "categoriesTitle": "Default categories",
     "categoriesText": "Which language should the built-in categories use? Automatic categorisation keys off the identifier, not the name - you can rename any category later without breaking it.",
     "categoriesGerman": "German (Lebensmittel, Wohnen, Verkehr …)",
@@ -1360,20 +1358,6 @@
     "marketDataYahooHint": "No key needed. Finds securities by ISIN. Unofficial, and for private use.",
     "marketDataCustom": "Custom template",
     "marketDataCustomHint": "Further details (URL, paths, key) are in Settings under Market data."
-  },
-  "cloudIntelligence": {
-    "diagnostics": "Open connection diagnostics (endpoint, queue)",
-    "title": "FullWorth Cloud Intelligence",
-    "manage": "Manage Cloud Intelligence",
-    "loading": "Checking cloud status…",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "explain": "FullWorth uses shared, versioned knowledge for better automatic mappings and aggregate benchmarks.",
-    "shared": "Only required minimized learning and statistical data is shared, such as recognized merchants, category aliases, confirmed provider/product aliases, canonical provider keys for anonymous contract comparisons, pseudonymous merchant keys with aggregated monthly spend, anonymized product prices, aggregated contract costs and savings rate, plus coarse comparison buckets. No individual transactions, complete baskets, income amounts, IBAN, account number, e-mail, user ID, notes, or bank credentials.",
-    "useCloud": "Use FullWorth Cloud Intelligence",
-    "localWins": "Manual decisions and local rules always take precedence over cloud knowledge.",
-    "savedEnabled": "Cloud Intelligence enabled.",
-    "savedDisabled": "Cloud Intelligence disabled."
   },
   "twoFactor": {
     "title": "Two-factor authentication",

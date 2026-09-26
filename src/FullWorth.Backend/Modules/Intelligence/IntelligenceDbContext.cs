@@ -29,12 +29,6 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<IntelligenceAdminGrant> IntelligenceAdminGrants => Set<IntelligenceAdminGrant>();
     public DbSet<IntelligenceAuditEvent> IntelligenceAuditEvents => Set<IntelligenceAuditEvent>();
     public DbSet<LearnedMerchantMapping> LearnedMerchantMappings => Set<LearnedMerchantMapping>();
-    public DbSet<CloudConnectionState> CloudConnectionStates => Set<CloudConnectionState>();
-    public DbSet<CloudIntelligenceConsent> CloudIntelligenceConsents => Set<CloudIntelligenceConsent>();
-    public DbSet<CloudInstanceCredential> CloudInstanceCredentials => Set<CloudInstanceCredential>();
-    public DbSet<CloudSubmissionOutbox> CloudSubmissionOutbox => Set<CloudSubmissionOutbox>();
-    public DbSet<KnowledgePackInstallation> KnowledgePackInstallations => Set<KnowledgePackInstallation>();
-    public DbSet<KnowledgePackArchive> KnowledgePackArchives => Set<KnowledgePackArchive>();
     public DbSet<OfficialMerchantMapping> OfficialMerchantMappings => Set<OfficialMerchantMapping>();
     public DbSet<OfficialBrandAsset> OfficialBrandAssets => Set<OfficialBrandAsset>();
     public DbSet<OfficialBrandAlias> OfficialBrandAliases => Set<OfficialBrandAlias>();
@@ -45,14 +39,6 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<ResearchedBrandAsset> ResearchedBrandAssets => Set<ResearchedBrandAsset>();
     public DbSet<ResearchedBrandAlias> ResearchedBrandAliases => Set<ResearchedBrandAlias>();
     public DbSet<BrandLogoResearchAttempt> BrandLogoResearchAttempts => Set<BrandLogoResearchAttempt>();
-    public DbSet<OfficialOntologyEntity> OfficialOntologyEntities => Set<OfficialOntologyEntity>();
-    public DbSet<OfficialOntologyAlias> OfficialOntologyAliases => Set<OfficialOntologyAlias>();
-    public DbSet<OfficialOntologyRedirect> OfficialOntologyRedirects => Set<OfficialOntologyRedirect>();
-    public DbSet<OfficialContractProvider> OfficialContractProviders => Set<OfficialContractProvider>();
-    public DbSet<OfficialContractSignature> OfficialContractSignatures => Set<OfficialContractSignature>();
-    public DbSet<OfficialProduct> OfficialProducts => Set<OfficialProduct>();
-    public DbSet<OfficialProductGtin> OfficialProductGtins => Set<OfficialProductGtin>();
-    public DbSet<OfficialProductAlias> OfficialProductAliases => Set<OfficialProductAlias>();
     public DbSet<IntelligenceDigest> IntelligenceDigests => Set<IntelligenceDigest>();
     public DbSet<FinancialSignal> FinancialSignals => Set<FinancialSignal>();
     public DbSet<FinancialSignalState> FinancialSignalStates => Set<FinancialSignalState>();
@@ -65,9 +51,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
         IntelligenceAdminModelConfiguration.ConfigureAdmin(modelBuilder);
         IntelligenceAuditModelConfiguration.ConfigureAudit(modelBuilder);
         LearnedMerchantMappingModelConfiguration.Configure(modelBuilder);
-        CloudIntelligenceModelConfiguration.Configure(modelBuilder);
-        KnowledgePackModelConfiguration.Configure(modelBuilder);
-        OperationalRegistryModelConfiguration.Configure(modelBuilder);
+        IntelligenceCatalogModelConfiguration.Configure(modelBuilder);
         IntelligenceDigestModelConfiguration.Configure(modelBuilder);
         FinancialSignalModelConfiguration.Configure(modelBuilder);
 

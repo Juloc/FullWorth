@@ -53,7 +53,7 @@ function detailRows(summary) {
     [bilingual('Vorschläge angenommen', 'Suggestions accepted'), suggestions.accepted],
     [bilingual('Vorschläge abgelehnt', 'Suggestions rejected'), suggestions.rejected],
     [bilingual('Lernereignisse', 'Learning events'), learning.feedbackEvents],
-    [bilingual('davon für die Cloud', 'of those cloud-eligible'), learning.cloudEligible],
+    [bilingual('davon verallgemeinerbar', 'of those generalizable'), learning.generalizable ?? learning.cloudEligible],
     [bilingual('AI-Läufe erfolgreich', 'AI runs succeeded'), ai.succeeded],
     [bilingual('AI-Läufe fehlgeschlagen', 'AI runs failed'), ai.failed],
     [bilingual('Offene Artikel', 'Unresolved items'), unresolved.purchaseItems],

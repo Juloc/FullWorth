@@ -86,7 +86,6 @@ public sealed class IntelligenceSuggestionReviewTests
 
         // Teilbar heisst nicht geteilt. Ohne angebundene und zugestimmte Cloud bleibt die Outbox leer,
         // und diese Testwelt hat keine. Was tatsaechlich hinausgeht, prueft LearningFeedsTheCloudTests.
-        Assert.Empty(await intelligenceDb.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Fact]

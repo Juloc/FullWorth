@@ -20,80 +20,11 @@
       </div>
 
       <div id="intel-content" hidden>
-        <section id="cloud-setup-panel" class="panel cloud-setup" aria-labelledby="cloud-title">
-          <div class="panel-head cloud-head">
-            <div>
-              <div class="cloud-title-line">
-                <h2 id="cloud-title">FullWorth Cloud Intelligence</h2>
-                <span id="cloud-mode" class="status-pill">Nicht entschieden</span>
-              </div>
-              <p class="row-sub">Entscheide, ob diese Instanz die offizielle FullWorth Platform Cloud nutzt oder vollständig lokal bleibt.</p>
-              <p class="row-sub cloud-endpoint-line">Verbunden mit <code id="cloud-endpoint">—</code></p>
-            </div>
-          </div>
-
-          <div id="cloud-required" class="cloud-required" hidden>
-            Diese Entscheidung gehört zum Intelligence-Setup und muss einmal bewusst getroffen werden.
-          </div>
-
-          <fieldset class="cloud-choices">
-            <legend class="sr-only">Cloud-Intelligence-Modus</legend>
-            <label class="cloud-choice">
-              <input id="cloud-choice-enabled" type="radio" name="cloud-choice" value="enabled">
-              <span>
-                <strong>FullWorth Cloud Intelligence verwenden <em>Empfohlen</em></strong>
-                <small>Bessere Händler-, Kategorie-, Vertrags-, Produkt-, Preis- und Brand-Intelligence aus der FullWorth Platform Cloud.</small>
-              </span>
-            </label>
-            <label class="cloud-choice">
-              <input id="cloud-choice-local" type="radio" name="cloud-choice" value="disabled">
-              <span>
-                <strong>Intelligence nur lokal halten</strong>
-                <small>Keine Cloud-Beiträge und keine erweiterten FullWorth-Cloud-Mappings. Lokale Regeln, Algorithmen und optional lokale/eigene AI funktionieren weiter.</small>
-              </span>
-            </label>
-          </fieldset>
-
-          <details class="cloud-details">
-            <summary>Was wird geteilt?</summary>
-            <div class="cloud-detail-grid">
-              <div>
-                <strong>Nur geeignete abgeleitete Daten</strong>
-                <p>Zum Beispiel bestätigte, kanonische Produkt-/Mapping-Informationen, aggregierte Beobachtungen und Qualitäts-/Confidence-Metadaten. Beiträge werden vor dem Outbox-Eintrag minimiert und nach einer festen Whitelist projiziert.</p>
-              </div>
-              <div>
-                <strong>Nicht Teil der Cloud-Beiträge</strong>
-                <p>Keine IBANs, Kontonummern, Salden, Benutzernamen, Kartenendungen, API-Keys, Belegbilder oder rohen freien Verwendungszwecke. Einzelne Käufe anderer Nutzer werden nicht sichtbar gemacht.</p>
-              </div>
-            </div>
-            <p class="row-sub">Empfang und Beitrag gehören zusammen: FullWorth unterstützt keinen produktiven „nur herunterladen“-Modus.</p>
-          </details>
-
-          <label id="cloud-consent-wrap" class="cloud-consent" hidden>
-            <input id="cloud-consent" type="checkbox">
-            <span>Ich verstehe, dass Cloud Intelligence den Empfang verbesserter FullWorth-Daten und die Übermittlung geeigneter minimierter Beiträge gemeinsam aktiviert.</span>
-          </label>
-
-          <div class="cloud-actions">
-            <button id="cloud-save" class="btn btn-primary" type="button">Entscheidung speichern</button>
-          </div>
-          <p id="cloud-result" class="intel-result" aria-live="polite"></p>
-          <div id="cloud-ops" class="cloud-ops" hidden>
-            <span>Policy <strong id="cloud-policy">—</strong></span>
-            <span>Entitlement <strong id="cloud-entitlement">—</strong></span>
-            <span>Letzte Registrierung <strong id="cloud-registration">—</strong></span>
-            <span>Letzter Upload <strong id="cloud-submission">—</strong></span>
-            <span>Wartend <strong id="cloud-outbox-waiting">—</strong></span>
-            <span>Dead Letter <strong id="cloud-outbox-dead-letter">—</strong></span>
-            <span>Ältester Wartender <strong id="cloud-outbox-oldest">—</strong></span>
-          </div>
-        </section>
-
         <section class="panel brand-pack-panel">
           <div class="panel-head">
             <div>
               <h2>Eigene Brand-Packs</h2>
-              <p class="row-sub">Eigene Logos und Firmen-Aliase bleiben auf dieser Instanz und überschreiben bei Treffern das offizielle FullWorth-Pack.</p>
+              <p class="row-sub">Eigene Logos und Firmen-Aliase bleiben auf dieser Instanz und überschreiben bei Treffern den mitgelieferten Katalog.</p>
             </div>
             <button id="brand-pack-refresh" type="button" class="btn btn-secondary">Aktualisieren</button>
           </div>
@@ -101,7 +32,7 @@
             <input id="brand-pack-file" type="file" accept=".json,application/json">
             <button id="brand-pack-import" type="button">Pack importieren</button>
           </div>
-          <details class="cloud-details brand-pack-format">
+          <details class="intel-details brand-pack-format">
             <summary>Pack-Format</summary>
             <pre class="intel-code">{
         "name": "Meine Firmenlogos",

@@ -4,7 +4,6 @@ import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 
 // Die drei Nachbarn gehören zu dieser Seite. Statisch importiert, damit beim ersten Besuch nichts
 // nachgeladen wird; sie verdrahten sich beim Laden selbst und laden ihre eigenen Daten.
-import './cloud.js';
 import './brand-packs.js';
 import './jobs.js';
 import { renderIntelligenceDigests } from './digests.js';
