@@ -82,7 +82,16 @@ public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, Fi
         return await reader.ReadAsync(ct) ? JobRow(reader) : null;
     }
 
-    public async Task<List<object>> ListCandidateViewsAsync(Guid jobId, CancellationToken ct)
+    /// <summary>Die Buchungen eines Zielkontos, gegen die Vorschau und Festschreiben pruefen.</summary>
+    public Task<ExistingBookings> ExistingBookingsAsync(Guid accountId, CancellationToken ct) =>
+        ExistingBookings.LoadAsync(db.Transactions.AsNoTracking(), [accountId], ct);
+
+    /// <summary>
+    /// Die Zeilen eines Auftrags zur Pruefung. Ist das Zielkonto schon gewaehlt, traegt jede, was sie auf
+    /// ihm waere: schon vorhanden (<c>existing</c>) oder vermutlich schon vorhanden, aus einer anderen
+    /// Quelle (<c>probable</c>, samt der vorhandenen Buchung). Ohne Konto gibt es nichts zu vergleichen.
+    /// </summary>
+    public async Task<List<object>> ListCandidateViewsAsync(Guid jobId, Guid? accountId, ExistingBookings existing, CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
         await using var cmd = RawSql.Command(connection,
@@ -92,22 +101,36 @@ public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, Fi
 
         var rows = new List<object>();
         while (await reader.ReadAsync(ct))
+        {
+            var bookingDate = RawSql.NullableDate(reader, "BookingDate");
+            var amount = RawSql.Decimal(reader, "Amount");
+            var currency = RawSql.String(reader, "Currency");
+            var counterparty = RawSql.NullableString(reader, "Counterparty");
+            var normalized = MerchantNormalization.Normalize(counterparty);
+            var (known, probable) = accountId is { } target && bookingDate is { } day
+                ? (existing.Has(target, day, amount, currency, normalized), existing.Probably(target, day, amount, currency, normalized))
+                : (false, null);
             rows.Add(new
             {
                 id = RawSql.Guid(reader, "Id"),
                 sourceAccount = RawSql.NullableString(reader, "SourceAccount"),
-                bookingDate = RawSql.NullableDate(reader, "BookingDate"),
-                amount = RawSql.Decimal(reader, "Amount"),
-                currency = RawSql.String(reader, "Currency"),
-                counterparty = RawSql.NullableString(reader, "Counterparty"),
+                bookingDate,
+                amount,
+                currency,
+                counterparty,
                 description = RawSql.NullableString(reader, "Description"),
                 categoryText = RawSql.NullableString(reader, "CategoryText"),
                 externalKey = RawSql.NullableString(reader, "ExternalKey"),
                 duplicateStatus = RawSql.String(reader, "DuplicateStatus"),
                 validationStatus = RawSql.String(reader, "ValidationStatus"),
                 validationError = RawSql.NullableString(reader, "ValidationError"),
-                reviewNote = RawSql.NullableString(reader, "ReviewNote")
+                reviewNote = RawSql.NullableString(reader, "ReviewNote"),
+                duplicate = known ? "existing" : probable is null ? null : "probable",
+                duplicateOf = probable is null
+                    ? null
+                    : new { counterparty = probable.Counterparty, bookingDate = probable.BookingDate ?? probable.ValueDate }
             });
+        }
         return rows;
     }
 
@@ -226,22 +249,9 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
     {
         // Ein neues Konto hat noch nichts, wogegen sich vergleichen liesse - die Doppelpruefung unten
         // laeuft dann gegen leere Mengen.
-        var existing = account is null ? [] : await db.Transactions.AsNoTracking()
-            .Where(transaction => transaction.AccountId == account.Id)
-            .Select(transaction => new
-            {
-                transaction.ExternalKey,
-                Date = transaction.BookingDate ?? transaction.ValueDate,
-                transaction.Amount,
-                transaction.Currency,
-                transaction.NormalizedCounterparty
-            })
-            .ToListAsync(ct);
-        var existingKeys = existing.Where(row => !string.IsNullOrEmpty(row.ExternalKey))
-            .Select(row => row.ExternalKey).ToHashSet(StringComparer.Ordinal);
-        var existingSemantic = existing.Where(row => row.Date.HasValue)
-            .Select(row => (row.Date!.Value, row.Amount, row.Currency, row.NormalizedCounterparty))
-            .ToHashSet();
+        var existing = account is null ? ExistingBookings.None : await ExistingBookingsAsync(account.Id, ct);
+        // Was dieser Auftrag selbst schon geschrieben hat - dieselbe Zeile zweimal in einer Datei.
+        var writtenKeys = new HashSet<string>(StringComparer.Ordinal);
 
         var imported = 0;
         var duplicates = 0;
@@ -270,7 +280,9 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
         foreach (var candidate in candidates)
         {
             var normalized = MerchantNormalization.Normalize(candidate.Counterparty);
-            if (existingSemantic.Contains((candidate.Date!.Value, candidate.Amount, candidate.Currency, normalized)))
+            // Nur die sichere Dublette wird uebersprungen. Eine vermutliche (ExistingBookings.Probably) hat
+            // die Seite ungehakt gezeigt - steht sie hier, hat der Nutzer sie gewollt.
+            if (existing.Has(account.Id, candidate.Date!.Value, candidate.Amount, candidate.Currency, normalized))
             {
                 duplicates++;
                 await MarkCandidateAsync(candidate.Id, "duplicate", ct);
@@ -280,7 +292,7 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
             var external = !string.IsNullOrWhiteSpace(candidate.ExternalKey)
                 ? $"import:{jobId:N}:{candidate.ExternalKey}"
                 : $"import:{jobId:N}:{candidate.Fingerprint}";
-            if (!existingKeys.Add(external))
+            if (existing.HasExternalKey(account.Id, external) || !writtenKeys.Add(external))
             {
                 duplicates++;
                 await MarkCandidateAsync(candidate.Id, "duplicate", ct);

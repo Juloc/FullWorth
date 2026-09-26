@@ -52,7 +52,8 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
         Assert.Contains("async function detectStatement", js);
         Assert.Contains("async function commitStatement", js);
         Assert.Contains("api/import-jobs/upload", js);
-        Assert.Contains("api/import-jobs/${upload.jobId}/candidates", js);
+        // Die Zeilen laedt eine eigene Funktion, gegen das gewaehlte Zielkonto (#131, Abschnitt 6).
+        Assert.Contains("api/import-jobs/${state.stmt.jobId}/candidates", js);
         Assert.Contains("api/import-jobs/${state.stmt.jobId}/commit", js);
 
         // A statement is a fixed format, not a spreadsheet a human laid out: unlike the generic
@@ -60,7 +61,9 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
         // statement flow's own upload/commit functions must never reach for column mapping.
         var detectStatementBody = ExtractFunctionBody(js, "async function detectStatement");
         var commitStatementBody = ExtractFunctionBody(js, "async function commitStatement");
+        var loadCandidatesBody = ExtractFunctionBody(js, "async function loadStatementCandidates");
         Assert.DoesNotContain("import-mapping", detectStatementBody);
+        Assert.DoesNotContain("import-mapping", loadCandidatesBody);
         Assert.DoesNotContain("import-mapping", commitStatementBody);
         Assert.DoesNotContain("renderMapping('stmt'", js);
         Assert.DoesNotContain("collectMapping('stmt'", js);

@@ -132,34 +132,9 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("{colu
     /// Die Buchungen, gegen die auf Dubletten geprueft wird - eine Abfrage je Konto statt zwei je
     /// Zeile. Bei einer Datei mit 5000 Zeilen waren das 10 000 Runden zur Datenbank.
     /// </summary>
-    public async Task<(HashSet<(Guid, string)> ExternalKeys, HashSet<(Guid, DateOnly, decimal, string, string?)> Semantic)>
-        ExistingKeysAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken ct)
-    {
-        var externalKeys = new HashSet<(Guid, string)>();
-        var semantic = new HashSet<(Guid, DateOnly, decimal, string, string?)>();
-        if (accountIds.Count == 0) return (externalKeys, semantic);
-
-        var rows = await db.Transactions.AsNoTracking()
-            .Where(transaction => accountIds.Contains(transaction.AccountId))
-            .Select(transaction => new
-            {
-                transaction.AccountId,
-                transaction.ExternalKey,
-                Date = transaction.BookingDate ?? transaction.ValueDate,
-                transaction.Amount,
-                transaction.Currency,
-                transaction.NormalizedCounterparty
-            })
-            .ToListAsync(ct);
-
-        foreach (var row in rows)
-        {
-            if (!string.IsNullOrEmpty(row.ExternalKey)) externalKeys.Add((row.AccountId, row.ExternalKey));
-            if (row.Date.HasValue)
-                semantic.Add((row.AccountId, row.Date.Value, row.Amount, row.Currency, row.NormalizedCounterparty));
-        }
-        return (externalKeys, semantic);
-    }
+    /// <summary>Die Buchungen der Zielkonten, gegen die die Vorschau und das Festschreiben pruefen.</summary>
+    public Task<ExistingBookings> ExistingBookingsAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken ct) =>
+        ExistingBookings.LoadAsync(db.Transactions.AsNoTracking(), accountIds, ct);
 
     public Task<int> CountCategoriesAsync(Guid fullWorthSpaceId, Guid[] categoryIds, CancellationToken ct) =>
         db.Categories.AsNoTracking()

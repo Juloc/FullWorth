@@ -141,11 +141,17 @@ public static class ImportJobEndpoints
         var job=await store.FindJobAsync(id,fullWorthSpaceId,currentUser.RequireUserId(),ct);
         return job is null?Results.NotFound():Results.Ok(job);
     }
-    private static async Task<IResult> GetCandidates(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
+    /// <summary>
+    /// Die Zeilen eines Auftrags. Mit <paramref name="accountId"/> - dem Konto, das die Seite gerade als
+    /// Ziel gewaehlt hat - traegt jede, ob sie dort schon oder vermutlich schon steht (#131, Abschnitt 6).
+    /// </summary>
+    private static async Task<IResult> GetCandidates(Guid id,Guid fullWorthSpaceId,Guid? accountId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
     {
         var uid=currentUser.RequireUserId();
         if(!await store.OwnsJobAsync(id,fullWorthSpaceId,uid,ct))return Results.NotFound();
-        return Results.Ok(await store.ListCandidateViewsAsync(id,ct));
+        if(accountId is not { } target)return Results.Ok(await store.ListCandidateViewsAsync(id,null,ExistingBookings.None,ct));
+        if(!(await space.WritableAccountIdsAsync(uid,fullWorthSpaceId,ct)).Contains(target))return Results.BadRequest(new{error="The target account is inaccessible."});
+        return Results.Ok(await store.ListCandidateViewsAsync(id,target,await store.ExistingBookingsAsync(target,ct),ct));
     }
 
     private static async Task<IResult> Commit(

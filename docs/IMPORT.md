@@ -200,9 +200,18 @@ in German — the bank already reported that day or later, a manual balance alre
 currency differs. The four `ImportJobs.Statement*` columns carry the figure from upload to commit.
 
 There is no column mapping and no category step, so a statement row commits with
-`CategorizationSource='none'`. Duplicates are found at commit against the target account only:
+`CategorizationSource='none'`. Duplicates are found against the target account only:
 semantically (date, amount, currency, normalised counterparty) plus an external key that carries the
 job id — so re-uploading the same file is caught by the semantic check, not the key.
+
+**The same booking from another source** (#131, section 6) rarely has the same counterparty text:
+Finanzguru writes "Möbelhaus Beispiel GmbH", the bank "MOEBELHAUS BEISPIEL MUSTERSTADT". Same account,
+amount and currency on the booking **or** value day of an existing booking, with the name differing, is
+therefore a *probable* duplicate (`ExistingBookings.Probably`, one class for the statement and the table
+import). It is a suggestion, not a certainty — two real equal payments on one day exist — so it is not
+skipped: the preview (`GET /api/import-jobs/{id}/candidates?accountId=`, and the table import's
+`duplicate-preview`) names the existing booking, the page leaves the row unticked, and a row the owner
+ticks is booked. Only the certain duplicate is skipped at commit.
 
 A statement may create its target account (`newAccountName`); a balance-only file with no bookings is
 a legitimate import that merely anchors the account. Such a file creates no provenance links, so it

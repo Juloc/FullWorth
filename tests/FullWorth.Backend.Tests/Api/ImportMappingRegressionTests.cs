@@ -272,6 +272,54 @@ public sealed class ImportMappingRegressionTests
             .Single().GetProperty("reason").GetString());
     }
 
+    // #131, Abschnitt 6: dieselbe Zahlung aus einer anderen Quelle, anders benannt und hier mit dem
+    // Valutatag der vorhandenen Buchung datiert. Das ist keine sichere Dublette - sie wird nicht
+    // uebersprungen -, aber die Vorschau nennt die vorhandene Buchung, damit die Seite sie nicht vorwaehlt.
+    [Fact]
+    public async Task DuplicatePreviewNamesABookingThatIsProbablyTheSameFromAnotherSource()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await SeedAccount(factory, account, owner);
+        await factory.SeedAsync(async db =>
+        {
+            db.Transactions.Add(new FinanceTransaction
+            {
+                AccountId = account,
+                ExternalKey = $"finanzguru-{Guid.NewGuid():N}",
+                BookingDate = new DateOnly(2026, 8, 28),
+                ValueDate = new DateOnly(2026, 8, 29),
+                Amount = -12.34m,
+                Currency = "EUR",
+                Counterparty = "REWE Markt GmbH",
+                NormalizedCounterparty = MerchantNormalization.Normalize("REWE Markt GmbH")
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var upload = await Upload(client, owner,
+            "Datum;Betrag;Empfänger;Text\r\n29.08.2026;-12,34;REWE SAGT DANKE 4711;Lebensmittel\r\n30.08.2026;-12,34;Kiosk;Zeitung\r\n",
+            FullMapping());
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        var preview = await Preview(client, owner, jobId, account);
+        Assert.Equal(0, preview.GetProperty("duplicates").GetInt32());
+        Assert.Equal(2, preview.GetProperty("fresh").GetInt32());
+        Assert.Equal(1, preview.GetProperty("probable").GetInt32());
+        var probable = preview.GetProperty("candidates").EnumerateArray()
+            .Single(entry => entry.GetProperty("reason").ValueKind == JsonValueKind.String);
+        Assert.Equal("new", probable.GetProperty("status").GetString());
+        Assert.Equal("probable", probable.GetProperty("reason").GetString());
+        Assert.Equal("REWE Markt GmbH", probable.GetProperty("probableOf").GetProperty("counterparty").GetString());
+
+        // Festgeschrieben wird, was gewaehlt ist - hier beide: der Vorschlag sperrt nichts.
+        var committed = await Commit(client, owner, jobId, account);
+        Assert.Equal(2, committed.GetProperty("imported").GetInt32());
+    }
+
     // categoryMappings was supported by the commit but no caller ever sent one, so it was untested.
     // Now that the review step offers the mapping, both directions have to hold: an explicit target
     // beats the same-named category, and an explicit "do not map" suppresses the name match too.

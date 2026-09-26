@@ -10,7 +10,8 @@ namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>Wohin eine Zeile gehoert und ob sie ueberhaupt ankommt.</summary>
 public sealed record CandidateClassification(
-    Guid CandidateId, Guid? AccountId, string ExternalKey, string? NormalizedCounterparty, string Status, string? Reason);
+    Guid CandidateId, Guid? AccountId, string ExternalKey, string? NormalizedCounterparty, string Status, string? Reason,
+    ExistingBookings.Booking? Probable = null);
 
 /// <summary>Was ein Festschreiben hinterlassen hat.</summary>
 /// <param name="CreatedAccounts">Platzhalter-Kennung auf das Konto, das der Commit dafuer angelegt hat.</param>

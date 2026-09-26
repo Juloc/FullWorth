@@ -269,16 +269,27 @@ public static class ImportMappingEndpoints
         // different answer, so persisting this would make the stored status a guess about the future.
         return Results.Ok(new
         {
-            candidates = classifications.Select(entry => new { id = entry.CandidateId, status = entry.Status, reason = entry.Reason }),
+            candidates = classifications.Select(entry => new
+            {
+                id = entry.CandidateId,
+                status = entry.Status,
+                reason = entry.Reason,
+                probableOf = entry.Probable is { } probable
+                    ? new { counterparty = probable.Counterparty, bookingDate = probable.BookingDate ?? probable.ValueDate }
+                    : null
+            }),
             duplicates = classifications.Count(entry => entry.Status == "duplicate"),
             unmapped = classifications.Count(entry => entry.Status == "unmapped"),
-            fresh = classifications.Count(entry => entry.Status == "new")
+            fresh = classifications.Count(entry => entry.Status == "new"),
+            probable = classifications.Count(entry => entry.Probable is not null)
         });
     }
 
     // "in_file": an earlier row of this very file already carries the key.
     // "external_key": the source system's own booking id is already stored on that account.
     // "existing": same account, date, amount, currency and normalised counterparty.
+    // "probable" (status stays "new"): same account, amount and currency on the booking or value day of
+    // an existing booking whose counterparty is named differently - see ExistingBookings.
     private static async Task<List<CandidateClassification>> ClassifyAsync(
         ImportMappingStore store, IReadOnlyList<MappedCandidate> candidates,
         IReadOnlyDictionary<string, Guid?> accountMap, Guid? defaultAccountId, CancellationToken ct)
@@ -292,7 +303,7 @@ public static class ImportMappingEndpoints
         var targetAccounts = candidates
             .Select(candidate => accountMap.TryGetValue(candidate.SourceAccount ?? "", out var mapped) ? mapped : defaultAccountId)
             .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
-        var (existingExternalKeys, existingSemantic) = await store.ExistingKeysAsync(targetAccounts, ct);
+        var existing = await store.ExistingBookingsAsync(targetAccounts, ct);
         foreach (var candidate in candidates)
         {
             var sourceKey = candidate.SourceAccount ?? "";
@@ -306,11 +317,19 @@ public static class ImportMappingEndpoints
             var external = StableExternalKey(candidate);
             var semanticKey = SemanticKey(accountId.Value, candidate.Date.Value, candidate.Amount, candidate.Currency, normalized);
             var reason = !seenImportKeys.Add((accountId.Value, external)) || !seenSemanticKeys.Add(semanticKey) ? "in_file" : null;
-            if (reason is null && existingExternalKeys.Contains((accountId.Value, external))) reason = "external_key";
-            if (reason is null && existingSemantic.Contains(
-                    (accountId.Value, candidate.Date.Value, candidate.Amount, candidate.Currency, normalized)))
+            if (reason is null && existing.HasExternalKey(accountId.Value, external)) reason = "external_key";
+            if (reason is null && existing.Has(accountId.Value, candidate.Date.Value, candidate.Amount, candidate.Currency, normalized))
                 reason = "existing";
-            result.Add(new(candidate.Id, accountId, external, normalized, reason is null ? "new" : "duplicate", reason));
+            if (reason is not null)
+            {
+                result.Add(new(candidate.Id, accountId, external, normalized, "duplicate", reason));
+                continue;
+            }
+            // Vermutlich dieselbe Buchung aus einer anderen Quelle: sie bleibt "new" - wer sie anhakt,
+            // bekommt sie gebucht -, traegt aber den Grund und die vorhandene Buchung, damit die Seite sie
+            // nicht vorwaehlt und sagt, womit sie verwechselt werden koennte.
+            var probable = existing.Probably(accountId.Value, candidate.Date.Value, candidate.Amount, candidate.Currency, normalized);
+            result.Add(new(candidate.Id, accountId, external, normalized, "new", probable is null ? null : "probable", probable));
         }
         return result;
     }

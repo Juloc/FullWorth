@@ -1777,6 +1777,14 @@
     const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
     const status = write?.status ?? 200;
     let body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
+    // #131, Abschnitt 6: mit gewaehltem Zielkonto steht die Moebelhaus-Zahlung dort schon, so wie Finanzguru
+    // sie benannt hat - die Zeile kommt als 'vermutlich vorhanden'. Wie bei der Blaetterung unten liest die
+    // Fixture hier ausnahmsweise einen Parameter, weil match() nur den Pfad kennt.
+    if (method === 'GET' && url.pathname.endsWith(`import-jobs/${STATEMENT_JOB}/candidates`) && url.searchParams.get('accountId')) {
+      body = statementRows(null).map(row => row.amount === -120 && row.reviewNote === null
+        ? { ...row, duplicate: 'probable', duplicateOf: { counterparty: 'Möbelhaus Beispiel GmbH', bookingDate: iso('2026-09-11') } }
+        : row);
+    }
     // #161: Blaetterung ist der eine Teil der Abfrage, den diese Fixture nicht ignorieren darf.
     // match() beantwortet nur den Pfad, und jeder andere Parameter (Filter, Bereich) laesst sich hier
     // gefahrlos uebergehen - die Buchungsliste ist klein genug, um ungefiltert zu zeigen, was gemeint
