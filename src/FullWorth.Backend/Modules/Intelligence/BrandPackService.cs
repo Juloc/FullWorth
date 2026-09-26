@@ -437,7 +437,11 @@ public sealed class BrandPackService(IntelligenceDbContext db)
         var cutoff = DateTimeOffset.UtcNow - UnreferencedBlobRetention;
         var official = await db.OfficialBrandAssets.AsNoTracking().Select(x => x.ContentSha256).ToListAsync(ct);
         var custom = await db.CustomBrandAssets.AsNoTracking().Select(x => x.ContentSha256).ToListAsync(ct);
-        var referenced = official.Concat(custom).ToHashSet(StringComparer.Ordinal);
+        // Die dritte Quelle fehlte hier. Ein selbst recherchiertes Logo verlor nach dreissig Tagen
+        // seine Bytes, waehrend seine Zeile stehenblieb - der Katalog liess es danach still weg,
+        // ohne dass irgendwo etwas fehlschlug.
+        var researched = await db.ResearchedBrandAssets.AsNoTracking().Select(x => x.ContentSha256).ToListAsync(ct);
+        var referenced = official.Concat(custom).Concat(researched).ToHashSet(StringComparer.Ordinal);
         var old = await db.BrandAssetBlobs.Where(x => x.LastUsedAt < cutoff).ToListAsync(ct);
         var remove = old.Where(x => !referenced.Contains(x.ContentSha256)).ToList();
         if (remove.Count == 0) return;

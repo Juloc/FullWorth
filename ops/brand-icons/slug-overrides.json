@@ -1,0 +1,16 @@
+{
+  "//": "Wo die naive Ableitung am Simple-Icons-Katalog vorbeigeht. Links steht, was aus dem Namen entsteht, rechts der echte Kurzname. Jeder Eintrag hier ist ein belegter Treffer - was nur geraten war, steht nicht drin. 'deny' nimmt eine Marke ganz heraus; das ist der Weg, auf den Einspruch eines Rechteinhabers zu reagieren.",
+  "map": {
+    "hm": "handm",
+    "bookingcom": "bookingdotcom",
+    "aldi": "aldinord",
+    "dmdrogerie": "dm",
+    "1und1": "1and1",
+    "nettomarkendiscount": "netto",
+    "telekom": "deutschetelekom",
+    "tmobile": "deutschetelekom",
+    "appletvplus": "appletv",
+    "youtubepremium": "youtube"
+  },
+  "deny": []
+}

@@ -88,7 +88,10 @@ public sealed class AutopilotArchitectureGuardTests
             "CodexBridgeIntelligenceProvider"
         };
 
-        foreach (var file in PlannedLayerFiles("Context", "Signals", "Simulation"))
+        // Brands/ steht hier, weil die Markenaufloesung genau die Schicht ist, die zuerst ohne KI
+        // auskommen muss: mitgelieferter Katalog, dann Ableitung, dann - und erst dann, eine Ebene
+        // hoeher - ein Anbieter. Wer hier einen Anbietertyp nennt, hat die Reihenfolge umgedreht.
+        foreach (var file in PlannedLayerFiles("Context", "Signals", "Simulation", "Brands"))
         {
             var content = File.ReadAllText(file);
             foreach (var token in forbidden)

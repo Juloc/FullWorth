@@ -1,0 +1,1328 @@
+{
+  "simpleIconsVersion": "16.29.0",
+  "brands": [
+    {
+      "brandKey": "1and1",
+      "canonicalName": "1UND1",
+      "file": "1and1.svg",
+      "contentSha256": "a91e88ad731153b0cf5ce8ac6b392b84747bf9bb9ea04e4383f66be7348fdcd4",
+      "byteLength": 862,
+      "aliases": [
+        "1UND1"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/1and1.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "1password",
+      "canonicalName": "1PASSWORD",
+      "file": "1password.svg",
+      "contentSha256": "03cdb6335acdf0c1aae3bfb5c577b6bc11a020d2037be3f1040230126f466c8b",
+      "byteLength": 995,
+      "aliases": [
+        "1PASSWORD"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/1password.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "airbnb",
+      "canonicalName": "Airbnb",
+      "file": "airbnb.svg",
+      "contentSha256": "936edc766fdc754d78c1cb1f5982acc75e48dc975060ebdd975b18870c803b8c",
+      "byteLength": 1399,
+      "aliases": [
+        "AIRBNB"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/airbnb.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "airfrance",
+      "canonicalName": "AIR FRANCE",
+      "file": "airfrance.svg",
+      "contentSha256": "febaa7c037600a18509e804e74c9c86e2d749b51e62de43e1fe007077e25590f",
+      "byteLength": 259,
+      "aliases": [
+        "AIR FRANCE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/airfrance.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "aldinord",
+      "canonicalName": "ALDI",
+      "file": "aldinord.svg",
+      "contentSha256": "f680e68a96a6dad7d95fcdfd0071cf320bd9031c0887673adce222a79a630e4d",
+      "byteLength": 1716,
+      "aliases": [
+        "ALDI"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/aldinord.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "aliexpress",
+      "canonicalName": "ALIEXPRESS",
+      "file": "aliexpress.svg",
+      "contentSha256": "7506b972ecbbe803966e21e8d7e22c796aaf226791ec75f8dad3c86c008d2542",
+      "byteLength": 2414,
+      "aliases": [
+        "ALIEXPRESS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/aliexpress.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "americanexpress",
+      "canonicalName": "American Express",
+      "file": "americanexpress.svg",
+      "contentSha256": "012b6da51ef928245b2b17f4805b9f25c5d26c9b9d0ff7c93042fe5aa902bbd4",
+      "byteLength": 3677,
+      "aliases": [
+        "AMERICAN EXPRESS",
+        "AMEX"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/americanexpress.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "applepay",
+      "canonicalName": "Apple Pay",
+      "file": "applepay.svg",
+      "contentSha256": "6d93729cef92020de6e0eb407338d7f99692ee3df9ffb3899fa0cc15a9dbcb75",
+      "byteLength": 2669,
+      "aliases": [
+        "APPLE PAY",
+        "APPLEPAY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/applepay.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "appletv",
+      "canonicalName": "APPLE TV PLUS",
+      "file": "appletv.svg",
+      "contentSha256": "32835db63a41d5f59b70f3bfc99504db7e569c7c85d5bbd6c61e2ad110b7000c",
+      "byteLength": 960,
+      "aliases": [
+        "APPLE TV PLUS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/appletv.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "aral",
+      "canonicalName": "ARAL",
+      "file": "aral.svg",
+      "contentSha256": "c9eeca9df4e208c9829d6240b673b581e770358da6f1cd0adb7549f803ed7308",
+      "byteLength": 1816,
+      "aliases": [
+        "ARAL"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/aral.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "barmenia",
+      "canonicalName": "BARMENIA",
+      "file": "barmenia.svg",
+      "contentSha256": "91b95f2e5d7ab7b204f5148c66699e72cfe7d2818962949bd4a4ab54d691fbef",
+      "byteLength": 725,
+      "aliases": [
+        "BARMENIA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/barmenia.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "bitwarden",
+      "canonicalName": "BITWARDEN",
+      "file": "bitwarden.svg",
+      "contentSha256": "51a73df1bd9aead44774668c1078b761ea738b0784f1f7e1083527b803d10f7d",
+      "byteLength": 748,
+      "aliases": [
+        "BITWARDEN"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/bitwarden.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "bookingdotcom",
+      "canonicalName": "BOOKING COM",
+      "file": "bookingdotcom.svg",
+      "contentSha256": "0307d0b2bd64a7020986244dec7ed423b6165f8dda2955b7daadb696529f4cfd",
+      "byteLength": 710,
+      "aliases": [
+        "BOOKING COM"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/bookingdotcom.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "burgerking",
+      "canonicalName": "BURGER KING",
+      "file": "burgerking.svg",
+      "contentSha256": "20421941ff119f99a6d445ba1322c4839614d9e7f9b650843ed64bcdd95a3363",
+      "byteLength": 4391,
+      "aliases": [
+        "BURGER KING"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/burgerking.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "bvg",
+      "canonicalName": "BVG",
+      "file": "bvg.svg",
+      "contentSha256": "1007365b7810db679f11ee51e4ac5a03db6a528a8cc51dba69ed382a96e03c26",
+      "byteLength": 1554,
+      "aliases": [
+        "BVG"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/bvg.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "coinbase",
+      "canonicalName": "COINBASE",
+      "file": "coinbase.svg",
+      "contentSha256": "5a47915c980632e26effaf0c495eeb618204d5485a06c9d1b9a5abddec72c971",
+      "byteLength": 2160,
+      "aliases": [
+        "COINBASE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/coinbase.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "commerzbank",
+      "canonicalName": "Commerzbank",
+      "file": "commerzbank.svg",
+      "contentSha256": "7da3e51e9efb26846cf2703ce0598227477f895e3e4f8826edc4cb10db1b01e0",
+      "byteLength": 1018,
+      "aliases": [
+        "COMMERZBANK"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/commerzbank.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "coursera",
+      "canonicalName": "COURSERA",
+      "file": "coursera.svg",
+      "contentSha256": "57cd231a816ebfb175ffe0383be893ed3ce9d108e93d5c0c463a7ea93ac1e72d",
+      "byteLength": 712,
+      "aliases": [
+        "COURSERA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/coursera.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "dazn",
+      "canonicalName": "DAZN",
+      "file": "dazn.svg",
+      "contentSha256": "24046823abc16a573a32769b0b9af5fa4b887a8ed8654f64450160b762bd358e",
+      "byteLength": 2385,
+      "aliases": [
+        "DAZN"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/dazn.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "deutschebahn",
+      "canonicalName": "DEUTSCHE BAHN",
+      "file": "deutschebahn.svg",
+      "contentSha256": "b6747babdf05e237d9748a91ab91216a408792dc5adf54edf9fc34be758215da",
+      "byteLength": 922,
+      "aliases": [
+        "DEUTSCHE BAHN"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/deutschebahn.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "deutschebank",
+      "canonicalName": "Deutsche Bank",
+      "file": "deutschebank.svg",
+      "contentSha256": "3b3b53d97eaf361109ff29a79f2b01300c0c25a3b5a86423c84b3ac26f893685",
+      "byteLength": 250,
+      "aliases": [
+        "DEUTSCHE BANK",
+        "DEUTSCHEBANK"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/deutschebank.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "deutschepost",
+      "canonicalName": "Deutsche Post",
+      "file": "deutschepost.svg",
+      "contentSha256": "2a98b64cc6170316f7f16887f01d2f885e6ce24d6c014311e77eb5947fca9802",
+      "byteLength": 676,
+      "aliases": [
+        "DEUTSCHE POST",
+        "DEUTSCHEPOST"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/deutschepost.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "deutschetelekom",
+      "canonicalName": "TELEKOM",
+      "file": "deutschetelekom.svg",
+      "contentSha256": "d8d71d61f09f95551a5cdb0a9a228d77f43dfe97e3328cf9c56aa4bfd4c175d4",
+      "byteLength": 429,
+      "aliases": [
+        "DEUTSCHE TELEKOM",
+        "T MOBILE",
+        "TELEKOM"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/deutschetelekom.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "dhl",
+      "canonicalName": "DHL",
+      "file": "dhl.svg",
+      "contentSha256": "197428e737987901cbc30fe34f1f26b14bca8a3afec37c535090e27a849fd1d2",
+      "byteLength": 937,
+      "aliases": [
+        "DHL",
+        "DHL PAKET"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/dhl.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "dm",
+      "canonicalName": "DM DROGERIE",
+      "file": "dm.svg",
+      "contentSha256": "8c08364fa9e427b4d9a4f8ae3a984b79e2343001a03522668e7c5eeeebeb2c07",
+      "byteLength": 1883,
+      "aliases": [
+        "DM DROGERIE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/dm.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "dpd",
+      "canonicalName": "DPD",
+      "file": "dpd.svg",
+      "contentSha256": "c70aa0ef69f2806f2d088686ef261911f1a9ca4eb9cce5be2eff4da7526b026a",
+      "byteLength": 624,
+      "aliases": [
+        "DPD"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/dpd.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "dropbox",
+      "canonicalName": "DROPBOX",
+      "file": "dropbox.svg",
+      "contentSha256": "e116f124ad017b6025a29e8a0dd320960c4acf3b603545c5a911630d3e0c8c0a",
+      "byteLength": 372,
+      "aliases": [
+        "DROPBOX"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/dropbox.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "duolingo",
+      "canonicalName": "DUOLINGO",
+      "file": "duolingo.svg",
+      "contentSha256": "3c4f11b695823fa3d349da27137668b252c1c87fc01943777669517a3e0a6635",
+      "byteLength": 3030,
+      "aliases": [
+        "DUOLINGO"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/duolingo.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "easyjet",
+      "canonicalName": "EASYJET",
+      "file": "easyjet.svg",
+      "contentSha256": "2758abd9bf5d188ba685feca00ad4aa54ffb5c00dcb34ee7c76596ae9ad1548a",
+      "byteLength": 6073,
+      "aliases": [
+        "EASYJET"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/easyjet.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ebay",
+      "canonicalName": "EBAY",
+      "file": "ebay.svg",
+      "contentSha256": "17ba38ff711f08bdfa994808e5693118c0628a7eb9acc23c7fae3773c0435dab",
+      "byteLength": 1304,
+      "aliases": [
+        "EBAY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ebay.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "edeka",
+      "canonicalName": "EDEKA",
+      "file": "edeka.svg",
+      "contentSha256": "5c92d9e28315a500b0decfc74bfc25b6a42ab7237090c0efeedf96e168063a7e",
+      "byteLength": 1367,
+      "aliases": [
+        "EDEKA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/edeka.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "emirates",
+      "canonicalName": "EMIRATES",
+      "file": "emirates.svg",
+      "contentSha256": "727175a88a7d33da593df9d2bba98132d830cd1f37fb3afb949125ac6f7dd04a",
+      "byteLength": 2456,
+      "aliases": [
+        "EMIRATES"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/emirates.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "epicgames",
+      "canonicalName": "EPIC GAMES",
+      "file": "epicgames.svg",
+      "contentSha256": "675f4a576585d70e4b5be699333d8622e77e53ff31a078bd746c655a819931fe",
+      "byteLength": 2848,
+      "aliases": [
+        "EPIC GAMES"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/epicgames.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "etsy",
+      "canonicalName": "ETSY",
+      "file": "etsy.svg",
+      "contentSha256": "331919ab2b3e3b2636bcaa6ca352d51681f20fecf3aa3679a7ed6ae0a5d3b4a1",
+      "byteLength": 746,
+      "aliases": [
+        "ETSY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/etsy.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "expedia",
+      "canonicalName": "EXPEDIA",
+      "file": "expedia.svg",
+      "contentSha256": "aaf96f245261b1feaea594c4b873842bc555bee59a619233bfd0545c5a715e7c",
+      "byteLength": 718,
+      "aliases": [
+        "EXPEDIA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/expedia.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "freenet",
+      "canonicalName": "FREENET",
+      "file": "freenet.svg",
+      "contentSha256": "55995926f62913c8043212f2e91faceb2c5a3bef619e0aa8465b659adea3bae6",
+      "byteLength": 1054,
+      "aliases": [
+        "FREENET"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/freenet.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "github",
+      "canonicalName": "GITHUB",
+      "file": "github.svg",
+      "contentSha256": "ee49e6f57c9cef04746ecb47088b1c25f59754622813862aef84491eadb95e98",
+      "byteLength": 858,
+      "aliases": [
+        "GITHUB"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/github.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "googlepay",
+      "canonicalName": "Google Pay",
+      "file": "googlepay.svg",
+      "contentSha256": "33cb600c352e94fc832d71aba71de129d160cb03f0505c26babfa61e7cde151f",
+      "byteLength": 1451,
+      "aliases": [
+        "GOOGLE PAY",
+        "GOOGLEPAY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/googlepay.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "handm",
+      "canonicalName": "H M",
+      "file": "handm.svg",
+      "contentSha256": "469cd2788088cddba5cd8c8fde06f655b63fc139584b68c64dba3cd2a0008d63",
+      "byteLength": 2133,
+      "aliases": [
+        "H M"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/handm.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "hermes",
+      "canonicalName": "Hermes",
+      "file": "hermes.svg",
+      "contentSha256": "a3aaad87769385f9f8b6520bd4c5dd7dce02a005337f3a55043239b9fd3d6672",
+      "byteLength": 375,
+      "aliases": [
+        "HERMES",
+        "HERMES VERSAND"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/hermes.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "hilton",
+      "canonicalName": "HILTON",
+      "file": "hilton.svg",
+      "contentSha256": "459eadc2f69d3c76568218f9a007270f2aa32268021056431071bd2ecbdda936",
+      "byteLength": 1323,
+      "aliases": [
+        "HILTON"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/hilton.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "icloud",
+      "canonicalName": "ICLOUD",
+      "file": "icloud.svg",
+      "contentSha256": "42adcd6586b9db5a7d814d12b99e4351138f46fbdf73b69a2cb743f39db3aca8",
+      "byteLength": 427,
+      "aliases": [
+        "ICLOUD"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/icloud.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ikea",
+      "canonicalName": "IKEA",
+      "file": "ikea.svg",
+      "contentSha256": "22bdfcd016d552eae912e5cc347d56a2d4b4b6eb79678c27be1e09ec32fdf333",
+      "byteLength": 1806,
+      "aliases": [
+        "IKEA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ikea.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "jetbrains",
+      "canonicalName": "JETBRAINS",
+      "file": "jetbrains.svg",
+      "contentSha256": "7e606125b8b385d46cf416d9a8e071058dda2bac39bc9cae99aebce738eba055",
+      "byteLength": 724,
+      "aliases": [
+        "JETBRAINS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/jetbrains.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "kaufland",
+      "canonicalName": "KAUFLAND",
+      "file": "kaufland.svg",
+      "contentSha256": "0385a790e408c99f5103a73f3366c6e5840046e72c594f78ea067bc3acbaeb77",
+      "byteLength": 302,
+      "aliases": [
+        "KAUFLAND"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/kaufland.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "kfc",
+      "canonicalName": "KFC",
+      "file": "kfc.svg",
+      "contentSha256": "38cb88d2e3e8b97d9c399be09595b95e7796e034f7b4b5fbe72922458e0cb2bf",
+      "byteLength": 1732,
+      "aliases": [
+        "KFC"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/kfc.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "klarna",
+      "canonicalName": "Klarna",
+      "file": "klarna.svg",
+      "contentSha256": "9c849065ba96878eba8ffe10b4419d1924fa185c16cdbed6303e445865af5b0e",
+      "byteLength": 350,
+      "aliases": [
+        "KLARNA",
+        "KLARNA BANK"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/klarna.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "klm",
+      "canonicalName": "KLM",
+      "file": "klm.svg",
+      "contentSha256": "682be220e4d7779c56285eb4f74b97c0293416844fec6a86430f8a51d7e20e94",
+      "byteLength": 886,
+      "aliases": [
+        "KLM"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/klm.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "lidl",
+      "canonicalName": "LIDL",
+      "file": "lidl.svg",
+      "contentSha256": "c1f214b10aaa77bec4af9aa6b4a149ea0ef8be3edb016f50f707d3886b0269dd",
+      "byteLength": 946,
+      "aliases": [
+        "LIDL"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/lidl.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "lufthansa",
+      "canonicalName": "Lufthansa",
+      "file": "lufthansa.svg",
+      "contentSha256": "d890d1c256d3702c8023e3021cf77cd7f693e8f9cc3c33ab3cb75a458b0d9b46",
+      "byteLength": 1247,
+      "aliases": [
+        "LUFTHANSA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/lufthansa.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "marriott",
+      "canonicalName": "MARRIOTT",
+      "file": "marriott.svg",
+      "contentSha256": "e0616905efe2e2375569fa3356c30c0c3cc13cdff54d871e1b33b8a5c474a2f0",
+      "byteLength": 435,
+      "aliases": [
+        "MARRIOTT"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/marriott.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "mastercard",
+      "canonicalName": "Mastercard",
+      "file": "mastercard.svg",
+      "contentSha256": "c41a76b5029ec2e370d9a51ec53f7c016efaeb0ce447d0f33025ba1230387d02",
+      "byteLength": 886,
+      "aliases": [
+        "MASTERCARD"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/mastercard.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "mcdonalds",
+      "canonicalName": "MCDONALDS",
+      "file": "mcdonalds.svg",
+      "contentSha256": "70d40c6204e0fa5464283b30de64aa3668b5df0df5556ec46fb62c1de703d7b1",
+      "byteLength": 438,
+      "aliases": [
+        "MC DONALDS",
+        "MCDONALDS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/mcdonalds.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "mediamarkt",
+      "canonicalName": "MediaMarkt",
+      "file": "mediamarkt.svg",
+      "contentSha256": "8a57d0f47ca081d874bb58257be8884bac8e04d5f4f4fb157f76674f383b994c",
+      "byteLength": 2455,
+      "aliases": [
+        "MEDIA MARKT",
+        "MEDIAMARKT"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/mediamarkt.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "n26",
+      "canonicalName": "N26",
+      "file": "n26.svg",
+      "contentSha256": "21ef4d715e7c64240342c45aac435035d53383652869da230acb58af419c1a92",
+      "byteLength": 1140,
+      "aliases": [
+        "N26",
+        "N26 BANK"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/n26.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "netflix",
+      "canonicalName": "NETFLIX",
+      "file": "netflix.svg",
+      "contentSha256": "f4b0bc9392fe1259fd174c99b767959cdfa314fbba0657b786981503b651ce8b",
+      "byteLength": 312,
+      "aliases": [
+        "NETFLIX"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/netflix.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "netto",
+      "canonicalName": "NETTO",
+      "file": "netto.svg",
+      "contentSha256": "ce396d697497982d321c6dcb6f8dc128e7daeebb6aaff1a52d7164f3138fdaf5",
+      "byteLength": 8081,
+      "aliases": [
+        "NETTO",
+        "NETTO MARKEN DISCOUNT"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/netto.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "nordvpn",
+      "canonicalName": "NORDVPN",
+      "file": "nordvpn.svg",
+      "contentSha256": "e5d29394136d9760e166363678391e3b8dbad56cbc3f56fd25af241bf6eac791",
+      "byteLength": 392,
+      "aliases": [
+        "NORDVPN"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/nordvpn.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "notion",
+      "canonicalName": "NOTION",
+      "file": "notion.svg",
+      "contentSha256": "8dd140358aabb9b56970bed6e066f310c2cf1de94eb2e2859f0a274dd64111f2",
+      "byteLength": 1014,
+      "aliases": [
+        "NOTION"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/notion.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "o2",
+      "canonicalName": "o2",
+      "file": "o2.svg",
+      "contentSha256": "4b203318481a62c0c3981eec1bef1c6fb526645784266e63aabf1ee9b145a17a",
+      "byteLength": 624,
+      "aliases": [
+        "O2",
+        "TELEFONICA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/o2.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "otto",
+      "canonicalName": "OTTO",
+      "file": "otto.svg",
+      "contentSha256": "ce5cec5650975e89195924b23e31115debb5701ddbc3852bce0aeb0d1b1970cf",
+      "byteLength": 1118,
+      "aliases": [
+        "OTTO",
+        "OTTO GROUP"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/otto.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "paramountplus",
+      "canonicalName": "PARAMOUNT PLUS",
+      "file": "paramountplus.svg",
+      "contentSha256": "cd53df358bef010667c0255797933cdd62019fbb447ecab4524ca3b8c3cf5d3a",
+      "byteLength": 2462,
+      "aliases": [
+        "PARAMOUNT PLUS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/paramountplus.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "patreon",
+      "canonicalName": "Patreon",
+      "file": "patreon.svg",
+      "contentSha256": "33bf21d0947cd182e4c5057e0a54e7b083b297f6e022677fd5f9ef3d3fc34659",
+      "byteLength": 405,
+      "aliases": [
+        "PATREON"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/patreon.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "paypal",
+      "canonicalName": "PayPal",
+      "file": "paypal.svg",
+      "contentSha256": "73b33fd4fb1e21f65415943ace3aff176891b9d35e962df7b87d744d02891137",
+      "byteLength": 488,
+      "aliases": [
+        "PAYPAL",
+        "PAYPAL EUROPE",
+        "PP"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/paypal.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "penny",
+      "canonicalName": "PENNY",
+      "file": "penny.svg",
+      "contentSha256": "1f589fe8a8ed09e19f41ca94fc7ba7173c90d5c402a2cf182030c3ca91e71e92",
+      "byteLength": 816,
+      "aliases": [
+        "PENNY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/penny.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "picnic",
+      "canonicalName": "PICNIC",
+      "file": "picnic.svg",
+      "contentSha256": "1443cda55d6fa91e01b3086080ed162aa3fd44d4a5ae4d654434459207d455a5",
+      "byteLength": 3311,
+      "aliases": [
+        "PICNIC"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/picnic.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "playstation",
+      "canonicalName": "PlayStation",
+      "file": "playstation.svg",
+      "contentSha256": "3767b8e9b4e23744329db4592a261a05d46a3d78c38ece6a5f7ccc447bc5527f",
+      "byteLength": 817,
+      "aliases": [
+        "PLAYSTATION",
+        "SONY INTERACTIVE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/playstation.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "proton",
+      "canonicalName": "PROTON",
+      "file": "proton.svg",
+      "contentSha256": "dcddcff8ebd32181b2964fd74b17c6f4bf48be44157f101304d6a38b52ee654f",
+      "byteLength": 564,
+      "aliases": [
+        "PROTON"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/proton.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "qatarairways",
+      "canonicalName": "QATAR AIRWAYS",
+      "file": "qatarairways.svg",
+      "contentSha256": "afbbfe2b90d994b98666f4946bd253ceb9a45bdb35055117f20d593197f1739f",
+      "byteLength": 3795,
+      "aliases": [
+        "QATAR AIRWAYS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/qatarairways.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "revolut",
+      "canonicalName": "Revolut",
+      "file": "revolut.svg",
+      "contentSha256": "547dea1c84d43eb35194554e6607b0729382cbbda81858b9efdafebcb512e7f1",
+      "byteLength": 488,
+      "aliases": [
+        "REVOLUT"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/revolut.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "rewe",
+      "canonicalName": "REWE",
+      "file": "rewe.svg",
+      "contentSha256": "abb75507f4e5e70f12f0a11c07cbba0913b933d3a137391d4e34ef428adb351c",
+      "byteLength": 1495,
+      "aliases": [
+        "REWE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/rewe.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "riotgames",
+      "canonicalName": "RIOT GAMES",
+      "file": "riotgames.svg",
+      "contentSha256": "6c9c0d026d9ca1e0ccb78cdc9530718089ffc6e723546cbb14ab4f999519cc2a",
+      "byteLength": 371,
+      "aliases": [
+        "RIOT GAMES"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/riotgames.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "rossmann",
+      "canonicalName": "ROSSMANN",
+      "file": "rossmann.svg",
+      "contentSha256": "19802d2e0e35fd659b18a4516d99ffac21cc92739acbc8a01e70f8adf76dfb5a",
+      "byteLength": 1420,
+      "aliases": [
+        "ROSSMANN"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/rossmann.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "rtl",
+      "canonicalName": "RTL+",
+      "file": "rtl.svg",
+      "contentSha256": "aa4a5e14dffb07931f6d0314c69139015cbb4d030e658d5a385c4add04673305",
+      "byteLength": 525,
+      "aliases": [
+        "RTL"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/rtl.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ryanair",
+      "canonicalName": "Ryanair",
+      "file": "ryanair.svg",
+      "contentSha256": "3e771ee5ebc92c77300c26279432f654473866d4ee835290b73bc7d8d5f87993",
+      "byteLength": 2350,
+      "aliases": [
+        "RYANAIR"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ryanair.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "saturn",
+      "canonicalName": "Saturn",
+      "file": "saturn.svg",
+      "contentSha256": "7d03264c2406623f0ccb205cb6623f6d369350932eda4607a2f980515850a06a",
+      "byteLength": 1186,
+      "aliases": [
+        "SATURN"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/saturn.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "shell",
+      "canonicalName": "SHELL",
+      "file": "shell.svg",
+      "contentSha256": "0a1b695d319d501b2e10a8535b41756ea0156a6e445f33eeb19c620f81e19834",
+      "byteLength": 1081,
+      "aliases": [
+        "SHELL"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/shell.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "sparkasse",
+      "canonicalName": "Sparkasse",
+      "file": "sparkasse.svg",
+      "contentSha256": "17513d491ebb03497ab53d14d0f1291369d0290f23a546c81f9a1b43e6688314",
+      "byteLength": 541,
+      "aliases": [
+        "SPARKASSE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/sparkasse.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "spotify",
+      "canonicalName": "SPOTIFY",
+      "file": "spotify.svg",
+      "contentSha256": "b469fec7f44784bb62cb542a64c7c4bb0fdf16d98ad7dc8878858e8840032aaf",
+      "byteLength": 733,
+      "aliases": [
+        "SPOTIFY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/spotify.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "starbucks",
+      "canonicalName": "STARBUCKS",
+      "file": "starbucks.svg",
+      "contentSha256": "75dff25dc4ced725cb079539e66aa24914819afff1698ed4ad181edc2a4d077a",
+      "byteLength": 7744,
+      "aliases": [
+        "STARBUCKS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/starbucks.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "steam",
+      "canonicalName": "Steam",
+      "file": "steam.svg",
+      "contentSha256": "912709c363fe647d3a74a4c4891a9a07c6427d4177613d1f79862dc2e3cb9acf",
+      "byteLength": 1072,
+      "aliases": [
+        "STEAM",
+        "VALVE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/steam.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "stripe",
+      "canonicalName": "Stripe",
+      "file": "stripe.svg",
+      "contentSha256": "972963ecc06c0ffc10d7480fd148d78baed2d4cedf38205ca995c417244af7bd",
+      "byteLength": 624,
+      "aliases": [
+        "STRIPE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/stripe.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "surfshark",
+      "canonicalName": "SURFSHARK",
+      "file": "surfshark.svg",
+      "contentSha256": "e021ead95d54c932aebf805c356ef8ac77087e0c9c5a0079f18f5dd8ad482aab",
+      "byteLength": 835,
+      "aliases": [
+        "SURFSHARK"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/surfshark.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ticketmaster",
+      "canonicalName": "TICKETMASTER",
+      "file": "ticketmaster.svg",
+      "contentSha256": "7e0cb2a67b9f84e09d40c77b643159f6bc5576a7da35170a3474becea0fd2bca",
+      "byteLength": 4473,
+      "aliases": [
+        "TICKETMASTER"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ticketmaster.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "turkishairlines",
+      "canonicalName": "TURKISH AIRLINES",
+      "file": "turkishairlines.svg",
+      "contentSha256": "b1a4c1b96e8523b017556123f89dcd9ca729b7b7200775dd83c731e1010cfa6d",
+      "byteLength": 599,
+      "aliases": [
+        "TURKISH AIRLINES"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/turkishairlines.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "twitch",
+      "canonicalName": "Twitch",
+      "file": "twitch.svg",
+      "contentSha256": "d8f66406599a58a771a42e31968282c42f534cae7572258ab5147a16b3e74eab",
+      "byteLength": 328,
+      "aliases": [
+        "TWITCH"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/twitch.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "uber",
+      "canonicalName": "UBER",
+      "file": "uber.svg",
+      "contentSha256": "f7cd75521fe69ea50236d89c528251cdac45d874bcc1002ef63d0032c18707a7",
+      "byteLength": 969,
+      "aliases": [
+        "UBER"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/uber.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ubereats",
+      "canonicalName": "UBER EATS",
+      "file": "ubereats.svg",
+      "contentSha256": "6e87f19155708a5543ef90724f8a2a25f4d7ca01ec88e0e0dbeab8d943c040d0",
+      "byteLength": 2359,
+      "aliases": [
+        "UBER EATS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ubereats.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ubisoft",
+      "canonicalName": "UBISOFT",
+      "file": "ubisoft.svg",
+      "contentSha256": "656fbd5b5a3bd0fa3d2fa37bac0fb7b1c9c4a7aadf82dd5388491c37d599d0f3",
+      "byteLength": 1058,
+      "aliases": [
+        "UBISOFT"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ubisoft.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "udemy",
+      "canonicalName": "UDEMY",
+      "file": "udemy.svg",
+      "contentSha256": "ffa8fdd834dbde1157fe259746f11e8e0169959f08c0fd6fc2bb600cfdf74dd0",
+      "byteLength": 413,
+      "aliases": [
+        "UDEMY"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/udemy.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "uniqlo",
+      "canonicalName": "UNIQLO",
+      "file": "uniqlo.svg",
+      "contentSha256": "18f10be30dc1d82263bc4008ff3fd21d1c469c3dee059083360c5dbbfb4ba168",
+      "byteLength": 1032,
+      "aliases": [
+        "UNIQLO"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/uniqlo.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "ups",
+      "canonicalName": "UPS",
+      "file": "ups.svg",
+      "contentSha256": "6729cba274d93d9efa0be235e87a45c37660bebb49256f2c74232ea34ba2881d",
+      "byteLength": 2054,
+      "aliases": [
+        "UNITED PARCEL SERVICE",
+        "UPS"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/ups.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "visa",
+      "canonicalName": "Visa",
+      "file": "visa.svg",
+      "contentSha256": "144f6a1c12c18c79a19e094ea23f4bf71a3d7343bfa9d42910f7a4936f9c2dcc",
+      "byteLength": 829,
+      "aliases": [
+        "VISA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/visa.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "vodafone",
+      "canonicalName": "Vodafone",
+      "file": "vodafone.svg",
+      "contentSha256": "90b3fb7501d7796d85fb0d90f574aa3c168fad3079bef77dad4870bed541965e",
+      "byteLength": 490,
+      "aliases": [
+        "VODAFONE",
+        "VODAFONE KABEL DEUTSCHLAND"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/vodafone.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "wise",
+      "canonicalName": "Wise",
+      "file": "wise.svg",
+      "contentSha256": "5fc9f22111e3989c50e3911df8a87f095b6879cfef36ba095691cdc71ae042af",
+      "byteLength": 273,
+      "aliases": [
+        "TRANSFERWISE",
+        "WISE"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/wise.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "wish",
+      "canonicalName": "WISH",
+      "file": "wish.svg",
+      "contentSha256": "bdd17c0566b184f6e3ff0aa06fd4bac55ec419289b61963b8b59692617a7619a",
+      "byteLength": 394,
+      "aliases": [
+        "WISH"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/wish.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "wizzair",
+      "canonicalName": "WIZZ AIR",
+      "file": "wizzair.svg",
+      "contentSha256": "9f20adcced472803eb44a750ff38114af3ec91260536058db93122fd91364714",
+      "byteLength": 2796,
+      "aliases": [
+        "WIZZ AIR"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/wizzair.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "youtube",
+      "canonicalName": "YOUTUBE PREMIUM",
+      "file": "youtube.svg",
+      "contentSha256": "263a456a62e89a8edb87acd3380dd70db16b5164919fabeb2b07fe49773a604b",
+      "byteLength": 495,
+      "aliases": [
+        "YOUTUBE PREMIUM"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/youtube.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "zalando",
+      "canonicalName": "Zalando",
+      "file": "zalando.svg",
+      "contentSha256": "5db6d2cbe12b9364f76ba6934ad7b80811207e9211862a23a906b6c55d68f2d7",
+      "byteLength": 503,
+      "aliases": [
+        "ZALANDO"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/zalando.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    },
+    {
+      "brandKey": "zara",
+      "canonicalName": "ZARA",
+      "file": "zara.svg",
+      "contentSha256": "6f501f33e7408edca383a456f5756c9a8bdf3c7458fef7bca065272322a30f4b",
+      "byteLength": 1223,
+      "aliases": [
+        "ZARA"
+      ],
+      "sourceName": "simple-icons/simple-icons",
+      "sourceUrl": "https://cdn.jsdelivr.net/npm/simple-icons@16.29.0/icons/zara.svg",
+      "licenseNote": "Simple Icons CC0-1.0; trademarks remain property of their owners."
+    }
+  ]
+}

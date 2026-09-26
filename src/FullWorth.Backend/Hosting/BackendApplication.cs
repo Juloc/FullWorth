@@ -28,6 +28,7 @@ using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Import;
 using FullWorth.Backend.Modules.Ingestion;
 using FullWorth.Backend.Modules.Intelligence;
+using FullWorth.Backend.Modules.Intelligence.Brands;
 using FullWorth.Backend.Modules.Intelligence.Context;
 using FullWorth.Backend.Modules.Intelligence.Signals;
 using FullWorth.Backend.Modules.Loans;
@@ -121,6 +122,7 @@ public static class BackendApplication
         builder.Services.AddScoped<KnowledgePackSyncService>();
         builder.Services.AddScoped<CloudOperationalRegistryResolver>();
         builder.Services.AddScoped<BrandPackService>();
+        builder.Services.AddScoped<BundledBrandCatalogInstaller>();
         builder.Services.AddScoped<CloudOntologyResolver>();
         builder.Services.AddHostedService<KnowledgePackSyncWorker>();
         builder.Services.AddScoped<AiBudgetGuard>();
@@ -476,6 +478,13 @@ public static class BackendApplication
             await intelligenceDb.Database.MigrateAsync();
             var intelligenceAdminBootstrapper = scope.ServiceProvider.GetRequiredService<IntelligenceAdminBootstrapper>();
             await intelligenceAdminBootstrapper.EnsureBootstrapAdminAsync(CancellationToken.None);
+
+            // Der mitgelieferte Markenkatalog. Beim Start und nicht in einem Hintergrundlaeufer,
+            // weil die erste Seite sonst ohne Logos zeichnet und sie kurz darauf nachwachsen -
+            // genau die Verschiebung, die Regel 1 des Frontends verbietet. Ergebnisgleich, also
+            // kostet ein Neustart mit unveraendertem Katalog nichts.
+            await scope.ServiceProvider.GetRequiredService<BundledBrandCatalogInstaller>()
+                .InstallAsync(CancellationToken.None);
         }
     }
 
