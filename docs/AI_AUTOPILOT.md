@@ -3,9 +3,8 @@
 FullWorth has four AI-touched product surfaces: the **Coach** (chat over your own finance data),
 **Autopilot signals and insights** ("Wichtig für dich"), **instance Intelligence jobs**
 (merchant/product/receipt/contract suggestions), and **receipt and payslip structuring**. Three of them
-can be served by the **Codex bridge**, a Node sidecar that owns a ChatGPT/Codex login. The private
-cloud has a fifth, entirely separate surface: the **AI candidate review** in `fullworth-cloud`, which
-talks to the same kind of bridge.
+can be served by the **Codex bridge**, a Node process inside the application image that owns a
+ChatGPT/Codex login.
 
 AI is an optional interpretation and language layer. It is never the source of financial truth: every
 number a user sees is computed deterministically in C#, and a provider only ever rewords, ranks or
@@ -28,10 +27,9 @@ This is the default state of a fresh installation and it is a supported, complet
 - The scheduled Intelligence planner enqueues the deterministic signal refresh **before** it reads
   `AiInstanceSettings` and returns early when AI is disabled
   (`ScheduledIntelligenceJobs.PlanAsync`).
-- Cloud candidate review uses `DefaultAiReviewer`, which escalates anything ambiguous to a human.
-
-No AI feature requires an environment variable to stay off, and the Codex bridge is a separate
-container behind the `codex` Compose profile, so a normal `docker compose up` does not start it.
+No AI feature requires an environment variable to stay off. The Codex bridge lives in the
+application image since alpha.36 and its launcher sleeps until something arms it, so a normal
+`docker compose up` starts no model process.
 
 ## Coach
 
@@ -166,8 +164,7 @@ environment variable.
 Instance-wide AI runs on the operator's own credential and is administered under
 `/api/intelligence/admin` (`IntelligenceAdminEndpoints`, `IntelligenceSuggestionEndpoints`):
 `overview`, `providers`, `settings`, `credentials` (+ `test`), `runs`, `jobs`, `audit`,
-`jobs/{type}/run`, `suggestions/pending`, `suggestions/{id}/accept|reject`, and the cloud
-`enable`/`disable`/`sync` actions.
+`jobs/{type}/run`, `suggestions/pending` and `suggestions/{id}/accept|reject`.
 
 `AiInstanceSettings` (single row, `ScopeKey = "instance"`) holds `Enabled`, provider, credential,
 `AllowUserCredentials`, default text/vision model, daily/monthly EUR budget, the three schedules
@@ -236,7 +233,7 @@ Three things make that safe and cheap:
 |---|---|
 | **Own user** | The bridge runs as `codex` (uid 1990), never as `app`. `/run/fullworth-secrets` is `0700 app:app`; the bridge gets the bridge key as a `0400 codex:codex` copy on tmpfs and can reach nothing else. `/data/codex` is `0700 codex:codex`, so the application cannot read a user's ChatGPT session either. |
 | **Lazy start** | `ops/docker/fullworth-codex-launcher` runs as `codex` from container start and sleeps until `/tmp/fullworth-codex/arm` appears. On an installation that never signed in there is **no Node process at all** — the cost of shipping Codex is one dormant shell. |
-| **Loopback** | `CODEX_BRIDGE_BIND=127.0.0.1`, `CODEX_BRIDGE_PORT=8099`. Narrower than the sidecar, which listened on `0.0.0.0:8080` on the compose network. A stack that shares the bridge (the Cloud's AI review) sets `CODEX_BRIDGE_BIND=0.0.0.0` in its own file. |
+| **Loopback** | `CODEX_BRIDGE_BIND=127.0.0.1`, `CODEX_BRIDGE_PORT=8099`. Narrower than the sidecar, which listened on `0.0.0.0:8080` on the compose network. The only caller is the .NET process in the same container. |
 
 Who writes the arm file is a decision, not an accident: `CodexBridgeSupervisor` exposes two named
 HTTP clients. The **arming** one is used by the paths a person triggers (the AI access screens, the
@@ -262,8 +259,7 @@ The scope is a hash, never a browser-visible value. The backend uses
 `SHA256("fullworth-ai:{userId:N}")` (`CodexBridgeIntelligenceProvider.ScopeForUser`, and the identical
 derivation in `CodexReceiptBridgeClient`, `CodexReceiptTestEndpoints` and `PayslipCodexExtractor`) —
 the login follows the user across FullWorth Spaces while space membership is authorized by the
-backend endpoint. The cloud uses `SHA256("fullworth-cloud-ai:{identity}")` with identity
-`fullworth-cloud`, keeping cloud usage separate on a shared bridge.
+backend endpoint.
 
 The bridge key is deliberately **not** `Security:InternalKey`: the sidecar processes untrusted files
 and must never hold the key that establishes trusted backend user context.
@@ -368,7 +364,7 @@ the `codex` profile is actually running.
 `fullworth-demo/compose.yml` pins `CodexTest__Enabled: "false"`.
 
 The URL check differs too: the FullWorth-side readers accept `Uri.UriSchemeHttp` only, so an `https://`
-bridge URL yields `codex_bridge_invalid` / 503. The cloud client accepts https, and http only for a
+bridge URL yields `codex_bridge_invalid` / 503. The client accepts https, and http only for a
 private host.
 
 Other AI configuration:
@@ -402,13 +398,9 @@ identifiers. Product, receipt-follow-up and contract-enrichment candidates are s
 
 **Payslip.** Up to 24 000 characters of locally produced OCR text.
 
-**Cloud AI review.** Aggregate only: subject type and key, proposed mapping key, distinct and
-contradicting instance counts, weighted confidence, up to 20 alternative mapping keys. No raw
-transactions, no amounts, no instance identities.
-
 Every prompt in the codebase states that all supplied strings are untrusted data and never
 instructions, and forbids shell, file, web and MCP tool use. The Responses-API providers
-(`openai`, `openai-compatible`, and the cloud's `OpenAiResponsesClient`) send `store: false`; on the
+(`openai` and `openai-compatible`) send `store: false`; on the
 Codex path the equivalent is the CLI's `--ephemeral` plus the `shell_tool` the wrapper disables.
 
 ## Limits and timeouts
@@ -426,9 +418,6 @@ Codex path the equivalent is the CLI's `--ephemeral` plus the `shell_tool` the w
 | Bridge device login | 10 minutes |
 | Backend → bridge HTTP | 11 min (`AiUserAccessEndpoints`), 5 min (receipt scan), 4 min (payslip) |
 | OpenAI HttpClient | 60 s |
-| Cloud → bridge | `RequestTimeoutSeconds`, default 120, clamped 2–300 |
-| Cloud → OpenAI | clamped 2–120 s, `max_output_tokens` clamped 100–4000 |
-| Cloud hourly budget | 100 requests and 500 000 input characters per provider, persisted across restarts |
 
 ## Failure behaviour
 
@@ -442,43 +431,4 @@ Codex path the equivalent is the CLI's `--ephemeral` plus the `shell_tool` the w
   budget guard rather than overspending.
 - Bridge unreachable, invalid or keyless: `codex_bridge_unavailable` / `codex_bridge_invalid` (503) or
   `codex_bridge_timeout` (504); the local `DELETE /api/intelligence/access` still succeeds.
-- Cloud: a *selected but unusable* provider raises a transient error so candidates stay pending and
-  the admin view shows the last error. It is not silently downgraded to deterministic — deterministic
-  is only the default when no provider is configured at all.
 
-## Cloud AI review (fullworth-cloud)
-
-A separate repository and a separate trust boundary. `AiReviewWorker` runs every 30 seconds over
-batches of 50 and drives three steps: `OntologySimilarityProposalService` proposes merge candidates,
-`AiReviewProcessor` reviews `MappingCandidate` rows with `Status = NeedsAiReview` and no admin
-override, and `OntologyAiReviewProcessor` reviews `OntologyMergeProposal` rows in status `Proposed`.
-Both processors call `IAiReviewer` — bound to `ConfiguredAiReviewer`, which resolves the effective
-provider per unit of work so an admin change takes effect without redeploying the worker.
-
-Providers: `deterministic` (`DefaultAiReviewer`), `codex` (`CodexAiReviewer` via `CodexBridgeClient`)
-and `openai` (`OpenAiAiReviewer` via `OpenAiResponsesClient`, default model `gpt-5.6-luna`). All three
-share one wire format in `AiReviewPrompt`: the same sanitized aggregate projection, the same strict
-output schema and the same defensive local parser, so validation cannot drift between providers.
-`sourceReferences` containing a URL are dropped.
-
-The result is advisory. `AiReviewProcessor` stores a `StoredAiReviewResult` and an audit row and
-**never mutates the registry**; the Trust Engine and the operator decide promotion afterwards.
-`OntologyAiReviewProcessor` only records a recommendation and advances the proposal to `AiReviewed` —
-it never approves, rejects, redirects or merges entities or aliases. An unparseable or empty answer
-becomes `NeedsHumanReview` with a `provider_schema_invalid` safety flag.
-
-`AiReviewBudgetService` reserves the hourly budget *before* the outbound request, so retries and
-failures still consume it; exceeding it stops the batch and leaves the rest pending.
-
-Operator surface, all under the admin auth filter: `GET /admin/ai-status`, `PUT /admin/ai-provider`,
-`POST /admin/ai-provider/test`, `POST /admin/ai-provider/codex/login`,
-`GET /admin/ai-provider/codex/login/{sessionId}`, `POST /admin/ai-provider/codex/logout`,
-`GET /admin/ai-reviews`. The persisted override (`CloudAiProviderSetting`, a single row) holds
-non-secret fields plus a Codex credential **reference** (`env:NAME` or `file:/path`) that is resolved
-server-side, so neither the database nor any admin response contains the bridge key. Set
-`Cloud:AiReview:AllowAdminOverride=false` to pin the provider to env configuration only.
-
-`AiBrandResearchAssistant` is the second cloud AI consumer, gated on `BrandAiFallbackEnabled`. It
-receives already-reviewed central-registry data (canonical names, reviewed domains, alias keys) and
-returns candidate slugs that are re-checked against the deterministic icon source; any resulting asset
-still goes through candidate → operator verification → signed pack.

@@ -60,7 +60,7 @@ Target:
 - `FullWorth.Web` is the sole executable composition root.
 - Backend and Banking expose module registration/endpoint/application APIs rather than their own supported host lifecycle.
 - Remove standalone host artifacts after verifying no current supported workflow consumes them.
-- Keep external process boundaries only where they are real boundaries (for example an external banking provider, FullWorth Cloud, Codex Bridge when separate, Paperless or a market-data service).
+- Keep external process boundaries only where they are real boundaries (for example an external banking provider, Codex Bridge when separate, Paperless or a market-data service).
 
 ### 2. The unified process still talks to itself over HTTP
 
@@ -460,7 +460,7 @@ Prioritize the largest/highest-risk hotspots:
 3. Purchases/receipts.
 4. BankConnections.
 5. Compensation.
-6. Intelligence/cloud jobs.
+6. Intelligence jobs.
 7. Analytics/Categories/Budgets and other modules where inventory shows mixed concerns.
 
 Split by responsibility and canonical use case, not arbitrary line counts. Remove duplicated helpers while moving code.

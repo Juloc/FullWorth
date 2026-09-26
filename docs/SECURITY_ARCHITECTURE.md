@@ -498,26 +498,24 @@ exist in ordinary database backups until those expire; backups are never selecti
 restore must not be used to resurrect an account past the deadline outside controlled disaster
 recovery.
 
-## Intelligence Cloud
+## Nothing leaves this installation
 
-[Cloud](CLOUD.md) documents the instance side: the consent gate, the optional enrollment token
-(currently empty in Compose, so enrollment relies on the Cloud's public registration), what the
-observation outbox is allowed to contain, and knowledge-pack `RSA-PSS-SHA256` verification.
+There used to be an Intelligence Cloud here: an instance enrolled with it, queued minimised
+observations in an outbox, uploaded them on a timer, and downloaded signed knowledge packs it
+verified with a pinned `RSA-PSS-SHA256` key. Two rules bound it to the rest of this document —
+outbound payloads carried only anonymous aggregates plus an instance id, and account deletion had to
+remove unsent, user-attributable outbox rows locally.
 
-The verification key is **pinned, not shipped**. An instance with none fetches it from the Cloud it
-is enrolled with and stores it per Cloud origin, create-only; configuration still overrules the pin.
-The security property is the pin, not the fetch: after the first sync a different key is recorded and
-refused (`knowledge_pack_public_key_changed`) and only an audited admin action can replace it, so a
-later endpoint compromise cannot make this instance accept another publisher's packs. The first fetch
-itself is trusted on TLS to a non-configurable endpoint — a smaller window than the previous state,
-in which the shipped `OfficialPublicKeyPem` was empty and no external instance could verify anything
-at all.
+Both rules are gone with their subject, and that is the stronger state: **this installation has no
+outbound queue at all.** Nothing in its database is waiting to be sent anywhere. Erasure is
+therefore the purge manifest plus the per-user and per-space deletes — there is no second path a
+deleted user's data could still be sitting in.
 
-Two rules bind Cloud to the rest of this document: outbound payloads may carry only anonymous
-aggregates plus the instance id — never a finance user id or e-mail — and account deletion removes
-unsent, user-attributable outbox items locally (`AccountPurgeService.PurgeIntelligenceUserDataAsync`).
-Already-accepted anonymous aggregates may remain; there is currently no remote retraction call, which
-is why the payload-anonymity rule has to hold at submission time.
+What replaced the packs ships inside the image (see [Brand assets](BRAND_ASSETS.md)) and needs no
+trust anchor: the assets are verified against their own manifest hashes at test time and re-verified
+by `BrandAssetVerifier` before they reach a browser, the same check a self-uploaded brand pack goes
+through. The one remaining outbound direction is optional and operator-chosen — an AI provider, and
+the logo lookup described in that document.
 
 ## Release gate
 

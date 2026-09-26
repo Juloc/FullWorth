@@ -12,8 +12,6 @@ namespace FullWorth.Backend.Modules.Intelligence;
 public sealed class OfficialMerchantMapping
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public string PackId { get; set; } = string.Empty;
-    public string PackVersion { get; set; } = string.Empty;
     public string AliasKey { get; set; } = string.Empty;
     public string Direction { get; set; } = "any";
     public string CanonicalMerchantKey { get; set; } = string.Empty;
@@ -165,8 +163,6 @@ public static class IntelligenceCatalogModelConfiguration
         {
             entity.HasIndex(x => new { x.AliasKey, x.Direction, x.Country }).IsUnique();
             entity.HasIndex(x => x.CanonicalMerchantKey);
-            entity.Property(x => x.PackId).HasMaxLength(120);
-            entity.Property(x => x.PackVersion).HasMaxLength(80);
             entity.Property(x => x.AliasKey).HasMaxLength(300);
             entity.Property(x => x.Direction).HasMaxLength(16);
             entity.Property(x => x.CanonicalMerchantKey).HasMaxLength(180);
