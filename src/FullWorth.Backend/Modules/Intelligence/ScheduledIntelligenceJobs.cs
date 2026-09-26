@@ -252,6 +252,11 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
                 return;
             }
 
+            // Logos, die sich ausrechnen lassen, VOR dem KI-Tor. Sonst bekaeme eine Installation
+            // ohne KI nie ein abgeleitetes Logo: der Auftrag verschoebe sich alle sechs Stunden,
+            // und die Ableitung, die kein Token kostet, liefe nie.
+            await DeriveLogosAsync(ct);
+
             var settings = await intelligenceDb.AiInstanceSettings.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.ScopeKey == AiInstanceSettings.InstanceScopeKey, ct);
             if (settings is null || !settings.Enabled)
@@ -588,18 +593,26 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
     private const int LogoResearchPerRun = 25;
 
     /// <summary>
+    /// Die kostenlose Runde: jeder haeufige Haendlername wird gegen den mitgelieferten Katalog
+    /// gerechnet. Kein Deckel und kein Abbruch - es gibt nichts zu begrenzen, wenn nichts bezahlt
+    /// wird, und ein Name, der sich nicht ableiten laesst, sagt nichts ueber den naechsten.
+    /// </summary>
+    private async Task DeriveLogosAsync(CancellationToken ct)
+    {
+        foreach (var name in await FrequentCounterpartiesAsync(ct))
+        {
+            ct.ThrowIfCancellationRequested();
+            await logoResearch.DeriveAsync(name, ct);
+        }
+    }
+
+    /// <summary>
     /// Die haeufigsten Haendlernamen, die noch kein Logo haben, einer nach dem anderen. Haeufig zuerst,
     /// weil ein Logo dort am meisten zu sehen ist.
     /// </summary>
     private async Task ResearchLogosAsync(CancellationToken ct)
     {
-        var names = await financeDb.Transactions.AsNoTracking()
-            .Where(x => x.NormalizedCounterparty != null && x.NormalizedCounterparty != "")
-            .GroupBy(x => x.NormalizedCounterparty!)
-            .OrderByDescending(group => group.Count())
-            .Select(group => group.Key)
-            .Take(LogoResearchPerRun * 8)
-            .ToListAsync(ct);
+        var names = await FrequentCounterpartiesAsync(ct);
 
         var done = 0;
         foreach (var name in names)
@@ -607,9 +620,11 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
             if (done >= LogoResearchPerRun) break;
             ct.ThrowIfCancellationRequested();
             var outcome = await logoResearch.ResearchAsync(name, null, ct);
-            // Nur ein echter Versuch zaehlt gegen den Deckel. "Kennen wir schon" und "haben wir erst
-            // neulich versucht" kosten nichts und duerfen den Lauf nicht auffuellen.
-            if (outcome is not (BrandLogoResearchService.OutcomeAlreadyKnown or BrandLogoResearchService.OutcomeRecentlyTried))
+            // Nur ein echter Versuch zaehlt gegen den Deckel. "Kennen wir schon", "gerechnet" und
+            // "haben wir erst neulich versucht" kosten nichts und duerfen den Lauf nicht auffuellen.
+            if (outcome is not (BrandLogoResearchService.OutcomeAlreadyKnown
+                or BrandLogoResearchService.OutcomeRecentlyTried
+                or BrandLogoResearchService.OutcomeDerived))
                 done++;
             // Nicht freigegeben heisst: hier gibt es nichts zu tun. Anbieter nicht erreichbar heisst:
             // die naechsten hundert Aufrufe scheitern genauso. Beides beendet den Lauf, aber aus
@@ -617,6 +632,15 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
             if (outcome is BrandLogoResearchService.OutcomeNoAccess or BrandLogoResearchService.OutcomeProviderFailed) return;
         }
     }
+
+    private Task<List<string>> FrequentCounterpartiesAsync(CancellationToken ct) =>
+        financeDb.Transactions.AsNoTracking()
+            .Where(x => x.NormalizedCounterparty != null && x.NormalizedCounterparty != "")
+            .GroupBy(x => x.NormalizedCounterparty!)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.Key)
+            .Take(LogoResearchPerRun * 8)
+            .ToListAsync(ct);
 
     private async Task CompleteAsync(IntelligenceJob job, CancellationToken ct)
     {

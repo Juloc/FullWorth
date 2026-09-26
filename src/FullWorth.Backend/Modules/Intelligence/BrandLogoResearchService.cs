@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using FullWorth.Backend.Modules.Intelligence.Brands;
 
 namespace FullWorth.Backend.Modules.Intelligence;
 
@@ -74,6 +75,7 @@ public sealed class BrandLogoResearchService(
     public const string OutcomeBudget = "budget";
     public const string OutcomeAlreadyKnown = "already_known";
     public const string OutcomeRecentlyTried = "recently_tried";
+    public const string OutcomeDerived = "derived";
 
     private const string Schema = """
 {
@@ -101,13 +103,10 @@ Return only JSON matching the supplied schema.
     /// </summary>
     public async Task<string> ResearchAsync(string merchantName, Guid? userId, CancellationToken ct)
     {
-        var aliasKey = BrandAliasKey.Of(merchantName);
-        if (aliasKey is null) return OutcomeNoDomain;
+        var offline = await DeriveAsync(merchantName, ct);
+        if (offline is not null) return offline;
 
-        // Schon bekannt heisst: nichts zu tun. Das gilt fuer alle drei Quellen des Katalogs, nicht nur
-        // fuer die eigene - ein Logo aus einem signierten Paket ist besser als ein recherchiertes.
-        if (await IsAlreadyCoveredAsync(aliasKey, ct)) return OutcomeAlreadyKnown;
-
+        var aliasKey = BrandAliasKey.Of(merchantName)!;
         var aliasHash = HashOf(aliasKey);
         var attempt = await db.BrandLogoResearchAttempts.SingleOrDefaultAsync(x => x.AliasHash == aliasHash, ct);
         if (attempt is not null &&
@@ -166,6 +165,87 @@ Return only JSON matching the supplied schema.
 
         await StoreAsync(aliasKey, merchantName, verified, fetched.Url, ct);
         return await RecordAsync(attempt, aliasHash, OutcomeOk, domain, ct);
+    }
+
+    /// <summary>
+    /// Die kostenlosen Sprossen, fuer sich aufrufbar: schon bekannt, oder aus dem mitgelieferten
+    /// Katalog ableitbar.
+    ///
+    /// Sie sind ausdruecklich von <see cref="ResearchAsync"/> getrennt, weil sie ohne KI-Zugang
+    /// laufen muessen. Der geplante Auftrag verschiebt sich um sechs Stunden, wenn die Instanz
+    /// keine KI hat - liefe die Ableitung nur dort, bekaeme eine Installation ohne KI nie ein
+    /// abgeleitetes Logo, obwohl dafuer nichts noetig ist als Rechnen.
+    ///
+    /// Gibt das Ergebnis zurueck, wenn hier schon alles entschieden ist, sonst <c>null</c>.
+    /// </summary>
+    public async Task<string?> DeriveAsync(string merchantName, CancellationToken ct)
+    {
+        var aliasKey = BrandAliasKey.Of(merchantName);
+        if (aliasKey is null) return OutcomeNoDomain;
+
+        // Schon bekannt heisst: nichts zu tun. Das gilt fuer alle Quellen des Katalogs, nicht nur
+        // fuer die eigene - ein mitgeliefertes oder selbst hochgeladenes Logo schlaegt ein
+        // recherchiertes.
+        if (await IsAlreadyCoveredAsync(aliasKey, ct)) return OutcomeAlreadyKnown;
+
+        return await TryDeriveFromBundledCatalogAsync(aliasKey, ct) ? OutcomeDerived : null;
+    }
+
+    /// <summary>
+    /// Die Offline-Sprosse: aus dem Haendlernamen einen Markenschluessel ableiten und ihn gegen den
+    /// mitgelieferten Katalog halten.
+    ///
+    /// Geschrieben wird nur eine Schreibweise, kein Bild - das Logo liegt schon da. Aus
+    /// "VODAFONE WEST GMBH" wird eine Zeile, die auf die vorhandene Marke <c>vodafone</c> zeigt;
+    /// Bytes fliessen keine.
+    ///
+    /// Zwei Wege, beide aus der abgeschafften Cloud portiert und beide mit derselben Bremse:
+    /// Mehrdeutigkeit gibt keine Antwort. Ein Kandidat, der auf zwei Marken passt, wird verworfen -
+    /// ein geratenes Logo ist schlechter als keines, weil niemand mehr nachvollzieht, woher es kam.
+    /// </summary>
+    private async Task<bool> TryDeriveFromBundledCatalogAsync(string aliasKey, CancellationToken ct)
+    {
+        var known = await db.OfficialBrandAssets.AsNoTracking()
+            .Select(x => x.BrandKey)
+            .ToListAsync(ct);
+        if (known.Count == 0) return false;
+        var byKey = known.ToHashSet(StringComparer.Ordinal);
+
+        // Erst zaehlen, dann entscheiden. Jede zusammenhaengende Wortfolge des Namens wird zum
+        // Kurznamen normalisiert und gegen den Katalog gehalten - ueber ALLE Laengen, nicht nur bis
+        // zum ersten Treffer. Stehen zwei verschiedene Marken im selben Namen, gibt es keine
+        // Antwort: "AMAZON PAYPAL ZAHLUNG" ist keine Amazon-Buchung, nur weil Amazon vorne steht.
+        var words = aliasKey.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var contained = new List<string>(2);
+        for (var take = words.Length; take >= 1; take--)
+        {
+            for (var start = 0; start + take <= words.Length; start++)
+            {
+                var slug = BrandSlugDerivation.NormalizeSlug(string.Join(' ', words.Skip(start).Take(take)));
+                if (slug.Length >= 4 && byKey.Contains(slug) && !contained.Contains(slug, StringComparer.Ordinal))
+                    contained.Add(slug);
+            }
+        }
+        if (contained.Count > 1) return false;
+
+        // Genau eine enthaltene Marke gewinnt. Sonst bleibt die Ableitung: ein Kurzname, der als
+        // Ganzes entsteht und in keiner Wortfolge steckt - "H&M" wird zu "handm", und das findet
+        // keine Wortsuche.
+        var brandKey = contained.Count == 1
+            ? contained[0]
+            : BrandSlugDerivation.CandidateSlugs(aliasKey).FirstOrDefault(byKey.Contains);
+        if (brandKey is null) return false;
+
+        db.ResearchedBrandAliases.Add(new ResearchedBrandAlias
+        {
+            AliasKey = aliasKey,
+            BrandKey = brandKey,
+            Source = "derivation",
+            Confidence = 0.90m,
+            AliasKind = "exact"
+        });
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     private async Task<bool> IsAlreadyCoveredAsync(string aliasKey, CancellationToken ct) =>

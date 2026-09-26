@@ -102,12 +102,40 @@ public sealed class ResearchedBrandAsset
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Eine selbst gelernte Schreibweise fuer eine Marke - und die Antwort auf "wie oft zahlt man dafuer".
+///
+/// <see cref="Source"/> sagt, welche Sprosse der Leiter sie geschrieben hat: <c>derivation</c> und
+/// <c>reuse</c> kosten nichts (reine Rechnung gegen den mitgelieferten Katalog), <c>cdn</c> kostet
+/// eine Anfrage, <c>ai</c> kostet Tokens. Was einmal hier steht, kostet beim naechsten Mal nichts
+/// mehr - das ist der ganze Zweck der Tabelle.
+///
+/// <see cref="Confidence"/> traegt die Herkunft als Zahl: abgeleitet 0,90, aus dem Katalog geholt
+/// 0,80, von einer KI vorgeschlagen 0,55. Dieselbe Decke wie beim Renten-Strukturierer, und aus
+/// demselben Grund: ein Modell darf ergaenzen, nie ueberstimmen.
+/// </summary>
 public sealed class ResearchedBrandAlias
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string AliasKey { get; set; } = string.Empty;
     public string BrandKey { get; set; } = string.Empty;
     public string Country { get; set; } = "GLOBAL";
+
+    /// <summary>derivation | reuse | cdn | ai | user</summary>
+    public string Source { get; set; } = "ai";
+    public decimal Confidence { get; set; } = 0.55m;
+
+    /// <summary>
+    /// <c>exact</c> trifft genau diesen Namen, <c>stem</c> einen Wortanfang - und damit eine ganze
+    /// Kette statt einer Filiale. Der Browser matcht ohnehin an Wortgrenzen; der Unterschied steht
+    /// hier, damit man ihn beim Aufraeumen sieht.
+    /// </summary>
+    public string AliasKind { get; set; } = "exact";
+
+    /// <summary>active | rejected. Ein abgelehnter Alias bleibt stehen, damit er nicht neu entsteht.</summary>
+    public string Status { get; set; } = "active";
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 /// <summary>
@@ -245,6 +273,10 @@ public static class IntelligenceCatalogModelConfiguration
             entity.Property(x => x.AliasKey).HasMaxLength(300);
             entity.Property(x => x.BrandKey).HasMaxLength(120);
             entity.Property(x => x.Country).HasMaxLength(8);
+            entity.Property(x => x.Source).HasMaxLength(20);
+            entity.Property(x => x.AliasKind).HasMaxLength(10);
+            entity.Property(x => x.Status).HasMaxLength(10);
+            entity.Property(x => x.Confidence).HasPrecision(6, 5);
         });
 
         modelBuilder.Entity<BrandLogoResearchAttempt>(entity =>

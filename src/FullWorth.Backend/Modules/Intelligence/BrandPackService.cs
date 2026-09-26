@@ -392,7 +392,11 @@ public sealed class BrandPackService(IntelligenceDbContext db)
         // Selbst recherchiert (#176): dieselbe Ablage, dieselbe Auslieferung, nur die schwaechste
         // Herkunft. Sie fuellt, was kein Paket abdeckt, und ueberschreibt nie etwas Kuratiertes.
         var researchedAssets = await db.ResearchedBrandAssets.AsNoTracking().ToListAsync(ct);
-        var researchedAliases = await db.ResearchedBrandAliases.AsNoTracking().ToListAsync(ct);
+        // Abgelehnt heisst abgelehnt: die Zeile bleibt stehen, damit sie nicht neu entsteht, aber
+        // sie kommt nicht mehr in den Katalog.
+        var researchedAliases = await db.ResearchedBrandAliases.AsNoTracking()
+            .Where(x => x.Status == "active")
+            .ToListAsync(ct);
 
         var assets = new Dictionary<string, BrandCatalogAssetView>(StringComparer.Ordinal);
         foreach (var pack in packs)
