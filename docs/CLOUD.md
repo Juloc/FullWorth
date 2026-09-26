@@ -5,8 +5,7 @@ This describes what a FullWorth instance does. The Cloud server lives in the pri
 
 Everything is opt-in per instance and off until an administrator makes the setup decision. With
 Cloud disabled, FullWorth is fully functional: merchant/category/contract/product resolution reads
-the last verified knowledge pack from the local database and makes no network call, and the
-benchmark and price endpoints answer `503` so their panels render as unavailable.
+the last verified knowledge pack from the local database and makes no network call.
 
 ## Where the state lives
 
@@ -31,7 +30,7 @@ a domain, an account or an email.
 `CloudIntelligencePolicy.CurrentVersion` is a compiled constant (currently `"2026-09-06.6"`).
 Bumping it is what forces a fresh decision: `HasCurrentActiveConsentAsync` requires
 `Mode == "enabled"` **and** a non-revoked consent row whose `PolicyVersion` equals the current
-constant. Every uploader, worker and benchmark endpoint calls it first, so a policy bump silently
+constant. Every uploader and worker calls it first, so a policy bump silently
 stops all outbound traffic until an admin re-accepts.
 
 `EnableAsync` rejects a stale `policyVersion` in the request body (`cloud_policy_stale`), revokes
@@ -128,7 +127,7 @@ rejects a response whose `instanceId` does not echo back, or whose credential is
 (`cloud_registration_invalid_response`), then stores the credential encrypted.
 
 Registration is lazy and happens wherever a credential is first needed — the outbox uploader, the
-knowledge-pack sync, the benchmark endpoints and the admin `cloud/enable` handler all call
+knowledge-pack sync and the admin `cloud/enable` handler all call
 `RegisterAsync` when `CloudInstanceCredentials` has no row. On a `401` the uploader deletes the
 stored credential so the next pass re-registers. `POST v1/instances/rotate-credential` is
 implemented (`RotateCredentialAsync`, `Bearer` current credential) but nothing in the product calls
@@ -146,33 +145,15 @@ waits on the Cloud and nothing is lost if it is unreachable.
 | --- | --- | --- | --- |
 | `IntelligenceFeedbackRecorder` | `product_category_corrected`, `contract_candidate_accepted` / `_rejected`, and the recorded action | on user feedback, same `SaveChanges` as the feedback row | the minimized projection only, and only when `feedback.CloudEligible` |
 | `IntelligenceSuggestionReviewService` | `ai_suggestion_accepted` / `_rejected` | on review | — |
-| `CloudMerchantBenchmarkContributionService` | `benchmark_observation` (`spending.merchant.monthly`) | 24 h | one previous-month net-spend sum per canonical merchant key + currency |
-| `CloudContractBenchmarkContributionService` | `benchmark_observation` (`contract.energy.monthly_cost`, `contract.internet.monthly_cost`, `contract.insurance.health.monthly_cost`, `contract.insurance.monthly_cost`) | 24 h | one monthly cost per metric/currency/entity |
-| `CloudSavingsBenchmarkContributionService` | `benchmark_observation` (`savings.rate`) | 24 h | one rate per instance/month |
-| `CloudProductPriceContributionService` | `price_observation` | 6 h | GTIN subject key + effective unit price |
 
-Minimization is done at queue time, in the producer:
+Minimization is done at queue time, in the producer: a confirmation only ever carries a **canonical
+key resolved from the installed signed knowledge pack** (`CloudOperationalRegistryResolver`). A
+counterparty the pack does not know is simply not contributed. Local ids, raw counterparty strings
+and per-transaction amounts never leave the instance.
 
-- Merchant observations only ever carry a **canonical merchant key resolved from the installed signed
-  knowledge pack** (`CloudOperationalRegistryResolver`). A counterparty the pack does not know is
-  simply not contributed. Local merchant ids, raw counterparty strings and per-transaction amounts
-  never leave the instance.
-- Price observations require a real GTIN barcode (`GtinKey.TryCreateGtinSubjectKey`) on a
-  `confirmed` purchase item, and only for items touched after `AcceptedAt`. There is no historical
-  backfill.
-- Savings observations reduce every local space to one median value first, so a many-space instance
-  cannot carry more weight than a single-space one.
-- Country is only attached when every contributing row agrees on it; otherwise it is `null`.
-- Values outside `(0, 1_000_000]` are dropped.
-
-Every row has an idempotency key: a SHA-256 over metric + entity + currency + month + value for
-merchant observations, `benchmark:{metricKey}:{currency}:{observedMonth}:{revisionDate}` (or a hash
-including the entity key) for contract observations,
-`benchmark:savings.rate:{observedMonth}:{revisionDate}` for savings, a stable per-purchase-item key
-for prices, and `feedback:{id}:schema:{n}` for feedback. Duplicates are skipped at queue time. The
-price producer additionally
-*replaces* the payload of a still-`queued`/`failed` row when the purchase item is corrected before
-transmission — once `sent`, that item is never uploaded again.
+Every row has an idempotency key — `feedback:{id}:schema:{n}` for feedback. Duplicates are skipped at
+queue time, and a producer *replaces* the payload of a still-`queued`/`failed` row when its source is
+corrected before transmission — once `sent`, that item is never uploaded again.
 
 ### Upload loop
 
@@ -210,27 +191,6 @@ A transport-level failure retries the **whole claimed batch**, not individual ro
 requeue command and no admin view of the dead-letter queue: a `dead_letter` row can only be
 inspected in the database, and `POST /api/intelligence/admin/cloud/disable` is the only way to clear
 untransmitted rows.
-
-## Benchmarks and prices
-
-Reads are pass-through: the instance does not cache Cloud aggregates.
-
-- `GET /api/intelligence/benchmarks/?metricKey=…` (plus optional `entityKey`, `currency`, `country`,
-  `regionBucket`, `householdSizeBand`, `incomeBand`, `ageBand`, `observedMonth`) →
-  `v1/benchmarks`. With `entityKey` it uses the entity-specific variant.
-- `GET /api/intelligence/benchmarks/contracts`, `…/contracts/{contractId}`, `…/savings`,
-  `/api/intelligence/benchmarks/merchants/{merchantId}` are the resolved, per-resource wrappers the
-  UI calls.
-- `GET /api/intelligence/prices/purchase-items/{purchaseItemId}` returns the Cloud aggregate plus a
-  local price history. Without a GTIN or a valid currency it returns
-  `{ available: false, reason: "public_product_id_missing" | "currency_invalid", local: … }` and
-  makes no Cloud call.
-
-A response carries `median`, `mean`, `p25`, `p75`, `min`, `max`, `observationCount` and
-`distinctInstanceCount`. A `204 No Content` from the Cloud (no aggregate for that bucket) becomes
-`Results.NoContent()`. Without current consent, and on a registration failure, the endpoints return
-`503`. All of them run per-request with the instance credential, so every panel is a live round
-trip.
 
 ## Knowledge packs
 
@@ -404,4 +364,4 @@ are stored once, keyed by hash, across official and custom packs.
 | `GET /cloud` | the full `CloudIntelligenceStateView`, including `requiresSetupDecision` and `lastErrorCode` |
 | `POST /cloud/enable` | store consent, then register immediately; audit `cloud.enabled` |
 | `POST /cloud/disable` | revoke consent, delete the credential, drop untransmitted rows; audit `cloud.disabled` |
-| `POST /cloud/sync` | queue contract + savings benchmarks, run one outbox upload, run one pack sync, and return the counts — the manual equivalent of all four workers |
+| `POST /cloud/sync` | run one outbox upload and one pack sync, and return the counts — the manual equivalent of both workers |

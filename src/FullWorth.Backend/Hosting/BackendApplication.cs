@@ -118,14 +118,6 @@ public static class BackendApplication
         builder.Services.AddSingleton<CloudRegistrationCooldown>();
         builder.Services.AddScoped<CloudCredentialAcquisition>();
         builder.Services.AddScoped<CloudLearningOutboxUploader>();
-        builder.Services.AddScoped<CloudContractBenchmarkContributionService>();
-        builder.Services.AddHostedService<CloudContractBenchmarkContributionWorker>();
-        builder.Services.AddScoped<CloudMerchantBenchmarkContributionService>();
-        builder.Services.AddHostedService<CloudMerchantBenchmarkContributionWorker>();
-        builder.Services.AddScoped<CloudSavingsBenchmarkContributionService>();
-        builder.Services.AddHostedService<CloudSavingsBenchmarkContributionWorker>();
-        builder.Services.AddScoped<CloudProductPriceContributionService>();
-        builder.Services.AddHostedService<CloudProductPriceContributionWorker>();
         builder.Services.AddHostedService<CloudLearningOutboxWorker>();
         builder.Services.AddScoped<KnowledgePackTrustStore>();
         builder.Services.AddScoped<KnowledgePackSyncService>();
@@ -315,11 +307,8 @@ public static class BackendApplication
         builder.Services.AddScoped<AccountGroupStore>();
         builder.Services.AddScoped<AccountBalanceHistoryStore>();
         builder.Services.AddScoped<WealthPreviewBasisService>();
-        builder.Services.AddScoped<CloudRequestContextStore>();
         builder.Services.AddScoped<AdminSecretsStore>();
-        builder.Services.AddScoped<CloudPriceStore>();
-        builder.Services.AddScoped<MerchantSpendStore>();
-        builder.Services.AddScoped<ContractBenchmarkStore>();
+        builder.Services.AddScoped<PriceHistoryStore>();
         builder.Services.AddScoped<AnalysisContributionStore>();
         builder.Services.AddScoped<AnalysisContributionService>();
         builder.Services.AddScoped<SavedAnalysisStore>();
@@ -601,8 +590,7 @@ public static class BackendApplication
         endpoints.MapFinanzguruImportEndpoints();
         endpoints.MapBankingSyncStateEndpoints();
         endpoints.MapIntelligenceAdminEndpoints();
-        endpoints.MapCloudBenchmarkEndpoints();
-        endpoints.MapCloudPriceEndpoints();
+        endpoints.MapPriceHistoryEndpoints();
         endpoints.MapBrandCatalogEndpoints();
         endpoints.MapAiUserAccessEndpoints();
         endpoints.MapIntelligenceSuggestionEndpoints();

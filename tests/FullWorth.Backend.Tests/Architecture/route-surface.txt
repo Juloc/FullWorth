@@ -193,10 +193,6 @@ GET              /api/intelligence/admin/providers
 GET              /api/intelligence/admin/runs
 GET              /api/intelligence/admin/settings
 GET              /api/intelligence/admin/suggestions/pending
-GET              /api/intelligence/benchmarks/
-GET              /api/intelligence/benchmarks/contracts
-GET              /api/intelligence/benchmarks/contracts/{contractId:guid}
-GET              /api/intelligence/benchmarks/savings
 GET              /api/intelligence/brand-assets/{contentSha256}
 GET              /api/intelligence/brand-catalog
 GET              /api/intelligence/digests/

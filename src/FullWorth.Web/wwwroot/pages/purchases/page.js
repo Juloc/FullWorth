@@ -169,7 +169,7 @@ async function openDetail(id) {
   const items = (purchase.items || []).map((i, index) => {
     const asin = i.asin ? `<span class="row-sub">ASIN ${ctx.esc(i.asin)}</span>` : '';
     const priceCompare = i.id && i.barcode
-      ? `<div class="row-sub purchase-price-compare" data-cloud-price-index="${index}"></div>`
+      ? `<div class="row-sub purchase-price-compare" data-price-history-index="${index}"></div>`
       : '';
     return `<div class="purchase-item" data-index="${index}"><div><input class="item-name" value="${ctx.esc(i.name)}">${asin}${priceCompare}</div><input class="item-qty" type="number" step="0.001" value="${i.quantity}"><input class="item-total" type="number" step="0.01" value="${i.totalPrice}"><select class="item-category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></div>`;
   }).join('');
@@ -194,7 +194,7 @@ async function openDetail(id) {
 
   renderReconcile(dlg.querySelector('[data-reconcile]'), purchase, reconciliation, dlg);
   if (amazon) bindAmazonDetails(dlg, purchase, amazon);
-  loadCloudPriceComparisons(dlg, purchase).catch(() => {});
+  loadPriceHistory(dlg, purchase).catch(() => {});
 
   dlg.querySelector('[data-view-receipt]')?.addEventListener('click', () => window.open(ctx.bffUrl(`api/purchases/${id}/receipt`), '_blank', 'noopener'));
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
@@ -243,14 +243,14 @@ async function openDetail(id) {
   dlg.showModal();
 }
 
-async function loadCloudPriceComparisons(dlg, purchase) {
+async function loadPriceHistory(dlg, purchase) {
   const items = (purchase.items || [])
     .map((item, index) => ({ item, index }))
     .filter(x => x.item?.id && x.item?.barcode)
     .slice(0, 20);
 
   await Promise.all(items.map(async ({ item, index }) => {
-    const target = dlg.querySelector(`[data-cloud-price-index="${index}"]`);
+    const target = dlg.querySelector(`[data-price-history-index="${index}"]`);
     if (!target) return;
 
     try {
@@ -258,40 +258,15 @@ async function loadCloudPriceComparisons(dlg, purchase) {
         `api/intelligence/prices/purchase-items/${encodeURIComponent(item.id)}`);
       if (!result) return;
 
-      const parts = [];
       const local = result.local || {};
       if (Number(local.count || 0) > 0 && local.median != null) {
-        parts.push(
+        target.innerHTML = `<span>${ctx.esc(
           `${t('Eigene Historie', 'Your history')}: ` +
-          `${t('Median', 'median')} ${ctx.money(Number(local.median), result.currency || item.currency || purchase.currency)} ` +
-          `· ${Number(local.count)} ${t('Käufe', 'purchases')}`);
-      }
-
-      if (result.available && result.cloud) {
-        const cloud = result.cloud;
-        const typical = cloud.p25 != null && cloud.p75 != null
-          ? ` · ${t('typisch', 'typical')} ${ctx.money(Number(cloud.p25), result.currency)}–${ctx.money(Number(cloud.p75), result.currency)}`
-          : '';
-        const scope = cloud.scope === 'country'
-          ? t('Land', 'country')
-          : cloud.scope === 'merchant'
-            ? t('Händler', 'merchant')
-            : t('global', 'global');
-        parts.push(
-          `FullWorth Cloud: ${t('Median', 'median')} ${ctx.money(Number(cloud.median), result.currency)}` +
-          typical +
-          ` · ${Number(cloud.distinctInstanceCount || 0)} ${t('Quellen', 'sources')} · ${scope}`);
-      }
-
-      if (parts.length) {
-        target.innerHTML =
-          `<span>${parts.map(x => ctx.esc(x)).join('<br>')}</span>` +
-          (result.available
-            ? `<br><span>${ctx.esc(t('Beobachtungsdaten, kein garantiertes Marktangebot.', 'Observational data, not a guaranteed market offer.'))}</span>`
-            : '');
+          `${t('Median', 'median')} ${ctx.money(Number(local.median), item.currency || purchase.currency)} ` +
+          `· ${Number(local.count)} ${t('Käufe', 'purchases')}`)}</span>`;
       }
     } catch {
-      // Price comparison is optional and must never make purchase details fail.
+      // Der Preisverlauf ist Beiwerk und darf die Kaufdetails nie scheitern lassen.
     }
   }));
 }

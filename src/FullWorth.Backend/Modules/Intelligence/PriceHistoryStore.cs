@@ -3,24 +3,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence;
 
-/// <summary>Eine gekaufte Position, soweit ein Preisvergleich sie braucht.</summary>
+/// <summary>
+/// Eine gekaufte Position, soweit der Preisverlauf sie braucht: woran der Artikel wiedererkannt
+/// wird, in welcher Waehrung, und zu welchem Haushalt er gehoert. Preis, Menge und Datum standen
+/// hier ebenfalls, solange die Cloud einen Beobachtungsmonat und einen Stueckpreis mitgeschickt
+/// bekam - fuer die eigene Historie werden sie erst in der Abfrage darunter gebraucht.
+/// </summary>
 public sealed record PricedPurchaseItem(
-    Guid Id, Guid? ProductId, string? Barcode, decimal? UnitPrice, decimal? BaseUnitPrice,
-    decimal Quantity, decimal TotalPrice, string Currency, DateTimeOffset CreatedAt,
-    Guid FullWorthSpaceId, DateOnly? PurchaseDate);
+    Guid? ProductId, string? Barcode, string Currency, Guid FullWorthSpaceId);
 
 /// <summary>Ein Stueckpreis aus der eigenen Historie.</summary>
 public sealed record LocalPriceObservation(
     decimal? UnitPrice, decimal? BaseUnitPrice, decimal Quantity, decimal TotalPrice);
 
 /// <summary>
-/// Was der Preisvergleich aus der eigenen Datenbank liest, bevor er die Cloud fragt: die Position
-/// selbst, die Strichcodes ihres Produkts und die frueheren Kaeufe desselben Artikels.
+/// Was der Preisverlauf aus der eigenen Datenbank liest: die Position selbst und die frueheren
+/// Kaeufe desselben Artikels.
 ///
 /// Gerechnet wird hier nichts - Median und Mittelwert entstehen im Endpunkt, weil sie die Antwort
 /// sind und nicht die Daten.
 /// </summary>
-public sealed class CloudPriceStore(FullWorthDbContext db)
+public sealed class PriceHistoryStore(FullWorthDbContext db)
 {
     /// <summary>Weiter zurueck als zweihundert Kaeufe sagt ueber den heutigen Preis nichts mehr.</summary>
     private const int MaxObservations = 200;
@@ -29,19 +32,16 @@ public sealed class CloudPriceStore(FullWorthDbContext db)
         db.PurchaseItems.AsNoTracking()
             .Where(item => item.Id == purchaseItemId)
             .Select(item => new PricedPurchaseItem(
-                item.Id, item.ProductId, item.Barcode, item.UnitPrice, item.BaseUnitPrice,
-                item.Quantity, item.TotalPrice, item.Currency, item.CreatedAt,
-                item.Purchase.FullWorthSpaceId, item.Purchase.PurchaseDate))
+                item.ProductId, item.Barcode, item.Currency, item.Purchase.FullWorthSpaceId))
             .SingleOrDefaultAsync(ct);
 
-    /// <summary>Die ersten Strichcodes eines Produkts, aelteste zuerst - einer davon ist die GTIN.</summary>
-    public Task<List<string>> ProductBarcodesAsync(Guid productId, CancellationToken ct) =>
-        db.ProductBarcodes.AsNoTracking()
-            .Where(barcode => barcode.ProductId == productId)
-            .OrderBy(barcode => barcode.CreatedAt)
-            .Select(barcode => barcode.Code)
-            .Take(10)
-            .ToListAsync(ct);
+    /// <summary>Eine Waehrung ist drei Buchstaben. Alles andere ist keine.</summary>
+    public static string? NormalizeCurrency(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim().ToUpperInvariant();
+        return normalized.Length == 3 && normalized.All(char.IsAsciiLetter) ? normalized : null;
+    }
 
     /// <summary>
     /// Was dieser Haushalt fuer denselben Artikel bezahlt hat - nur bestaetigte Kaeufe, nur echte
