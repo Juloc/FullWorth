@@ -434,6 +434,7 @@ POST             /api/intelligence/admin/jobs/{type}/enqueue
 POST             /api/intelligence/admin/jobs/{type}/run
 POST             /api/intelligence/admin/suggestions/{id:guid}/accept
 POST             /api/intelligence/admin/suggestions/{id:guid}/reject
+POST             /api/intelligence/brands/reject
 POST             /api/investment-import/detect
 POST             /api/investment-import/jobs/{jobId:guid}/commit
 POST             /api/investment-import/jobs/{jobId:guid}/duplicate-preview

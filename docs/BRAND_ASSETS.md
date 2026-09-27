@@ -137,3 +137,21 @@ Trifft der kürzeste Namensteil bereits eine **andere** Marke, gibt es keinen St
 trägt dann den vollen Namen (`AliasKind = "exact"`, statt `"stem"`). Ein zweiter Rateversuch mit
 einem längeren Namensteil findet nicht statt: das wäre genau die stille Fehlzuordnung, die eine
 Katalogpflege nie wieder findet.
+
+### Korrektur: "Logo ist falsch"
+
+Ein Mensch darf jede selbst recherchierte Zuordnung ablehnen - im `⋯`-Menü auf `/merchants`,
+ohne Admin-Freigabe: wer ein falsches Logo sieht, darf es abstellen. `POST
+/api/intelligence/brands/reject` (`{ name }`) findet die passende `ResearchedBrandAlias`-Zeile
+über dieselbe Wortgrenzen-Regel wie die Oberfläche und setzt `Status = "rejected"`. Ein
+mitgeliefertes oder eigenes Paket-Logo lässt sich hier nicht ablehnen - dafür ist die
+Pack-Verwaltung da, nicht dieser Schalter.
+
+Zwei Sperren halten die Ablehnung dauerhaft, nicht nur bis zum nächsten Lauf:
+
+- `IsAlreadyCoveredAsync` zählt eine **abgelehnte** Zeile weiterhin als "schon entschieden" - der
+  Statusfilter gilt nur für die Auslieferung, nicht für die Frage, ob noch gesucht werden muss.
+  Eine andere Filiale derselben Kette löst deshalb keinen erneuten Abruf aus.
+- Beide Sprossen-Vermerke (Spiegel und KI) bekommen zusätzlich `user_rejected` - der einzige
+  Vermerk, der **nie** nach dreißig Tagen verfällt. Zweite Sicherung, falls die
+  Wortgrenzen-Prüfung diesen einen Namen künftig einmal nicht mehr träfe.

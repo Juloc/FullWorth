@@ -102,6 +102,24 @@ public sealed class BrandLogoResearchService(
     public const string OutcomeMirrorUnreachable = "mirror_unreachable";
 
     /// <summary>
+    /// Ein Mensch hat das gezeigte Logo als falsch abgelehnt (siehe <see cref="RejectAsync"/>).
+    /// Anders als jeder andere Vermerk hier verfaellt dieser NIE nach dreissig Tagen - ein Mensch
+    /// hat schon hingesehen, das automatische Wiederversuchen ist genau das, was er abgestellt hat.
+    /// </summary>
+    public const string OutcomeUserRejected = "user_rejected";
+
+    /// <summary>Die Ablehnung selbst ist durchgelaufen: mindestens eine Zeile wurde abgelehnt.</summary>
+    public const string OutcomeRejected = "rejected";
+
+    /// <summary>
+    /// Es gab nichts abzulehnen - unter diesem Namen ist kein selbst recherchiertes Logo hinterlegt.
+    /// Kein Fehler, nur eine ehrliche Antwort: entweder zeigt die Oberflaeche gar kein Logo, oder es
+    /// stammt aus dem mitgelieferten oder einem eigenen Paket, und dafuer gibt es diesen Schalter
+    /// nicht.
+    /// </summary>
+    public const string OutcomeNothingToReject = "nothing_to_reject";
+
+    /// <summary>
     /// Wie viele Kurznamen eines Haendlers beim Spiegel probiert werden duerfen.
     ///
     /// <see cref="BrandSlugDerivation.CandidateSlugs"/> liefert bis zu zwoelf, von "der ganze Name"
@@ -149,9 +167,8 @@ Return only JSON matching the supplied schema.
 
         var attempt = await db.BrandLogoResearchAttempts
             .SingleOrDefaultAsync(x => x.AliasHash == aliasHash && x.Rung == BrandLogoResearchAttempt.RungAi, ct);
-        if (attempt is not null &&
-            attempt.AttemptedAt > DateTimeOffset.UtcNow.AddDays(-BrandLogoResearchAttempt.RetryAfterDays))
-            return OutcomeRecentlyTried;
+        if (attempt is not null && IsBlocked(attempt))
+            return attempt.Outcome == OutcomeUserRejected ? OutcomeUserRejected : OutcomeRecentlyTried;
 
         var resolved = await access.ResolveAsync(AiModules.LogoResearch, userId, AiModelKind.Text, ct);
         // Kein Zugang oder Modul nicht freigegeben. Es passiert nichts, und es wird auch nichts
@@ -355,9 +372,7 @@ Return only JSON matching the supplied schema.
 
         var attempt = await db.BrandLogoResearchAttempts
             .SingleOrDefaultAsync(x => x.AliasHash == aliasHash && x.Rung == BrandLogoResearchAttempt.RungCdn, ct);
-        if (attempt is not null &&
-            attempt.AttemptedAt > DateTimeOffset.UtcNow.AddDays(-BrandLogoResearchAttempt.RetryAfterDays))
-            return null;
+        if (attempt is not null && IsBlocked(attempt)) return null;
 
         var candidates = BrandSlugDerivation.CandidateSlugs(merchantName)
             .Where(x => SimpleIconsCdnFetcher.UrlFor(x) is not null)
@@ -421,19 +436,88 @@ Return only JSON matching the supplied schema.
     /// Geprueft wird deshalb wie die Oberflaeche selbst prueft - an Wortgrenzen
     /// (<c>ux-kit.js</c>) -, sonst haelt diese Instanz ihre eigene Kette fuer unbekannt und
     /// derivriert, recherchiert oder fragt die KI erneut nach etwas, das sie schon weiss.
+    ///
+    /// Absichtlich OHNE Statusfilter: "aktiv" UND "abgelehnt" sind beide eine bereits GETROFFENE
+    /// Entscheidung, nur mit verschiedenem Ergebnis - eine abgelehnte Zeile darf so wenig neu
+    /// beforscht werden wie eine aktive. Was den Statusfilter tatsaechlich braucht, ist die
+    /// AUSLIEFERUNG (<see cref="BrandPackService.GetEffectiveCatalogAsync"/>), nicht die Frage
+    /// "muss noch gesucht werden".
     /// </summary>
     private async Task<bool> IsAlreadyCoveredAsync(string aliasKey, CancellationToken ct)
     {
         if (await db.OfficialBrandAliases.AsNoTracking().AnyAsync(x => x.AliasKey == aliasKey, ct)) return true;
         if (await db.CustomBrandAliases.AsNoTracking().AnyAsync(x => x.AliasKey == aliasKey, ct)) return true;
-
-        var padded = $" {aliasKey} ";
-        var researchedAliasKeys = await db.ResearchedBrandAliases.AsNoTracking()
-            .Where(x => x.Status == "active")
-            .Select(x => x.AliasKey)
-            .ToListAsync(ct);
-        return researchedAliasKeys.Any(known => padded.Contains($" {known} ", StringComparison.Ordinal));
+        return (await MatchingResearchedAliasesAsync(aliasKey, ct)).Count > 0;
     }
+
+    /// <summary>
+    /// Alle recherchierten Aliase, die als ganzes Wort in <paramref name="aliasKey"/> stecken -
+    /// dieselbe Wortgrenzen-Regel wie die Oberflaeche (<c>ux-kit.js</c>) und wie
+    /// <see cref="IsAlreadyCoveredAsync"/>. Wird sowohl von dort als auch von
+    /// <see cref="RejectAsync"/> gebraucht: die eine Seite prueft "schon entschieden?", die andere
+    /// "welche Zeile genau zeigt hier das falsche Logo?".
+    /// </summary>
+    private async Task<List<ResearchedBrandAlias>> MatchingResearchedAliasesAsync(string aliasKey, CancellationToken ct)
+    {
+        var padded = $" {aliasKey} ";
+        var candidates = await db.ResearchedBrandAliases
+            .Where(x => x.Country == "GLOBAL")
+            .ToListAsync(ct);
+        return candidates.Where(x => padded.Contains($" {x.AliasKey} ", StringComparison.Ordinal)).ToList();
+    }
+
+    /// <summary>
+    /// Ein Mensch sagt: das Logo unter diesem Namen ist falsch. Trifft die eigene Wortgrenzen-Regel
+    /// mindestens eine recherchierte Zeile, wird sie dauerhaft abgelehnt - sie verschwindet aus dem
+    /// Katalog (<c>Status = "rejected"</c>, siehe <see cref="BrandPackService.GetEffectiveCatalogAsync"/>)
+    /// und aus jedem kuenftigen Suchlauf fuer diesen Namen: <see cref="IsAlreadyCoveredAsync"/> zaehlt
+    /// eine abgelehnte Zeile weiterhin als "schon entschieden", und beide Sprossen-Vermerke bekommen
+    /// zusaetzlich <see cref="OutcomeUserRejected"/>, das nie nach dreissig Tagen verfaellt - fuer den
+    /// Fall, dass die Wortgrenzen-Pruefung diesen einen Namen kuenftig einmal nicht mehr trifft.
+    ///
+    /// Ein mitgeliefertes oder eigenes Paket-Logo laesst sich hier NICHT ablehnen - dafuer gibt es
+    /// die Pack-Verwaltung. <see cref="OutcomeNothingToReject"/> heisst: unter diesem Namen ist
+    /// nichts SELBST RECHERCHIERTES hinterlegt.
+    /// </summary>
+    public async Task<string> RejectAsync(string subjectName, CancellationToken ct)
+    {
+        var aliasKey = BrandAliasKey.Of(subjectName);
+        if (aliasKey is null) return OutcomeNothingToReject;
+
+        var matches = await MatchingResearchedAliasesAsync(aliasKey, ct);
+        if (matches.Count == 0) return OutcomeNothingToReject;
+
+        foreach (var alias in matches) alias.Status = "rejected";
+
+        var aliasHash = HashOf(aliasKey);
+        foreach (var rung in new[] { BrandLogoResearchAttempt.RungCdn, BrandLogoResearchAttempt.RungAi })
+        {
+            var attempt = await db.BrandLogoResearchAttempts
+                .SingleOrDefaultAsync(x => x.AliasHash == aliasHash && x.Rung == rung, ct);
+            if (attempt is null)
+                db.BrandLogoResearchAttempts.Add(new BrandLogoResearchAttempt
+                {
+                    AliasHash = aliasHash, Rung = rung, Outcome = OutcomeUserRejected
+                });
+            else
+            {
+                attempt.Outcome = OutcomeUserRejected;
+                attempt.AttemptedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        return OutcomeRejected;
+    }
+
+    /// <summary>
+    /// Ob ein Vermerk einen erneuten Versuch noch blockiert. Eine menschliche Ablehnung blockiert
+    /// fuer immer; jeder andere Vermerk nur fuer <see cref="BrandLogoResearchAttempt.RetryAfterDays"/>
+    /// Tage - siehe <see cref="OutcomeUserRejected"/> fuer das Warum.
+    /// </summary>
+    private static bool IsBlocked(BrandLogoResearchAttempt attempt) =>
+        attempt.Outcome == OutcomeUserRejected ||
+        attempt.AttemptedAt > DateTimeOffset.UtcNow.AddDays(-BrandLogoResearchAttempt.RetryAfterDays);
 
     /// <summary>Liest, was die KI ueber diesen Haendler geantwortet hat - beide Felder, beide optional.</summary>
     private static (string? Domain, string? IconSlug) ReadAnswer(string outputJson)

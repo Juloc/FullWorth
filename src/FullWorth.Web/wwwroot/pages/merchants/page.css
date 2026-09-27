@@ -21,3 +21,26 @@
 }
 
 .merchant-probe .field{flex:1 1 260px;min-width:0}
+
+/* Das Auslassungszeichen ist die einzige Aktion der Zeile - vier einzelne Symbolknoepfe (umbenennen,
+   zusammenfuehren, Logo-Korrektur, loeschen) waeren fuer eine Zeile mit Aliassen zu viel gewesen.
+   Gleiche Masse wie pages/accounts/page.css: 34 px am Rechner, 44 px (Fingerkuppe) am Telefon. */
+.merchant-more{
+  display:inline-grid;
+  place-items:center;
+  width:34px;
+  min-width:34px;
+  height:34px;
+  padding:0;
+  font-size:20px;
+  line-height:1;
+}
+
+@media (max-width: 760px) {
+  .merchant-more{
+    width:44px;
+    min-width:44px;
+    height:44px;
+    font-size:22px;
+  }
+}
