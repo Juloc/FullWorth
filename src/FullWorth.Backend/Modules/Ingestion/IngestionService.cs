@@ -448,7 +448,7 @@ public sealed class IngestionService(
         var activeCategoryIds = activeCategoryRows.Select(x => x.Id).ToArray();
 
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings = Array.Empty<LearnedMerchantCategoryMapping>();
-        IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings = Array.Empty<OfficialMerchantCategoryMapping>();
+        IReadOnlyList<InstanceMerchantCategoryMapping> instanceMappings = Array.Empty<InstanceMerchantCategoryMapping>();
         if (intelligenceDb is not null && activeCategoryIds.Length > 0)
         {
             learnedMappings = await intelligenceDb.LearnedMerchantMappings.AsNoTracking()
@@ -460,13 +460,13 @@ public sealed class IngestionService(
             var normalizedCountry = string.IsNullOrWhiteSpace(country)
                 ? "GLOBAL"
                 : country.Trim().ToUpperInvariant();
-            cloudMappings = await intelligenceDb.OfficialMerchantMappings.AsNoTracking()
+            instanceMappings = await intelligenceDb.InstanceMerchantMappings.AsNoTracking()
                 .Where(x => x.CategoryKey != null &&
                             (x.Country == "GLOBAL" || x.Country == normalizedCountry))
                 .OrderBy(x => x.AliasKey)
                 .ThenBy(x => x.Direction)
                 .ThenByDescending(x => x.Confidence)
-                .Select(x => new OfficialMerchantCategoryMapping(
+                .Select(x => new InstanceMerchantCategoryMapping(
                     x.AliasKey,
                     x.Direction,
                     x.CategoryKey!,
@@ -577,7 +577,7 @@ public sealed class IngestionService(
                 }
 
                 if (entity.CategorizationSource != "manual")
-                    ApplyCategorization(entity, rules, activeCategoryIdsByKey, learnedMappings, cloudMappings);
+                    ApplyCategorization(entity, rules, activeCategoryIdsByKey, learnedMappings, instanceMappings);
             }
         }
         await db.SaveChangesAsync(ct);
@@ -589,14 +589,14 @@ public sealed class IngestionService(
         IReadOnlyList<CategorizationRule> rules,
         IReadOnlyDictionary<string, Guid> activeCategoryIdsByKey,
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings,
-        IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings)
+        IReadOnlyList<InstanceMerchantCategoryMapping> instanceMappings)
     {
         var classification = TransactionRuleEngine.EvaluateWithGermanyCatalog(
             tx,
             rules,
             activeCategoryIdsByKey,
             learnedMappings,
-            cloudMappings);
+            instanceMappings);
         tx.CategoryId = classification.CategoryId;
         tx.IsTransfer = classification.IsTransfer;
         tx.CategorizationSource = classification.Source;

@@ -6,10 +6,32 @@ namespace FullWorth.Backend.Modules.Intelligence;
 
 public sealed record IntelligenceSuggestionReviewResult(bool Success, string? ErrorCode, IntelligenceSuggestion? Suggestion);
 
+/// <summary>
+/// Uebernimmt einen Vorschlagstyp, dessen Annahme etwas ausserhalb von Intelligence anlegt - eine
+/// echte <c>CategorizationRule</c> zum Beispiel, die in Modules/Categories wohnt.
+///
+/// Diese Schnittstelle gehoert Intelligence, nicht die Implementierung: Categories importiert
+/// Intelligence bereits (<c>TransactionRuleEngine</c> liest dessen DTOs), und der Rueckweg
+/// (Intelligence importiert Categories) waere ein Zyklus, den <c>ModuleBoundaryTests</c>
+/// dauerhaft verbietet - "ein Eintrag darf verschwinden, keiner darf dazukommen". Die
+/// Implementierung lebt deshalb im fremden Modul und wird ueber DI verdrahtet
+/// (<c>BackendApplication</c>, das zu keinem Modul gehoert); Intelligence kennt nur diese
+/// Schnittstelle und den Vorschlag, nie die Kategorie-Regel dahinter.
+/// </summary>
+public interface IIntelligenceSuggestionAcceptor
+{
+    /// <summary>Der Vorschlagstyp, den dieser Acceptor uebernimmt - z. B. "categorization-rule".</summary>
+    string SuggestionType { get; }
+
+    Task<IntelligenceSuggestionReviewResult> AcceptAsync(
+        IntelligenceSuggestion suggestion, Guid actorUserId, CancellationToken ct);
+}
+
 public sealed class IntelligenceSuggestionReviewService(
     IntelligenceDbContext intelligenceDb,
     FullWorthDbContext financeDb,
-    IntelligenceFeedbackRecorder feedback)
+    IntelligenceFeedbackRecorder feedback,
+    IEnumerable<IIntelligenceSuggestionAcceptor> acceptors)
 {
     public Task<List<IntelligenceSuggestion>> ListPendingAsync(int limit, CancellationToken ct) =>
         intelligenceDb.IntelligenceSuggestions.AsNoTracking()
@@ -31,6 +53,9 @@ public sealed class IntelligenceSuggestionReviewService(
 
         if (suggestion.Type is "product-normalization" or "receipt-follow-up" or "contract-enrichment")
             return await AcceptReviewedProposalAsync(suggestion, actorUserId, ct);
+
+        var acceptor = acceptors.FirstOrDefault(x => string.Equals(x.SuggestionType, suggestion.Type, StringComparison.Ordinal));
+        if (acceptor is not null) return await acceptor.AcceptAsync(suggestion, actorUserId, ct);
 
         return new(false, "unsupported_suggestion_type", suggestion);
     }
@@ -97,7 +122,32 @@ public sealed class IntelligenceSuggestionReviewService(
             mapping.UpdatedAt = now;
         }
 
-        MarkAccepted(suggestion, actorUserId, now);
+        // "REWE ist Lebensmittel" gilt fuer jeden Haushalt auf dieser Instanz, nicht nur fuer den,
+        // der gerade zugestimmt hat - anders als die LearnedMerchantMapping oben, die bewusst pro
+        // Haushalt bleibt (ein Gegenkonto kann fuer den einen Urlaub, fuer den anderen Ausgabe
+        // sein). Ohne diese Zeile war InstanceMerchantMappings seit der Cloud-Abschaffung ein
+        // Nachschlagewerk ohne Schreiber: gelesen wird es laengst (TransactionRuleEngine), nur
+        // schrieb niemand mehr hinein. 0,95, nicht die 0,55 einer unbestaetigten KI-Antwort und
+        // auch nicht knapp ueber der Lese-Schwelle von 0,80 - ein Mensch hat zugestimmt, das ist
+        // mehr wert als jede automatische Vermutung.
+        var instanceMapping = await intelligenceDb.InstanceMerchantMappings.SingleOrDefaultAsync(x =>
+            x.AliasKey == normalizedCounterparty && x.Direction == direction && x.Country == "GLOBAL", ct);
+        if (instanceMapping is null)
+            intelligenceDb.InstanceMerchantMappings.Add(new InstanceMerchantMapping
+            {
+                AliasKey = normalizedCounterparty,
+                Direction = direction,
+                CategoryKey = category.Key,
+                Country = "GLOBAL",
+                Confidence = 0.95m
+            });
+        else
+        {
+            instanceMapping.CategoryKey = category.Key;
+            instanceMapping.Confidence = 0.95m;
+        }
+
+        suggestion.MarkAccepted(actorUserId, now);
         await intelligenceDb.SaveChangesAsync(ct);
 
         // Das Uebernehmen verbessert das deterministische System - die LearnedMerchantMapping oben -
@@ -170,7 +220,7 @@ public sealed class IntelligenceSuggestionReviewService(
         }
 
         var now = DateTimeOffset.UtcNow;
-        MarkAccepted(suggestion, actorUserId, now);
+        suggestion.MarkAccepted(actorUserId, now);
         intelligenceDb.IntelligenceFeedbackEvents.Add(new IntelligenceFeedbackEvent
         {
             FullWorthSpaceId = suggestion.FullWorthSpaceId.Value,
@@ -217,13 +267,6 @@ public sealed class IntelligenceSuggestionReviewService(
         }
         await intelligenceDb.SaveChangesAsync(ct);
         return new(true, null, suggestion);
-    }
-
-    private static void MarkAccepted(IntelligenceSuggestion suggestion, Guid actorUserId, DateTimeOffset now)
-    {
-        suggestion.Status = IntelligenceSuggestionStatuses.Accepted;
-        suggestion.ReviewedAt = now;
-        suggestion.ReviewedByUserId = actorUserId;
     }
 
     private sealed record MerchantCategorySuggestionPayload(string? CategoryKey, string? Direction, string? EvidenceSummary);

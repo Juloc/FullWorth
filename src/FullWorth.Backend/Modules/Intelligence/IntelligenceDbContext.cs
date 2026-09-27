@@ -29,7 +29,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<IntelligenceAdminGrant> IntelligenceAdminGrants => Set<IntelligenceAdminGrant>();
     public DbSet<IntelligenceAuditEvent> IntelligenceAuditEvents => Set<IntelligenceAuditEvent>();
     public DbSet<LearnedMerchantMapping> LearnedMerchantMappings => Set<LearnedMerchantMapping>();
-    public DbSet<OfficialMerchantMapping> OfficialMerchantMappings => Set<OfficialMerchantMapping>();
+    public DbSet<InstanceMerchantMapping> InstanceMerchantMappings => Set<InstanceMerchantMapping>();
     public DbSet<OfficialBrandAsset> OfficialBrandAssets => Set<OfficialBrandAsset>();
     public DbSet<OfficialBrandAlias> OfficialBrandAliases => Set<OfficialBrandAlias>();
     public DbSet<BrandAssetBlob> BrandAssetBlobs => Set<BrandAssetBlob>();

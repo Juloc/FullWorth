@@ -165,6 +165,19 @@ public sealed class IntelligenceSuggestion
     public DateTimeOffset? ReviewedAt { get; set; }
     public Guid? ReviewedByUserId { get; set; }
     public Guid? RunId { get; set; }
+
+    /// <summary>
+    /// Die eine Zustandsaenderung, die jede Annahme teilt - egal ob sie in
+    /// <see cref="IntelligenceSuggestionReviewService"/> selbst passiert oder in einem
+    /// <see cref="IIntelligenceSuggestionAcceptor"/> ausserhalb dieses Moduls. Hier statt zweimal
+    /// geschrieben, damit sie nicht auseinanderlaufen.
+    /// </summary>
+    public void MarkAccepted(Guid actorUserId, DateTimeOffset now)
+    {
+        Status = IntelligenceSuggestionStatuses.Accepted;
+        ReviewedAt = now;
+        ReviewedByUserId = actorUserId;
+    }
 }
 
 public sealed class IntelligenceFeedbackEvent

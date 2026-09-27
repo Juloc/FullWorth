@@ -106,7 +106,7 @@ public static class PersonalDataPurgeManifest
         // ein Markenname, kein Mensch.
         typeof(OfficialBrandAlias),
         typeof(OfficialBrandAsset),
-        typeof(OfficialMerchantMapping),
+        typeof(InstanceMerchantMapping),
         typeof(CustomBrandPack),
         typeof(CustomBrandAsset),
         typeof(CustomBrandAlias),

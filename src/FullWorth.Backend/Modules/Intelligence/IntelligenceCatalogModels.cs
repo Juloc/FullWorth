@@ -9,18 +9,26 @@ namespace FullWorth.Backend.Modules.Intelligence;
 // Archiv. Das Format ist weg, die Nachschlagewerke sind geblieben: der mitgelieferte Katalog
 // fuellt sie beim Start, eigene Pakete und die eigene Recherche schreiben daneben.
 
-public sealed class OfficialMerchantMapping
+/// <summary>
+/// Eine instanzweite Haendler-zu-Kategorie-Zuordnung - "REWE ist Lebensmittel", nicht mehr und
+/// nicht weniger.
+///
+/// Hiess bis zur Abschaffung der Cloud <c>OfficialMerchantMapping</c> und trug vier weitere
+/// Spalten - <c>CanonicalMerchantKey</c>, <c>CanonicalName</c>, <c>Domain</c>, <c>LogoKey</c> -,
+/// die die Markenidentitaet eines Haendlers mittrugen, weil das signierte Wissenspaket beides in
+/// einer Zeile lieferte. Diese Markenidentitaet lebt seitdem vollstaendig in
+/// <see cref="ResearchedBrandAlias"/>/<see cref="OfficialBrandAlias"/>/<see cref="CustomBrandAlias"/>;
+/// keine der vier Spalten hatte hier noch einen Leser. Eine Zeile, die verschoben wurde, ist
+/// kuerzer als vorher - sonst war sie nur umgezogen.
+/// </summary>
+public sealed class InstanceMerchantMapping
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string AliasKey { get; set; } = string.Empty;
     public string Direction { get; set; } = "any";
-    public string CanonicalMerchantKey { get; set; } = string.Empty;
-    public string CanonicalName { get; set; } = string.Empty;
     public string? CategoryKey { get; set; }
     public string? Country { get; set; }
     public decimal Confidence { get; set; }
-    public string? Domain { get; set; }
-    public string? LogoKey { get; set; }
 }
 
 
@@ -199,10 +207,11 @@ public sealed class OfficialBrandAlias
 }
 
 /// <summary>
-/// Read-only merchant-to-category mapping DTO consumed by the deterministic transaction rule engine.
-/// Only rows from the currently verified knowledge-pack installation are projected to this shape.
+/// Read-only merchant-to-category mapping DTO consumed by the deterministic transaction rule
+/// engine. Projected from <see cref="InstanceMerchantMapping"/> - only the four fields that
+/// engine actually reads, not the whole row.
 /// </summary>
-public sealed record OfficialMerchantCategoryMapping(
+public sealed record InstanceMerchantCategoryMapping(
     string AliasKey,
     string Direction,
     string CategoryKey,
@@ -213,19 +222,19 @@ public static class IntelligenceCatalogModelConfiguration
 {
     public static void Configure(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<OfficialMerchantMapping>(entity =>
+        modelBuilder.Entity<InstanceMerchantMapping>(entity =>
         {
+            // Explizit, nicht der DbSet-Namenskonvention ueberlassen: diese Kette hat kein
+            // Modell-Schnappschuss (nur handgeschriebene SQL-Migrationen), also gibt es sonst
+            // nichts, das eine Tabelle "InstanceMerchantMappings" und einen DbSet-Namen
+            // gegeneinander prueft.
+            entity.ToTable("InstanceMerchantMappings");
             entity.HasIndex(x => new { x.AliasKey, x.Direction, x.Country }).IsUnique();
-            entity.HasIndex(x => x.CanonicalMerchantKey);
             entity.Property(x => x.AliasKey).HasMaxLength(300);
             entity.Property(x => x.Direction).HasMaxLength(16);
-            entity.Property(x => x.CanonicalMerchantKey).HasMaxLength(180);
-            entity.Property(x => x.CanonicalName).HasMaxLength(240);
             entity.Property(x => x.CategoryKey).HasMaxLength(180);
             entity.Property(x => x.Country).HasMaxLength(8);
             entity.Property(x => x.Confidence).HasPrecision(6, 5);
-            entity.Property(x => x.Domain).HasMaxLength(255);
-            entity.Property(x => x.LogoKey).HasMaxLength(180);
         });
 
         modelBuilder.Entity<OfficialBrandAsset>(entity =>

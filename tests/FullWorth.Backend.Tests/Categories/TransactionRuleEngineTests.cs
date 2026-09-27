@@ -74,10 +74,10 @@ public sealed class TransactionRuleEngineTests
 
 
     [Fact]
-    public void Explicit_rule_has_precedence_over_cloud_mapping()
+    public void Explicit_rule_has_precedence_over_instance_mapping()
     {
         var rule = Rule(pattern: "REWE");
-        var cloudCategoryId = Guid.NewGuid();
+        var instanceCategoryId = Guid.NewGuid();
         var tx = Tx(counterparty: "REWE");
         tx.NormalizedCounterparty = "REWE";
 
@@ -86,19 +86,19 @@ public sealed class TransactionRuleEngineTests
             [rule],
             new Dictionary<string, Guid>
             {
-                ["food.groceries"] = cloudCategoryId
+                ["food.groceries"] = instanceCategoryId
             },
             [],
-            [new OfficialMerchantCategoryMapping("REWE", "expense", "food.groceries", 0.99m)]);
+            [new InstanceMerchantCategoryMapping("REWE", "expense", "food.groceries", 0.99m)]);
 
         Assert.Equal("rule", result.Source);
         Assert.Equal(rule.CategoryId, result.CategoryId);
     }
 
     [Fact]
-    public void Verified_cloud_mapping_is_used_before_builtin_catalog()
+    public void Verified_instance_mapping_is_used_before_builtin_catalog()
     {
-        var cloudCategoryId = Guid.NewGuid();
+        var instanceCategoryId = Guid.NewGuid();
         var catalogCategoryId = Guid.NewGuid();
         var tx = Tx(counterparty: "REWE");
         tx.NormalizedCounterparty = "REWE";
@@ -109,17 +109,17 @@ public sealed class TransactionRuleEngineTests
             new Dictionary<string, Guid>
             {
                 ["food.groceries"] = catalogCategoryId,
-                ["shopping.general"] = cloudCategoryId
+                ["shopping.general"] = instanceCategoryId
             },
             [],
-            [new OfficialMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.95m)]);
+            [new InstanceMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.95m)]);
 
-        Assert.Equal("cloud", result.Source);
-        Assert.Equal(cloudCategoryId, result.CategoryId);
+        Assert.Equal("instance", result.Source);
+        Assert.Equal(instanceCategoryId, result.CategoryId);
     }
 
     [Fact]
-    public void Low_confidence_cloud_mapping_is_ignored()
+    public void Low_confidence_instance_mapping_is_ignored()
     {
         var groceryId = Guid.NewGuid();
         var wrongId = Guid.NewGuid();
@@ -135,9 +135,36 @@ public sealed class TransactionRuleEngineTests
                 ["shopping.general"] = wrongId
             },
             [],
-            [new OfficialMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.50m)]);
+            [new InstanceMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.50m)]);
 
         Assert.Equal("catalog", result.Source);
         Assert.Equal(groceryId, result.CategoryId);
+    }
+
+    /// <summary>
+    /// Eine Buchung, die eine Installation vor der Cloud-Abschaffung automatisch zugeordnet hat,
+    /// traegt noch die alte Quelle "cloud" - und muss neu berechenbar bleiben, genau wie eine
+    /// frisch mit "instance" geschriebene. Faellt "cloud" aus der Ausnahme-Liste, friert jede
+    /// solche Buchung fuer immer ein, weil sie danach wie eine fremde explizite Klassifikation
+    /// aussieht.
+    /// </summary>
+    [Fact]
+    public void A_transaction_classified_by_the_old_cloud_can_still_be_recomputed()
+    {
+        var newCategoryId = Guid.NewGuid();
+        var tx = Tx(counterparty: "REWE");
+        tx.NormalizedCounterparty = "REWE";
+        tx.CategoryId = Guid.NewGuid();
+        tx.CategorizationSource = "cloud";
+
+        var result = TransactionRuleEngine.EvaluateWithGermanyCatalog(
+            tx,
+            [],
+            new Dictionary<string, Guid> { ["shopping.general"] = newCategoryId },
+            [],
+            [new InstanceMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.95m)]);
+
+        Assert.Equal("instance", result.Source);
+        Assert.Equal(newCategoryId, result.CategoryId);
     }
 }

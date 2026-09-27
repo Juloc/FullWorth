@@ -121,6 +121,10 @@ public static class BackendApplication
         builder.Services.AddScoped<ScheduledDomainIntelligenceAdapters>();
         builder.Services.AddScoped<ScheduledIntelligenceJobProcessor>();
         builder.Services.AddScoped<IntelligenceSuggestionReviewService>();
+        // Kein Kreis: Categories importiert Intelligence bereits (TransactionRuleEngine), der
+        // Rueckweg waere einer. Der konkrete Acceptor wohnt in Categories, IIntelligenceSuggestionAcceptor
+        // gehoert Intelligence - hier, wo kein Modul zustaendig ist, kommen sie zusammen.
+        builder.Services.AddScoped<IIntelligenceSuggestionAcceptor, CategorizationRuleSuggestionAcceptor>();
         builder.Services.AddHostedService<IntelligenceSchedulePlannerService>();
         builder.Services.AddHostedService<IntelligenceScheduledJobWorker>();
         

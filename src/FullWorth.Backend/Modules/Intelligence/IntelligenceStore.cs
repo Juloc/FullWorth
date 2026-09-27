@@ -313,8 +313,12 @@ public sealed class IntelligenceStore(
 
     public async Task<IntelligenceSuggestion?> TryAddSuggestionAsync(IntelligenceSuggestion suggestion, CancellationToken ct)
     {
+        // Pending blockt, damit dieselbe Frage nicht zweimal gleichzeitig offen steht. Rejected
+        // blockt aus einem anderen Grund: ein Mensch hat schon geantwortet, und "nein" ist eine
+        // Antwort so gut wie jede andere - der naechste Lauf darf sie nicht einfach uebergehen und
+        // dieselbe Frage erneut stellen, nur weil das Fenster inzwischen zu ist.
         var exists = await db.IntelligenceSuggestions.AsNoTracking().AnyAsync(x =>
-            x.Status == IntelligenceSuggestionStatuses.Pending &&
+            (x.Status == IntelligenceSuggestionStatuses.Pending || x.Status == IntelligenceSuggestionStatuses.Rejected) &&
             x.FullWorthSpaceId == suggestion.FullWorthSpaceId &&
             x.SubjectType == suggestion.SubjectType &&
             x.SubjectId == suggestion.SubjectId &&

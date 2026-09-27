@@ -69,7 +69,7 @@ public sealed class IntelligenceDomainSuggestionReviewTests
         await intelligenceDb.SaveChangesAsync();
         var actor = Guid.NewGuid();
 
-        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb))
+        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb), [])
             .AcceptAsync(suggestion.Id, actor, CancellationToken.None);
 
         Assert.True(result.Success);
@@ -121,7 +121,7 @@ public sealed class IntelligenceDomainSuggestionReviewTests
         intelligenceDb.IntelligenceSuggestions.Add(suggestion);
         await intelligenceDb.SaveChangesAsync();
 
-        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb))
+        var result = await new IntelligenceSuggestionReviewService(intelligenceDb, financeDb, Recorder(intelligenceDb), [])
             .AcceptAsync(suggestion.Id, Guid.NewGuid(), CancellationToken.None);
 
         Assert.False(result.Success);
