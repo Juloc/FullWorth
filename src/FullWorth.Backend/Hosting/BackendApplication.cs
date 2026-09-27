@@ -186,6 +186,15 @@ public static class BackendApplication
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-logo-research)");
             })
             .ConfigurePrimaryHttpMessageHandler(PublicOnlyHandler);
+        // Derselbe Handler fuer den Icon-Spiegel, obwohl der Wirt hier fest ist: der Grund fuer die
+        // Pruefung ist nicht, dass die Adresse geraten waere, sondern dass ein Name auch dann noch
+        // auf 127.0.0.1 zeigen kann, wenn er fest im Quelltext steht. Ein Spiegel ist kein Freibrief.
+        builder.Services.AddHttpClient<Modules.Intelligence.Brands.SimpleIconsCdnFetcher>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-icon-lookup)");
+            })
+            .ConfigurePrimaryHttpMessageHandler(PublicOnlyHandler);
         // Der Handler fuer JEDEN Abruf, den diese Instanz aufgrund von Nutzerdaten macht (#176):
         // Logo und Anbieterseite. Keine Umleitung - die waere die frei gewaehlte Adresse durch die
         // Hintertuer. Und der Verbindungsaufbau prueft selbst, wohin er geht: der Name wird vor dem

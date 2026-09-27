@@ -100,6 +100,7 @@ public sealed class IntelligenceStore(
         settings.DailyScanEnabled = input.DailyScanEnabled;
         settings.WeeklyDeepScanEnabled = input.WeeklyDeepScanEnabled;
         settings.MonthlyReviewEnabled = input.MonthlyReviewEnabled;
+        settings.BrandCdnLookupEnabled = input.BrandCdnLookupEnabled;
         settings.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return settings;

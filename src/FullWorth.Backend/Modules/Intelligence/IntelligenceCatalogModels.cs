@@ -157,8 +157,23 @@ public sealed class BrandLogoResearchAttempt
 {
     public const int RetryAfterDays = 30;
 
+    /// <summary>Die Sprosse, die es versucht hat: <c>cdn</c> oder <c>ai</c>.</summary>
+    public const string RungCdn = "cdn";
+    public const string RungAi = "ai";
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public string AliasHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Welche Sprosse diesen Vermerk geschrieben hat.
+    ///
+    /// Ohne diese Spalte verbraucht ein Fehlschlag beim Icon-Spiegel den einen KI-Versuch: die
+    /// Zeile steht, dreissig Tage lang wird nichts mehr probiert, und die teure Sprosse - die es
+    /// vielleicht gekonnt haette - kommt nie dran. Die beiden Sprossen merken sich getrennt, dass
+    /// sie es versucht haben.
+    /// </summary>
+    public string Rung { get; set; } = RungAi;
+
     public string Outcome { get; set; } = string.Empty;
     public string? Domain { get; set; }
     public DateTimeOffset AttemptedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -281,8 +296,11 @@ public static class IntelligenceCatalogModelConfiguration
 
         modelBuilder.Entity<BrandLogoResearchAttempt>(entity =>
         {
-            entity.HasIndex(x => x.AliasHash).IsUnique();
+            // Je Sprosse ein Vermerk, nicht je Haendler: sonst verbraucht ein Fehlschlag beim
+            // Icon-Spiegel den KI-Versuch mit.
+            entity.HasIndex(x => new { x.AliasHash, x.Rung }).IsUnique();
             entity.Property(x => x.AliasHash).HasMaxLength(64);
+            entity.Property(x => x.Rung).HasMaxLength(10);
             entity.Property(x => x.Outcome).HasMaxLength(40);
             entity.Property(x => x.Domain).HasMaxLength(253);
         });

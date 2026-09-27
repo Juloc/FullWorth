@@ -66,6 +66,22 @@ public sealed class AiInstanceSettings
     public bool DailyScanEnabled { get; set; }
     public bool WeeklyDeepScanEnabled { get; set; }
     public bool MonthlyReviewEnabled { get; set; }
+
+    /// <summary>
+    /// Darf die Instanz einen selbst ausgerechneten Marken-Kurznamen beim Icon-Spiegel
+    /// nachschlagen? Siehe <see cref="Brands.SimpleIconsCdnFetcher"/> fuer das, was dabei die
+    /// Maschine verlaesst.
+    ///
+    /// Das ist bewusst KEINE KI-Einstellung und haengt an keinem Zugang - die Sprosse laeuft ohne
+    /// Anbieter und ohne Tokens. Sie sitzt hier, weil dies die Einstellungszeile der Instanz ist
+    /// und eine zweite Tabelle fuer einen Schalter schlimmer waere als ein Feld an einer Stelle,
+    /// deren Name etwas zu eng ist.
+    ///
+    /// Standardmaessig <b>an</b>: die ausdrueckliche Entscheidung ist, dass eine Instanz immer
+    /// zuerst selbst sucht.
+    /// </summary>
+    public bool BrandCdnLookupEnabled { get; set; } = true;
+
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

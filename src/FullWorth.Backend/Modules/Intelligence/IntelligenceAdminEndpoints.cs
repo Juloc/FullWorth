@@ -15,6 +15,11 @@ public sealed record AiInstanceSettingsView(
     bool DailyScanEnabled,
     bool WeeklyDeepScanEnabled,
     bool MonthlyReviewEnabled,
+    /// <summary>
+    /// Darf ein selbst ausgerechneter Marken-Kurzname beim Icon-Spiegel nachgeschlagen werden?
+    /// Keine KI-Einstellung - die Sprosse laeuft ohne Anbieter und ohne Tokens.
+    /// </summary>
+    bool BrandCdnLookupEnabled,
     /// <summary>Wofuer der eingetragene Zugang arbeiten darf - siehe <see cref="AiModules"/>.</summary>
     IReadOnlyList<string> Modules,
     /// <summary>Alles, was freigegeben werden KANN. Die Oberflaeche baut daraus ihre Liste,
@@ -34,6 +39,7 @@ public sealed record UpdateAiInstanceSettingsRequest(
     bool DailyScanEnabled,
     bool WeeklyDeepScanEnabled,
     bool MonthlyReviewEnabled,
+    bool BrandCdnLookupEnabled,
     IReadOnlyList<string>? Modules);
 
 public sealed record CreateAiCredentialRequest(string Provider, string Name, string Secret);
@@ -130,7 +136,8 @@ public static class IntelligenceAdminEndpoints
                     MonthlyBudgetEur = request.MonthlyBudgetEur,
                     DailyScanEnabled = request.DailyScanEnabled,
                     WeeklyDeepScanEnabled = request.WeeklyDeepScanEnabled,
-                    MonthlyReviewEnabled = request.MonthlyReviewEnabled
+                    MonthlyReviewEnabled = request.MonthlyReviewEnabled,
+                    BrandCdnLookupEnabled = request.BrandCdnLookupEnabled
                 }, request.Modules ?? [], ct);
                 IntelligenceAuditWriter.Record(db, actorUserId.Value, "settings.updated", "AiInstanceSettings", saved.Id);
                 await db.SaveChangesAsync(ct);
@@ -327,6 +334,7 @@ public static class IntelligenceAdminEndpoints
         x.DailyScanEnabled,
         x.WeeklyDeepScanEnabled,
         x.MonthlyReviewEnabled,
+        x.BrandCdnLookupEnabled,
         modules,
         AiModules.All,
         x.UpdatedAt);

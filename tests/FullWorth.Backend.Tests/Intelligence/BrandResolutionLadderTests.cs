@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using FullWorth.Backend.Modules.Intelligence;
+using FullWorth.Backend.Modules.Intelligence.Brands;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,8 +12,13 @@ namespace FullWorth.Backend.Tests.Intelligence;
 ///
 /// Was hier geprueft wird, ist nicht "findet es ein Logo", sondern **was es dafuer ausgibt**. Ein
 /// Haendlername, der sich ausrechnen laesst, darf keinen einzigen Aufruf nach draussen ausloesen.
-/// Der Dienst bekommt in diesen Tests weder Zugang noch Anbieter: was die Ableitung schafft,
-/// schafft sie ohne beides, und wo sie nichts schafft, faellt der Aufruf in "kein Zugang".
+/// Der Dienst bekommt in diesen Tests weder Zugang noch Anbieter noch Netz: was die Ableitung
+/// schafft, schafft sie ohne alles davon, und wo sie nichts schafft, faellt der Aufruf in "kein
+/// Zugang".
+///
+/// Die Spiegel-Sprosse ist hier **abgeschaltet** - sie hat ihre eigene Datei
+/// (<see cref="BrandCdnRungTests"/>). Ohne das wuerde jeder Fall, den die Ableitung nicht loest,
+/// hier an einem Abruf scheitern statt an dem, was er pruefen will.
 /// </summary>
 public sealed class BrandResolutionLadderTests
 {
@@ -22,6 +28,8 @@ public sealed class BrandResolutionLadderTests
         var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
         var db = new IntelligenceDbContext(options);
         await db.Database.EnsureCreatedAsync();
+
+        db.AiInstanceSettings.Add(new AiInstanceSettings { BrandCdnLookupEnabled = false });
 
         foreach (var key in brandKeys)
         {
@@ -162,15 +170,8 @@ public sealed class BrandResolutionLadderTests
             new AiAccessResolver(db, store, registry),
             new AiBudgetGuard(db),
             new AiCostEstimator(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()),
-            new BrandLogoFetcher(new HttpClient(new NeverCalledHandler())),
+            new BrandLogoFetcher(new HttpClient(new OfflineHandler())),
+            new SimpleIconsCdnFetcher(new HttpClient(new OfflineHandler())),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BrandLogoResearchService>.Instance);
-    }
-
-    /// <summary>Jeder ausgehende Aufruf ist hier ein Testfehler, kein Netzwerkfehler.</summary>
-    private sealed class NeverCalledHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
-            throw new InvalidOperationException(
-                $"Es wurde nach draussen gegriffen: {request.RequestUri}. Die Ableitung soll das verhindern.");
     }
 }

@@ -57,6 +57,20 @@
           <div id="brand-pack-list" class="rows"></div>
         </section>
 
+        @* Eigenes Panel und nicht bei den KI-Schaltern: diese Sprosse braucht keinen Zugang und
+           kostet keine Tokens. Sie kostet etwas anderes, und das steht daneben. *@
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Logos nachschlagen</h2>
+              <p class="row-sub">FullWorth sucht ein Logo zuerst im mitgelieferten Katalog und rechnet den Markennamen selbst aus. Findet es dort nichts, kann es beim Simple-Icons-Spiegel nachfragen.</p>
+            </div>
+          </div>
+          <label class="check"><input id="brand-cdn-lookup" type="checkbox"><span>Beim Simple-Icons-Spiegel nachschlagen</span></label>
+          <p class="row-sub">Dabei verlässt der ausgerechnete Markenname diese Maschine: aus <em>REWE SAGT DANKE</em> wird <em>rewe</em>, aus <em>MUELLER FLIESENLEGER</em> aber <em>muellerfliesenleger</em>. Die abgerufene Adresse <em>ist</em> der Name – ein Logo lässt sich nicht holen, ohne zu sagen, wessen Logo. Es geht nur der Name, kein Betrag, kein Datum und keine Kennung, und was schon im Abbild liegt, wird nie nachgeschlagen.</p>
+          <p id="brand-cdn-result" class="intel-result" aria-live="polite"></p>
+        </section>
+
         <section class="intel-metrics">
           <article class="metric"><span>Provider</span><strong id="metric-provider">—</strong></article>
           <article class="metric"><span>Offene Vorschläge</span><strong id="metric-suggestions">—</strong></article>

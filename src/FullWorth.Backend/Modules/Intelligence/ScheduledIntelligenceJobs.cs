@@ -252,10 +252,12 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
                 return;
             }
 
-            // Logos, die sich ausrechnen lassen, VOR dem KI-Tor. Sonst bekaeme eine Installation
-            // ohne KI nie ein abgeleitetes Logo: der Auftrag verschoebe sich alle sechs Stunden,
-            // und die Ableitung, die kein Token kostet, liefe nie.
+            // Beide Logo-Sprossen ohne KI VOR dem KI-Tor. Sonst bekaeme eine Installation ohne KI
+            // nie ein Logo: der Auftrag verschoebe sich alle sechs Stunden, und die zwei Wege, die
+            // keinen Zugang brauchen, liefen nie. Erst rechnen, dann fragen - was im Abbild liegt,
+            // wird nirgends nachgeschlagen.
             await DeriveLogosAsync(ct);
+            await LookUpLogosAtMirrorAsync(ct);
 
             var settings = await intelligenceDb.AiInstanceSettings.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.ScopeKey == AiInstanceSettings.InstanceScopeKey, ct);
@@ -607,6 +609,38 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
     }
 
     /// <summary>
+    /// Die Spiegel-Runde: was die Ableitung nicht geschafft hat, wird beim Icon-Spiegel
+    /// nachgeschlagen.
+    ///
+    /// Laeuft wie die Ableitung VOR dem KI-Tor - die Sprosse braucht keinen Zugang, und haenge sie
+    /// dahinter, bekaeme eine Installation ohne KI nie ein Logo von dort.
+    ///
+    /// Erst danach, weil die Reihenfolge der ganze Punkt ist: was sich ausrechnen laesst, wird nie
+    /// abgerufen. Der Deckel zaehlt deshalb Abrufe, nicht Haendler. Ein Spiegel, der abwinkt oder
+    /// nicht erreichbar ist, beendet die Runde sofort - die naechsten vierundzwanzig Abrufe gingen
+    /// genauso aus, und ein fremder Dienst, der gerade nicht mag, wird nicht fuenfundzwanzigmal
+    /// gefragt.
+    /// </summary>
+    private async Task LookUpLogosAtMirrorAsync(CancellationToken ct)
+    {
+        var fetched = 0;
+        foreach (var name in await FrequentCounterpartiesAsync(ct))
+        {
+            if (fetched >= LogoResearchPerRun) return;
+            ct.ThrowIfCancellationRequested();
+            var outcome = await logoResearch.ResolveWithoutAiAsync(name, ct);
+
+            if (outcome is BrandLogoResearchService.OutcomeThrottled
+                or BrandLogoResearchService.OutcomeMirrorUnreachable) return;
+
+            if (outcome is BrandLogoResearchService.OutcomeCdn
+                or BrandLogoResearchService.OutcomeCdnMiss
+                or BrandLogoResearchService.OutcomeUnsafeAsset)
+                fetched++;
+        }
+    }
+
+    /// <summary>
     /// Die haeufigsten Haendlernamen, die noch kein Logo haben, einer nach dem anderen. Haeufig zuerst,
     /// weil ein Logo dort am meisten zu sehen ist.
     /// </summary>
@@ -624,7 +658,9 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
             // "haben wir erst neulich versucht" kosten nichts und duerfen den Lauf nicht auffuellen.
             if (outcome is not (BrandLogoResearchService.OutcomeAlreadyKnown
                 or BrandLogoResearchService.OutcomeRecentlyTried
-                or BrandLogoResearchService.OutcomeDerived))
+                or BrandLogoResearchService.OutcomeDerived
+                or BrandLogoResearchService.OutcomeCdn
+                or BrandLogoResearchService.OutcomeCdnMiss))
                 done++;
             // Nicht freigegeben heisst: hier gibt es nichts zu tun. Anbieter nicht erreichbar heisst:
             // die naechsten hundert Aufrufe scheitern genauso. Beides beendet den Lauf, aber aus

@@ -63,3 +63,44 @@ unter anderem OBI, Vattenfall, E.ON, Douglas, Decathlon, FlixBus, Eurowings, CHE
 Postbank und Trade Republic — nachgeprüft, nicht vermutet. Diese Händler werden weiterhin
 kategorisiert; sie bekommen nur das Monogramm-Ersatzbild aus `ux-kit.js` statt eines Logos, oder ein
 Logo aus einem eigenen Paket.
+
+## Die Leiter: wie ein unbekannter Händler zu seinem Logo kommt
+
+Zeigt keine der drei Stufen oben ein Logo, arbeitet die Instanz eine Leiter ab. Jede Sprosse ist
+teurer als die darüber, und keine wird erreicht, solange eine darüber antwortet.
+
+| # | Sprosse | Netz | KI | Standard | Schreibt |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Bekannter Alias in einer der drei Tabellen | – | – | an | – |
+| 2 | Kurznamen ableiten und gegen den mitgelieferten Katalog halten | – | – | an | Alias @ 0,90 |
+| 3 | Beim Simple-Icons-Spiegel nachschlagen | ja | – | **an** | Bild + Alias @ 0,80 |
+| 4 | KI nennt eine Domain, `BrandLogoFetcher` holt das SVG | ja | ja | Freigabe nötig | Bild + Alias @ 0,55 |
+
+Die Sprossen 1–3 laufen im geplanten Auftrag **vor** dem KI-Tor. Das ist kein Detail: ohne KI
+verschiebt sich der Auftrag alle sechs Stunden mit `ai_disabled`, und alles dahinter liefe nie.
+Eine Installation ganz ohne KI bekommt so trotzdem Logos.
+
+### Was Sprosse 3 kostet
+
+Nicht Geld — den Namen. Der abgeleitete Kurzname verlässt die Maschine, weil er in der Adresse
+steht: `https://cdn.jsdelivr.net/npm/simple-icons@<Fassung>/icons/<kurzname>.svg`. Bei einer Kette
+ist das folgenlos (`REWE SAGT DANKE` → `rewe`), bei einem Einzelunternehmer nicht
+(`MUELLER FLIESENLEGER` → `muellerfliesenleger`). Ein Logo lässt sich nicht holen, ohne zu sagen,
+wessen Logo.
+
+Deshalb:
+
+- **Abschaltbar** unter *Einstellungen → Intelligence → Logos nachschlagen*, mit genau diesem Text
+  daneben. Standard ist **an** — die Entscheidung ist, dass eine Instanz zuerst selbst sucht.
+- **Nur der Kurzname**, und nur wenn er die Form `[a-z0-9]{2,60}` erfüllt. Was nicht hineinpasst,
+  wird nicht abgeschickt.
+- **Höchstens drei Kurznamen je Händler**, ein Vermerk je Händler, 25 Abrufe je Lauf.
+- **429 oder 5xx beendet den Lauf sofort.** Ein fremder Spiegel, der gerade nicht mag, wird nicht
+  fünfundzwanzigmal gefragt.
+- **Die Fassung kommt aus `catalog.json`**, nicht aus einer zweiten Konstante — sonst holt die
+  Instanz Bilder aus einer anderen Menge als die, die sie schon mitbringt.
+- **Geprüft wird trotzdem.** `BrandAssetVerifier` härtet jedes SVG von dort wie jedes andere; der
+  Spiegel wird nicht geglaubt, weil er der Spiegel ist.
+
+`BrandLogoResearchAttempts.Rung` trennt die Vermerke der Sprossen 3 und 4. Ohne diese Spalte hätte
+ein „kennt der Spiegel nicht" dreißig Tage lang auch den einen KI-Versuch verbraucht.

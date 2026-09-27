@@ -3,6 +3,7 @@ using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Intelligence;
+using FullWorth.Backend.Modules.Intelligence.Brands;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
 using Microsoft.Data.Sqlite;
@@ -206,7 +207,11 @@ public sealed class ScheduledIntelligenceProcessorTests
                 DefaultTextModel = "fake-model",
                 DefaultVisionModel = "fake-model",
                 DailyBudgetEur = dailyBudgetEur,
-                DailyScanEnabled = true
+                DailyScanEnabled = true,
+                // Der Icon-Spiegel steht in einer echten Installation standardmaessig an. Hier
+                // nicht: dieser Test soll den geplanten Auftrag pruefen, nicht das Internet. Die
+                // Sprosse laeuft VOR dem KI-Tor, also wuerde sie hier sonst tatsaechlich abrufen.
+                BrandCdnLookupEnabled = false
             });
             // Wofuer dieser Zugang arbeiten darf. Vorher waren das die zwei Schalter
             // MerchantAiEnabled und CategoryAiEnabled, die ohnehin nur gemeinsam galten.
@@ -248,11 +253,15 @@ public sealed class ScheduledIntelligenceProcessorTests
                 adapters,
                 new IntelligenceDigestService(intelligenceDb, financeDb),
                 new AiAccessResolver(intelligenceDb, store, registry),
-                // Die Logo-Recherche laeuft hier nie: sie holt sich ihren Zugang selbst, und in
-                // dieser Fixture ist das Modul nicht freigegeben.
+                // Die KI-Sprosse der Logo-Recherche laeuft hier nie: sie holt sich ihren Zugang
+                // selbst, und in dieser Fixture ist das Modul nicht freigegeben. Die Spiegel-Sprosse
+                // liefe sehr wohl - sie braucht keinen Zugang - und ist deshalb oben abgeschaltet.
+                // Die Handler werfen, damit ein kuenftiger Umbau nicht still ins Netz greift.
                 new BrandLogoResearchService(
                     intelligenceDb, store, new AiAccessResolver(intelligenceDb, store, registry),
-                    budgetGuard, costEstimator, new BrandLogoFetcher(new HttpClient()),
+                    budgetGuard, costEstimator,
+                    new BrandLogoFetcher(new HttpClient(new OfflineHandler())),
+                    new SimpleIconsCdnFetcher(new HttpClient(new OfflineHandler())),
                     NullLogger<BrandLogoResearchService>.Instance),
                 // Ebenso: ohne freigegebenes Modul schlaegt die Netz-Recherche nichts nach.
                 new InternetResearchSuggestionAdapter(
