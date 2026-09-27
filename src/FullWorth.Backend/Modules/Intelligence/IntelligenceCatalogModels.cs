@@ -135,6 +135,17 @@ public sealed class ResearchedBrandAlias
     /// <summary>active | rejected. Ein abgelehnter Alias bleibt stehen, damit er nicht neu entsteht.</summary>
     public string Status { get; set; } = "active";
 
+    /// <summary>
+    /// Welcher KI-Lauf diese Zeile geschrieben hat - nur bei <see cref="Source"/> == <c>ai</c>
+    /// gesetzt. Ohne diese Spur weiss man einer Zeile nicht an, welches Modell, welcher Anbieter
+    /// und welcher Tag sie vorgeschlagen hat, und kann eine falsche Charge nie gezielt finden.
+    ///
+    /// <c>SetNull</c> und nicht <c>Cascade</c>: der Lauf ist ein Protokolleintrag, die Zuordnung
+    /// ist Wissen. Wird der Protokolleintrag irgendwann geraeumt - etwa weil sein Benutzer geloescht
+    /// wird -, verliert die Marke ihren Beleg, aber nicht ihr Logo.
+    /// </summary>
+    public Guid? RunId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -292,6 +303,8 @@ public static class IntelligenceCatalogModelConfiguration
             entity.Property(x => x.AliasKind).HasMaxLength(10);
             entity.Property(x => x.Status).HasMaxLength(10);
             entity.Property(x => x.Confidence).HasPrecision(6, 5);
+            entity.HasIndex(x => x.RunId);
+            entity.HasOne<AiRun>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<BrandLogoResearchAttempt>(entity =>

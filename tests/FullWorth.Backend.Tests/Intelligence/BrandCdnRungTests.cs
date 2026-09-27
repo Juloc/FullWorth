@@ -53,7 +53,9 @@ public sealed class BrandCdnRungTests
         var asset = await db.ResearchedBrandAssets.SingleAsync();
         Assert.Equal("rewe", asset.BrandKey);
         var alias = await db.ResearchedBrandAliases.SingleAsync();
-        Assert.Equal("REWE MARKT GMBH", alias.AliasKey);
+        // Nicht "REWE MARKT GMBH": der Stamm "REWE" deckt schon jede Filiale ab.
+        Assert.Equal("REWE", alias.AliasKey);
+        Assert.Equal("stem", alias.AliasKind);
         Assert.Equal("rewe", alias.BrandKey);
         Assert.Equal("cdn", alias.Source);
         Assert.Equal(0.80m, alias.Confidence);
@@ -67,9 +69,10 @@ public sealed class BrandCdnRungTests
     }
 
     /// <summary>
-    /// Die naechste Filiale derselben Kette leitet denselben Kurznamen ab - und findet das Bild
-    /// schon da. Das ist der Grund, warum die Marke unter dem Kurznamen abgelegt wird und nicht
-    /// unter dem Haendlernamen: sonst holte jede Filiale dasselbe Icon noch einmal.
+    /// Die naechste Filiale derselben Kette braucht nicht einmal einen zweiten Abruf: der Stamm
+    /// "REWE" aus der ersten Filiale deckt sie schon ab, weil die Oberflaeche an Wortgrenzen
+    /// matcht. Das ist der ganze Sinn des Stamms - eine Zeile fuer eine Kette, nicht eine je
+    /// Filiale.
     /// </summary>
     [Fact]
     public async Task A_second_branch_of_the_same_chain_costs_no_further_call()
@@ -80,15 +83,16 @@ public sealed class BrandCdnRungTests
         var service = Service(db, handler);
 
         await service.ResearchAsync("REWE MARKT GMBH", null, CancellationToken.None);
+        var callsAfterFirstBranch = handler.Urls.Count;
 
         Assert.Equal(
-            BrandLogoResearchService.OutcomeCdn,
+            BrandLogoResearchService.OutcomeAlreadyKnown,
             await service.ResearchAsync("REWE CITY HAMBURG", null, CancellationToken.None));
 
-        // Weitere Abrufe, weil der Haendlername ein anderer ist - aber nur EIN Bild und EINE
-        // Marke, weil beide auf denselben Kurznamen zeigen.
+        // Kein weiterer Abruf, kein weiteres Bild, keine weitere Zeile.
+        Assert.Equal(callsAfterFirstBranch, handler.Urls.Count);
         Assert.Single(await db.ResearchedBrandAssets.ToListAsync());
-        Assert.Equal(2, await db.ResearchedBrandAliases.CountAsync());
+        Assert.Single(await db.ResearchedBrandAliases.ToListAsync());
     }
 
     /// <summary>

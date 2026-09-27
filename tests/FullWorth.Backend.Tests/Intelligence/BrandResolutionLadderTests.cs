@@ -65,7 +65,10 @@ public sealed class BrandResolutionLadderTests
         Assert.Equal(BrandLogoResearchService.OutcomeDerived, outcome);
 
         var alias = await db.ResearchedBrandAliases.SingleAsync();
-        Assert.Equal("VODAFONE WEST GMBH", alias.AliasKey);
+        // Nicht der volle Name: "VODAFONE" ist der kuerzeste Namensteil, der schon eindeutig auf
+        // die Marke zeigt, und deckt damit jede Filiale ab statt nur diese eine Gesellschaft.
+        Assert.Equal("VODAFONE", alias.AliasKey);
+        Assert.Equal("stem", alias.AliasKind);
         Assert.Equal("vodafone", alias.BrandKey);
         Assert.Equal("derivation", alias.Source);
         Assert.Equal(0.90m, alias.Confidence);

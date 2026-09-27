@@ -74,7 +74,7 @@ teurer als die darüber, und keine wird erreicht, solange eine darüber antworte
 | 1 | Bekannter Alias in einer der drei Tabellen | – | – | an | – |
 | 2 | Kurznamen ableiten und gegen den mitgelieferten Katalog halten | – | – | an | Alias @ 0,90 |
 | 3 | Beim Simple-Icons-Spiegel nachschlagen | ja | – | **an** | Bild + Alias @ 0,80 |
-| 4 | KI nennt eine Domain, `BrandLogoFetcher` holt das SVG | ja | ja | Freigabe nötig | Bild + Alias @ 0,55 |
+| 4 | KI nennt Kurzname (→ Spiegel) oder Domain (→ `BrandLogoFetcher`) | ja | ja | Freigabe nötig | Bild + Alias @ 0,55 |
 
 Die Sprossen 1–3 laufen im geplanten Auftrag **vor** dem KI-Tor. Das ist kein Detail: ohne KI
 verschiebt sich der Auftrag alle sechs Stunden mit `ai_disabled`, und alles dahinter liefe nie.
@@ -104,3 +104,36 @@ Deshalb:
 
 `BrandLogoResearchAttempts.Rung` trennt die Vermerke der Sprossen 3 und 4. Ohne diese Spalte hätte
 ein „kennt der Spiegel nicht" dreißig Tage lang auch den einen KI-Versuch verbraucht.
+
+### Sprosse 4: die KI, und was sie zurückschreibt
+
+Eine KI-Antwort gilt erst als fertig, wenn sie eine deterministische Zeile erzeugt hat. Zwei
+Formen, in dieser Reihenfolge:
+
+1. **Die KI nennt einen Simple-Icons-Kurznamen** (Form 4a). Der wird — genau wie in Sprosse 3 —
+   beim gepinnten Spiegel geholt und mit `BrandAssetVerifier` geprüft. Das ist der sicherere erste
+   Griff: ein Kurzname ist ein deterministischer Pfad zu einem bereits vertrauten Ort, eine Domain
+   ein Rateversuch über mehrere mögliche Bildpfade.
+2. **Nur wenn das nichts ergibt** (kein Kurzname genannt, die Form nicht erfüllt, der Spiegel führt
+   ihn nicht, oder das Ergebnis kein sicheres SVG ist), fällt es auf die genannte **Domain** zurück
+   (Form 4b) — `BrandLogoFetcher` rät dort die üblichen Logo-Pfade, wie schon vor dieser Sprosse.
+
+Beide Formen schreiben mit `Source = "ai"` und `Confidence = 0,55` — derselbe Deckel wie beim
+Renten-Strukturierer: ein Modell darf ergänzen, nie überstimmen. Die Zeile trägt zusätzlich
+`RunId`, den `AiRun`-Protokolleintrag, der sie vorgeschlagen hat — ohne diesen Beleg sieht man
+einer KI-Zeile nicht an, welches Modell, welcher Anbieter und welcher Tag sie geschrieben hat, und
+findet eine falsche Charge nur durch Zufall.
+
+### Der kürzeste eindeutige Namensteil statt des vollen Namens
+
+Alle drei schreibenden Sprossen (Ableitung, Spiegel, KI) legen nicht den vollen Händlernamen ab,
+sondern den kürzesten Namensteil, der noch eindeutig auf die Marke zeigt — `BrandSlugDerivation
+.UnambiguousStem`. Aus „EDEKA MARKT 4711 BERLIN" wird die Zeile „EDEKA": die Oberfläche matcht
+ohnehin an Wortgrenzen (`ux-kit.js`), also deckt eine Zeile jede Filiale einer Kette ab statt nur
+die eine, die zuerst gebucht wurde — die nächste Filiale ist danach bereits „bekannt", ohne
+erneuten Abruf.
+
+Trifft der kürzeste Namensteil bereits eine **andere** Marke, gibt es keinen Stamm — die Zeile
+trägt dann den vollen Namen (`AliasKind = "exact"`, statt `"stem"`). Ein zweiter Rateversuch mit
+einem längeren Namensteil findet nicht statt: das wäre genau die stille Fehlzuordnung, die eine
+Katalogpflege nie wieder findet.
