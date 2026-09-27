@@ -163,7 +163,7 @@ public sealed class IntelligenceFeedbackEvent
     public string OldValueJson { get; set; } = "{}";
     public string NewValueJson { get; set; } = "{}";
     public string Source { get; set; } = "user";
-    public bool CloudEligible { get; set; }
+    public bool Generalizable { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -276,7 +276,7 @@ public static class IntelligenceModelConfiguration
         b.Entity<IntelligenceFeedbackEvent>(e =>
         {
             e.HasIndex(x => new { x.FullWorthSpaceId, x.CreatedAt });
-            e.HasIndex(x => new { x.CloudEligible, x.CreatedAt });
+            e.HasIndex(x => new { x.Generalizable, x.CreatedAt });
             e.Property(x => x.EventType).HasMaxLength(80);
             e.Property(x => x.SubjectType).HasMaxLength(80);
             e.Property(x => x.SubjectId).HasMaxLength(160);

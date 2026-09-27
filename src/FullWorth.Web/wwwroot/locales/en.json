@@ -133,7 +133,7 @@
     },
     "intelligence": {
       "title": "AI & intelligence",
-      "subtitle": "Local AI settings, cloud connection and brand packs"
+      "subtitle": "Local AI settings and brand packs"
     },
     "coach": {
       "title": "Coach",
@@ -1330,8 +1330,8 @@
   "onboarding": {
     "title": "Set up FullWorth",
     "welcome": "Welcome to FullWorth",
-    "intro": "Set up personal access and FullWorth Cloud Intelligence.",
-    "optional": "AI and bank access are optional. Cloud Intelligence is recommended and enabled by default, but can be turned off before finishing and changed later in Settings.",
+    "intro": "Set up your personal access.",
+    "optional": "AI and bank access are optional. FullWorth works out everything essential on its own; you can add or remove either later in Settings.",
     "start": "Start setup",
     "aiTitle": "AI access",
     "aiText": "Choose Codex / ChatGPT, your own OpenAI API key, or a custom OpenAI-compatible endpoint.",

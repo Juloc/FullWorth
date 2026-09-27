@@ -35,7 +35,7 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.DoesNotContain(rawAlias, feedback.OldValueJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(rawAlias, feedback.NewValueJson, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(newCategoryId.ToString(), feedback.NewValueJson, StringComparison.OrdinalIgnoreCase);
-        Assert.False(feedback.CloudEligible);
+        Assert.False(feedback.Generalizable);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.True(recorded);
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
         Assert.Equal("product_category_corrected", feedback.EventType);
-        Assert.True(feedback.CloudEligible);
+        Assert.True(feedback.Generalizable);
         Assert.DoesNotContain(rawAlias, feedback.SubjectFingerprint, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -89,9 +89,8 @@ public sealed class IntelligenceFeedbackRecorderTests
     /// die beiden, und es bleibt: daraus soll spaeter instanzweites Wissen werden.
     ///
     /// Was es nicht mehr ausloest, ist eine Zeile in einer Ausgangswarteschlange. Die gibt es nicht
-    /// mehr - und dass es sie nicht mehr gibt, steht seit dem Wegfall des Cloud-Clients im
-    /// Datenmodell selbst: diese Datei wuerde nicht uebersetzen, wenn jemand sie wieder einfuehrte,
-    /// ohne die Entscheidung erneut zu treffen.
+    /// mehr, und das steht im Datenmodell selbst: diese Datei wuerde nicht uebersetzen, wenn jemand
+    /// sie wieder einfuehrte, ohne die Entscheidung erneut zu treffen.
     /// </summary>
     [Fact]
     public async Task Accepted_contract_is_marked_generalizable()
@@ -116,7 +115,7 @@ public sealed class IntelligenceFeedbackRecorderTests
             CancellationToken.None));
 
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
-        Assert.True(feedback.CloudEligible);
+        Assert.True(feedback.Generalizable);
         Assert.Equal("contract_candidate_accepted", feedback.EventType);
 
         // Der rohe Gegenpartei-Name darf nirgends stehen; gespeichert ist nur sein Fingerabdruck.
@@ -147,11 +146,11 @@ public sealed class IntelligenceFeedbackRecorderTests
             CancellationToken.None));
 
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
-        Assert.False(feedback.CloudEligible);
+        Assert.False(feedback.Generalizable);
     }
 
     [Fact]
-    public async Task Contract_rejection_does_not_store_raw_counterparty_or_become_cloud_eligible()
+    public async Task Contract_rejection_does_not_store_raw_counterparty_or_become_generalizable()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -174,10 +173,10 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.DoesNotContain(rawCounterparty, feedback.SubjectFingerprint, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(rawCounterparty, feedback.NewValueJson, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("EUR", feedback.NewValueJson, StringComparison.Ordinal);
-        Assert.False(feedback.CloudEligible);
+        Assert.False(feedback.Generalizable);
     }
     [Fact]
-    public async Task Category_feedback_is_local_with_no_ai_settings_credentials_or_cloud_identity()
+    public async Task Category_feedback_is_local_with_no_ai_settings_or_credentials()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -194,6 +193,6 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.Empty(await db.AiCredentials.ToListAsync());
         Assert.Empty(await db.AiInstanceSettings.ToListAsync());
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
-        Assert.False(feedback.CloudEligible);
+        Assert.False(feedback.Generalizable);
     }
 }

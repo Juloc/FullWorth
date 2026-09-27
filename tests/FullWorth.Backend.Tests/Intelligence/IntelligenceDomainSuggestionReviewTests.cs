@@ -78,7 +78,7 @@ public sealed class IntelligenceDomainSuggestionReviewTests
         var feedback = await intelligenceDb.IntelligenceFeedbackEvents.AsNoTracking().SingleAsync();
         Assert.Equal("ai_suggestion_accepted", feedback.EventType);
         Assert.Equal("purchase-item", feedback.SubjectType);
-        Assert.False(feedback.CloudEligible);
+        Assert.False(feedback.Generalizable);
 
         var unchanged = await financeDb.PurchaseItems.AsNoTracking().SingleAsync(x => x.Id == item.Id);
         Assert.Equal("Cola Zero", unchanged.Name);

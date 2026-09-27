@@ -11,7 +11,7 @@ namespace FullWorth.Backend.Tests.Intelligence;
 
 public sealed class IntelligenceSuggestionReviewTests
 {
-    /// <summary>Die Rueckmeldung ist Nebensache dieser Tests; sie prueft LearningFeedsTheCloudTests.</summary>
+    /// <summary>Die Rueckmeldung ist Nebensache dieser Tests; sie prueft IntelligenceFeedbackRecorderTests.</summary>
     private static IntelligenceFeedbackRecorder Recorder(IntelligenceDbContext db) =>
         new(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
 
@@ -82,10 +82,10 @@ public sealed class IntelligenceSuggestionReviewTests
 
         // Hier stand "Assert.False". Das war die Luecke, nicht die Regel: eine bestaetigte Zuordnung
         // ist teilbares Wissen - "REWE ist Lebensmittel" gilt fuer jeden und enthaelt niemanden.
-        Assert.True(feedback.CloudEligible);
+        Assert.True(feedback.Generalizable);
 
-        // Teilbar heisst nicht geteilt. Ohne angebundene und zugestimmte Cloud bleibt die Outbox leer,
-        // und diese Testwelt hat keine. Was tatsaechlich hinausgeht, prueft LearningFeedsTheCloudTests.
+        // Verallgemeinerbar heisst nicht verschickt: es gibt keinen Empfaenger mehr. Das Flag sagt,
+        // dass aus dieser Zeile instanzweites Wissen werden darf - nicht, dass sie die Maschine verlaesst.
     }
 
     [Fact]

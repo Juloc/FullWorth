@@ -27,8 +27,8 @@ public sealed class IntelligenceFeedbackRecorder(
         string? semanticCategoryKey = null)
     {
         _ = semanticCategoryKey;
-        var cloudAlias = NormalizeCloudCommercialAlias(normalizedAlias);
-        var cloudEligible = cloudAlias is not null && IsPublicProductIdentifier(publicProductKey);
+        var generalAlias = NormalizeCommercialAlias(normalizedAlias);
+        var generalizable = generalAlias is not null && IsPublicProductIdentifier(publicProductKey);
 
         var feedback = new IntelligenceFeedbackEvent
         {
@@ -41,7 +41,7 @@ public sealed class IntelligenceFeedbackRecorder(
             OldValueJson = JsonSerializer.Serialize(new { categoryId = oldCategoryId }),
             NewValueJson = JsonSerializer.Serialize(new { categoryId = newCategoryId, productId }),
             Source = "user",
-            CloudEligible = cloudEligible,
+            Generalizable = generalizable,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -59,10 +59,10 @@ public sealed class IntelligenceFeedbackRecorder(
         int? interval,
         CancellationToken ct)
     {
-        var cloudAlias = accepted && contractId.HasValue
-            ? NormalizeCloudCommercialAlias(counterparty)
+        var generalAlias = accepted && contractId.HasValue
+            ? NormalizeCommercialAlias(counterparty)
             : null;
-        var cloudEligible = cloudAlias is not null;
+        var generalizable = generalAlias is not null;
 
         var feedback = new IntelligenceFeedbackEvent
         {
@@ -82,7 +82,7 @@ public sealed class IntelligenceFeedbackRecorder(
                 interval
             }),
             Source = "user",
-            CloudEligible = cloudEligible,
+            Generalizable = generalizable,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -104,14 +104,14 @@ public sealed class IntelligenceFeedbackRecorder(
         Guid? newCategoryId,
         string action,
         CancellationToken ct,
-        string? cloudMerchantAlias = null,
+        string? generalMerchantAlias = null,
         string? categoryKey = null,
         string? categoryName = null)
     {
         var normalizedMerchant = MerchantNormalization.Normalize(normalizedCounterparty);
         var normalizedDirection = NormalizeDirection(direction);
-        var cloudAlias = MerchantNormalization.Normalize(cloudMerchantAlias);
-        var cloudEligible = cloudAlias is not null &&
+        var generalAlias = MerchantNormalization.Normalize(generalMerchantAlias);
+        var generalizable = generalAlias is not null &&
                             normalizedDirection is not null &&
                             !string.IsNullOrWhiteSpace(categoryKey) &&
                             !string.IsNullOrWhiteSpace(categoryName);
@@ -127,7 +127,7 @@ public sealed class IntelligenceFeedbackRecorder(
             OldValueJson = JsonSerializer.Serialize(new { categoryId = oldCategoryId }),
             NewValueJson = JsonSerializer.Serialize(new { categoryId = newCategoryId }),
             Source = "user",
-            CloudEligible = cloudEligible,
+            Generalizable = generalizable,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -140,11 +140,12 @@ public sealed class IntelligenceFeedbackRecorder(
     ///
     /// Das ist dieselbe Erkenntnis wie eine Korrektur in den Buchungsdetails, nur auf der Ebene des
     /// Haendlers statt einer einzelnen Buchung: "REWE ist Lebensmittel" gilt fuer jeden. Deshalb
-    /// dieselbe Eignungsregel und dieselbe Projektion - ein zweiter Cloud-Weg wuerde frueher oder
-    /// spaeter etwas anderes hinausschicken als dieser.
+    /// dieselbe Eignungsregel und derselbe Recorder - ein zweiter Weg wuerde frueher oder spaeter
+    /// etwas anderes vermerken als dieser.
     ///
-    /// Was hinausgeht, ist der normalisierte Haendlername und der Kategorieschluessel. Kein Betrag,
-    /// kein Datum, keine Buchung, kein Konto - die Zuordnung ist Allgemeinwissen, die Buchung nicht.
+    /// Vermerkt wird der normalisierte Haendlername und der Kategorieschluessel. Kein Betrag, kein
+    /// Datum, keine Buchung, kein Konto - die Zuordnung ist Allgemeinwissen, die Buchung nicht.
+    /// Deshalb kann aus ihr instanzweites Wissen werden; die Buchung bleibt, wo sie ist.
     /// </summary>
     public Task<bool> RecordMerchantMappingConfirmedAsync(
         Guid fullWorthSpaceId,
@@ -158,7 +159,7 @@ public sealed class IntelligenceFeedbackRecorder(
     {
         var normalizedMerchant = MerchantNormalization.Normalize(normalizedCounterparty);
         var normalizedDirection = NormalizeDirection(direction);
-        var cloudEligible = normalizedMerchant is not null &&
+        var generalizable = normalizedMerchant is not null &&
                             normalizedDirection is not null &&
                             !string.IsNullOrWhiteSpace(categoryKey) &&
                             !string.IsNullOrWhiteSpace(categoryName);
@@ -174,7 +175,7 @@ public sealed class IntelligenceFeedbackRecorder(
             OldValueJson = "{}",
             NewValueJson = JsonSerializer.Serialize(new { categoryKey, direction = normalizedDirection }),
             Source = "user",
-            CloudEligible = cloudEligible,
+            Generalizable = generalizable,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -223,7 +224,7 @@ public sealed class IntelligenceFeedbackRecorder(
     private static string Normalize(string? value) =>
         string.Join(' ', (value ?? string.Empty).Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
-    private static string? NormalizeCloudCommercialAlias(string? value)
+    private static string? NormalizeCommercialAlias(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Contains('@'))
             return null;

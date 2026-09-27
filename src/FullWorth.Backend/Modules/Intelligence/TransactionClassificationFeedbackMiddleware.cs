@@ -81,14 +81,14 @@ public sealed class TransactionClassificationFeedbackMiddleware(RequestDelegate 
                 .SingleOrDefaultAsync(ct)
             : null;
 
-        string? cloudMerchantAlias = null;
+        string? generalMerchantAlias = null;
         var normalizedAlias = MerchantNormalization.Normalize(before.NormalizedCounterparty);
         if (normalizedAlias is not null)
         {
             var knownMerchantAlias = await financeDb.Set<MerchantAlias>().AsNoTracking().AnyAsync(x =>
                 x.FullWorthSpaceId == fullWorthSpaceId && x.NormalizedAlias == normalizedAlias, ct);
             if (knownMerchantAlias || !string.IsNullOrWhiteSpace(before.MerchantCategoryCode))
-                cloudMerchantAlias = normalizedAlias;
+                generalMerchantAlias = normalizedAlias;
         }
 
         await feedback.RecordCategoryDecisionAsync(
@@ -101,7 +101,7 @@ public sealed class TransactionClassificationFeedbackMiddleware(RequestDelegate 
             requestedCategoryId,
             "category_changed",
             ct,
-            cloudMerchantAlias,
+            generalMerchantAlias,
             category?.Key,
             category?.Name);
     }

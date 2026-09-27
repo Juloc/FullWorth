@@ -101,13 +101,13 @@ public sealed class IntelligenceSuggestionReviewService(
         await intelligenceDb.SaveChangesAsync(ct);
 
         // Das Uebernehmen verbessert das deterministische System - die LearnedMerchantMapping oben -
-        // UND geht als Erkenntnis an die Cloud, sofern sie aktiv ist. Genau dieser zweite Teil fehlte:
-        // die Rueckmeldung wurde mit CloudEligible=false geschrieben und blieb deshalb liegen, obwohl
+        // UND wird als verallgemeinerbare Erkenntnis vermerkt. Genau dieser zweite Teil fehlte: die
+        // Rueckmeldung wurde mit Generalizable=false geschrieben und blieb deshalb liegen, obwohl
         // "REWE ist Lebensmittel" fuer jeden gilt und kein persoenliches Datum enthaelt.
         //
         // Ueber denselben Recorder wie die Korrektur in den Buchungsdetails: dieselbe Eignungsregel,
-        // dieselbe Projektion. Ein zweiter Cloud-Weg wuerde frueher oder spaeter etwas anderes
-        // hinausschicken als dieser.
+        // dieselbe Projektion. Ein zweiter Weg wuerde frueher oder spaeter etwas anderes vermerken
+        // als dieser.
         await feedback.RecordMerchantMappingConfirmedAsync(
             suggestion.FullWorthSpaceId.Value,
             actorUserId,
@@ -182,7 +182,7 @@ public sealed class IntelligenceSuggestionReviewService(
             OldValueJson = "{}",
             NewValueJson = suggestion.ProposedPayloadJson,
             Source = "ai-review",
-            CloudEligible = false,
+            Generalizable = false,
             CreatedAt = now
         });
         await intelligenceDb.SaveChangesAsync(ct);
@@ -211,7 +211,7 @@ public sealed class IntelligenceSuggestionReviewService(
                 OldValueJson = suggestion.ProposedPayloadJson,
                 NewValueJson = "{}",
                 Source = "ai-review",
-                CloudEligible = false,
+                Generalizable = false,
                 CreatedAt = DateTimeOffset.UtcNow
             });
         }
