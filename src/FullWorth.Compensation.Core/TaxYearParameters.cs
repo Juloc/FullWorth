@@ -128,6 +128,14 @@ public sealed record TaxYearParameters(
     // Vorsorgepauschale: share of the employee pension contribution that is deductible in the payroll tariff
     // (§39b Abs. 2 Satz 5 Nr. 3 EStG in connection with the §10 Abs. 3 phase-in).
     decimal PensionProvisionPhaseIn,
+    // Rentenpunkte (Anlage 1 SGB VI, §70 SGB VI): one Entgeltpunkt is earned per year of contributions at
+    // exactly this average income - final for years the DRV has closed, "vorläufig" for the newest ones (the
+    // same figure the annual Rentenauskunft uses, so a later revision moves with the law, not against a
+    // second guess of it). "Aktueller Rentenwert" is what one Entgeltpunkt is worth per month, at the value in
+    // force at the END of the year (same convention as care insurance above - a snapshot carries a year, not a
+    // month; the value that applies from 1 July stays through 31 December, so that is the one recorded here).
+    decimal AverageEarningsAnnual,
+    decimal CurrentPensionValueMonthly,
     string SourceNote)
 {
     public decimal ChildAllowanceHalf => ChildAllowanceFull / 2m;
@@ -173,6 +181,9 @@ public sealed record TaxYearParameters(
 /// childless surcharge and the Saxony split).</item>
 /// <item>Vorsorgepauschale phase-in: §39b Abs. 2 Satz 5 Nr. 3 EStG with §10 Abs. 3 EStG — 72 % in 2018 rising by
 /// 4 points a year, accelerated to the full 100 % from 2023 by the Jahressteuergesetz 2022.</item>
+/// <item>Rentenpunkte: Durchschnittsentgelt per Anlage 1 SGB VI (final for 2018–2024, "vorläufig" for 2025/2026,
+/// as published on gesetze-im-internet.de); aktueller Rentenwert (unified Ost/West since 1.7.2023) at the value
+/// in force on 31 December of each year, per the annual DRV Rentenanpassung.</item>
 /// </list>
 ///
 /// Mid-year changes are modelled with the values in force at the end of the year, because a snapshot carries a
@@ -225,6 +236,7 @@ public static class TaxYearTable
                 unemployment: 0.030m, care: 0.0255m, childless: 0.0025m, childDiscount: 0m,
                 healthCeiling: 53_100m, pensionWest: 78_000m, pensionEast: 69_600m,
                 provisionPhaseIn: 0.72m,
+                averageEarnings: 38212m, currentPensionValue: 32.03m,
                 source: "§32a EStG 2018; SolzG 1995; SVRechGrV 2018; Zusatzbeitrag 1,0 % (still employee-only)"),
 
             Year(2019,
@@ -236,6 +248,7 @@ public static class TaxYearTable
                 unemployment: 0.025m, care: 0.0305m, childless: 0.0025m, childDiscount: 0m,
                 healthCeiling: 54_450m, pensionWest: 80_400m, pensionEast: 73_800m,
                 provisionPhaseIn: 0.76m,
+                averageEarnings: 39301m, currentPensionValue: 33.05m,
                 source: "§32a EStG 2019; SVRechGrV 2019; GKV-Versichertenentlastungsgesetz split the "
                     + "Zusatzbeitrag 50/50 from 2019; PV 3,05 %; AV cut to 2,5 %"),
 
@@ -248,6 +261,7 @@ public static class TaxYearTable
                 unemployment: 0.024m, care: 0.0305m, childless: 0.0025m, childDiscount: 0m,
                 healthCeiling: 56_250m, pensionWest: 82_800m, pensionEast: 77_400m,
                 provisionPhaseIn: 0.80m,
+                averageEarnings: 39167m, currentPensionValue: 34.19m,
                 source: "§32a EStG 2020; SVRechGrV 2020; §24b raised to 4.008 € by the Zweites "
                     + "Corona-Steuerhilfegesetz; AV cut to 2,4 %"),
 
@@ -260,6 +274,7 @@ public static class TaxYearTable
                 unemployment: 0.024m, care: 0.0305m, childless: 0.0025m, childDiscount: 0m,
                 healthCeiling: 58_050m, pensionWest: 85_200m, pensionEast: 80_400m,
                 provisionPhaseIn: 0.84m,
+                averageEarnings: 40463m, currentPensionValue: 34.19m,
                 source: "§32a EStG 2021; SVRechGrV 2021; Gesetz zur Rückführung des Solidaritätszuschlags "
                     + "raised the annual Freigrenze to 16.956 € and the glide rate to 11,9 %"),
 
@@ -272,6 +287,7 @@ public static class TaxYearTable
                 unemployment: 0.024m, care: 0.0305m, childless: 0.0035m, childDiscount: 0m,
                 healthCeiling: 58_050m, pensionWest: 84_600m, pensionEast: 81_000m,
                 provisionPhaseIn: 0.88m,
+                averageEarnings: 42053m, currentPensionValue: 36.02m,
                 source: "§32a EStG 2022 (Steuerentlastungsgesetz 2022, retroactive Grundfreibetrag 10.347 €); "
                     + "AN-Pauschbetrag 1.200 €; childless care surcharge 0,35 % per GVWG; SVRechGrV 2022"),
 
@@ -284,6 +300,7 @@ public static class TaxYearTable
                 unemployment: 0.026m, care: 0.034m, childless: 0.006m, childDiscount: 0.0025m,
                 healthCeiling: 59_850m, pensionWest: 87_600m, pensionEast: 85_200m,
                 provisionPhaseIn: 1.00m,
+                averageEarnings: 44732m, currentPensionValue: 37.60m,
                 source: "§32a EStG 2023; SVRechGrV 2023; Pflegeunterstützungs- und -entlastungsgesetz raised PV "
                     + "to 3,40 % and the childless surcharge to 0,60 % and introduced the per-child discounts "
                     + "on 1.7.2023 (values in force at year end); JStG 2022 brought the Vorsorgepauschale to 100 %"),
@@ -297,6 +314,7 @@ public static class TaxYearTable
                 unemployment: 0.026m, care: 0.034m, childless: 0.006m, childDiscount: 0.0025m,
                 healthCeiling: 62_100m, pensionWest: 90_600m, pensionEast: 89_400m,
                 provisionPhaseIn: 1.00m,
+                averageEarnings: 47085m, currentPensionValue: 39.32m,
                 source: "§32a EStG 2024 in the final version (Grundfreibetrag 11.784 €, Kinderfreibetrag "
                     + "6.612 € + 2.928 € BEA); SVRechGrV 2024"),
 
@@ -309,6 +327,7 @@ public static class TaxYearTable
                 unemployment: 0.026m, care: 0.036m, childless: 0.006m, childDiscount: 0.0025m,
                 healthCeiling: 66_150m, pensionWest: 96_600m, pensionEast: 96_600m,
                 provisionPhaseIn: 1.00m,
+                averageEarnings: 50493m, currentPensionValue: 40.79m,
                 source: "§32a EStG 2025 (Steuerfortentwicklungsgesetz); SVRechGrV 2025 — first year with a "
                     + "unified east/west pension ceiling; PV 3,60 %; Ø Zusatzbeitrag 2,5 %"),
 
@@ -321,6 +340,7 @@ public static class TaxYearTable
                 unemployment: 0.026m, care: 0.036m, childless: 0.006m, childDiscount: 0.0025m,
                 healthCeiling: 69_750m, pensionWest: 101_400m, pensionEast: 101_400m,
                 provisionPhaseIn: 1.00m,
+                averageEarnings: 51944m, currentPensionValue: 42.52m,
                 source: "§32a EStG 2026 / BMF PAP 2026; SVRechGrV 2026; Ø Zusatzbeitrag 2,9 %")
         };
 
@@ -345,6 +365,8 @@ public static class TaxYearTable
         decimal pensionWest,
         decimal pensionEast,
         decimal provisionPhaseIn,
+        decimal averageEarnings,
+        decimal currentPensionValue,
         string source) => new(
             year,
             tariff,
@@ -370,5 +392,7 @@ public static class TaxYearTable
             pensionWest,
             pensionEast,
             provisionPhaseIn,
+            averageEarnings,
+            currentPensionValue,
             source);
 }
