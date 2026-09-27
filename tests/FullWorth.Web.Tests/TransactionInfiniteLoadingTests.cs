@@ -90,15 +90,23 @@ public sealed class TransactionInfiniteLoadingTests
     }
 
     /// <summary>
-    /// Die Stelle, an der der Nutzer gerade liest, darf nicht wegspringen, wenn oben etwas dazukommt.
-    /// Gemessen wird dafuer an der ersten bisherigen Zeile und nicht an der Gesamthoehe der Seite: die
-    /// Gesamthoehe hat im Versuch auf dem Telefon 689 px zu wenig gemeldet, weil sie an allem haengt,
-    /// was sich sonst noch im Dokument setzt.
+    /// Aeltere Buchungen kommen unten dazu - das verschiebt nichts, was schon sichtbar ist. Weitere
+    /// Zukunft kommt OBEN dazu, und dort darf die Stelle, an der der Nutzer gerade liest, nicht
+    /// wegspringen. Gemessen wird an der Zeile unter der Einfuegestelle und nicht an der Gesamthoehe der
+    /// Seite: die hat im Versuch auf dem Telefon 689 px zu wenig gemeldet, weil sie an allem haengt, was
+    /// sich sonst noch im Dokument setzt.
     /// </summary>
     [Fact]
-    public void Prepending_older_rows_keeps_the_reading_position()
+    public void Older_rows_go_below_and_more_future_keeps_the_reading_position()
     {
         var js = PageJs();
+        var older = js.IndexOf("async function loadMoreTransactions(", StringComparison.Ordinal);
+        var future = js.IndexOf("async function loadMoreForecast(", StringComparison.Ordinal);
+        var append = js.IndexOf("body.append(fragment);", older, StringComparison.Ordinal);
+        Assert.True(older > 0 && append > older && append < js.IndexOf("function parkRows(", older, StringComparison.Ordinal),
+            "Aeltere Buchungen werden nicht unten angehaengt.");
+        Assert.True(future > 0 && js.IndexOf("const anchorTop = anchor?.getBoundingClientRect().top ?? 0;", StringComparison.Ordinal) > future,
+            "Die Messung der Lesestelle gehoert zum Nachladen der Zukunft.");
 
         Assert.Contains("const anchorTop = anchor?.getBoundingClientRect().top ?? 0;", js);
         Assert.Contains("const moved = (anchor?.getBoundingClientRect().top ?? 0) - anchorTop;", js);
@@ -185,8 +193,8 @@ public sealed class TransactionInfiniteLoadingTests
     {
         var js = PageJs();
 
-        Assert.Contains("function buildRowBlock(items, opts = {})", js);
+        Assert.Contains("function buildRowBlock(items)", js);
         Assert.Contains("const fragment = buildRowBlock(items);", js);
-        Assert.Contains("const fragment = buildRowBlock(ordered, { ownDays: ascendingTimeline });", js);
+        Assert.Contains("const fragment = buildRowBlock(page);", js);
     }
 }

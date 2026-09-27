@@ -90,48 +90,58 @@ public sealed class TransactionForecastTests
     }
 
     /// <summary>
-    /// #139, part 2 mit der Korrektur aus #161: die einfache (ungefilterte) Sicht wird aufsteigend
-    /// GEZEICHNET, aber nicht aufsteigend GEHOLT.
-    ///
-    /// Aufsteigend zu holen hiess: die erste Seite sind die AELTESTEN Buchungen. Solange die Seite
-    /// pauschal 500 Zeilen nahm, fiel das bei kleinen Bestaenden nicht auf - wer mehr als 500 Buchungen
-    /// hat, bekam eine Liste, die Jahre in der Vergangenheit aufhoert: "heute" war nie geladen, der
-    /// Sprung dorthin fand keinen Ankerpunkt, und die Zukunftszeilen standen direkt hinter einer
-    /// Buchung von damals. Seit die Seite blaettert (#161) waere jede erste Seite so.
-    ///
-    /// Deshalb: absteigend holen (die juengsten zuerst) und die Seite umdrehen. Das ergibt exakt
-    /// dieselbe Reihenfolge, die order=asc geliefert haette - einschliesslich der vorgemerkten
-    /// Buchungen, die ueber denselben Sortierschluessel eine zusammenhaengende Gruppe bilden und
-    /// umgedreht hinter den gebuchten landen.
+    /// Die Zeitleiste: oben die Zukunft, unten die Vergangenheit. #139 hatte sie andersherum gebaut -
+    /// die aelteste Buchung oben, die Zukunft ganz unten -, und das las sich wie ein Kontoauszug von
+    /// hinten. Die Buchungen werden gezeichnet, wie der Server sie liefert (die neueste zuerst, die
+    /// vorgemerkten davor), die Prognose steht UEBER ihnen, die fernste zuoberst, und aeltere Seiten
+    /// kommen unten dazu. Nie aufsteigend holen: die erste Seite waeren die aeltesten Buchungen.
     /// </summary>
     [Fact]
-    public void ForecastEligible_view_draws_ascending_without_asking_for_the_oldest_page()
+    public void The_timeline_draws_the_future_on_top_and_the_past_below()
     {
         var js = PageJs();
 
         Assert.DoesNotContain("'order', 'asc'", js);
-        Assert.Contains("ascendingTimeline ? [...(data.items || [])].reverse() : (data.items || [])", js);
+        Assert.DoesNotContain("[...(data.items || [])].reverse()", js);
+        Assert.Contains("const items = data.items || [];", js);
+        Assert.Contains("for (const entry of [...forecastItems].reverse()) future.appendChild(forecastRow(entry));", js);
+        Assert.Contains("fragment.prepend(future);", js);
+        Assert.Contains("if (txCursor) fragment.appendChild(txSentinel());", js);
     }
 
     /// <summary>
-    /// The grouping loop's pending-detection flag has to start in the state that matches which end of
-    /// the list is pending: descending still leads with it (unchanged), ascending now trails it. A flag
-    /// hardcoded to <c>true</c> here would silently misgroup real transactions under ascending order -
-    /// the exact regression this test exists to catch.
+    /// Vorgemerkte Buchungen fuehren die Liste an - direkt unter der Prognose, direkt ueber heute. Die
+    /// Gruppierung beginnt deshalb im Vorgemerkt-Zustand und verlaesst ihn mit der ersten gebuchten
+    /// Zeile endgueltig.
     /// </summary>
     [Fact]
-    public void Grouping_loop_starts_pending_detection_in_the_state_matching_ascending_order()
+    public void Pending_bookings_lead_the_list()
     {
         var js = PageJs();
 
-        Assert.Contains("let inPendingGroup = !ascendingTimeline", js);
+        Assert.Contains("let inPendingGroup = txLastDay === null && !pendingHeaderRendered;", js);
     }
 
     /// <summary>
-    /// The "Heute" button used to mean "scroll to the literal top", which was true only because the list
-    /// was always descending. Under ascending order the list top is the OLDEST transaction, so the
-    /// handler must consult the real today-anchor first and only fall back to the literal top for the
-    /// (unchanged) descending/filtered case.
+    /// "Heute" ist in der Zeitleiste nicht der Listenanfang - dort steht die fernste Zukunft. Heute ist
+    /// die Grenze: der Vorgemerkt-Kopf, sonst der erste Tag, der nicht in der Zukunft liegt.
+    /// </summary>
+    [Fact]
+    public void Today_is_the_boundary_between_future_and_past()
+    {
+        var js = PageJs();
+        var match = Regex.Match(js, @"function todayAnchor\(\)\s*\{(?<body>.*?)\n\}", RegexOptions.Singleline);
+        Assert.True(match.Success, "todayAnchor() was not found.");
+        var body = match.Groups["body"].Value;
+
+        Assert.Contains("anchor.kind === 'pending'", body);
+        Assert.Contains("anchor.day <= today", body);
+        Assert.DoesNotContain("'forecast'", body);
+    }
+
+    /// <summary>
+    /// Der Knopf "Heute" darf nicht bedingungslos an den Listenanfang springen: in der Zeitleiste steht
+    /// dort die Zukunft. Nur in der gefilterten Sicht ohne Zukunft ist der Listenanfang das Ziel.
     /// </summary>
     [Fact]
     public void TodayButton_no_longer_unconditionally_scrolls_to_the_literal_top()
@@ -152,7 +162,7 @@ public sealed class TransactionForecastTests
         var body = js[start..end];
 
         Assert.Contains("todayAnchor", body);
-        Assert.Contains("ascendingTimeline", body);
+        Assert.Contains("timelineView", body);
     }
 
     /// <summary>
@@ -226,7 +236,7 @@ public sealed class TransactionForecastTests
 
         Assert.Contains("FORECAST_MAX_HORIZON_DAYS = 180", js);
         Assert.Contains("if (forecastLoadingMore || forecastHorizonDays >= FORECAST_MAX_HORIZON_DAYS) return;", js);
-        Assert.Contains("if (forecastEligible && forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) {", js);
+        Assert.Contains("if (forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) future.appendChild(forecastSentinel());", js);
     }
 
     /// <summary>

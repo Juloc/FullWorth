@@ -196,10 +196,10 @@ export function bindTransactions(context) {
   ctx.$('#tx-filter')?.addEventListener('click', openFilterSheet);
   ctx.$('#tx-add').addEventListener('click', () => openBookingDialog(ctx.$('#tx-add').dataset.accountId || ''));
   ctx.$('#tx-daybar-today').addEventListener('click', () => {
-    // Aufsteigend bedeutet Listenanfang nicht mehr heute (#139, Teil 2) - erst der echte
-    // Heute-Ankerpunkt, derselbe wie beim ersten Zeichnen; nur ohne ihn (oder in der unveraendert
-    // absteigenden/gefilterten Sicht) bleibt der literale Listenanfang das Ziel.
-    const anchor = ascendingTimeline ? todayAnchor() : null;
+    // Ueber heute steht in der Zeitleiste die Zukunft - der Listenanfang ist dort nicht heute. Erst der
+    // echte Heute-Ankerpunkt, derselbe wie beim ersten Zeichnen; nur ohne ihn (oder in der gefilterten
+    // Sicht ohne Zukunft) bleibt der Listenanfang das Ziel.
+    const anchor = timelineView ? todayAnchor() : null;
     if (anchor) { todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     const host = scrollHost();
     if (host === window) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -242,10 +242,14 @@ let dayBalances = new Map();
 let dayBalancesAsked = new Set();
 let dayAnchors = [];
 let dayBarFrame = 0;
-// Ob die aktuell gezeichnete Liste aufsteigend sortiert ist (#139, Teil 2) - nur dann bedeutet "heute"
-// nicht mehr Listenanfang, und Klick/Selbstpruefung der Leiste muessen den echten Heute-Ankerpunkt
-// suchen statt Index 0.
-let ascendingTimeline = false;
+// Ob die gezeichnete Liste die Zeitleiste ist (#139): oben die Zukunft (Erwartet, dann Vorgemerkt),
+// darunter heute und nach unten die Vergangenheit. Nur dann ist der Listenanfang nicht heute, und
+// Klick/Selbstpruefung der Leiste suchen den echten Heute-Ankerpunkt statt Index 0.
+//
+// Bis 2026-09 lief die Zeitleiste andersherum - die Vergangenheit oben, die Zukunft unten. Das las
+// sich wie ein Kontoauszug von hinten; jede andere Finanz-App und jeder Nutzer erwartet die neuesten
+// Buchungen oben und die Zukunft darueber.
+let timelineView = false;
 // Nachladen am Ende der Zukunfts-Timeline: der Standard-Horizont (90 Tage) haelt den ersten Aufruf
 // schnell, ForecastTimelineAsync erlaubt aber bis zu 180 - kein zweiter, hoeherer Deckel hier, nur
 // derselbe. "Unendliches" Scrollen gibt es deshalb nicht wirklich: einmal bei 180 angekommen, ist der
@@ -267,16 +271,10 @@ let listRenderId = 0;
 
 // --- Unsichtbares Nachladen der Buchungen (#161, Teil C) ---
 //
-// Vorher holte die Seite pauschal 500 Zeilen. Das war nicht nur eine grosse Anfrage, sondern in der
-// aufsteigenden Zukunfts-Timeline (#139) auch falsch: aufsteigend sind die ersten 500 die AELTESTEN
-// Buchungen des Kontos. Wer mehr als 500 hat, bekam eine Liste, die Jahre in der Vergangenheit
-// aufhoert - "heute" war gar nicht geladen, der Sprung dorthin fand keinen Ankerpunkt, und die
-// Zukunftszeilen standen direkt hinter einer Buchung von damals.
-//
-// Deshalb holt die Liste IMMER die neuesten Buchungen zuerst und blaettert per Cursor in die
-// Vergangenheit - auch aufsteigend. Aufsteigend wird die geholte Seite nur umgedreht gezeichnet, und
-// die naechste (aeltere) Seite kommt OBEN dazu. Es gibt damit nur eine Nachladerichtung
-// ("aelter"), und der Cursor des Servers passt ohne Gegenstueck.
+// Vorher holte die Seite pauschal 500 Zeilen - eine grosse Anfrage und eine stille Obergrenze. Die
+// Liste holt die neuesten Buchungen zuerst und blaettert per Cursor in die Vergangenheit; die naechste
+// (aeltere) Seite kommt UNTEN dazu. Es gibt nur eine Nachladerichtung, und der Cursor des Servers
+// passt ohne Gegenstueck.
 const TX_PAGE_SIZE = 60;
 // Der Cursor der naechsten (aelteren) Seite; null heisst: es gibt nichts mehr.
 let txCursor = null;
@@ -320,16 +318,15 @@ async function loadDayBalances(scope, days) {
   }
 }
 
-// Der "Heute"-Ankerpunkt unter aufsteigender Sortierung (#139, Teil 2): das echte Datums-Element fuer
-// heute, wenn heute etwas gebucht oder vorgemerkt ist, sonst der Vorgemerkt-Kopf, sonst der
-// Erwartet-Kopf, sonst nichts (z.B. ein Konto ganz ohne Buchungen und ohne Prognose - dann bleibt die
-// Seite, wo sie ist). Vom ersten Zeichnen, dem Klick auf "Heute" und paintDayBar()s eigener
-// Ist-schon-oben-Pruefung gemeinsam benutzt, statt "was heisst heute" ein drittes Mal zu definieren.
+// Der "Heute"-Ankerpunkt der Zeitleiste: die Grenze zwischen Zukunft und Vergangenheit. Das ist der
+// Vorgemerkt-Kopf (noch nicht gebucht, also naechste Gegenwart), sonst der erste Tag, der nicht in der
+// Zukunft liegt, sonst nichts - ein Konto ganz ohne Buchungen bleibt, wo es ist. Vom ersten Zeichnen,
+// dem Klick auf "Heute" und paintDayBar()s Ist-schon-oben-Pruefung gemeinsam benutzt, statt "was heisst
+// heute" ein drittes Mal zu definieren.
 function todayAnchor() {
   const today = new Date().toISOString().slice(0, 10);
-  return dayAnchors.find(anchor => anchor.day === today)
-      || dayAnchors.find(anchor => anchor.kind === 'pending')
-      || dayAnchors.find(anchor => anchor.kind === 'forecast')
+  return dayAnchors.find(anchor => anchor.kind === 'pending')
+      || dayAnchors.find(anchor => anchor.day && anchor.day <= today)
       || null;
 }
 
@@ -349,7 +346,7 @@ function refreshDayAnchors() {
   const body = ctx.$('#transactions-body');
   if (!body) return;
   dayAnchors = [...body.querySelectorAll('.tx-date-head')]
-    .filter(element => ascendingTimeline || element.dataset.day)
+    .filter(element => timelineView || element.dataset.day)
     .map(element => ({ element, day: element.dataset.day || '', label: element.dataset.label, kind: element.dataset.kind }));
 }
 
@@ -382,9 +379,9 @@ function paintDayBar() {
   }
 
   const today = ctx.$('#tx-daybar-today');
-  // Aufsteigend ist Index 0 die AELTESTE Buchung, nicht mehr heute (#139, Teil 2) - dieselbe
-  // Heute-Suche wie beim Klick und beim ersten Zeichnen entscheidet hier mit.
-  const atTop = ascendingTimeline ? current === todayAnchor() : current === dayAnchors[0];
+  // In der Zeitleiste ist Index 0 die fernste Zukunft, nicht heute - dieselbe Heute-Suche wie beim
+  // Klick und beim ersten Zeichnen entscheidet hier mit.
+  const atTop = timelineView ? current === todayAnchor() : current === dayAnchors[0];
   today.disabled = atTop;
   today.setAttribute('aria-disabled', String(atTop));
 }
@@ -771,13 +768,7 @@ export async function renderTransactions(context, opts = {}) {
   const forecastEligible = !(text || dir || status || merchant || merchantId || minAmount || maxAmount ||
     transfersOnly || ignoredOnly || refundOnly || hasReceipt || categoryId || fromDate || toDate ||
     collectionIds.length);
-  ascendingTimeline = forecastEligible;
-  // Zukunfts-Timeline (#139), Teil 2: nur in dieser einfachen Sicht wird aufsteigend GEZEICHNET.
-  // Geholt wird trotzdem absteigend (#161, Teil C, siehe TX_PAGE_SIZE): eine aufsteigende erste Seite
-  // waere die aelteste, nicht die juengste. Das Umdrehen einer absteigenden Seite ergibt exakt
-  // dieselbe Reihenfolge, die der Server bei order=asc geliefert haette - auch fuer die vorgemerkten
-  // Buchungen, die dort ueber denselben Sortierschluessel als eine zusammenhaengende Gruppe stehen
-  // (TransactionStore.SearchForUserAsync) und umgedreht damit hinter den gebuchten landen.
+  timelineView = forecastEligible;
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
@@ -810,10 +801,9 @@ export async function renderTransactions(context, opts = {}) {
     ctx.api(`api/transactions?${q}`),
     forecastEligible ? ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null) : Promise.resolve(null)
   ]);
-  // Absteigend geholt, aufsteigend gezeichnet (siehe oben): das Umdrehen passiert an genau dieser
-  // einen Stelle. Alles danach - Kopfzeilen, Vorgemerkt-Gruppe, Tagesanker, der Sprung zu heute -
-  // liest nur noch die Reihenfolge, in der die Zeilen tatsaechlich stehen.
-  const items = ascendingTimeline ? [...(data.items || [])].reverse() : (data.items || []);
+  // So gezeichnet, wie der Server sie liefert: die vorgemerkten zuerst (TransactionStore sortiert sie
+  // als eine zusammenhaengende Gruppe nach vorn), dann die gebuchten, die neueste oben.
+  const items = data.items || [];
   // Der Cursor der naechsten (aelteren) Seite. hasNext ist die Antwort auf limit+1, kein COUNT (#161).
   txCursor = data.hasNext ? (data.nextCursor || null) : null;
   txLoadedCount = items.length;
@@ -829,27 +819,24 @@ export async function renderTransactions(context, opts = {}) {
   // ::after direkt darueber) an einer wachsenden Liste und kann zwischen dem leeren und dem
   // fertigen Zustand einen zweiten, sichtbaren Absatz zeichnen.
   const fragment = buildRowBlock(items);
-  // Zukunfts-Timeline (#139): erwartete Vertragsbuchungen/Eingaenge/Budgetperioden, angehaengt NACH
-  // allem oben. Ascending (Teil 2, forecastEligible): das ist jetzt die echte Zukunft, direkt nach der
-  // (nun trailing) Vorgemerkt-Gruppe. Descending (unveraendert, jede andere Sicht): der Forecast wird
-  // dort erst gar nicht geladen (forecastEligible ist dann false, siehe der Promise.all oben).
-  const forecastItems = forecast?.items || [];
-  if (forecastItems.length) {
-    fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast'));
-    for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
-    forecastLatestDate = forecastItems[forecastItems.length - 1].date;
+  // Zukunfts-Timeline (#139): erwartete Vertragsbuchungen/Eingaenge/Budgetperioden UEBER allem - die
+  // fernste oben, die naechste direkt ueber der Vorgemerkt-Gruppe. Der Server liefert sie aufsteigend.
+  // In jeder gefilterten Sicht wird der Forecast gar nicht erst geladen (forecastEligible, siehe oben).
+  if (forecastEligible) {
+    const forecastItems = forecast?.items || [];
+    const future = document.createDocumentFragment();
+    // Nachlade-Ankerpunkt am oberen Rand: nur solange der 180-Tage-Deckel nicht erreicht ist - sonst
+    // gaebe es nichts Weiteres zu holen, ein Beobachter darauf liefe ins Leere.
+    if (forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) future.appendChild(forecastSentinel());
+    if (forecastItems.length) {
+      future.appendChild(forecastHeader());
+      for (const entry of [...forecastItems].reverse()) future.appendChild(forecastRow(entry));
+      forecastLatestDate = forecastItems[forecastItems.length - 1].date;
+    }
+    fragment.prepend(future);
   }
-  // Nachlade-Ankerpunkt: nur wenn diese Sicht ueberhaupt Prognose zeigt und der 180-Tage-Deckel noch
-  // nicht erreicht ist - sonst gaebe es nichts Weiteres zu holen, ein Beobachter darauf liefe ins Leere.
-  if (forecastEligible && forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) {
-    fragment.appendChild(forecastSentinel());
-  }
-  // Nachlade-Ankerpunkt fuer AELTERE Buchungen (#161, Teil C). Aufsteigend liegt die Vergangenheit
-  // oben, absteigend unten - der Anker steht jeweils am Rand, hinter dem es weitergeht.
-  if (txCursor) {
-    if (ascendingTimeline) fragment.prepend(txSentinel());
-    else fragment.appendChild(txSentinel());
-  }
+  // Nachlade-Ankerpunkt fuer AELTERE Buchungen (#161, Teil C) am unteren Rand.
+  if (txCursor) fragment.appendChild(txSentinel());
   body.replaceChildren(fragment);
   // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
   // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
@@ -859,17 +846,15 @@ export async function renderTransactions(context, opts = {}) {
   // [data-day] und separates Anhaengen der uebrigen Koepfe wuerde den (in Wahrheit FUEHRENDEN)
   // Vorgemerkt-Kopf ans Ende der Liste setzen und die Suche falsch abbrechen lassen. Ein einziger
   // Durchlauf ueber ALLE Koepfe in ihrer wirklichen Reihenfolge, danach gefiltert, vermeidet das.
-  // Absteigend/gefiltert bleibt unveraendert: dort bleibt der (fuehrende) Vorgemerkt-Kopf kein Anker,
-  // genau wie vor dieser Aenderung. Aufsteigend (#139 Teil 2) zaehlen auch der (nun nachgestellte)
-  // Vorgemerkt- und der Erwartet-Kopf mit, damit die Leiste dort weiterhin etwas zeigt statt auf dem
-  // letzten echten Datum einzufrieren, waehrend jemand tief in die Zukunft gescrollt ist.
+  // In der Zeitleiste zaehlen der Erwartet- und der Vorgemerkt-Kopf mit, damit die Leiste dort etwas
+  // zeigt statt auf dem obersten echten Datum einzufrieren, waehrend jemand in der Zukunft liest.
   refreshDayAnchors();
-  // Initialer Sprung zu "heute" (#139 Teil 2) - nur beim ersten Zeichnen dieser Sicht, nie nach
-  // refreshList()s keepListPosition (siehe dort). Ohne echten Heute-Anker (z.B. ein Konto ganz ohne
-  // Buchungen und ohne Prognose) bleibt die natuerliche Scrollposition unangetastet.
-  if (ascendingTimeline && !opts.skipTodayScroll) {
+  // Initialer Sprung zu "heute" - nur beim ersten Zeichnen dieser Sicht, nie nach refreshList()s
+  // keepListPosition (siehe dort), und nur, wenn ueber heute ueberhaupt Zukunft steht: sonst beginnt
+  // die Liste ohnehin bei heute, und der Sprung schoebe nur Suche und Filter aus dem Bild.
+  if (timelineView && !opts.skipTodayScroll) {
     const anchor = todayAnchor();
-    if (anchor) todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'instant' });
+    if (anchor && anchor !== dayAnchors[0]) todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'instant' });
   }
   dayBalances = new Map();
   dayBalancesAsked = new Set();
@@ -891,27 +876,17 @@ export async function renderTransactions(context, opts = {}) {
 // (#161, Teil C). Vorher stand das nur inline in renderTransactions(); ein nachgeladener Block haette
 // Kopfzeilen, Vorgemerkt-Gruppe und die Bindungen jeder Zeile ein zweites Mal beschreiben muessen -
 // und die zweite Beschreibung waere die gewesen, die irgendwann abweicht.
-//
-// opts.ownDays: der Block bringt seine eigene Tagesfolge mit und fuehrt txLastDay NICHT fort. Das ist
-// der aufsteigende Fall, wo der Block OBEN angesetzt wird: seine Tage laufen auf die schon
-// gezeichneten zu, nicht von ihnen weg.
-function buildRowBlock(items, opts = {}) {
+function buildRowBlock(items) {
   const fragment = document.createDocumentFragment();
-  // Pending entries are not booked yet: the API sorts them into one contiguous run (leading when
-  // descending, trailing when ascending - see below), and they get their own header so a date header
-  // next to them still means only booked rows. Without it a pending row dated today sat under the
-  // today header among real bookings, and one with no booking date at all opened an unlabelled group.
-  // Descending (any incompatible filter active): pending is the LEADING group, exactly as before -
-  // inPendingGroup starts true and the loop leaves that state for good the moment the first booked row
-  // shows up. Ascending (die umgedrehte Seite, siehe renderTransactions): pending steht dort als
-  // TRAILING group, also startet die Gruppierung im Datumsmodus und wechselt in den Vorgemerkt-Kopf,
-  // sobald die erste vorgemerkte Zeile kommt - und da dieser Lauf so oder so zusammenhaengend ist,
-  // nie wieder zurueck.
-  let inPendingGroup = !ascendingTimeline && txLastDay === null && !pendingHeaderRendered;
-  let lastDate = opts.ownDays ? null : txLastDay;
+  // Pending entries are not booked yet: the API sorts them into one contiguous LEADING run, and they
+  // get their own header so a date header next to them still means only booked rows. Without it a
+  // pending row dated today sat under the today header among real bookings, and one with no booking
+  // date at all opened an unlabelled group. inPendingGroup starts true for the first block and the
+  // loop leaves that state for good the moment the first booked row shows up.
+  let inPendingGroup = txLastDay === null && !pendingHeaderRendered;
+  let lastDate = txLastDay;
   for (const x of items) {
     const isPending = String(x.status || '').toUpperCase() === 'PDNG';
-    if (ascendingTimeline && isPending) inPendingGroup = true;
     if (inPendingGroup && isPending) {
       if (!pendingHeaderRendered) {
         pendingHeaderRendered = true;
@@ -920,8 +895,8 @@ function buildRowBlock(items, opts = {}) {
     } else {
       inPendingGroup = false;
       // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
-      // to identity cards via CSS. Descending: items arrive newest-first, a header opens each new
-      // booking day going back in time. Ascending: the same headers open oldest-first going forward.
+      // to identity cards via CSS. Items arrive newest-first, a header opens each new booking day
+      // going back in time.
       const day = String(transactionDate(x) || '').slice(0, 10);
       if (day !== lastDate) {
         lastDate = day;
@@ -966,7 +941,7 @@ function buildRowBlock(items, opts = {}) {
     row.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
     fragment.appendChild(row);
   }
-  if (!opts.ownDays) txLastDay = lastDate;
+  txLastDay = lastDate;
   return fragment;
 }
 
@@ -997,13 +972,9 @@ function observeTxSentinel(renderId) {
   txObserver.observe(sentinel);
 }
 
-// Die naechste (aeltere) Seite, an die schon gezeichnete Liste gespleisst - ohne sie neu aufzubauen
-// und ohne die Scrollposition zu bewegen (#161, Teil C).
-//
-// Aufsteigend kommt der Block OBEN dazu. Das verschiebt alles darunter um seine Hoehe nach unten,
-// also waere die Stelle, die der Nutzer gerade liest, ohne Gegenrechnung weggesprungen - deshalb wird
-// der Scrollwert um genau den Hoehenzuwachs mitgezogen. Absteigend entfaellt das: unten anzuhaengen
-// bewegt nichts, was schon sichtbar ist.
+// Die naechste (aeltere) Seite, unten an die schon gezeichnete Liste gehaengt - ohne sie neu
+// aufzubauen und ohne die Scrollposition zu bewegen (#161, Teil C): unten anzuhaengen verschiebt
+// nichts, was schon sichtbar ist.
 async function loadMoreTransactions(renderId) {
   // Die Nummer wird VOR dem Abbau des Beobachters geprueft, nicht erst nach dem Abruf. Sonst haette
   // ein ueberholter Aufruf den Beobachter abgehaengt und danach ohne ihn zurueckgegeben - die Liste
@@ -1034,32 +1005,11 @@ async function loadMoreTransactions(renderId) {
     if (!page.length) return;
     for (const item of page) currentItemsById.set(String(item.id), item);
     txLoadedCount += page.length;
-    const ordered = ascendingTimeline ? [...page].reverse() : page;
-    const fragment = buildRowBlock(ordered, { ownDays: ascendingTimeline });
+    const fragment = buildRowBlock(page);
     // Vor dem Einsetzen gemerkt: danach gehoeren die Knoten dem Dokument, nicht mehr dem Fragment.
     const rows = [...fragment.querySelectorAll('.tx-row')];
-    if (ascendingTimeline) {
-      // Der neue Block endet an dem Tag, an dem die bisherige Liste beginnt - dessen Kopf steht dann
-      // zweimal da. Der aeltere (aus dem neuen Block) ist der richtige: er oeffnet die Gruppe wirklich.
-      const lastNewDay = [...fragment.querySelectorAll('.tx-date-head')].pop()?.dataset.day || '';
-      const firstOldHead = body.querySelector('.tx-date-head');
-      if (lastNewDay && firstOldHead?.dataset.day === lastNewDay) firstOldHead.remove();
-      const host = scrollHost();
-      const box = host === window ? (document.scrollingElement || document.documentElement) : host;
-      // Gemessen wird an der ersten bisherigen Zeile, nicht an der Gesamthoehe der Seite. Die
-      // Gesamthoehe hat im Test auf dem Telefon 689 px zu wenig gemeldet - sie haengt an allem, was
-      // sich sonst noch im Dokument setzt, waehrend die Zeile, an der der Nutzer gerade liest, genau
-      // das misst, was hier nicht springen darf.
-      const anchor = body.firstElementChild;
-      const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
-      body.prepend(fragment);
-      if (txCursor) body.prepend(txSentinel());
-      const moved = (anchor?.getBoundingClientRect().top ?? 0) - anchorTop;
-      if (moved) box.scrollTop += moved;
-    } else {
-      body.append(fragment);
-      if (txCursor) body.append(txSentinel());
-    }
+    body.append(fragment);
+    if (txCursor) body.append(txSentinel());
     parkRows(rows);
     refreshDayAnchors();
     await loadDayBalances(txScope || {}, dayAnchors.map(anchor => anchor.day).filter(Boolean));
@@ -1190,7 +1140,11 @@ function forecastRow(entry) {
   return row;
 }
 
-// Unsichtbarer Ankerpunkt am Ende der Zukunfts-Timeline: kommt er ins Bild, ist noch Horizont bis 180
+function forecastHeader() {
+  return groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast');
+}
+
+// Unsichtbarer Ankerpunkt am oberen Rand der Zukunfts-Timeline: kommt er ins Bild, ist noch Horizont bis 180
 // Tage uebrig, den loadMoreForecast() dann nachlaedt. Kein eigener Text/Knopf noetig - das Nachladen
 // selbst dauert nur einen Blick lang, ein sichtbarer "Mehr laden"-Schritt waere hier nur ein Umweg.
 function forecastSentinel() {
@@ -1245,16 +1199,31 @@ async function loadMoreForecast(accountId, groupId, renderId) {
     if (renderId !== listRenderId) return;
     const items = (forecast?.items || []).filter(entry => !forecastLatestDate || entry.date > forecastLatestDate);
     const body = ctx.$('#transactions-body');
-    const sentinel = body?.querySelector('.tx-forecast-sentinel');
-    if (!items.length) { sentinel?.remove(); return; }
+    // Der 180-Tage-Deckel ist erreicht - kein weiterer Ankerpunkt, kein weiterer Beobachter.
+    body?.querySelector('.tx-forecast-sentinel')?.remove();
+    if (!items.length || !body) return;
+    // Die weitere Zukunft gehoert OBEN in die Erwartet-Gruppe, direkt unter ihren Kopf - die fernste
+    // zuerst, wie beim ersten Zeichnen.
     const fragment = document.createDocumentFragment();
-    for (const entry of items) fragment.appendChild(forecastRow(entry));
+    for (const entry of [...items].reverse()) fragment.appendChild(forecastRow(entry));
     forecastLatestDate = items[items.length - 1].date;
-    if (sentinel) sentinel.replaceWith(fragment);
-    else body?.appendChild(fragment);
+    const head = body.querySelector('.tx-date-head[data-kind="forecast"]');
+    if (!head) fragment.prepend(forecastHeader());
+    // Oben einzusetzen verschiebt alles darunter um die Hoehe des Blocks - die Stelle, die der Nutzer
+    // gerade liest, waere ohne Gegenrechnung weggesprungen. Gemessen wird an der Zeile direkt unter
+    // der Einfuegestelle, nicht an der Gesamthoehe der Seite: die hat im Test auf dem Telefon 689 px
+    // zu wenig gemeldet, weil sie an allem haengt, was sich sonst noch im Dokument setzt.
+    const host = scrollHost();
+    const box = host === window ? (document.scrollingElement || document.documentElement) : host;
+    const anchor = head ? head.nextElementSibling : body.firstElementChild;
+    const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+    if (head) head.after(fragment);
+    else body.prepend(fragment);
+    const moved = (anchor?.getBoundingClientRect().top ?? 0) - anchorTop;
+    if (moved) box.scrollTop += moved;
+    if (!head) refreshDayAnchors();
   } finally {
     forecastLoadingMore = false;
-    // Der 180-Tage-Deckel ist erreicht - kein weiterer Ankerpunkt, kein weiterer Beobachter.
   }
 }
 
