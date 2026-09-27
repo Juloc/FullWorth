@@ -32,6 +32,14 @@ public static class CompensationEndpoints
             return Safe(() => Results.Ok(CompensationInsights.Analyze(request)));
         });
 
+        // Dienstrad-/JobRad-Rechner (#179) - zustandslos wie /calculate und /compare: kein eigener
+        // Speicherpfad, das gesparte Profil traegt bereits alles, was gebraucht wird.
+        group.MapPost("/jobrad/compare", (JobRadComparisonRequest request, CurrentUserContext currentUser) =>
+        {
+            _ = currentUser.RequireUserId();
+            return Safe(() => Results.Ok(JobRadCalculator.Compare(request)));
+        });
+
         group.MapGet("/inflation", (CurrentUserContext currentUser) =>
         {
             _ = currentUser.RequireUserId();

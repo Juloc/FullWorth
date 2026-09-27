@@ -14,6 +14,7 @@ import './extended.js';
 import './history.js';
 import './other-income.js';
 import './benchmarks.js';
+import './jobrad.js';
 
 const state={spaces:[],space:null,result:null,scenarios:[],selected:[]};
 // Months employed can be fractional - a month entered mid-month counts 15/30 - so 4 and 4,5 both have

@@ -1516,6 +1516,36 @@
     return value;
   }
 
+  // #179: dieselben sechs Kennzahlen, die der Reiter zeichnet - CompensationAssumptions ist hier die
+  // ECHTE Form (TaxYear/CalculationKind/TaxSource/...), anders als das schlanke assumptions-Array
+  // oben in COMPENSATION_RESULT, das aus einer frueheren, seither ersetzten Antwortform stammt.
+  const JOBRAD_RESULT = {
+    monthlyTaxableBenefit: 7.00,
+    netMonthlyImpact: -54.65,
+    totalLeaseCostUntilOwnership: 3204,
+    comparableCashPurchaseCost: 2600,
+    differenceLeasingVsCash: -604,
+    pension: {
+      lostEntgeltpunkteOverTerm: 0.0645, monthlyPensionReductionAtCurrentValue: 2.74,
+      aboveContributionCeiling: false, currentPensionValueMonthly: 42.52, averageEarningsAnnual: 51944
+    },
+    socialBenefitEstimates: [
+      { label: 'Krankengeld', monthlyDeltaEstimate: -65.10, isEstimate: true, basis: '70 % des Bruttoentgeltausfalls (§ 47 SGB V) - der eigene 90-%-Nettodeckel bleibt unberücksichtigt' },
+      { label: 'Arbeitslosengeld I', monthlyDeltaEstimate: -55.80, isEstimate: true, basis: '60 % des pauschalierten Nettoentgeltausfalls (§ 149 SGB III), ohne die tatsächliche Leistungsgruppe' },
+      { label: 'Elterngeld', monthlyDeltaEstimate: -60.45, isEstimate: true, basis: '65 % des Nettoentgeltausfalls (§ 2 BEEG) - nur relevant, wenn die Umwandlung in den Bemessungszeitraum fällt' }
+    ],
+    employer: { monthlySavingsFromLowerContributions: 8.65, monthlySubsidyPassedToEmployee: 0, monthlyNetBenefit: 8.65 },
+    // Nur das Feld, das der Reiter aus diesen beiden tatsaechlich liest (siehe jobrad.js) - der Rest
+    // der echten CompensationCalculationResult-Form ist hier ohne Zweck.
+    withoutJobRad: { estimatedCashNetMonthly: 3200 },
+    withJobRad: { estimatedCashNetMonthly: 3145.35 },
+    assumptions: {
+      taxYear: 2026, calculationKind: 'planning', taxSource: '§32a EStG 2026 / BMF PAP 2026',
+      socialInsuranceSource: 'SVRechGrV 2026', inflationSource: 'Destatis VPI',
+      dataAsOf: '2026-01-01', disclaimer: 'Harness-Fixture, keine echte Berechnung.'
+    }
+  };
+
   const COMPENSATION_RESULT = {
     name: 'Aktuelles Gehalt', monthsEmployedInYear: 4, salaryPaymentsInYear: 4,
     contractualGrossAnnual: 60000, bonusAnnual: 0, cashGrossAnnual: 20000,
@@ -1541,6 +1571,9 @@
   function writeAnswer(method, pathname, init) {
     const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
     if (after.startsWith('compensation/calculate')) return { status: 200, body: COMPENSATION_RESULT };
+    // #179: derselbe Grund wie bei 'analytics/sankey' - ohne eigene Antwort bekaeme der Dienstrad-
+    // Reiter den allgemeinen Schreib-Echo ({id:'stub'}) und zeigte lauter NaN statt einer Zahl.
+    if (after.startsWith('compensation/jobrad/compare')) return { status: 200, body: JOBRAD_RESULT };
     // #177: das Flussdiagramm ist ein POST, weil die Auswahl ein ganzer Filter ist - geschrieben
     // wird nichts. Ohne eigene Antwort bekaeme die Ansicht den allgemeinen Schreib-Echo ({id:'stub'})
     // und zeigte "keine Fluesse", was im Harness wie ein Fehler der Seite aussieht.
