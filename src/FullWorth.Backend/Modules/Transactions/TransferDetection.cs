@@ -347,6 +347,13 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
             if (string.IsNullOrWhiteSpace(raw)) return null;
             using var document = JsonDocument.Parse(raw);
             var root = document.RootElement;
+            // Eine FinTS-Buchung traegt die MT940-Zeilen roh ({source:"MT940", raw}); die Gegenseite steht
+            // dort in ?31. Ohne diesen Weg blieb jede Umbuchung zwischen zwei ING-Konten unerkannt.
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("source", out var source) && source.ValueKind == JsonValueKind.String
+                && string.Equals(source.GetString(), "MT940", StringComparison.Ordinal)
+                && root.TryGetProperty("raw", out var mt940) && mt940.ValueKind == JsonValueKind.String)
+                return FullWorth.Shared.Mt940Information.Parse(Mt940Field86(mt940.GetString())).CounterpartyAccount;
             var debit = root.TryGetProperty("credit_debit_indicator", out var indicator) &&
                         indicator.ValueKind == JsonValueKind.String
                 ? string.Equals(indicator.GetString(), "DBIT", StringComparison.OrdinalIgnoreCase)
@@ -357,6 +364,14 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
         {
             return null;
         }
+    }
+
+    /// <summary>Das Feld <c>:86:</c> aus einer gespeicherten MT940-Buchung (":61:...\n:86:...").</summary>
+    internal static string? Mt940Field86(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return null;
+        var start = raw.IndexOf(":86:", StringComparison.Ordinal);
+        return start < 0 ? null : raw[(start + 4)..];
     }
 
     private static string? ReadAccountIdentifier(JsonElement root, string property)

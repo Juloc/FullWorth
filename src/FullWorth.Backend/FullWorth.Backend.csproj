@@ -8,6 +8,7 @@
     <Compile Include="..\Shared\SecretBootstrap.cs" Link="Security\SecretBootstrap.cs" />
     <Compile Include="..\Shared\FullWorthVersion.cs" Link="Security\FullWorthVersion.cs" />
     <Compile Include="..\Shared\AdminVaultTicket.cs" Link="Security\AdminVaultTicket.cs" />
+    <Compile Include="..\Shared\Mt940Information.cs" Link="Modules\Import\Mt940Information.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FullWorth.Compensation.Core\FullWorth.Compensation.Core.csproj" />

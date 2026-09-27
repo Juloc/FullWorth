@@ -237,31 +237,16 @@ internal static class BankStatementFile
             return new StatementEntry(bookingDate, valueDate, amount, currency, null, null, reference);
         }
 
-        // :86: is either free text or the German structured form ?00posting text?20..?29 remittance
-        // ?32/?33 counterparty name. Both are read; nothing is invented when a field is absent.
+        // :86: is either free text or the German structured form - one reader for that, shared with the
+        // FinTS retrieval (FullWorth.Shared.Mt940Information). Nothing is invented when a field is absent.
         private static StatementEntry WithInformation(StatementEntry entry, string value)
         {
-            var text = value.Replace("\n", string.Empty).Trim();
-            if (!text.StartsWith('?'))
-                return entry with { Description = Combine(entry.Description, text) };
-
-            var description = new StringBuilder();
-            var name = new StringBuilder();
-            foreach (var field in text.Split('?', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (field.Length < 2 || !char.IsAsciiDigit(field[0]) || !char.IsAsciiDigit(field[1])) continue;
-                var key = field[..2];
-                var body = field[2..].Trim();
-                if (body.Length == 0) continue;
-                if (key is "32" or "33") name.Append(body);
-                else if (key is "00" or "20" or "21" or "22" or "23" or "24" or "25" or "26" or "27" or "28" or "29")
-                    description.Append(description.Length > 0 ? " " : string.Empty).Append(body);
-            }
-
+            var info = FullWorth.Shared.Mt940Information.Parse(value);
+            var readable = info.Purpose ?? info.PostingText;
             return entry with
             {
-                Description = Combine(entry.Description, description.ToString()),
-                Counterparty = name.Length > 0 ? name.ToString() : entry.Counterparty
+                Description = readable is null ? entry.Description : Combine(entry.Description, readable),
+                Counterparty = info.CounterpartyName ?? entry.Counterparty
             };
         }
 

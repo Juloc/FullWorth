@@ -4,4 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\Mt940Information.cs" Link="Mt940Information.cs" />
+  </ItemGroup>
 </Project>

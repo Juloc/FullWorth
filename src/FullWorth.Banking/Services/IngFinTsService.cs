@@ -556,16 +556,23 @@ public sealed class IngFinTsService(
             tx.Amount,
             tx.Currency,
             tx.Counterparty,
-            tx.Description,
+            // Dieselbe Bereinigung wie beim Enable-Banking-Abruf: technische Kennungen fallen weg.
+            TransactionPurpose.Normalize(tx.Description, tx.Counterparty) ?? tx.Description,
             null,
             tx.ExternalKey,
-            JsonSerializer.Serialize(new { source = "MT940", raw = tx.RawSource }, Json))).ToArray();
+            JsonSerializer.Serialize(new { source = "MT940", raw = tx.RawSource }, Json),
+            // Die IBAN der Gegenseite (?31) - ohne sie konnte die Umbuchungserkennung zwei ING-Konten nie
+            // als eigene erkennen, und +200 hier und -200 dort blieben Einnahme und Ausgabe.
+            tx.CounterpartyAccount)).ToArray();
         var product = account.ProductName;
         var type = product?.Contains("Extra", StringComparison.OrdinalIgnoreCase) == true ? "savings" : "checking";
         await backend.IngestAsync(new FinanceIngestBatch(
             new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, clock.GetUtcNow(), null),
             [new AccountBatchItem(hash, providerAccountId, "ING", product ?? "ING Konto", product, type,
-                account.Currency, Last4(account.Iban), visible, true, [hash], "private", "enabled")],
+                account.Currency, Last4(account.Iban), visible, true, [hash], "private", "enabled",
+                // Die eigene IBAN: die andere Seite einer Umbuchung nennt sie in ?31, und nur so erkennt die
+                // Umbuchungserkennung beide Buchungen als Bewegung zwischen eigenen Konten.
+                Iban: account.Iban)],
             balances,
             transactions), ct);
         return session;

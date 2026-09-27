@@ -424,6 +424,8 @@ public static class BackendApplication
         builder.Services.AddScoped<AuditStore>();
         builder.Services.AddScoped<MerchantStore>();
         builder.Services.AddScoped<TransferDetectionService>();
+        builder.Services.AddScoped<Mt940TextRepairService>();
+        builder.Services.AddHostedService<Mt940TextRepairWorker>();
         builder.Services.AddScoped<TaxStore>();
         builder.Services.AddScoped<PensionStore>();
         builder.Services.Configure<PensionStorageOptions>(builder.Configuration.GetSection(PensionStorageOptions.SectionName));

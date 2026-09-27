@@ -111,6 +111,7 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
             foreach (var worker in services.Where(descriptor =>
                 descriptor.ServiceType == typeof(IHostedService) &&
                 (descriptor.ImplementationType == typeof(NetWorthSnapshotWorker) ||
+                 descriptor.ImplementationType == typeof(FullWorth.Backend.Modules.Transactions.Mt940TextRepairWorker) ||
                  descriptor.ImplementationType == typeof(FullWorth.Backend.Modules.Fx.FxRateFetchWorker) ||
                  descriptor.ImplementationType == typeof(FullWorth.Backend.Modules.Notifications.ContractDueNotificationWorker) ||
                  descriptor.ImplementationType == typeof(FullWorth.Backend.Modules.Notifications.PropertyAssetNotificationWorker) ||

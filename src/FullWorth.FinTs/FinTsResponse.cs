@@ -531,11 +531,17 @@ internal static class FinTsResponseParser
             var valueDate = match.Groups["value"].Success && booking.HasValue ? ParseMonthDay(booking.Value, match.Groups["value"].Value) : booking;
             if (!TryDecimal(match.Groups["amount"].Value, out var amount)) continue;
             if (match.Groups["dc"].Value == "D") amount = -amount;
-            var desc = match.Groups["desc"].Value.Replace("\n", " ").Trim();
-            var counterparty = ExtractMt940Field(desc, "32") ?? ExtractMt940Field(desc, "33");
-            var keyMaterial = $"{booking:yyyyMMdd}|{valueDate:yyyyMMdd}|{amount}|{currency}|{match.Groups["rest"].Value}|{desc}|{pending}";
+            // Der Schluessel bleibt, wie er war: aus dem Text MIT den Leerzeichen, die das alte Zusammenfuegen an
+            // jeden Zeilenumbruch setzte. Aus dem richtig zerlegten Text gebildet, bekaeme jede gespeicherte
+            // Buchung beim naechsten Abruf einen neuen Schluessel und stuende danach zweimal da.
+            var legacyDesc = match.Groups["desc"].Value.Replace("\n", " ").Trim();
+            var keyMaterial = $"{booking:yyyyMMdd}|{valueDate:yyyyMMdd}|{amount}|{currency}|{match.Groups["rest"].Value}|{legacyDesc}|{pending}";
             var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(keyMaterial)));
-            result.Add(new FinTsTransaction(key, booking, valueDate, amount, currency, counterparty, desc, match.Value.Trim(), pending));
+            // Gelesen wird das Feld zerlegt (FullWorth.Shared.Mt940Information): Name aus ?32/?33, Zweck aus
+            // ?20-?29/?60-?63 hinter SVWZ+ (sonst der Buchungstext ?00), IBAN der Gegenseite aus ?31.
+            var info = FullWorth.Shared.Mt940Information.Parse(match.Groups["desc"].Value);
+            result.Add(new FinTsTransaction(key, booking, valueDate, amount, currency, info.CounterpartyName,
+                info.Purpose ?? info.PostingText, match.Value.Trim(), pending, info.CounterpartyAccount));
         }
         return result;
     }
@@ -556,12 +562,6 @@ internal static class FinTsResponseParser
         var name = values.FirstOrDefault(x => x.Length > 3 && !IsCurrency(x) && !IbanRegex.IsMatch(x) && !BicRegex.IsMatch(x) && !IsinRegex.IsMatch(x) && !TryDecimal(x, out _) && ParseDate(x) is null) ?? isin ?? wkn ?? "Wertpapier";
         var exchange = values.FirstOrDefault(x => x.Length is >= 2 and <= 10 && x.All(char.IsLetter) && !IsCurrency(x) && !string.Equals(x, name, StringComparison.Ordinal));
         return new FinTsHolding(isin, wkn, name, quantity, price, currencies.ElementAtOrDefault(0), date, market, currencies.ElementAtOrDefault(1) ?? currencies.ElementAtOrDefault(0), exchange);
-    }
-
-    private static string? ExtractMt940Field(string text, string id)
-    {
-        var match = Regex.Match(text, $@"\?{Regex.Escape(id)}(?<v>.*?)(?=\?[0-9]{{2}}|$)");
-        return match.Success ? match.Groups["v"].Value.Trim() : null;
     }
 
     private static bool SameAccount(FinTsAccount a, FinTsAccount b)

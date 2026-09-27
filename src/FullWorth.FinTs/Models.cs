@@ -70,7 +70,9 @@ public sealed record FinTsTransaction(
     string? Counterparty,
     string? Description,
     string RawSource,
-    bool Pending = false);
+    bool Pending = false,
+    /// <summary>IBAN oder Kontonummer der Gegenseite (<c>?31</c>) - fuer die Umbuchungserkennung.</summary>
+    string? CounterpartyAccount = null);
 
 public sealed record FinTsHolding(
     string? Isin,
