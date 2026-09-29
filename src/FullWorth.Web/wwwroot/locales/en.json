@@ -133,7 +133,7 @@
     },
     "intelligence": {
       "title": "AI & intelligence",
-      "subtitle": "Local AI settings, cloud connection and brand packs"
+      "subtitle": "Local AI settings and brand packs"
     },
     "coach": {
       "title": "Coach",
@@ -1068,6 +1068,10 @@
     "merge": "Merge",
     "mergeConfirm": "Merge “{name}” into the selected merchant? “{name}” will be removed.",
     "mergeNone": "No other merchant to merge into.",
+    "moreActions": "More actions",
+    "logoWrong": "Logo is wrong",
+    "logoWrongDone": "Logo rejected - it will not come back on its own.",
+    "logoWrongNothing": "There is no self-learned logo on file for this name.",
     "probeTitle": "Check a match",
     "probeHint": "Type the text as it appears on the statement. The longest matching alias wins - the same rule the bookings use.",
     "probeLabel": "Text from the statement",
@@ -1330,8 +1334,8 @@
   "onboarding": {
     "title": "Set up FullWorth",
     "welcome": "Welcome to FullWorth",
-    "intro": "Set up personal access and FullWorth Cloud Intelligence.",
-    "optional": "AI and bank access are optional. Cloud Intelligence is recommended and enabled by default, but can be turned off before finishing and changed later in Settings.",
+    "intro": "Set up your personal access.",
+    "optional": "AI and bank access are optional. FullWorth works out everything essential on its own; you can add or remove either later in Settings.",
     "start": "Start setup",
     "aiTitle": "AI access",
     "aiText": "Choose Codex / ChatGPT, your own OpenAI API key, or a custom OpenAI-compatible endpoint.",
@@ -1346,8 +1350,6 @@
     "back": "Back",
     "finish": "Finish setup",
     "done": "Setup complete. All access settings can still be changed later in Settings.",
-    "cloudTitle": "FullWorth Cloud Intelligence",
-    "cloudText": "Improves merchant, category, and contract mappings collaboratively and enables anonymous benchmarks.",
     "categoriesTitle": "Default categories",
     "categoriesText": "Which language should the built-in categories use? Automatic categorisation keys off the identifier, not the name - you can rename any category later without breaking it.",
     "categoriesGerman": "German (Lebensmittel, Wohnen, Verkehr …)",
@@ -1360,20 +1362,6 @@
     "marketDataYahooHint": "No key needed. Finds securities by ISIN. Unofficial, and for private use.",
     "marketDataCustom": "Custom template",
     "marketDataCustomHint": "Further details (URL, paths, key) are in Settings under Market data."
-  },
-  "cloudIntelligence": {
-    "diagnostics": "Open connection diagnostics (endpoint, queue)",
-    "title": "FullWorth Cloud Intelligence",
-    "manage": "Manage Cloud Intelligence",
-    "loading": "Checking cloud status…",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "explain": "FullWorth uses shared, versioned knowledge for better automatic mappings and aggregate benchmarks.",
-    "shared": "Only required minimized learning and statistical data is shared, such as recognized merchants, category aliases, confirmed provider/product aliases, canonical provider keys for anonymous contract comparisons, pseudonymous merchant keys with aggregated monthly spend, anonymized product prices, aggregated contract costs and savings rate, plus coarse comparison buckets. No individual transactions, complete baskets, income amounts, IBAN, account number, e-mail, user ID, notes, or bank credentials.",
-    "useCloud": "Use FullWorth Cloud Intelligence",
-    "localWins": "Manual decisions and local rules always take precedence over cloud knowledge.",
-    "savedEnabled": "Cloud Intelligence enabled.",
-    "savedDisabled": "Cloud Intelligence disabled."
   },
   "twoFactor": {
     "title": "Two-factor authentication",

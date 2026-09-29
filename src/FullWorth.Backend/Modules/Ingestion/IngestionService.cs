@@ -54,7 +54,6 @@ public sealed class IngestionService(
     FullWorth.Backend.Modules.Notifications.BudgetNotificationService? budgetNotifications = null,
     FinanzguruAccountReconciliationService? finanzguruReconciliation = null,
     IntelligenceDbContext? intelligenceDb = null,
-    CloudOntologyResolver? cloudOntologyResolver = null,
     TransferDetectionService? transferDetection = null)
 {
     private readonly FullWorth.Backend.Security.FieldCipher cipher = fieldCipher ?? FullWorth.Backend.Security.FieldCipher.Null;
@@ -441,21 +440,15 @@ public sealed class IngestionService(
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && !x.IsArchived)
             .Select(x => new { x.Key, x.Name, x.Id })
             .ToListAsync(ct);
+        // Hier erweiterte einmal eine Ontologie aus dem Wissenspaket die Kategorieschluessel um
+        // gelernte Synonyme. Ihre Tabellen hatten nach dem Wegfall der Paketsynchronisation keinen
+        // Schreiber mehr - drei Abfragen je Stapel, die nur noch leer zurueckkommen konnten.
         IReadOnlyDictionary<string, Guid> activeCategoryIdsByKey = activeCategoryRows
             .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
-        if (cloudOntologyResolver is not null && intelligenceDb is not null)
-        {
-            activeCategoryIdsByKey = await cloudOntologyResolver.ExpandCategoryMapAsync(
-                activeCategoryRows
-                    .Select(x => new LocalCategorySemanticCandidate(x.Id, x.Key, x.Name))
-                    .ToList(),
-                country,
-                ct);
-        }
         var activeCategoryIds = activeCategoryRows.Select(x => x.Id).ToArray();
 
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings = Array.Empty<LearnedMerchantCategoryMapping>();
-        IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings = Array.Empty<OfficialMerchantCategoryMapping>();
+        IReadOnlyList<InstanceMerchantCategoryMapping> instanceMappings = Array.Empty<InstanceMerchantCategoryMapping>();
         if (intelligenceDb is not null && activeCategoryIds.Length > 0)
         {
             learnedMappings = await intelligenceDb.LearnedMerchantMappings.AsNoTracking()
@@ -467,13 +460,13 @@ public sealed class IngestionService(
             var normalizedCountry = string.IsNullOrWhiteSpace(country)
                 ? "GLOBAL"
                 : country.Trim().ToUpperInvariant();
-            cloudMappings = await intelligenceDb.OfficialMerchantMappings.AsNoTracking()
+            instanceMappings = await intelligenceDb.InstanceMerchantMappings.AsNoTracking()
                 .Where(x => x.CategoryKey != null &&
                             (x.Country == "GLOBAL" || x.Country == normalizedCountry))
                 .OrderBy(x => x.AliasKey)
                 .ThenBy(x => x.Direction)
                 .ThenByDescending(x => x.Confidence)
-                .Select(x => new OfficialMerchantCategoryMapping(
+                .Select(x => new InstanceMerchantCategoryMapping(
                     x.AliasKey,
                     x.Direction,
                     x.CategoryKey!,
@@ -584,7 +577,7 @@ public sealed class IngestionService(
                 }
 
                 if (entity.CategorizationSource != "manual")
-                    ApplyCategorization(entity, rules, activeCategoryIdsByKey, learnedMappings, cloudMappings);
+                    ApplyCategorization(entity, rules, activeCategoryIdsByKey, learnedMappings, instanceMappings);
             }
         }
         await db.SaveChangesAsync(ct);
@@ -596,14 +589,14 @@ public sealed class IngestionService(
         IReadOnlyList<CategorizationRule> rules,
         IReadOnlyDictionary<string, Guid> activeCategoryIdsByKey,
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings,
-        IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings)
+        IReadOnlyList<InstanceMerchantCategoryMapping> instanceMappings)
     {
         var classification = TransactionRuleEngine.EvaluateWithGermanyCatalog(
             tx,
             rules,
             activeCategoryIdsByKey,
             learnedMappings,
-            cloudMappings);
+            instanceMappings);
         tx.CategoryId = classification.CategoryId;
         tx.IsTransfer = classification.IsTransfer;
         tx.CategorizationSource = classification.Source;

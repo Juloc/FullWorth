@@ -31,5 +31,10 @@
     <!-- Curated reference datasets ship inside the assembly, not as loose files next to it. -->
     <Content Remove="Modules\Compensation\salary-benchmarks-de.json" />
     <EmbeddedResource Include="Modules\Compensation\salary-benchmarks-de.json" LogicalName="FullWorth.Backend.Modules.Compensation.salary-benchmarks-de.json" />
+    <!-- Der mitgelieferte Markenkatalog: ein Manifest und ein SVG je Marke, erzeugt von
+         ops/brand-icons/build.mjs. Ohne den Content Remove liegen sie doppelt im Ausgabeordner. -->
+    <Content Remove="Modules\Intelligence\BrandAssets\**" />
+    <EmbeddedResource Include="Modules\Intelligence\BrandAssets\catalog.json" LogicalName="FullWorth.Backend.Modules.Intelligence.BrandAssets.catalog.json" />
+    <EmbeddedResource Include="Modules\Intelligence\BrandAssets\*.svg" />
   </ItemGroup>
 </Project>

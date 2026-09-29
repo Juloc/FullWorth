@@ -296,7 +296,6 @@ export async function renderContracts(context) {
   // 355 Pixel nach unten; /contracts sprang um 0,117 am Desktop und 0,310 am Telefon. Jetzt warten
   // sie mit, und sichtbar wird alles zusammen.
   //
-  // loadCloudBenchmarks bleibt draußen: sein Feld steht UNTER der Liste, da schiebt nichts.
   const staged = document.createElement('div');
   staged.innerHTML = viewHtml();
   renderList(staged);
@@ -311,7 +310,6 @@ export async function renderContracts(context) {
 
   host.replaceChildren(...staged.childNodes);
   wireControls(host);
-  loadCloudBenchmarks();
 }
 
 // Whole-view markup: top summary card (sum of monthlyEquivalent / annualizedAmount over active
@@ -456,61 +454,7 @@ function viewHtml() {
       ${selectionBar}
       <div class="contracts-list" data-list></div>
     </div>
-    <div id="contracts-cloud-benchmarks" hidden></div>
   </div>`;
-}
-
-function benchmarkLabel(metricKey) {
-  return ({
-    'contract.energy.monthly_cost': t('Strom', 'Electricity'),
-    'contract.internet.monthly_cost': t('Internet & Telefon', 'Internet & phone'),
-    'contract.insurance.monthly_cost': t('Versicherung', 'Insurance'),
-    'contract.insurance.health.monthly_cost': t('Krankenversicherung', 'Health insurance'),
-  })[metricKey] || metricKey;
-}
-
-async function loadCloudBenchmarks() {
-  const box = ctx.$('#contracts-cloud-benchmarks');
-  if (!box) return;
-  try {
-    const result = await ctx.api('api/intelligence/benchmarks/contracts');
-    if (!result?.available || !result.items?.length) {
-      box.hidden = true;
-      box.innerHTML = '';
-      return;
-    }
-
-    const rows = result.items.map(item => {
-      const local = Number(item.localMedian);
-      const median = Number(item.median);
-      const delta = median > 0 ? ((local - median) / median) * 100 : null;
-      const relation = delta == null
-        ? ''
-        : delta > 2
-          ? t(Math.round(delta) + ' % über Median', Math.round(delta) + '% above median')
-          : delta < -2
-            ? t(Math.abs(Math.round(delta)) + ' % unter Median', Math.abs(Math.round(delta)) + '% below median')
-            : t('nahe am Median', 'near median');
-
-      return `<div class="fw-row">
-        <div class="fw-row-main">
-          <div class="fw-row-title">${esc(benchmarkLabel(item.metricKey))}</div>
-          <div class="fw-row-sub">${esc(t('Dein Vertragsmedian', 'Your contract median'))}: ${ctx.money(local, item.currency)} · ${esc(relation)}</div>
-          <div class="fw-row-sub">${esc(t('Cloud-Spanne', 'Cloud range'))}: ${ctx.money(item.p25, item.currency)}–${ctx.money(item.p75, item.currency)} · ${item.distinctInstanceCount} ${esc(t('Instanzen', 'instances'))}</div>
-        </div>
-        <div class="fw-row-amt">${ctx.money(median, item.currency)}<small>${esc(t('Median / Monat', 'median / month'))}</small></div>
-      </div>`;
-    }).join('');
-
-    box.hidden = false;
-    box.innerHTML = sectionCard(
-      t('Vergleich mit FullWorth Cloud', 'Compare with FullWorth Cloud'),
-      `<div class="rows">${rows}</div><div class="row-sub">${esc(t('Nur aggregierte Werte ab mindestens 20 Instanzen.', 'Aggregates only, from at least 20 instances.'))}</div>`,
-      { className: 'contracts-benchmarks' });
-  } catch {
-    box.hidden = true;
-    box.innerHTML = '';
-  }
 }
 
 function wireControls(host) {
@@ -1281,13 +1225,12 @@ function openPaymentsDialog(contract, payments, links) {
 }
 
 async function openDetail(id) {
-  let contract, activity, cancellation, cloudBenchmark, mergedSources, links;
+  let contract, activity, cancellation, mergedSources, links;
   try {
-    [contract, activity, cancellation, cloudBenchmark, mergedSources, links] = await Promise.all([
+    [contract, activity, cancellation, mergedSources, links] = await Promise.all([
       ctx.api(`api/contracts/${id}`),
       ctx.api(`api/contracts/${id}/activity`),
       ctx.api(`api/contracts/${id}/cancellation`).catch(() => null),
-      ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null),
       ctx.api(`api/contracts/${id}/merged-sources`).catch(() => []),
       // Die Verknuepfungen sagen, WARUM eine Buchung in dieser Liste steht - erkannt, importiert oder
       // von Hand zugeordnet - und sind das Einzige, worueber sich eine falsche Zuordnung wieder loesen
@@ -1344,21 +1287,6 @@ async function openDetail(id) {
     [t('Erkennung', 'Detection'), contract.autoDetected ? t('Automatisch', 'Automatic') : t('Manuell', 'Manual')]
   ].filter(Boolean).map(([label, value]) => `<div class="contract-data-row"><span>${ctx.esc(label)}</span><strong>${ctx.esc(value)}</strong></div>`).join('');
 
-  let benchmark = '';
-  if (cloudBenchmark?.available) {
-    const median = Number(cloudBenchmark.median) || 0;
-    const local = Number(cloudBenchmark.localMonthly) || Number(contract.monthlyEquivalent) || 0;
-    const delta = median > 0 ? Math.round(((local - median) / median) * 100) : 0;
-    const relation = Math.abs(delta) <= 2
-      ? t('Nahe am Vergleich', 'Near benchmark')
-      : delta > 0
-        ? t(`${delta} % über Vergleich`, `${delta}% above benchmark`)
-        : t(`${Math.abs(delta)} % unter Vergleich`, `${Math.abs(delta)}% below benchmark`);
-    benchmark = `<section class="contract-detail-card">
-      <div class="contract-insight-row"><span>${ctx.esc(t('Kostenvergleich', 'Cost comparison'))}</span><strong>${ctx.esc(relation)}</strong><span aria-hidden="true">›</span></div>
-    </section>`;
-  }
-
   const sources = (mergedSources || []).map(source => {
     const sourceAccount = source.accountId ? (accountNames.get(source.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
     return `<div class="contract-source-row"><div><strong>${ctx.esc(source.name)}</strong><span>${ctx.esc(sourceAccount)}</span></div><button type="button" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button></div>`;
@@ -1389,8 +1317,6 @@ async function openDetail(id) {
       ${editableDetailRow(t('Zahlungskonto', 'Payment account'), account, 'account')}
       ${editableDetailRow(t('Nächste Fälligkeit', 'Next due date'), next ? ctx.date(next) : '—', 'nextDue')}
     </section>
-
-    ${benchmark}
 
     <div class="contract-section-label">${ctx.esc(t('Buchungen', 'Payments'))}</div>
     <section class="contract-detail-card">

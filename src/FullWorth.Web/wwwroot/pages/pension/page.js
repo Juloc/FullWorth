@@ -15,7 +15,7 @@
 //
 // The document import (step 2) lives in features/pension-documents.js and the projection / variant
 // comparison (step 3) in features/pension-projection.js; both are mounted as tabs here. The manual
-// entry flow in this file stays the supported path on an installation with no Cloud and no AI.
+// entry flow in this file stays the supported path on an installation with no AI.
 //
 // Both mounted modules receive this module's copy (`t`, `label`, `percent`) instead of importing it,
 // so neither pair ever becomes a circular import.

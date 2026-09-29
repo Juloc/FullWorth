@@ -4,7 +4,6 @@ import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 
 // Die drei Nachbarn gehören zu dieser Seite. Statisch importiert, damit beim ersten Besuch nichts
 // nachgeladen wird; sie verdrahten sich beim Laden selbst und laden ihre eigenen Daten.
-import './cloud.js';
 import './brand-packs.js';
 import './jobs.js';
 import { renderIntelligenceDigests } from './digests.js';
@@ -179,6 +178,7 @@ function renderSettings(settings) {
   $('ai-daily').checked = settings.dailyScanEnabled;
   $('ai-weekly').checked = settings.weeklyDeepScanEnabled;
   $('ai-monthly').checked = settings.monthlyReviewEnabled;
+  $('brand-cdn-lookup').checked = settings.brandCdnLookupEnabled;
   renderCredentialOptions(settings.credentialId);
 }
 
@@ -328,6 +328,31 @@ async function reload() {
   }
 }
 
+// Speichert nur diesen einen Schalter - aber ueber dieselbe Route, weil es dieselbe
+// Einstellungszeile ist. Gesendet wird der zuletzt geladene Stand mit genau einem geaenderten Feld;
+// die KI-Felder unten auf der Seite duerfen dabei nicht mitgehen, sonst speichert ein Haken hier
+// unbeabsichtigt eine halbfertige Eingabe dort.
+async function saveBrandCdnLookup() {
+  const result = $('brand-cdn-result');
+  const wanted = $('brand-cdn-lookup').checked;
+  result.textContent = 'Speichert…';
+  try {
+    const saved = await api('/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...overview.settings, brandCdnLookupEnabled: wanted })
+    });
+    overview.settings = saved;
+    result.textContent = wanted
+      ? 'An. Unbekannte Marken werden beim Spiegel nachgeschlagen.'
+      : 'Aus. Es wird nur noch gerechnet, was im Abbild liegt.';
+  } catch (error) {
+    // Zuruecksetzen, nicht stehenlassen: ein Haken, der etwas anderes zeigt als gespeichert ist,
+    // ist schlimmer als eine Fehlermeldung.
+    $('brand-cdn-lookup').checked = !wanted;
+    result.textContent = error.message || 'Speichern fehlgeschlagen.';
+  }
+}
+
 async function saveSettings() {
   const result = $('settings-result');
   result.textContent = 'Speichert…';
@@ -343,6 +368,7 @@ async function saveSettings() {
     dailyScanEnabled: $('ai-daily').checked,
     weeklyDeepScanEnabled: $('ai-weekly').checked,
     monthlyReviewEnabled: $('ai-monthly').checked,
+    brandCdnLookupEnabled: $('brand-cdn-lookup').checked,
     modules: selectedModules()
   };
   try {
@@ -456,6 +482,9 @@ async function refreshAudit() {
 }
 
 $('save-settings').addEventListener('click', saveSettings);
+// Ein einzelner Schalter braucht keinen Speichern-Knopf. Er steht in einem eigenen Panel, weit weg
+// von dem der KI-Einstellungen - ein "Speichern" dort haette bei ihm nicht sichtbar gewirkt.
+$('brand-cdn-lookup').addEventListener('change', saveBrandCdnLookup);
 $('credential-form').addEventListener('submit', addCredential);
 $('run-smoke').addEventListener('click', runSmokeTest);
 $('refresh-suggestions').addEventListener('click', refreshSuggestions);

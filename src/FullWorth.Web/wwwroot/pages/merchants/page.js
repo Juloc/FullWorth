@@ -9,9 +9,6 @@ import { spriteHref } from '../../components/sprite.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
-const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-trash') + '"></use></svg>';
-const editIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-edit') + '"></use></svg>';
-const mergeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-merge') + '"></use></svg>';
 // Line-art storefront for the friendly empty state (monochrome, matches the icon set).
 const storefrontIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="' + spriteHref('ui-store') + '"></use></svg>';
 
@@ -115,24 +112,46 @@ function rowFor(m, all) {
   row.className = 'row merchant-row';
   const chips = (m.aliases || []).map(a =>
     `<span class="chip">${ctx.esc(a.normalizedAlias)}<button type="button" class="${buttonClass(ButtonRole.Icon)}" data-remove-alias="${a.id}" aria-label="${ctx.esc(ctx.get('merchants.removeAlias'))}" title="${ctx.esc(ctx.get('merchants.removeAlias'))}">×</button></span>`).join('');
-  const canMerge = (all || []).length > 1;
+  const moreBtn = `<button type="button" class="${buttonClass(ButtonRole.Icon, 'merchant-more')}" data-more title="${ctx.esc(ctx.get('merchants.moreActions'))}" aria-label="${ctx.esc(ctx.get('merchants.moreActions'))}">⋯</button>`;
   row.innerHTML = `
     ${identityIcon(m.name, { logoAssetPath: m.logoAssetPath })}
     <div class="row-main">
       <div class="row-title">${ctx.esc(m.name)}</div>
       <div class="chips">${chips}<button type="button" class="chip add" data-add-alias>+ ${ctx.esc(ctx.get('merchants.addAlias'))}</button></div>
     </div>
-    <div class="row-side">
-      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-rename aria-label="${ctx.esc(ctx.get('merchants.rename'))}" title="${ctx.esc(ctx.get('merchants.rename'))}">${editIcon}</button>
-      ${canMerge ? `<button type="button" class="${buttonClass(ButtonRole.Icon)}" data-merge aria-label="${ctx.esc(ctx.get('merchants.mergeInto'))}" title="${ctx.esc(ctx.get('merchants.mergeInto'))}">${mergeIcon}</button>` : ''}
-      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-delete aria-label="${ctx.esc(ctx.get('common.delete'))}" title="${ctx.esc(ctx.get('common.delete'))}">${trashIcon}</button>
-    </div>`;
+    <div class="row-side">${moreBtn}</div>`;
   row.querySelector('[data-add-alias]').addEventListener('click', () => addAlias(m));
   row.querySelectorAll('[data-remove-alias]').forEach(b => b.addEventListener('click', () => removeAlias(m, b.dataset.removeAlias)));
-  row.querySelector('[data-rename]').addEventListener('click', () => openRenameDialog(m));
-  row.querySelector('[data-merge]')?.addEventListener('click', () => openMergeDialog(m, all));
-  row.querySelector('[data-delete]').addEventListener('click', () => deleteMerchant(m));
+  row.querySelector('[data-more]').addEventListener('click', () => openMerchantActionsDialog(m, all));
   return row;
+}
+
+// Ein Auslassungszeichen statt vier einzelner Symbolknoepfe (rename/merge/logo-korrektur/loeschen) -
+// eine gedraengte Zeile bekommt eine Zusammenfassung, kein fuenftes Icon. Dieselbe Form wie
+// pages/accounts/page.js: ein Bogen mit einer Liste, keine schwebende Auswahl.
+function openMerchantActionsDialog(m, all) {
+  const canMerge = (all || []).length > 1;
+  const actions = [
+    ['rename', ctx.get('merchants.rename'), false],
+    ...(canMerge ? [['merge', ctx.get('merchants.mergeInto'), false]] : []),
+    ['logo-wrong', ctx.get('merchants.logoWrong'), false],
+    ['delete', ctx.get('common.delete'), true]
+  ];
+  const dlg = ctx.dialog(`<div class="dialog-card more-sheet">
+    <div class="panel-head"><h2>${ctx.esc(m.name)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="more-list">${actions.map(([key, label, danger]) => `<button type="button" data-merchant-action="${key}" class="${danger ? 'more-list-danger' : ''}"><span>${ctx.esc(label)}</span></button>`).join('')}</div>
+  </div>`, { mobileMode: 'sheet' });
+
+  dlg.querySelector('[data-close]')?.addEventListener('click', () => dlg.close());
+  dlg.querySelectorAll('[data-merchant-action]').forEach(button => button.addEventListener('click', () => {
+    const action = button.dataset.merchantAction;
+    dlg.close();
+    if (action === 'rename') openRenameDialog(m);
+    else if (action === 'merge') openMergeDialog(m, all);
+    else if (action === 'logo-wrong') rejectLogo(m);
+    else if (action === 'delete') deleteMerchant(m);
+  }));
+  dlg.showModal();
 }
 
 function openMerchantDialog() {
@@ -230,5 +249,27 @@ async function deleteMerchant(m) {
   try {
     await ctx.api(`api/merchants/${m.id}`, { method: 'DELETE' });
     ctx.toast(ctx.get('common.deleted')); await renderMerchants(ctx);
+  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+}
+
+// "Logo ist falsch" (#176 Korrektur). Der Server entscheidet, welche Zeile das ist - die
+// Oberflaeche kennt nur den Namen, unter dem sie gerade ein Logo zeigt (oder auch nicht). Ein
+// abgelehntes Logo kommt nie von selbst zurueck: siehe BrandLogoResearchService.RejectAsync.
+async function rejectLogo(m) {
+  try {
+    const result = await ctx.api('api/intelligence/brands/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: m.name })
+    });
+    if (result?.outcome === 'nothing_to_reject') {
+      ctx.toast(ctx.get('merchants.logoWrongNothing'));
+      return;
+    }
+    // Der Katalog liegt bis zu sechs Stunden im Zwischenspeicher - ohne den erzwungenen Neuabruf
+    // saehe man die abgelehnte Marke noch bis dahin weiter.
+    await ensureOfficialBrandCatalog(ctx.api, true);
+    ctx.toast(ctx.get('merchants.logoWrongDone'));
+    await renderMerchants(ctx);
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
 }

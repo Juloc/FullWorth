@@ -133,7 +133,7 @@
     },
     "intelligence": {
       "title": "AI & Intelligence",
-      "subtitle": "Lokale KI-Einstellungen, Cloud-Anbindung und Marken-Pakete"
+      "subtitle": "Lokale KI-Einstellungen und Marken-Pakete"
     },
     "coach": {
       "title": "Coach",
@@ -1068,6 +1068,10 @@
     "merge": "Zusammenführen",
     "mergeConfirm": "„{name}\" mit dem ausgewählten Händler zusammenführen? „{name}\" wird entfernt.",
     "mergeNone": "Kein anderer Händler zum Zusammenführen vorhanden.",
+    "moreActions": "Weitere Aktionen",
+    "logoWrong": "Logo ist falsch",
+    "logoWrongDone": "Logo abgelehnt - es kommt nicht von selbst zurück.",
+    "logoWrongNothing": "Für diesen Namen ist kein selbst gelerntes Logo hinterlegt.",
     "probeTitle": "Zuordnung prüfen",
     "probeHint": "Text so eingeben, wie er auf dem Kontoauszug steht. Zugeordnet wird immer der längste passende Alias - dieselbe Regel, die auch die Buchungen benutzen.",
     "probeLabel": "Text vom Kontoauszug",
@@ -1330,8 +1334,8 @@
   "onboarding": {
     "title": "FullWorth einrichten",
     "welcome": "Willkommen bei FullWorth",
-    "intro": "Richte persönliche Zugänge und FullWorth Cloud Intelligence ein.",
-    "optional": "KI- und Bankzugang sind optional. Cloud Intelligence ist empfohlen und standardmäßig aktiviert, kann aber vor Abschluss abgewählt und später in den Einstellungen geändert werden.",
+    "intro": "Richte deine persönlichen Zugänge ein.",
+    "optional": "KI- und Bankzugang sind optional. FullWorth rechnet alles Wesentliche selbst; beides lässt sich später in den Einstellungen nachtragen oder wieder abschalten.",
     "start": "Einrichtung starten",
     "aiTitle": "KI-Zugang",
     "aiText": "Wähle Codex / ChatGPT, einen eigenen OpenAI API-Key oder einen eigenen OpenAI-kompatiblen Endpoint.",
@@ -1346,8 +1350,6 @@
     "back": "Zurück",
     "finish": "Einrichtung abschließen",
     "done": "Einrichtung abgeschlossen. Alle Zugänge bleiben später in den Einstellungen änderbar.",
-    "cloudTitle": "FullWorth Cloud Intelligence",
-    "cloudText": "Verbessert Händler-, Kategorie- und Vertragszuordnungen gemeinsam und ermöglicht anonyme Vergleichswerte.",
     "categoriesTitle": "Standardkategorien",
     "categoriesText": "In welcher Sprache sollen die mitgelieferten Kategorien heißen? Die automatische Zuordnung hängt am Schlüssel, nicht am Namen – du kannst jede Kategorie später umbenennen, ohne dass etwas kaputtgeht.",
     "categoriesGerman": "Deutsch (Lebensmittel, Wohnen, Verkehr …)",
@@ -1360,20 +1362,6 @@
     "marketDataYahooHint": "Ohne Schlüssel. Findet Papiere über die ISIN. Inoffiziell und für den privaten Gebrauch.",
     "marketDataCustom": "Eigene Vorlage",
     "marketDataCustomHint": "Weitere Angaben (URL, Pfade, Schlüssel) in den Einstellungen unter Marktdaten."
-  },
-  "cloudIntelligence": {
-    "diagnostics": "Verbindungsdiagnose öffnen (Endpunkt, Warteschlange)",
-    "title": "FullWorth Cloud Intelligence",
-    "manage": "Cloud Intelligence verwalten",
-    "loading": "Cloud-Status wird geprüft…",
-    "enabled": "Aktiv",
-    "disabled": "Deaktiviert",
-    "explain": "FullWorth nutzt gemeinsames, versioniertes Wissen für bessere automatische Zuordnungen und Vergleichswerte.",
-    "shared": "Geteilt werden nur benötigte, minimierte Lern- und Statistikdaten, z. B. erkannte Händler, Kategorie-Aliase, bestätigte Provider-/Produkt-Aliase, kanonische Provider-Schlüssel für anonyme Vertragsvergleiche, pseudonyme Merchant-Schlüssel mit aggregierten Monatsausgaben, anonymisierte Produktpreise, aggregierte Vertragskosten und Sparquote sowie grobe Vergleichs-Buckets. Keine einzelnen Buchungen, vollständigen Warenkörbe, Einkommensbeträge, IBAN, Kontonummer, E-Mail, Benutzer-ID, Notizen oder Bankzugangsdaten.",
-    "useCloud": "FullWorth Cloud Intelligence verwenden",
-    "localWins": "Manuelle Entscheidungen und lokale Regeln haben immer Vorrang vor Cloud-Wissen.",
-    "savedEnabled": "Cloud Intelligence aktiviert.",
-    "savedDisabled": "Cloud Intelligence deaktiviert."
   },
   "twoFactor": {
     "title": "Zwei-Faktor-Authentifizierung",

@@ -6,9 +6,9 @@ namespace FullWorth.Web.Tests;
 ///
 /// <c>POST /api/category-intelligence/learn</c> stand fertig im Baum und hatte keinen Aufrufer.
 /// Teuer war der Fund nicht wegen der fehlenden Oberflaeche, sondern wegen dessen, was daran haengt:
-/// bei <c>scope=future</c> - und NUR dort - meldet der Server die bestaetigte
-/// Haendler-zu-Kategorie-Zuordnung an die Cloud weiter. „REWE ist Lebensmittel" gilt fuer jeden;
-/// „diese eine Buchung gehoert zu Urlaub" gilt nur hier.
+/// bei <c>scope=future</c> - und NUR dort - merkt der Server die bestaetigte
+/// Haendler-zu-Kategorie-Zuordnung als verallgemeinerbar vor. „REWE ist Lebensmittel" gilt fuer
+/// jeden; „diese eine Buchung gehoert zu Urlaub" gilt nur hier.
 /// </summary>
 public sealed class LearnCategoryUiTests
 {

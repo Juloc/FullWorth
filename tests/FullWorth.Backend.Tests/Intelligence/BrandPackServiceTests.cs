@@ -130,8 +130,75 @@ public sealed class BrandPackServiceTests
                 [new CustomBrandAssetImport("unsafe", "Unsafe", null, "image/svg+xml", unsafeSvg, null, null, null, null)],
                 [new CustomBrandAliasImport("UNSAFE", "unsafe", null)]), CancellationToken.None));
 
-        Assert.Equal("knowledge_pack_brand_svg_unsafe", ex.Message);
+        Assert.Equal("brand_svg_unsafe", ex.Message);
         Assert.Empty(await db.CustomBrandPacks.ToListAsync());
         Assert.Empty(await db.BrandAssetBlobs.ToListAsync());
+    }
+
+    /// <summary>
+    /// Der Blob-Speicher ist inhaltsadressiert und hat keine Besitzerspalte. Wer beim Aufraeumen eine
+    /// der Quellen vergisst, loescht die Bytes eines Logos, dessen Zeile stehenbleibt - und der
+    /// Katalog laesst es danach still weg, ohne dass irgendwo etwas fehlschlaegt.
+    ///
+    /// Genau das passierte selbst recherchierten Logos: sie wurden nicht mitgezaehlt und verloren
+    /// nach dreissig Tagen ihre Bytes. Dieser Test haelt alle drei Quellen fest.
+    /// </summary>
+    [Fact]
+    public async Task Pruning_keeps_a_blob_that_any_of_the_three_sources_still_references()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
+        await using var db = new IntelligenceDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var stale = DateTimeOffset.UtcNow.AddDays(-40);
+        string Add(string marker)
+        {
+            var bytes = Encoding.UTF8.GetBytes(
+                $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 4 4\"><title>{marker}</title></svg>");
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            db.BrandAssetBlobs.Add(new BrandAssetBlob
+            {
+                ContentSha256 = hash,
+                MediaType = "image/svg+xml",
+                ByteLength = bytes.Length,
+                Content = bytes,
+                LastUsedAt = stale
+            });
+            return hash;
+        }
+
+        var bundled = Add("bundled");
+        var custom = Add("custom");
+        var researched = Add("researched");
+        var orphan = Add("orphan");
+
+        db.OfficialBrandAssets.Add(new OfficialBrandAsset
+        {
+            BrandKey = "bundled", CanonicalName = "Bundled", LogoKey = "bundled",
+            ContentSha256 = bundled, ByteLength = 1
+        });
+        var pack = new CustomBrandPack { Name = "Eigenes" };
+        db.CustomBrandPacks.Add(pack);
+        db.CustomBrandAssets.Add(new CustomBrandAsset
+        {
+            PackId = pack.Id, BrandKey = "custom", CanonicalName = "Custom", LogoKey = "custom",
+            ContentSha256 = custom, ByteLength = 1
+        });
+        db.ResearchedBrandAssets.Add(new ResearchedBrandAsset
+        {
+            BrandKey = "researched", CanonicalName = "Researched", LogoKey = "researched",
+            ContentSha256 = researched, ByteLength = 1
+        });
+        await db.SaveChangesAsync();
+
+        await new BrandPackService(db).PruneUnreferencedBlobsAsync(CancellationToken.None);
+
+        var left = await db.BrandAssetBlobs.Select(x => x.ContentSha256).ToListAsync();
+        Assert.Contains(bundled, left);
+        Assert.Contains(custom, left);
+        Assert.Contains(researched, left);
+        Assert.DoesNotContain(orphan, left);
     }
 }

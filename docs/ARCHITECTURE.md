@@ -5,7 +5,7 @@
 Related documents: [Security architecture](SECURITY_ARCHITECTURE.md) (trust boundaries, auth),
 [Frontend architecture](FRONTEND_ARCHITECTURE.md) (the `wwwroot` contract),
 [Migrations](MIGRATIONS.md) (schema history and the Wave-B space migration),
-[Cloud](CLOUD.md) (the FullWorth Cloud client), [Operations](OPERATIONS.md), [Release](RELEASE.md).
+[Brand assets](BRAND_ASSETS.md) (the bundled logo catalogue), [Operations](OPERATIONS.md), [Release](RELEASE.md).
 
 ## One process, three modules
 
@@ -162,7 +162,7 @@ PostgreSQL database. Three `DbContext`s share it, each with its own migration hi
 | Context | Project | Tables | History table |
 | --- | --- | --- | --- |
 | `FullWorthDbContext` | Backend/Data | financial source of truth, 50 `DbSet`s | `public.__EFMigrationsHistory` |
-| `IntelligenceDbContext` | Backend/Modules/Intelligence | AI, cloud, knowledge-pack, brand and signal metadata | `public.__EFMigrationsHistory_Intelligence` |
+| `IntelligenceDbContext` | Backend/Modules/Intelligence | AI, brand, job and signal metadata | `public.__EFMigrationsHistory_Intelligence` |
 | `AuthDbContext` | Web/Data | ASP.NET Identity, sessions, passkeys, recovery | `auth.__EFMigrationsHistory` (schema `auth`) |
 
 The split is deliberate: `IntelligenceDbContext` documents itself as holding

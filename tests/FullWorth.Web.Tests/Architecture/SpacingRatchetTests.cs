@@ -45,7 +45,7 @@ public sealed class SpacingRatchetTests
         ["pages/rules/page.css"] = 11,
         ["pages/settings/import/finanzguru/xlsx/page.css"] = 30,
         ["pages/settings/import/page.css"] = 26,
-        ["pages/settings/intelligence/page.css"] = 58,
+        ["pages/settings/intelligence/page.css"] = 31,
         ["pages/settings/page.css"] = 3,
         ["pages/tax/page.css"] = 42,
         ["pages/transactions/page.css"] = 35,

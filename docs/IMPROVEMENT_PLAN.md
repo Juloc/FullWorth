@@ -1,5 +1,10 @@
 # Improvement plan — closed record, 2026-09-14
 
+> **2026-09-26: die FullWorth Cloud ist abgeschafft.** Jede Erwähnung unten — die
+> `FullWorthCloud:BaseUrl`-Defekte, die Wissenspakete, der angeheftete Signaturschlüssel — ist
+> Geschichte und beschreibt nichts, was es noch gibt. Was an ihre Stelle trat, steht in
+> [BRAND_ASSETS.md](BRAND_ASSETS.md).
+
 **This plan is finished and nothing new goes in it.** All thirty items are resolved except one, and that
 one is now [#109](https://github.com/Juloc/FullWorth/issues/109) — it waits on a row from a running
 instance, not on code. New work belongs in GitHub Issues (#102).

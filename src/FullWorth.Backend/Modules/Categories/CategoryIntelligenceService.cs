@@ -158,7 +158,7 @@ public sealed class CategoryIntelligenceService(
         {
             await feedback.RecordMerchantMappingConfirmedAsync(
                 space, userId, merchant, direction, category.Key, category.Name,
-                "merchant_rule_confirmed", ct, categoryIsCustom: !category.IsSystem);
+                "merchant_rule_confirmed", ct);
         }
 
         return new LearnResult(affected.Count, ruleId);

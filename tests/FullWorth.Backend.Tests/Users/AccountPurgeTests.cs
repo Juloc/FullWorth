@@ -53,32 +53,6 @@ public sealed class AccountPurgeTests
             string.Join(", ", unclassified.Select(x => x.EntityType.ClrType.Name)));
     }
 
-    /// <summary>
-    /// The queued Cloud submissions of a deleted user are personal data, and must not be filed away as
-    /// instance data because they happen to have no UserId column.
-    ///
-    /// CloudSubmissionOutbox is reached through its FeedbackEventId - AccountPurgeService resolves the
-    /// user's feedback events first and deletes by that. To the ownership heuristics it therefore looks
-    /// exactly like an instance table, and classifying it as one would leave a queued submission about
-    /// a deleted user's finances in the database: a retention regression that nothing else would catch.
-    /// </summary>
-    [Fact]
-    public async Task Queued_cloud_submissions_are_classified_as_personal_not_as_instance_data()
-    {
-        using var factory = new BackendWebApplicationFactory();
-        using var client = factory.CreateClient();
-        await using var scope = factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
-
-        var outbox = PersonalDataPurgeManifest
-            .Describe(db.Model)
-            .Single(x => x.EntityType.ClrType == typeof(CloudSubmissionOutbox));
-
-        Assert.True(outbox.IsDeletedWithRelatedRoot);
-        Assert.False(outbox.IsInstanceScoped);
-        Assert.False(outbox.IsGlobalAnonymous);
-    }
-
     [Fact]
     public async Task PurgeSoleMemberSpace_RemovesSpaceDataAndLeavesUniqueTombstone()
     {

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FullWorth.Backend.Modules.Intelligence;
 
 public sealed record UpdateCustomBrandPackStateRequest(bool Enabled);
+public sealed record RejectBrandLogoRequest(string Name);
 
 /// <summary>
 /// Brand identities are resolved from verified local data only. Official assets arrive through signed
@@ -20,13 +21,10 @@ public static class BrandCatalogEndpoints
             CancellationToken ct) =>
         {
             _ = currentUser.RequireUserId();
-            var installation = await db.KnowledgePackInstallations.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.ScopeKey == KnowledgePackProtocol.InstallationScopeKey, ct);
             var catalog = await brandPacks.GetEffectiveCatalogAsync(ct);
 
             return Results.Ok(new
             {
-                packVersion = installation?.Version,
                 assets = catalog.Assets.Select(x => new
                 {
                     x.BrandKey,
@@ -66,7 +64,7 @@ public static class BrandCatalogEndpoints
             {
                 _ = BrandAssetVerifier.VerifySvg(bytes, blob.MediaType, hash, blob.ByteLength);
             }
-            catch (KnowledgePackVerificationException)
+            catch (BrandAssetVerificationException)
             {
                 return Results.NotFound();
             }
@@ -74,6 +72,27 @@ public static class BrandCatalogEndpoints
             http.Response.Headers.ETag = $"\"{hash}\"";
             http.Response.Headers.CacheControl = "private, max-age=31536000, immutable";
             return Results.Bytes(bytes, blob.MediaType);
+        });
+
+        // "Logo ist falsch" (#176 Korrektur): keine Admin-Freigabe noetig, genau wie das Lesen des
+        // Katalogs oben - wer ein falsches Logo sieht, darf es abstellen. Was das anlegt und warum
+        // es nie von selbst zurueckkommt, steht bei BrandLogoResearchService.RejectAsync.
+        app.MapPost("/api/intelligence/brands/reject", async (
+            RejectBrandLogoRequest request,
+            CurrentUserContext currentUser,
+            IntelligenceDbContext db,
+            BrandLogoResearchService research,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            var name = request.Name?.Trim() ?? string.Empty;
+            if (name.Length is 0 or > 300) return Results.BadRequest(new { error = "invalid_name" });
+
+            var outcome = await research.RejectAsync(name, ct);
+            if (outcome == BrandLogoResearchService.OutcomeRejected)
+                IntelligenceAuditWriter.Record(db, userId, "brand_logo.rejected", "ResearchedBrandAlias", null);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { outcome });
         });
 
         var custom = app.MapGroup("/api/intelligence/admin/brand-packs/custom")

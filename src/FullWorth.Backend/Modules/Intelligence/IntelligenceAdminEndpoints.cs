@@ -15,6 +15,11 @@ public sealed record AiInstanceSettingsView(
     bool DailyScanEnabled,
     bool WeeklyDeepScanEnabled,
     bool MonthlyReviewEnabled,
+    /// <summary>
+    /// Darf ein selbst ausgerechneter Marken-Kurzname beim Icon-Spiegel nachgeschlagen werden?
+    /// Keine KI-Einstellung - die Sprosse laeuft ohne Anbieter und ohne Tokens.
+    /// </summary>
+    bool BrandCdnLookupEnabled,
     /// <summary>Wofuer der eingetragene Zugang arbeiten darf - siehe <see cref="AiModules"/>.</summary>
     IReadOnlyList<string> Modules,
     /// <summary>Alles, was freigegeben werden KANN. Die Oberflaeche baut daraus ihre Liste,
@@ -34,6 +39,7 @@ public sealed record UpdateAiInstanceSettingsRequest(
     bool DailyScanEnabled,
     bool WeeklyDeepScanEnabled,
     bool MonthlyReviewEnabled,
+    bool BrandCdnLookupEnabled,
     IReadOnlyList<string>? Modules);
 
 public sealed record CreateAiCredentialRequest(string Provider, string Name, string Secret);
@@ -73,154 +79,6 @@ public static class IntelligenceAdminEndpoints
                 todayCostEur = todayCost,
                 monthlyCostEur = monthCost
             });
-        });
-
-        group.MapGet("/cloud", async (
-            CurrentUserContext currentUser,
-            IntelligenceAdminAuthorizer authorizer,
-            CloudIntelligenceStateService cloudState,
-            CancellationToken ct) =>
-        {
-            if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-            return Results.Ok(await cloudState.GetAsync(ct));
-        });
-
-        group.MapPost("/cloud/enable", async (
-            EnableCloudIntelligenceRequest request,
-            CurrentUserContext currentUser,
-            IntelligenceAdminAuthorizer authorizer,
-            IntelligenceDbContext db,
-            CloudIntelligenceStateService cloudState,
-            IFullWorthCloudClient cloud,
-            CloudInstanceCredentialStore credentialStore,
-            CancellationToken ct) =>
-        {
-            var actorUserId = await GetAdminUserIdAsync(currentUser, authorizer, ct);
-            if (actorUserId is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-            try
-            {
-                var state = await cloudState.EnableAsync(actorUserId.Value, request, ct);
-                IntelligenceAuditWriter.Record(db, actorUserId.Value, "cloud.enabled", "CloudConnectionState", outcome: CloudIntelligencePolicy.CurrentVersion);
-                await db.SaveChangesAsync(ct);
-
-                // Registration is best-effort. Enabling Cloud Intelligence must never make setup fail
-                // because the platform is temporarily unavailable; the outbox will retry later.
-                try
-                {
-                    var registration = await cloud.RegisterAsync(
-                        state.InstanceId,
-                        CloudIntelligencePolicy.CurrentVersion,
-                        request.ClientVersion ?? "unknown",
-                        null,
-                        ct);
-                    await credentialStore.SaveAsync(registration, ct);
-                    await cloudState.SetTransportStatusAsync(
-                        state.InstanceId, null, registration.EntitlementStatus,
-                        DateTimeOffset.UtcNow, null, ct);
-                }
-                catch (FullWorthCloudException ex)
-                {
-                    await cloudState.SetTransportStatusAsync(
-                        state.InstanceId, ex.ErrorCode, null, null, null, ct);
-                }
-
-                return Results.Ok(await cloudState.GetAsync(ct));
-            }
-            catch (ArgumentException ex)
-            {
-                return Results.Conflict(new
-                {
-                    error = "cloud_policy_stale",
-                    message = ex.Message,
-                    currentPolicyVersion = CloudIntelligencePolicy.CurrentVersion
-                });
-            }
-        });
-
-        group.MapPost("/cloud/disable", async (
-            CurrentUserContext currentUser,
-            IntelligenceAdminAuthorizer authorizer,
-            IntelligenceDbContext db,
-            CloudIntelligenceStateService cloudState,
-            CancellationToken ct) =>
-        {
-            var actorUserId = await GetAdminUserIdAsync(currentUser, authorizer, ct);
-            if (actorUserId is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var state = await cloudState.DisableAsync(actorUserId.Value, ct);
-            IntelligenceAuditWriter.Record(db, actorUserId.Value, "cloud.disabled", "CloudConnectionState", outcome: "revoked");
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(state);
-        });
-
-        // Which pack verification key this installation trusts, and where it came from. Normally there
-        // is nothing to do here: the key is pinned automatically on first contact with the Cloud. It
-        // becomes interesting exactly once — when the Cloud starts signing with a different key, which
-        // this refuses to adopt on its own.
-        group.MapGet("/cloud/pack-key", async (
-            CurrentUserContext currentUser,
-            IntelligenceAdminAuthorizer authorizer,
-            KnowledgePackTrustStore trust,
-            CancellationToken ct) =>
-        {
-            if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null)
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            return Results.Ok(await trust.GetViewAsync(ct));
-        });
-
-        // Accepting a rotated Cloud signing key. Deliberately a person's decision and an audited one:
-        // the pin is the whole reason a swapped key cannot quietly make this installation trust another
-        // publisher's packs, so nothing automatic may move it.
-        group.MapPost("/cloud/pack-key/accept", async (
-            CurrentUserContext currentUser,
-            IntelligenceAdminAuthorizer authorizer,
-            IntelligenceDbContext db,
-            CloudIntelligenceStateService cloudState,
-            CloudInstanceCredentialStore credentialStore,
-            KnowledgePackTrustStore trust,
-            CancellationToken ct) =>
-        {
-            var actorUserId = await GetAdminUserIdAsync(currentUser, authorizer, ct);
-            if (actorUserId is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-
-            var state = await cloudState.GetEnabledStateAsync(ct);
-            var credential = state is null ? null : await credentialStore.GetSecretAsync(state.InstanceId, ct);
-            if (string.IsNullOrWhiteSpace(credential))
-                return Results.Conflict(new { error = "cloud_credential_missing" });
-
-            KnowledgePackTrustView view;
-            try
-            {
-                view = await trust.AcceptOfferedKeyAsync(credential, ct);
-            }
-            catch (InvalidOperationException)
-            {
-                return Results.Conflict(new { error = "knowledge_pack_public_key_missing" });
-            }
-
-            IntelligenceAuditWriter.Record(
-                db, actorUserId.Value, "cloud.pack_key_pinned", "KnowledgePackTrustedKey",
-                outcome: view.Fingerprint);
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(view);
-        });
-
-        group.MapPost("/cloud/sync", async (
-            CurrentUserContext currentUser,
-            IntelligenceAdminAuthorizer authorizer,
-            CloudContractBenchmarkContributionService contractBenchmarks,
-            CloudSavingsBenchmarkContributionService savingsBenchmarks,
-            CloudLearningOutboxUploader uploader,
-            KnowledgePackSyncService knowledgePacks,
-            CancellationToken ct) =>
-        {
-            if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null)
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var now = DateTimeOffset.UtcNow;
-            var contractBenchmarksQueued = await contractBenchmarks.QueueCurrentAsync(now, ct);
-            var savingsBenchmarksQueued = await savingsBenchmarks.QueueCurrentAsync(now, ct);
-            var sent = await uploader.UploadOnceAsync(ct);
-            var pack = await knowledgePacks.SyncOnceAsync(ct);
-            return Results.Ok(new { contractBenchmarksQueued, savingsBenchmarksQueued, sent, pack });
         });
 
         group.MapGet("/providers", async (
@@ -278,7 +136,8 @@ public static class IntelligenceAdminEndpoints
                     MonthlyBudgetEur = request.MonthlyBudgetEur,
                     DailyScanEnabled = request.DailyScanEnabled,
                     WeeklyDeepScanEnabled = request.WeeklyDeepScanEnabled,
-                    MonthlyReviewEnabled = request.MonthlyReviewEnabled
+                    MonthlyReviewEnabled = request.MonthlyReviewEnabled,
+                    BrandCdnLookupEnabled = request.BrandCdnLookupEnabled
                 }, request.Modules ?? [], ct);
                 IntelligenceAuditWriter.Record(db, actorUserId.Value, "settings.updated", "AiInstanceSettings", saved.Id);
                 await db.SaveChangesAsync(ct);
@@ -475,6 +334,7 @@ public static class IntelligenceAdminEndpoints
         x.DailyScanEnabled,
         x.WeeklyDeepScanEnabled,
         x.MonthlyReviewEnabled,
+        x.BrandCdnLookupEnabled,
         modules,
         AiModules.All,
         x.UpdatedAt);

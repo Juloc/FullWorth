@@ -66,6 +66,22 @@ public sealed class AiInstanceSettings
     public bool DailyScanEnabled { get; set; }
     public bool WeeklyDeepScanEnabled { get; set; }
     public bool MonthlyReviewEnabled { get; set; }
+
+    /// <summary>
+    /// Darf die Instanz einen selbst ausgerechneten Marken-Kurznamen beim Icon-Spiegel
+    /// nachschlagen? Siehe <see cref="Brands.SimpleIconsCdnFetcher"/> fuer das, was dabei die
+    /// Maschine verlaesst.
+    ///
+    /// Das ist bewusst KEINE KI-Einstellung und haengt an keinem Zugang - die Sprosse laeuft ohne
+    /// Anbieter und ohne Tokens. Sie sitzt hier, weil dies die Einstellungszeile der Instanz ist
+    /// und eine zweite Tabelle fuer einen Schalter schlimmer waere als ein Feld an einer Stelle,
+    /// deren Name etwas zu eng ist.
+    ///
+    /// Standardmaessig <b>an</b>: die ausdrueckliche Entscheidung ist, dass eine Instanz immer
+    /// zuerst selbst sucht.
+    /// </summary>
+    public bool BrandCdnLookupEnabled { get; set; } = true;
+
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -149,6 +165,19 @@ public sealed class IntelligenceSuggestion
     public DateTimeOffset? ReviewedAt { get; set; }
     public Guid? ReviewedByUserId { get; set; }
     public Guid? RunId { get; set; }
+
+    /// <summary>
+    /// Die eine Zustandsaenderung, die jede Annahme teilt - egal ob sie in
+    /// <see cref="IntelligenceSuggestionReviewService"/> selbst passiert oder in einem
+    /// <see cref="IIntelligenceSuggestionAcceptor"/> ausserhalb dieses Moduls. Hier statt zweimal
+    /// geschrieben, damit sie nicht auseinanderlaufen.
+    /// </summary>
+    public void MarkAccepted(Guid actorUserId, DateTimeOffset now)
+    {
+        Status = IntelligenceSuggestionStatuses.Accepted;
+        ReviewedAt = now;
+        ReviewedByUserId = actorUserId;
+    }
 }
 
 public sealed class IntelligenceFeedbackEvent
@@ -163,7 +192,7 @@ public sealed class IntelligenceFeedbackEvent
     public string OldValueJson { get; set; } = "{}";
     public string NewValueJson { get; set; } = "{}";
     public string Source { get; set; } = "user";
-    public bool CloudEligible { get; set; }
+    public bool Generalizable { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -276,7 +305,7 @@ public static class IntelligenceModelConfiguration
         b.Entity<IntelligenceFeedbackEvent>(e =>
         {
             e.HasIndex(x => new { x.FullWorthSpaceId, x.CreatedAt });
-            e.HasIndex(x => new { x.CloudEligible, x.CreatedAt });
+            e.HasIndex(x => new { x.Generalizable, x.CreatedAt });
             e.Property(x => x.EventType).HasMaxLength(80);
             e.Property(x => x.SubjectType).HasMaxLength(80);
             e.Property(x => x.SubjectId).HasMaxLength(160);

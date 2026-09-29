@@ -12,7 +12,6 @@ Issues — not in a document.
 - [Migrations](MIGRATIONS.md) — how the schema really changes
 - [Import](IMPORT.md) — every importer, what it parses, and what it persists
 - [Banking](BANKING.md) — Enable Banking and FinTS, sync cadence, health states, live validation
-- [Cloud](CLOUD.md) — enrollment, observation outbox, knowledge packs, benchmarks, brand packs
 - [AI Autopilot](AI_AUTOPILOT.md) — Coach, Intelligence, the Codex bridge and behaviour without AI
 - [Compensation analyzer](COMPENSATION_ANALYZER.md) — the German payroll engine
 - [Occupational pension](PENSION.md) — the bAV data model, what it reuses, and the money-direction rule

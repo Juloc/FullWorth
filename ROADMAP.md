@@ -11,7 +11,7 @@ FullWorth is a self-hosted personal finance application for individuals and shar
 - Compensation (Gehalt & Benefits), payslips and salary comparison
 - Analytics, spending reviews and multi-currency (FX) conversion
 - Tax assistant with year reviews and tax export (Germany)
-- AI coach and intelligence suggestions, with optional cloud benchmarks
+- AI coach and intelligence suggestions, entirely on this instance
 - Notifications and web push
 - Data export and portable backups
 - Password and passkey sign-in, sessions, recovery codes and sharing

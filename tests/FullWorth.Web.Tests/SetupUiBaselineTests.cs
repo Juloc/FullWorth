@@ -136,9 +136,9 @@ public sealed class SetupUiBaselineTests
         Assert.Contains("[data-start]').onclick = categoryStep", wizard);
         // Die Zaehlung ist seit components/wizard.js kein literaler String im Schritt-Markup mehr,
         // sondern ein {step, total}-Paar, das der gemeinsame Baustein selbst zu "N / M" rendert.
-        Assert.Contains("{ step: 1, total: 5 }", wizard);
-        Assert.Contains("{ step: 2, total: 5 }", wizard);
-        Assert.Contains("{ step: 3, total: 5 }", wizard);
+        Assert.Contains("{ step: 1, total: 4 }", wizard);
+        Assert.Contains("{ step: 2, total: 4 }", wizard);
+        Assert.Contains("{ step: 3, total: 4 }", wizard);
         Assert.DoesNotContain("setup-progress", wizard);
 
         // Gesperrt heisst gesperrt: keine Auswahl, keine Anfrage, aber eine Begruendung.
@@ -155,14 +155,19 @@ public sealed class SetupUiBaselineTests
     }
 
     /// <summary>
-    /// Kursdaten sind der neue vierte Schritt zwischen Bank- und Cloud-Zugang (5 statt 4 insgesamt).
+    /// Kursdaten sind der letzte Schritt des Assistenten, der vierte von vier. Er war einmal der
+    /// vierte von fuenf, danach kam die Cloud-Zustimmung - die es nicht mehr gibt.
+    ///
     /// GET /auth/admin/instance-settings ist admin-only, laeuft aber fuer jede neu registrierte
-    /// Person - eine Nicht-Admin-Person bekommt 403 und darf nie einen leeren/kaputten Schritt sehen,
-    /// sondern muss direkt bei cloudStep landen, exakt wie categoryStep und cloudStep das schon fuer
-    /// ihre eigenen admin-only Aufrufe machen.
+    /// Person - eine Nicht-Admin-Person bekommt 403 und darf nie einen leeren oder kaputten Schritt
+    /// sehen, sondern muss still im Abschluss landen, genau wie categoryStep das fuer seinen eigenen
+    /// admin-only Aufruf macht.
+    ///
+    /// Der Zaehler wird mitgeprueft, weil ihn sonst nichts prueft: "Schritt 4 von 5" in einem
+    /// Assistenten mit vier Schritten faellt niemandem auf, der ihn nicht durchklickt.
     /// </summary>
     [Fact]
-    public void TheSetupWizardOffersAMarketDataStepBetweenBankAndCloud()
+    public void TheSetupWizardEndsWithTheMarketDataStep()
     {
         var wizard = ReadSource(Path.Combine("features", "access-setup.js"));
         var de = JsonDocument.Parse(ReadSource(Path.Combine("locales", "de.json")));
@@ -171,24 +176,21 @@ public sealed class SetupUiBaselineTests
         Assert.Contains("marketDataStep", wizard);
         Assert.Contains("/auth/admin/instance-settings", wizard);
         Assert.Contains("MarketData:Provider", wizard);
-        // Wie oben: das Zaehl-Paar statt eines literalen "N / 5"-Strings.
-        Assert.Contains("{ step: 4, total: 5 }", wizard);
-        Assert.Contains("{ step: 5, total: 5 }", wizard);
+        // Wie oben: das Zaehl-Paar statt eines literalen "N / 4"-Strings.
+        Assert.Contains("{ step: 4, total: 4 }", wizard);
+        Assert.DoesNotContain("total: 5", wizard);
 
-        // bankStep fuehrt jetzt in den neuen Schritt, der neue Schritt in cloudStep - nicht mehr direkt
-        // von bankStep zu cloudStep.
         Assert.Contains("step.querySelector('[data-finish]').onclick = marketDataStep;", wizard);
-        Assert.Contains("step.querySelector('[data-back]').onclick = marketDataStep;", wizard);
 
         // 403 (oder jeder andere Fehler) auf GET ueberspringt den Schritt still, statt ihn leer zu zeigen.
         Assert.Contains(
             "try { settings = await instanceSettingsApi('/auth/admin/instance-settings'); }\n" +
-            "      catch { await cloudStep(); return; }",
+            "      catch { await finish(); return; }",
             wizard.Replace("\r\n", "\n"));
 
         // Gespeichert wird nur bei einer Aenderung, per PUT - keine eigene Vorlage in diesem Dialog.
         Assert.Contains("jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT')", wizard);
-        Assert.Contains("if (picked === current) return cloudStep();", wizard);
+        Assert.Contains("if (picked === current) return finish();", wizard);
 
         foreach (var key in new[]
                  {

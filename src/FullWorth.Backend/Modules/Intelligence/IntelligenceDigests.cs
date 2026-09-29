@@ -78,7 +78,7 @@ public sealed class IntelligenceDigestService(IntelligenceDbContext intelligence
             learning = new
             {
                 feedbackEvents = feedback.Count,
-                cloudEligible = feedback.Count(x => x.CloudEligible)
+                generalizable = feedback.Count(x => x.Generalizable)
             },
             ai = new
             {

@@ -108,7 +108,7 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 # skipped (SecretBootstrap only reads files that exist), so a stack that supplies its secrets some
 # other way - the dev stack does - is unaffected.
 #
-# All six are THIS installation's own secrets. Nothing the Cloud owns is listed here on purpose.
+# All six are THIS installation's own secrets.
 ENV Database__Password_FILE=/run/fullworth-secrets/fullworth_db_password \
     Security__InternalKey_FILE=/run/fullworth-secrets/backend_internal_key \
     Security__IngestKey_FILE=/run/fullworth-secrets/ingest_key \
@@ -119,20 +119,12 @@ ENV Database__Password_FILE=/run/fullworth-secrets/fullworth_db_password \
     Backend__IngestKey_FILE=/run/fullworth-secrets/ingest_key \
     AiAccess__CodexBridgeKey_FILE=/run/fullworth-secrets/codex_bridge_key
 
-# Where a Cloud pack verification key is expected, if one was handed over. A path, not a secret, and
-# the only thing this image knows about the Cloud stack - which owns the key and publishes it into its
-# own volume. Absent means pack verification fails closed; see the deploy stack's README.
-#
-# Its own ENV, not appended above: a # inside a line continuation is part of the instruction, not a
-# comment, so the whole block would become one long broken variable.
-ENV FullWorthCloud__KnowledgePackPublicKeyPath=/run/fullworth-secrets/cloud-public/public.pem
-
 # Where Codex lives in this container. Enabled by default now that it IS this container: the launcher
 # does not start Node until somebody needs it, so "enabled" costs a dormant shell rather than a second
 # service an operator has to wire up.
 #
 # 127.0.0.1 is deliberately narrower than the sidecar was. The only caller is the .NET process in this
-# same container. A stack that wants to share the bridge - the Cloud's AI review - sets
+# same container. Ein Stapel, der die Bruecke teilen will, setzt
 # CODEX_BRIDGE_BIND=0.0.0.0 in its own file, where the decision is visible.
 #
 # CODEX_BRIDGE_KEY_PATH points at the tmpfs copy the entrypoint places for the codex user, NOT at

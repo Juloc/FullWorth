@@ -102,18 +102,11 @@ public static class PersonalDataPurgeManifest
         // it would be actively harmful: the guard would re-baseline against whatever key is mounted
         // next, which is exactly the check it exists to make.
         typeof(FullWorth.Backend.Security.InstallationEncryptionMarker),
-        // Pack-sourced reference data.
+        // Die Nachschlagewerke der Instanz: Markenlogos und Haendlerzuordnungen. Ihr Schluessel ist
+        // ein Markenname, kein Mensch.
         typeof(OfficialBrandAlias),
         typeof(OfficialBrandAsset),
-        typeof(OfficialContractProvider),
-        typeof(OfficialContractSignature),
-        typeof(OfficialMerchantMapping),
-        typeof(OfficialOntologyAlias),
-        typeof(OfficialOntologyEntity),
-        typeof(OfficialOntologyRedirect),
-        typeof(OfficialProduct),
-        typeof(OfficialProductAlias),
-        typeof(OfficialProductGtin),
+        typeof(InstanceMerchantMapping),
         typeof(CustomBrandPack),
         typeof(CustomBrandAsset),
         typeof(CustomBrandAlias),
@@ -125,14 +118,8 @@ public static class PersonalDataPurgeManifest
         typeof(ResearchedBrandAsset),
         typeof(ResearchedBrandAlias),
         typeof(BrandLogoResearchAttempt),
-        typeof(KnowledgePackArchive),
-        typeof(KnowledgePackInstallation),
-        // The verification key this installation pinned for its Cloud. A public key with no person in
-        // it, and re-pinning it on every account deletion would reopen the one moment of trust.
-        typeof(KnowledgePackTrustedKey),
         // Instance configuration and machinery.
         typeof(AiInstanceSettings),
-        typeof(CloudInstanceCredential),
         typeof(IntelligenceJob),
         typeof(IntelligenceJobLease),
         typeof(IntelligenceWatermark)
@@ -142,15 +129,13 @@ public static class PersonalDataPurgeManifest
     /// Personal data the heuristics cannot see, because it is reached through a relation rather than
     /// through a user column.
     ///
-    /// <see cref="CloudSubmissionOutbox"/> is the case: it carries no UserId, only a FeedbackEventId,
-    /// and <c>AccountPurgeService.PurgeIntelligenceUserDataAsync</c> deletes it by resolving that to the
-    /// user's feedback events first. Listing it here rather than as instance data is deliberate -
-    /// calling it global would be a retention regression, and the row holds a queued submission about
-    /// that user's finances.
+    /// Hier stand die Ausgangswarteschlange der Cloud: sie trug keine UserId, nur eine
+    /// FeedbackEventId, und wurde beim Loeschen eines Kontos ueber dessen Rueckmeldungen aufgeloest.
+    /// Es gibt sie nicht mehr - nichts in dieser Datenbank wartet noch darauf, hinausgeschickt zu
+    /// werden.
     /// </summary>
     private static readonly HashSet<Type> DeletedWithRelatedRootTypes =
     [
-        typeof(CloudSubmissionOutbox),
         // Wofuer ein Zugang arbeiten darf. Die meisten Zeilen gehoeren dem Zugang der INSTANZ und
         // ueberleben jede Kontoloeschung - die hat keine Wurzel in einem Benutzer. Hat ein Benutzer
         // einen eigenen Zugang, faellt dessen Freigabe mit ihm: der Fremdschluessel auf

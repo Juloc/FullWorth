@@ -28,6 +28,7 @@ using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Import;
 using FullWorth.Backend.Modules.Ingestion;
 using FullWorth.Backend.Modules.Intelligence;
+using FullWorth.Backend.Modules.Intelligence.Brands;
 using FullWorth.Backend.Modules.Intelligence.Context;
 using FullWorth.Backend.Modules.Intelligence.Signals;
 using FullWorth.Backend.Modules.Loans;
@@ -84,9 +85,6 @@ public static class BackendApplication
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(60);
         });
-        builder.Services.AddHttpClient<FullWorthCloudClient>();
-        builder.Services.AddScoped<IFullWorthCloudClient>(services => services.GetRequiredService<FullWorthCloudClient>());
-        builder.Services.AddHostedService<CloudEndpointStartupLogger>();
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiIntelligenceProvider>());
         builder.Services.AddScoped<OpenAiCompatibleIntelligenceProvider>();
         builder.Services.AddScoped<CodexBridgeIntelligenceProvider>();
@@ -112,27 +110,9 @@ public static class BackendApplication
         builder.Services.AddScoped<IntelligenceAdminAuthorizer>();
         builder.Services.AddScoped<IntelligenceManualJobService>();
         builder.Services.AddScoped<IntelligenceFeedbackRecorder>();
-        builder.Services.AddScoped<CloudIntelligenceStateService>();
-        builder.Services.AddScoped<CloudInstanceCredentialStore>();
         // Singleton, because remembering a failed registration across requests is the whole point.
-        builder.Services.AddSingleton<CloudRegistrationCooldown>();
-        builder.Services.AddScoped<CloudCredentialAcquisition>();
-        builder.Services.AddScoped<CloudLearningOutboxUploader>();
-        builder.Services.AddScoped<CloudContractBenchmarkContributionService>();
-        builder.Services.AddHostedService<CloudContractBenchmarkContributionWorker>();
-        builder.Services.AddScoped<CloudMerchantBenchmarkContributionService>();
-        builder.Services.AddHostedService<CloudMerchantBenchmarkContributionWorker>();
-        builder.Services.AddScoped<CloudSavingsBenchmarkContributionService>();
-        builder.Services.AddHostedService<CloudSavingsBenchmarkContributionWorker>();
-        builder.Services.AddScoped<CloudProductPriceContributionService>();
-        builder.Services.AddHostedService<CloudProductPriceContributionWorker>();
-        builder.Services.AddHostedService<CloudLearningOutboxWorker>();
-        builder.Services.AddScoped<KnowledgePackTrustStore>();
-        builder.Services.AddScoped<KnowledgePackSyncService>();
-        builder.Services.AddScoped<CloudOperationalRegistryResolver>();
         builder.Services.AddScoped<BrandPackService>();
-        builder.Services.AddScoped<CloudOntologyResolver>();
-        builder.Services.AddHostedService<KnowledgePackSyncWorker>();
+        builder.Services.AddScoped<BundledBrandCatalogInstaller>();
         builder.Services.AddScoped<AiBudgetGuard>();
         builder.Services.AddScoped<AiCostEstimator>();
         builder.Services.AddScoped<IntelligenceJobLeaseService>();
@@ -141,6 +121,10 @@ public static class BackendApplication
         builder.Services.AddScoped<ScheduledDomainIntelligenceAdapters>();
         builder.Services.AddScoped<ScheduledIntelligenceJobProcessor>();
         builder.Services.AddScoped<IntelligenceSuggestionReviewService>();
+        // Kein Kreis: Categories importiert Intelligence bereits (TransactionRuleEngine), der
+        // Rueckweg waere einer. Der konkrete Acceptor wohnt in Categories, IIntelligenceSuggestionAcceptor
+        // gehoert Intelligence - hier, wo kein Modul zustaendig ist, kommen sie zusammen.
+        builder.Services.AddScoped<IIntelligenceSuggestionAcceptor, CategorizationRuleSuggestionAcceptor>();
         builder.Services.AddHostedService<IntelligenceSchedulePlannerService>();
         builder.Services.AddHostedService<IntelligenceScheduledJobWorker>();
         
@@ -204,6 +188,15 @@ public static class BackendApplication
             {
                 client.Timeout = TimeSpan.FromSeconds(10);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-logo-research)");
+            })
+            .ConfigurePrimaryHttpMessageHandler(PublicOnlyHandler);
+        // Derselbe Handler fuer den Icon-Spiegel, obwohl der Wirt hier fest ist: der Grund fuer die
+        // Pruefung ist nicht, dass die Adresse geraten waere, sondern dass ein Name auch dann noch
+        // auf 127.0.0.1 zeigen kann, wenn er fest im Quelltext steht. Ein Spiegel ist kein Freibrief.
+        builder.Services.AddHttpClient<Modules.Intelligence.Brands.SimpleIconsCdnFetcher>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0 (+brand-icon-lookup)");
             })
             .ConfigurePrimaryHttpMessageHandler(PublicOnlyHandler);
         // Der Handler fuer JEDEN Abruf, den diese Instanz aufgrund von Nutzerdaten macht (#176):
@@ -315,11 +308,8 @@ public static class BackendApplication
         builder.Services.AddScoped<AccountGroupStore>();
         builder.Services.AddScoped<AccountBalanceHistoryStore>();
         builder.Services.AddScoped<WealthPreviewBasisService>();
-        builder.Services.AddScoped<CloudRequestContextStore>();
         builder.Services.AddScoped<AdminSecretsStore>();
-        builder.Services.AddScoped<CloudPriceStore>();
-        builder.Services.AddScoped<MerchantSpendStore>();
-        builder.Services.AddScoped<ContractBenchmarkStore>();
+        builder.Services.AddScoped<PriceHistoryStore>();
         builder.Services.AddScoped<AnalysisContributionStore>();
         builder.Services.AddScoped<AnalysisContributionService>();
         builder.Services.AddScoped<SavedAnalysisStore>();
@@ -489,6 +479,13 @@ public static class BackendApplication
             await intelligenceDb.Database.MigrateAsync();
             var intelligenceAdminBootstrapper = scope.ServiceProvider.GetRequiredService<IntelligenceAdminBootstrapper>();
             await intelligenceAdminBootstrapper.EnsureBootstrapAdminAsync(CancellationToken.None);
+
+            // Der mitgelieferte Markenkatalog. Beim Start und nicht in einem Hintergrundlaeufer,
+            // weil die erste Seite sonst ohne Logos zeichnet und sie kurz darauf nachwachsen -
+            // genau die Verschiebung, die Regel 1 des Frontends verbietet. Ergebnisgleich, also
+            // kostet ein Neustart mit unveraendertem Katalog nichts.
+            await scope.ServiceProvider.GetRequiredService<BundledBrandCatalogInstaller>()
+                .InstallAsync(CancellationToken.None);
         }
     }
 
@@ -601,8 +598,7 @@ public static class BackendApplication
         endpoints.MapFinanzguruImportEndpoints();
         endpoints.MapBankingSyncStateEndpoints();
         endpoints.MapIntelligenceAdminEndpoints();
-        endpoints.MapCloudBenchmarkEndpoints();
-        endpoints.MapCloudPriceEndpoints();
+        endpoints.MapPriceHistoryEndpoints();
         endpoints.MapBrandCatalogEndpoints();
         endpoints.MapAiUserAccessEndpoints();
         endpoints.MapIntelligenceSuggestionEndpoints();

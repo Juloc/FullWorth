@@ -1,5 +1,9 @@
 # FullWorth AI Autopilot — Implementation Plan
 
+> **2026-09-26: die FullWorth Cloud ist abgeschafft.** Alle Abschnitte unten, die von
+> Cloud-Zustimmung, Ausgangswarteschlange oder Cloud-Lernen sprechen, beschreiben nichts mehr, was
+> es gibt. Nichts verlaesst diese Installation.
+
 > **Pfade in diesem Dokument sind der Stand seiner Entstehung.** Das Frontend wurde im September 2026
 > umgebaut: eine Seite ist ein Ordner unter `wwwroot/pages/` mit `page.html`, `page.css` und
 > `page.js`; `wwwroot/ui/` und `styles/features/` gibt es nicht mehr, und die eigenständigen

@@ -10,7 +10,7 @@ namespace FullWorth.Backend.Modules.Categories;
 /// </summary>
 public static class TransactionRuleEngine
 {
-    public const decimal MinimumCloudMappingConfidence = 0.80m;
+    public const decimal MinimumInstanceMappingConfidence = 0.80m;
 
     public readonly record struct Classification(Guid? CategoryId, bool IsTransfer, string Source)
     {
@@ -38,7 +38,7 @@ public static class TransactionRuleEngine
             rules,
             activeCategoryIdsByKey,
             Array.Empty<LearnedMerchantCategoryMapping>(),
-            Array.Empty<OfficialMerchantCategoryMapping>());
+            Array.Empty<InstanceMerchantCategoryMapping>());
 
     public static Classification EvaluateWithGermanyCatalog(
         FinanceTransaction tx,
@@ -50,19 +50,20 @@ public static class TransactionRuleEngine
             rules,
             activeCategoryIdsByKey,
             learnedMappings,
-            Array.Empty<OfficialMerchantCategoryMapping>());
+            Array.Empty<InstanceMerchantCategoryMapping>());
 
     /// <summary>
     /// Precedence is explicit personal rule -> exact user-confirmed local merchant mapping ->
-    /// meaningful importer/user classification -> verified FullWorth Cloud mapping -> built-in catalog.
-    /// Cloud mappings are exact normalized aliases only, confidence-gated, and never override local facts.
+    /// meaningful importer/user classification -> verified instance-wide merchant mapping ->
+    /// built-in catalog. Instance mappings are exact normalized aliases only, confidence-gated,
+    /// and never override local facts.
     /// </summary>
     public static Classification EvaluateWithGermanyCatalog(
         FinanceTransaction tx,
         IReadOnlyList<CategorizationRule> rules,
         IReadOnlyDictionary<string, Guid> activeCategoryIdsByKey,
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings,
-        IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings)
+        IReadOnlyList<InstanceMerchantCategoryMapping> instanceMappings)
     {
         var ruleResult = Evaluate(tx, rules);
         if (ruleResult.Source == "rule") return ruleResult;
@@ -73,16 +74,23 @@ public static class TransactionRuleEngine
 
         // Preserve explicit/imported classifications. The named values below are FullWorth-owned
         // automatic states and may therefore be recomputed when better deterministic knowledge exists.
+        //
+        // "cloud" is a legacy value: it was written by installations that ran before the
+        // FullWorth Intelligence Cloud was abolished on 2026-09-26, and "instance" is what the
+        // same computation writes today. Both mean the identical thing - an automatic mapping
+        // this engine may recompute - and "cloud" stays in this tuple forever, not just until the
+        // last such row is gone: dropping it would silently freeze every booking a self-hoster
+        // classified years ago as if a person had confirmed it by hand.
         if (tx.CategoryId.HasValue &&
-            tx.CategorizationSource is not ("none" or "rule" or "learned" or "cloud" or "catalog"))
+            tx.CategorizationSource is not ("none" or "rule" or "learned" or "cloud" or "instance" or "catalog"))
             return new Classification(tx.CategoryId, tx.IsTransfer, tx.CategorizationSource);
 
-        var cloudCategoryKey = EvaluateCloudMerchantMapping(tx, cloudMappings);
-        if (cloudCategoryKey is not null)
+        var instanceCategoryKey = EvaluateInstanceMerchantMapping(tx, instanceMappings);
+        if (instanceCategoryKey is not null)
         {
-            var resolved = ResolveCategoryId(activeCategoryIdsByKey, cloudCategoryKey);
+            var resolved = ResolveCategoryId(activeCategoryIdsByKey, instanceCategoryKey);
             if (resolved.HasValue)
-                return new Classification(resolved.Value, false, "cloud");
+                return new Classification(resolved.Value, false, "instance");
         }
 
         var catalogMatch = GermanyCategorizationCatalog.Classify(tx);
@@ -110,16 +118,16 @@ public static class TransactionRuleEngine
         return null;
     }
 
-    public static string? EvaluateCloudMerchantMapping(
+    public static string? EvaluateInstanceMerchantMapping(
         FinanceTransaction tx,
-        IReadOnlyList<OfficialMerchantCategoryMapping> mappings)
+        IReadOnlyList<InstanceMerchantCategoryMapping> mappings)
     {
         if (string.IsNullOrWhiteSpace(tx.NormalizedCounterparty) || tx.Amount == 0m || mappings.Count == 0)
             return null;
 
         var direction = tx.Amount > 0m ? "income" : "expense";
         return mappings
-            .Where(x => x.Confidence >= MinimumCloudMappingConfidence)
+            .Where(x => x.Confidence >= MinimumInstanceMappingConfidence)
             .Where(x => string.Equals(x.AliasKey, tx.NormalizedCounterparty, StringComparison.Ordinal))
             .Where(x => x.Direction == "any" || string.Equals(x.Direction, direction, StringComparison.Ordinal))
             .OrderByDescending(x => string.Equals(x.Direction, direction, StringComparison.Ordinal))

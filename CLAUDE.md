@@ -205,9 +205,9 @@ Since v1.3.0-alpha.2 the app ships as **one unified container** (`FullWorthHost_
 
 ## Deploy
 
-Deploy repo is `Juloc/docker` at `~/git/docker` (separate repo). FullWorth stacks: `fullworth/` (production, web.fullworth.de), `fullworth-demo/`, `fullworth-cloud/`, `fullworth-landing/` (also serves the apex). The `finance/` stack was retired on 2026-09-09. Bump the `FULLWORTH_VERSION` default in the compose files; the server may additionally pin it via its own `.env`.
+Deploy repo is `Juloc/docker` at `~/git/docker` (separate repo). FullWorth stacks: `fullworth/` (production, web.fullworth.de), `fullworth-demo/`, `fullworth-landing/` (also serves the apex). The `finance/` stack was retired on 2026-09-09, the `fullworth-cloud/` stack on 2026-09-26. Bump the `FULLWORTH_VERSION` default in the compose files; the server may additionally pin it via its own `.env`.
 
-`fullworth-platform-secrets` belongs to the **app stack alone** — the cloud stack shares nothing with it any more. It holds `data_encryption_key`: never `docker volume prune`, never `docker compose down -v` in a folder that mounts it. It is no longer `external`, so a fresh host needs no preparation; `DataEncryptionKeyGuard` refuses to start when the key cannot be the one this database was encrypted with.
+`fullworth-platform-secrets` belongs to the **app stack alone**. It holds `data_encryption_key`: never `docker volume prune`, never `docker compose down -v` in a folder that mounts it. It is no longer `external`, so a fresh host needs no preparation; `DataEncryptionKeyGuard` refuses to start when the key cannot be the one this database was encrypted with.
 
 ## Conventions
 

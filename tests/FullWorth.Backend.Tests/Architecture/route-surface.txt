@@ -184,8 +184,6 @@ GET              /api/intelligence/access/codex/login/{sessionId:guid}
 GET              /api/intelligence/access/codex/models
 GET              /api/intelligence/admin/audit
 GET              /api/intelligence/admin/brand-packs/custom/
-GET              /api/intelligence/admin/cloud
-GET              /api/intelligence/admin/cloud/pack-key
 GET              /api/intelligence/admin/credentials
 GET              /api/intelligence/admin/jobs
 GET              /api/intelligence/admin/overview
@@ -193,10 +191,6 @@ GET              /api/intelligence/admin/providers
 GET              /api/intelligence/admin/runs
 GET              /api/intelligence/admin/settings
 GET              /api/intelligence/admin/suggestions/pending
-GET              /api/intelligence/benchmarks/
-GET              /api/intelligence/benchmarks/contracts
-GET              /api/intelligence/benchmarks/contracts/{contractId:guid}
-GET              /api/intelligence/benchmarks/savings
 GET              /api/intelligence/brand-assets/{contentSha256}
 GET              /api/intelligence/brand-catalog
 GET              /api/intelligence/digests/
@@ -434,16 +428,13 @@ POST             /api/intelligence/access/codex/login
 POST             /api/intelligence/access/codex/logout
 POST             /api/intelligence/access/test
 POST             /api/intelligence/admin/brand-packs/custom/
-POST             /api/intelligence/admin/cloud/disable
-POST             /api/intelligence/admin/cloud/enable
-POST             /api/intelligence/admin/cloud/pack-key/accept
-POST             /api/intelligence/admin/cloud/sync
 POST             /api/intelligence/admin/credentials
 POST             /api/intelligence/admin/credentials/{id:guid}/test
 POST             /api/intelligence/admin/jobs/{type}/enqueue
 POST             /api/intelligence/admin/jobs/{type}/run
 POST             /api/intelligence/admin/suggestions/{id:guid}/accept
 POST             /api/intelligence/admin/suggestions/{id:guid}/reject
+POST             /api/intelligence/brands/reject
 POST             /api/investment-import/detect
 POST             /api/investment-import/jobs/{jobId:guid}/commit
 POST             /api/investment-import/jobs/{jobId:guid}/duplicate-preview
