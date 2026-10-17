@@ -1,0 +1,41 @@
+name: FullWorth clean-start
+
+on:
+  push:
+    branches:
+      - feature/fullworth-clean-start-foundation-20261017
+    paths:
+      - 'clean-start/**'
+      - '.github/workflows/clean-start.yml'
+  pull_request:
+    paths:
+      - 'clean-start/**'
+      - '.github/workflows/clean-start.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build isolated solution
+        run: dotnet build clean-start/FullWorth.CleanStart.slnx -c Release --nologo
+      - name: Smoke-test Razor and public API
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_URLS=http://127.0.0.1:5088 dotnet run --project clean-start/src/FullWorth.Frontend -c Release --no-build --no-launch-profile &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --silent --fail http://127.0.0.1:5088/api/v1/public/status -o /tmp/fw-status.json; then
+              break
+            fi
+            sleep 1
+          done
+          grep -Fq '"product":"FullWorth"' /tmp/fw-status.json
+          grep -Fq '"stage":"clean-start"' /tmp/fw-status.json
+          curl --silent --show-error --fail http://127.0.0.1:5088/ | grep -Fq 'Clean Start'
