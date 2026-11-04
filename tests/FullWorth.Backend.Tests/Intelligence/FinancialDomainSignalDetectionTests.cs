@@ -276,6 +276,9 @@ public sealed class FinancialDomainSignalDetectionTests
                 AutoDetected = false
             });
 
+            // Relativ zu heute: der Detektor schaut 60 Tage zurueck, feste Daten liefen irgendwann aus dem
+            // Fenster (die Tests wurden am 2026-11-01 rot, ohne dass sich Code geaendert hatte).
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
             db.Transactions.AddRange(
                 new FinanceTransaction
                 {
@@ -284,7 +287,7 @@ public sealed class FinancialDomainSignalDetectionTests
                     ExternalKey = "transfer-out",
                     Amount = -200m,
                     Currency = "EUR",
-                    BookingDate = new DateOnly(2026, 9, 2),
+                    BookingDate = today.AddDays(-8),
                     Counterparty = "Own transfer",
                     NormalizedCounterparty = "OWN TRANSFER",
                     CategorizationSource = "none",
@@ -297,21 +300,21 @@ public sealed class FinancialDomainSignalDetectionTests
                     ExternalKey = "transfer-in",
                     Amount = 200m,
                     Currency = "EUR",
-                    BookingDate = new DateOnly(2026, 9, 2),
+                    BookingDate = today.AddDays(-8),
                     Counterparty = "Own transfer",
                     NormalizedCounterparty = "OWN TRANSFER",
                     CategorizationSource = "none",
                     RawJson = "{}"
                 },
-                PriceTransaction(scenario.ContractAccount, "price-old", new DateOnly(2026, 7, 5), 10m),
-                PriceTransaction(scenario.ContractAccount, "price-new", new DateOnly(2026, 8, 5), 12m),
+                PriceTransaction(scenario.ContractAccount, "price-old", today.AddDays(-67), 10m),
+                PriceTransaction(scenario.ContractAccount, "price-new", today.AddDays(-36), 12m),
                 new FinanceTransaction
                 {
                     AccountId = scenario.ContractAccount,
                     ExternalKey = "unrelated-newer-debit",
                     Amount = -99m,
                     Currency = "EUR",
-                    BookingDate = new DateOnly(2026, 9, 6),
+                    BookingDate = today.AddDays(-4),
                     Counterparty = "OTHER SHOP",
                     NormalizedCounterparty = "OTHER SHOP",
                     CategorizationSource = "none",
