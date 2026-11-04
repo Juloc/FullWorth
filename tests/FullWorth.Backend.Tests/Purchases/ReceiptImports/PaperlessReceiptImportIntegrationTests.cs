@@ -204,6 +204,34 @@ public sealed class PaperlessReceiptImportIntegrationTests
     }
 
     /// <summary>
+    /// Paperless schreibt "modified" mit dem Offset SEINER Zeitzone, etwa "+02:00". Npgsql schreibt in
+    /// eine timestamptz-Spalte nur Werte mit Offset 0 - alles andere wirft. Der Wurf kam nach dem
+    /// Anlegen des Batches und vor dem ersten Beleg: die Antwort war ein 500, und zurueck blieb ein
+    /// leerer Batch, der fuer immer "laeuft" zeigte. Wer sein Paperless nicht auf UTC betreibt, konnte
+    /// deshalb gar nichts importieren. Der bisherige Test lieferte kein "modified" und sah das nie.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentModifiedInALocalTimeZoneIsImported()
+    {
+        const string token = "paperless-test-token";
+        var encryptionKey = Convert.ToBase64String(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray());
+        var paperless = new PaperlessHttpClientFactory(modified: "2026-09-01T10:00:00.123456+02:00");
+        using var factory = CreateFactory(paperless, encryptionKey);
+        using var client = factory.CreateClient();
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        await SeedMemberAsync(factory, userId, spaceId);
+        await ConnectAsync(client, spaceId, userId, token);
+
+        using var request = PaperlessImportRequest(spaceId, userId);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, json.RootElement.GetProperty("total").GetInt32());
+    }
+
+    /// <summary>
     /// Ein Durchgang des Hintergrunddienstes (#127). Die Tests fahren ihn von Hand, damit der Ablauf
     /// - erst die Zeile, dann der Download - ueberpruefbar bleibt, ohne auf einen Takt zu warten.
     /// </summary>
@@ -289,9 +317,10 @@ public sealed class PaperlessReceiptImportIntegrationTests
         });
     }
 
-    private sealed class PaperlessHttpClientFactory(int failDownloads = 0) : IHttpClientFactory
+    private sealed class PaperlessHttpClientFactory(int failDownloads = 0, string? modified = null) : IHttpClientFactory
     {
         private int downloadCount;
+        private readonly string? modified = modified;
         private int remainingFailures = failDownloads;
 
         public int DownloadCount => Volatile.Read(ref downloadCount);
@@ -336,9 +365,10 @@ public sealed class PaperlessReceiptImportIntegrationTests
 
                 if (path.EndsWith("/api/documents/", StringComparison.Ordinal))
                 {
-                    const string json = """
+                    var modifiedField = owner.modified is null ? string.Empty : $",\"modified\":\"{owner.modified}\"";
+                    var json = $$"""
                         {"count":1,"next":null,"results":[
-                          {"id":42,"title":"Receipt 42","created":"2026-08-31","document_type":3,"correspondent":4,"tags":[5],"original_file_name":"receipt-42.png"}
+                          {"id":42,"title":"Receipt 42","created":"2026-08-31"{{modifiedField}},"document_type":3,"correspondent":4,"tags":[5],"original_file_name":"receipt-42.png"}
                         ]}
                         """;
                     var response = new HttpResponseMessage(HttpStatusCode.OK)

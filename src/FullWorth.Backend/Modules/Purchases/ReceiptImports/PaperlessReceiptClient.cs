@@ -333,8 +333,10 @@ public sealed class PaperlessReceiptClient(
         // zweites Mal selbst erzeugt.
         var mimeType = document.TryGetProperty("mime_type", out var mimeNode) ? mimeNode.GetString() : null;
         var content = document.TryGetProperty("content", out var contentNode) ? contentNode.GetString() : null;
+        // In UTC, nicht mit dem Offset von Paperless ("+02:00"): Npgsql schreibt in timestamptz nur Werte
+        // mit Offset 0 und wirft sonst - der Import endete mit einem 500 und einem leeren Batch.
         DateTimeOffset? modified = document.TryGetProperty("modified", out var modifiedNode)
-            && DateTimeOffset.TryParse(modifiedNode.GetString(), out var parsedModified) ? parsedModified : null;
+            && DateTimeOffset.TryParse(modifiedNode.GetString(), out var parsedModified) ? parsedModified.ToUniversalTime() : null;
         return new PaperlessDocumentSummary(
             id, title, created, documentType, correspondent, tags, originalFileName,
             Imported: false, MimeType: mimeType, Content: content, Modified: modified);
