@@ -1219,6 +1219,10 @@
     "limitAccounts": "Limit access to specific accounts",
     "accountIdentifiers": "Account identifiers",
     "accountIdentifiersHint": "Optional: one IBAN per line. Other identifiers use SCHEME|IDENTIFICATION|ISSUER, e.g. BBAN|123456. Without a restriction, the bank flow handles account selection.",
+    "credentialTexts": {
+      "c24Phone": { "title": "Mobile number", "hint": "The mobile number registered with C24, including country code (e.g. +49 170 1234567)." },
+      "c24Pin": { "title": "C24 PIN", "hint": "The PIN of your C24 account." }
+    },
     "accountIdentifiersMissing": "Enter at least one valid IBAN or SCHEME|IDENTIFICATION.",
     "setupChoiceHint": "FullWorth can create the Enable Banking application automatically through the official Control Panel API, or you can set it up manually.",
     "automaticTitle": "Automatic (Alpha)",

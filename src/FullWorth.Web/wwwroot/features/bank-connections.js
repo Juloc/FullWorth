@@ -907,6 +907,19 @@ function openIngTanDialog(initial){
   render();dlg.showModal();
 }
 
+// Eigene Texte fuer die Zugangsfelder einzelner Banken. Enable Banking liefert Titel und Beschreibung
+// roh aus den ASPSP-Metadaten; die genauen Feldnamen sind nicht zugesichert, daher wird auf Name und
+// Titel gemeinsam gematcht. Ohne Treffer bleiben die Texte von Enable Banking.
+const OWN_CREDENTIAL_TEXTS=[
+  {bank:/\bc24\b/i,fields:[
+    {key:'c24Phone',match:/phone|mobile|msisdn|telefon|handy|mobil/i,type:'tel'},
+    {key:'c24Pin',match:/pin|passw|kennw/i}]}
+];
+const ownCredentialText=(bankName,fieldText)=>{
+  const bank=OWN_CREDENTIAL_TEXTS.find(x=>x.bank.test(bankName||''));
+  return bank?.fields.find(x=>x.match.test(fieldText));
+};
+
 function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null,preferredPsuType=null){
   const rawPsuTypes=Array.isArray(bank.psu_types)?bank.psu_types.filter(Boolean):[];
   const psuTypes=[...new Set((rawPsuTypes.length?rawPsuTypes:['personal','business']).map(x=>String(x).toLowerCase()))]
@@ -939,15 +952,18 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
     const method=methods.find(m=>m.name===methodSelect?.value);
     for(const field of method?.credentials||[]){
       const name=field.name||field.id;if(!name)continue;
+      const own=ownCredentialText(bank.name,name+' '+(field.title||''));
+      const ownKey=own&&'bankingSetup.credentialTexts.'+own.key;
       const label=document.createElement('label');
-      label.append(document.createTextNode(field.title||name));
+      label.append(document.createTextNode(own?get(ownKey+'.title'):field.title||name));
       const input=document.createElement('input');input.name='credential:'+name;input.autocomplete='off';
-      input.type=/password|pin|secret/i.test(name+' '+(field.title||''))?'password':'text';
+      input.type=own?.type||(/password|pin|secret/i.test(name+' '+(field.title||''))?'password':'text');
       if(field.template)try{new RegExp(field.template);input.pattern=field.template}catch{}
       input.required=field.required===true;
       label.append(input);
-      if(field.description){
-        const hint=document.createElement('span');hint.className='row-sub';hint.textContent=field.description;label.append(hint);
+      const description=own?get(ownKey+'.hint'):field.description;
+      if(description){
+        const hint=document.createElement('span');hint.className='row-sub';hint.textContent=description;label.append(hint);
       }
       credentialRoot.append(label);
     }

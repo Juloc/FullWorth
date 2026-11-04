@@ -1219,6 +1219,10 @@
     "limitAccounts": "Zugriff auf bestimmte Konten begrenzen",
     "accountIdentifiers": "Konto-Kennungen",
     "accountIdentifiersHint": "Optional: eine IBAN pro Zeile. Andere Kennungen als SCHEMA|IDENTIFIKATION|ISSUER, z. B. BBAN|123456. Ohne Einschränkung übernimmt der Bank-Dialog die Kontenauswahl.",
+    "credentialTexts": {
+      "c24Phone": { "title": "Mobilnummer", "hint": "Die bei C24 hinterlegte Mobilnummer, mit Ländervorwahl (z. B. +49 170 1234567)." },
+      "c24Pin": { "title": "C24-PIN", "hint": "Die PIN deines C24-Kontos." }
+    },
     "accountIdentifiersMissing": "Gib mindestens eine gültige IBAN oder SCHEMA|IDENTIFIKATION an.",
     "setupChoiceHint": "FullWorth kann die Enable-Banking-Application automatisch über die offizielle Control-Panel-API anlegen oder du richtest sie manuell ein.",
     "automaticTitle": "Automatisch (Alpha)",
