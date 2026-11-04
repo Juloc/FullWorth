@@ -18,9 +18,13 @@ namespace FullWorth.FinTs.Tests;
 /// 257,128493+EUR
 /// </code>
 ///
-/// Dass es der Kurs JE STUECK ist und nicht der Einstandswert, sagen die Daten selbst. Ein Wert
-/// waere ein Geldbetrag mit zwei Nachkommastellen; hier tragen drei von vier Positionen sechs - und
-/// ausgerechnet die mit glatt zehn Stueck traegt zwei. Das ist eine Division durch die Stueckzahl.
+/// Jede Zeile dieses Feldes beginnt mit ihrer ZEILENNUMMER: <c>1STK</c> ist Zeile 1 mit der Art STK,
+/// <c>257,128493+EUR</c> ist Zeile 2 mit dem Kurs 57,128493. Die fuehrende 2 gehoert nicht zum
+/// Betrag - ohne diese Trennung stand bei einem Depot, das 12,5 % im Plus liegt, ein Verlust von 89 %.
+///
+/// Dass es der Kurs JE STUECK ist und nicht der Einstandswert, sagt die Spezifikation und zeigen die
+/// Daten: hier tragen drei von vier Positionen sechs Nachkommastellen - und ausgerechnet die mit
+/// glatt zehn Stueck traegt zwei. Das ist eine Division durch die Stueckzahl.
 /// </summary>
 public sealed class Mt535CostPriceTests
 {
@@ -31,11 +35,38 @@ public sealed class Mt535CostPriceTests
         var holdings = Mt535Parser.Parse(IngDepot());
 
         Assert.Equal(4, holdings.Count);
-        Assert.Equal(257.128493m, holdings[0].CostPrice);
-        Assert.Equal(288.17m, holdings[1].CostPrice);
-        Assert.Equal(2141.717657m, holdings[2].CostPrice);
-        Assert.Equal(2292.048429m, holdings[3].CostPrice);
+        Assert.Equal(57.128493m, holdings[0].CostPrice);
+        Assert.Equal(88.17m, holdings[1].CostPrice);
+        Assert.Equal(141.717657m, holdings[2].CostPrice);
+        Assert.Equal(292.048429m, holdings[3].CostPrice);
         Assert.All(holdings, holding => Assert.Equal("EUR", holding.CostCurrency));
+    }
+
+    /// <summary>
+    /// Die Probe aufs Exempel: Stueckzahl mal Kurs ergibt den Einstand, den die ING selbst nennt
+    /// (3143,20 EUR), und die iShares-Position genau den Sparplankauf von 25,00 EUR, der im Girokonto
+    /// steht. Mit der Zeilennummer im Betrag waeren es 32.384,72 EUR gewesen.
+    /// </summary>
+    [Fact]
+    public void QuantityTimesCostPriceAddsUpToWhatTheBankShows()
+    {
+        var holdings = Mt535Parser.Parse(IngDepot());
+
+        Assert.Equal(25.00m, Math.Round(holdings[0].Quantity * holdings[0].CostPrice!.Value, 2));
+        Assert.Equal(3143.20m, Math.Round(holdings.Sum(holding => holding.Quantity * holding.CostPrice!.Value), 2));
+    }
+
+    /// <summary>Nur Zeile 2 ist der Einstandskurs - die Nummer faellt weg, jede andere Zeile zaehlt nicht.</summary>
+    [Theory]
+    [InlineData("2141,717657+EUR", 141.717657)]
+    [InlineData("288,17+EUR", 88.17)]
+    [InlineData("1141,7+EUR", null)]
+    [InlineData("3141,7+EUR", null)]
+    public void OnlyLineTwoIsTheCostPrice(string line, double? expected)
+    {
+        var holdings = Mt535Parser.Parse(Block("LU0908500753", "2,07808", line));
+
+        Assert.Equal(expected is null ? null : (decimal)expected, Assert.Single(holdings).CostPrice);
     }
 
     /// <summary>
@@ -48,16 +79,16 @@ public sealed class Mt535CostPriceTests
         var round = Mt535Parser.Parse(IngDepot())[1];
 
         Assert.Equal(10m, round.Quantity);
-        Assert.Equal(288.17m, round.CostPrice);
+        Assert.Equal(88.17m, round.CostPrice);
         // Der Einstandswert entsteht erst aus beidem - der Parser bildet ihn NICHT.
-        Assert.Equal(2881.70m, round.Quantity * round.CostPrice!.Value);
+        Assert.Equal(881.70m, round.Quantity * round.CostPrice!.Value);
     }
 
     /// <summary>Ein negativer Einstand ist moeglich; das Vorzeichen steht hinter dem Betrag.</summary>
     [Fact]
     public void TheSignBelongsToTheAmountAndIsRead()
     {
-        var holdings = Mt535Parser.Parse(Block("LU0908500753", "2,07808", "12,50-EUR"));
+        var holdings = Mt535Parser.Parse(Block("LU0908500753", "2,07808", "212,50-EUR"));
 
         Assert.Equal(-12.50m, Assert.Single(holdings).CostPrice);
     }

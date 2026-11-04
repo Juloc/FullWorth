@@ -223,25 +223,37 @@ public static class Mt535Parser
     /// 257,128493+EUR
     /// </code>
     ///
-    /// <c>1STK</c> nennt die Bezugsgroesse - je 1 Stueck -, danach folgt der Betrag mit Vorzeichen
-    /// und Waehrung. Dass es der Kurs je Stueck ist und nicht der Einstandswert, sagen die Daten
-    /// selbst: ein Wert waere ein Geldbetrag mit zwei Nachkommastellen. Drei der vier Positionen
-    /// tragen SECHS, und ausgerechnet die mit glatt 10 Stueck traegt zwei - das ist eine Division
-    /// durch die Stueckzahl, keine Summe.
+    /// Jede Zeile dieses Feldes beginnt mit ihrer ZEILENNUMMER, unmittelbar gefolgt vom Inhalt
+    /// (DK-Spezifikation MT535, "Strukturierte Belegung des Feldes :70E:"). Zeile 1 nennt die
+    /// Wertpapierart - <c>1STK</c> ist Zeile 1, Art STK, NICHT "je 1 Stueck". Zeile 2 ist der
+    /// Einstandskurs: <c>257,128493+EUR</c> ist Zeile 2, Kurs 57,128493 EUR. Die fuehrende 2 gehoert
+    /// nicht zum Betrag. Das hat vorher niemand getrennt, und aus 57 Euro wurden 257, aus 141 wurden
+    /// 2141 - ein Verlust von 89 % bei einem Depot, das 12,5 % im Plus liegt.
+    ///
+    /// Belegt ist es an den Daten, nicht nur am Text: Stueckzahl * Kurs summiert sich bei den vier
+    /// Positionen auf 3143,20 EUR Einstand, und die iShares-Position ergibt genau die 25,00 EUR des
+    /// Sparplankaufs, der im Girokonto steht.
+    ///
+    /// Dass es der Kurs je Stueck ist und nicht der Einstandswert, sagt die Spezifikation ("Einstandspreis
+    /// bzw. Einstandskurs", Zeile 2) und bestaetigen die Nachkommastellen: drei von vier Positionen
+    /// tragen SECHS, und ausgerechnet die mit glatt 10 Stueck traegt zwei.
     ///
     /// Der Einstandswert ist deshalb <c>Stueckzahl * Einstandskurs</c> und wird hier NICHT gebildet:
     /// die Stueckzahl steht in einem anderen Feld, und zwei Felder zu verrechnen ist Auslegung, nicht
-    /// Lesen. Nennt die Bank keinen Kurs, bleibt es leer - kein Ersatzwert.
+    /// Lesen. Nennt die Bank keine Zeile 2, bleibt es leer - kein Ersatzwert, und keine andere Zeile
+    /// wird dafuer gehalten.
     /// </summary>
     private static (decimal? Price, string? Currency) ReadCostPrice(string? field)
     {
         if (string.IsNullOrWhiteSpace(field)) return (null, null);
 
-        // Erste Zeile ist die Bezugsgroesse, der Betrag steht darunter.
-        var lines = field.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length < 2) return (null, null);
+        // Zeile 2 ist der Einstandskurs; ihre Nummer steht vor dem Betrag und gehoert nicht dazu.
+        var line = field.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(text => text.Trim())
+            .FirstOrDefault(text => text.Length > 1 && text[0] == '2');
+        if (line is null) return (null, null);
 
-        var match = CostAmount.Match(lines[^1].Trim());
+        var match = CostAmount.Match(line[1..]);
         if (!match.Success) return (null, null);
 
         var text = match.Groups["value"].Value.Replace(',', '.').TrimEnd('.');
