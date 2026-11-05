@@ -6,9 +6,10 @@
 
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { confirmMessage } from '../../components/confirm.js';
 
 const TABS = ['queue', 'history', 'review', 'failed'];
-const PAGE = 30;
+const PAGE = 40;
 const POLL_BUSY_MS = 2000;
 const POLL_IDLE_MS = 15000;
 
@@ -23,12 +24,21 @@ let counts = null;
 let lastCountsKey = '';
 let drawn = '';
 let hasMore = false;
+let loading = false;
 let timer = null;
+// Was der Benutzer angehakt hat - die Schluessel sind die Auftrags-Ids und ueberleben jedes Neuzeichnen.
+const selected = new Set();
 
 export function bindReceipts(context) {
   ctx = context;
   ctx.$('#view-receipts').addEventListener('click', onClick);
+  ctx.$('#view-receipts').addEventListener('change', onSelect);
+  ctx.$('#receipts-bar').addEventListener('click', onBar);
   ctx.$('#receipts-file').addEventListener('change', upload);
+  // Endloses Nachladen: der Wachposten am Ende der Liste fragt die naechste Seite an, sobald er in die
+  // Naehe des Bildschirms kommt. Eine Seitenzahl gibt es nicht - in fast allen Faellen liest man von oben.
+  new IntersectionObserver(entries => { if (entries[0].isIntersecting) more().catch(() => {}); }, { rootMargin: '480px' })
+    .observe(ctx.$('#receipts-sentinel'));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 }
 
@@ -63,9 +73,15 @@ async function refresh(force) {
   const key = JSON.stringify(counts);
   if (!force && tab !== 'queue' && key === lastCountsKey) return;
   lastCountsKey = key;
-  const loaded = await load(0, Math.min(100, Math.max(PAGE, rows.length)));
-  rows = loaded.rows;
-  hasMore = loaded.more;
+  if (!rows.length) { loading = true; draw(); }
+  try {
+    const loaded = await load(0, Math.min(100, Math.max(PAGE, rows.length)));
+    rows = loaded.rows;
+    hasMore = loaded.more;
+  } finally {
+    loading = false;
+  }
+  for (const id of selected) if (!rows.some(row => row.id === id)) selected.delete(id);
   draw();
 }
 
@@ -84,21 +100,85 @@ function showCounts() {
   }
 }
 
-async function onClick(event) {
+function onClick(event) {
   const tabButton = event.target.closest('[data-receipts-tab]');
-  if (tabButton) return switchTab(tabButton.dataset.receiptsTab);
-  const button = event.target.closest('[data-action]');
+  if (tabButton) switchTab(tabButton.dataset.receiptsTab);
+}
+
+function onSelect(event) {
+  const box = event.target.closest('[data-select]');
+  if (!box) return;
+  if (box.checked) selected.add(box.dataset.select); else selected.delete(box.dataset.select);
+  box.closest('.receipts-row')?.classList.toggle('is-selected', box.checked);
+  showBar();
+}
+
+// Die schwebende Leiste: sie erscheint erst, wenn etwas angehakt ist, und traegt die Aktionen fuer
+// genau diese Belege - statt Knoepfen an jeder Zeile.
+function showBar() {
+  const bar = ctx.$('#receipts-bar');
+  const open = selected.size > 0 && (tab === 'review' || tab === 'failed');
+  bar.classList.toggle('is-open', open);
+  ctx.$('[data-bar-count]').textContent = t(`${selected.size} ausgewählt`, `${selected.size} selected`);
+  const confirmButton = ctx.$('[data-bar="confirm"]');
+  const retryButton = ctx.$('[data-bar="retry"]');
+  confirmButton.hidden = tab !== 'review';
+  retryButton.hidden = tab !== 'failed';
+}
+
+async function onBar(event) {
+  const button = event.target.closest('[data-bar]');
   if (!button) return;
-  button.disabled = true;
-  try {
-    if (button.dataset.action === 'more') await more();
-    else if (button.dataset.action === 'confirm') await confirmPurchase(button.dataset.purchase);
-    else if (button.dataset.action === 'retry') await retry(button.dataset.job);
-  } catch (error) {
-    ctx.toast(error?.message || ctx.get('common.error'));
-  } finally {
-    button.disabled = false;
+  const action = button.dataset.bar;
+  if (action === 'all') for (const row of rows) selected.add(row.id);
+  else if (action === 'none') selected.clear();
+  else {
+    button.disabled = true;
+    try { await (action === 'confirm' ? confirmSelected() : retrySelected()); }
+    catch (error) { ctx.toast(error?.message || ctx.get('common.error')); }
+    finally { button.disabled = false; }
+    return;
   }
+  draw();
+}
+
+// Eine Sammelbestaetigung wiegt schwer, also fragt sie einmal nach - und bestaetigt dann Beleg fuer
+// Beleg ueber dieselbe Summenpruefung wie die Einzelbestaetigung. Einer, dem sie nicht genuegt, bleibt
+// angehakt und auf "Zu pruefen"; die anderen sind trotzdem durch.
+async function confirmSelected() {
+  const jobs = rows.filter(row => selected.has(row.id));
+  if (!await confirmMessage({
+    title: t('Belege bestätigen', 'Confirm receipts'),
+    message: t(`${jobs.length} Beleg(e) bestätigen? Jeder wird einzeln geprüft; was nicht aufgeht, bleibt in der Liste.`,
+               `Confirm ${jobs.length} receipt(s)? Each is checked on its own; anything that does not add up stays in the list.`),
+    confirmLabel: t('Bestätigen', 'Confirm'),
+    cancelLabel: t('Abbrechen', 'Cancel')
+  })) return;
+  let ok = 0;
+  for (const job of jobs) {
+    try {
+      await ctx.api(`api/purchases/${job.purchaseId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ createSafeAllocations: true, allowUnlinked: true })
+      });
+      selected.delete(job.id);
+      ok++;
+    } catch { /* bleibt angehakt */ }
+  }
+  const left = jobs.length - ok;
+  ctx.toast(left
+    ? t(`${ok} bestätigt, ${left} stimmen nicht und bleiben zu prüfen.`, `${ok} confirmed, ${left} do not add up and stay in review.`)
+    : t(`${ok} bestätigt.`, `${ok} confirmed.`));
+  await refresh(true);
+}
+
+async function retrySelected() {
+  for (const job of rows.filter(row => selected.has(row.id))) {
+    await ctx.api(`api/purchases/receipt-scan/jobs/${job.id}/retry`, { method: 'POST' });
+    selected.delete(job.id);
+  }
+  await refresh(true);
 }
 
 async function switchTab(next) {
@@ -106,30 +186,24 @@ async function switchTab(next) {
   tab = next;
   history.replaceState(null, '', `#${tab}`);
   rows = [];
+  selected.clear();
   lastCountsKey = '';
   drawn = '';
   await refresh(true);
 }
 
 async function more() {
-  const loaded = await load(rows.length, PAGE);
-  rows = rows.concat(loaded.rows);
-  hasMore = loaded.more;
+  if (loading || !hasMore) return;
+  loading = true;
   draw();
-}
-
-async function confirmPurchase(purchaseId) {
-  await ctx.api(`api/purchases/${purchaseId}/confirm`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ createSafeAllocations: true, allowUnlinked: true })
-  });
-  await refresh(true);
-}
-
-async function retry(jobId) {
-  await ctx.api(`api/purchases/receipt-scan/jobs/${jobId}/retry`, { method: 'POST' });
-  await refresh(true);
+  try {
+    const loaded = await load(rows.length, PAGE);
+    rows = rows.concat(loaded.rows);
+    hasMore = loaded.more;
+  } finally {
+    loading = false;
+    draw();
+  }
 }
 
 // Eine Datei ist ein Beleg. Mehrere Fotos EINES Belegs gehoeren in den Scan-Dialog der Kaeufe-Seite,
@@ -162,15 +236,22 @@ function draw() {
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', String(active));
   }
-  // Die Minuten "vor 3 Min" laufen weiter, auch wenn sich sonst nichts aendert - sie gehoeren deshalb
-  // nicht in den Vergleich, sondern werden bei jedem Zeichnen frisch gerechnet.
-  const html = rows.length
-    ? rows.map(row => (tab === 'queue' ? queueRow(row) : tab === 'review' ? reviewRow(row) : historyRow(row))).join('')
-      + (hasMore ? `<div class="receipts-more"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-action="more">${ctx.esc(t('Mehr anzeigen', 'Show more'))}</button></div>` : '')
-    : emptyRow(emptyText());
-  if (html === drawn) return;
-  drawn = html;
-  ctx.$('#receipts-list').innerHTML = html;
+  // Solange die erste Seite noch aussteht, stehen Platzhalter da: so hoch wie die Zeilen, die kommen.
+  const first = loading && !rows.length;
+  const html = first
+    ? skeleton(4)
+    : (rows.length
+      ? rows.map(row => (tab === 'queue' ? queueRow(row) : tab === 'review' ? reviewRow(row) : historyRow(row))).join('')
+      : emptyRow(emptyText())) + (loading ? skeleton(2) : '');
+  if (html !== drawn) {
+    drawn = html;
+    ctx.$('#receipts-list').innerHTML = html;
+  }
+  showBar();
+}
+
+function skeleton(count) {
+  return Array.from({ length: count }, () => '<div class="receipts-row receipts-skeleton" aria-hidden="true"><span class="row-main"><span class="receipts-sk-line shimmer"></span><span class="receipts-sk-line short shimmer"></span></span></div>').join('');
 }
 
 function emptyText() {
@@ -243,30 +324,29 @@ function purchaseSub(job) {
   return [date, items].filter(Boolean).map(part => ctx.esc(part)).join(' · ');
 }
 
+function checkbox(job) {
+  return `<label class="receipts-check"><input type="checkbox" data-select="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''} aria-label="${ctx.esc(t('Auswählen', 'Select'))}"></label>`;
+}
+
 function historyRow(job) {
   const failed = job.status === 'error';
-  return `<div class="receipts-row">
-    <span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}${failed ? ` <span class="receipts-tag receipts-tag--failed">${ctx.esc(t('Fehler', 'Failed'))}</span>` : ''}</span>
+  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}">
+    ${failed ? checkbox(job) : ''}<span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}${failed ? ` <span class="receipts-tag receipts-tag--failed">${ctx.esc(t('Fehler', 'Failed'))}</span>` : ''}</span>
       <span class="row-sub">${failed ? ctx.esc(job.error || '') : purchaseSub(job)} · ${ctx.esc(ago(job.completedAt))}</span>
       <span class="row-sub">${readerTag(job)}</span></span>
-    ${failed
-      ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-action="retry" data-job="${ctx.esc(job.id)}">${ctx.esc(t('Erneut', 'Retry'))}</button>`
-      : `<span class="amount">${ctx.money(job.totalAmount, job.currency)}</span>`}
+    ${failed ? '' : `<span class="amount">${ctx.money(job.totalAmount, job.currency)}</span>`}
   </div>`;
 }
 
 function reviewRow(job) {
   const warnings = parseWarnings(job.warningsJson);
-  return `<div class="receipts-row">
-    <span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}</span>
+  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}">
+    ${checkbox(job)}<span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}</span>
       <span class="row-sub">${purchaseSub(job)}</span>
       <span class="row-sub">${readerTag(job)}</span>
       ${warnings.length ? `<span class="row-sub receipts-warning">${ctx.esc(warnings[0])}${warnings.length > 1 ? ` (+${warnings.length - 1})` : ''}</span>` : ''}</span>
     <span class="amount">${ctx.money(job.totalAmount, job.currency)}</span>
-    <span class="receipts-actions">
-      <a class="${buttonClass(ButtonRole.Secondary)}" href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>
-      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-action="confirm" data-purchase="${ctx.esc(job.purchaseId)}">${ctx.esc(t('Bestätigen', 'Confirm'))}</button>
-    </span>
+    <a class="${buttonClass(ButtonRole.Secondary)}" href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>
   </div>`;
 }
 

@@ -284,6 +284,9 @@
     "queue": "Queue",
     "history": "History",
     "review": "Needs review",
+    "selectAll": "All",
+    "selectNone": "None",
+    "retry": "Try again",
     "upload": "Upload receipt",
     "failed": "Failed"
   },

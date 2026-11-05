@@ -24,7 +24,17 @@
             </div>
         </div>
         <div id="receipts-list" class="rows receipts-list" aria-live="polite"></div>
+        <div id="receipts-sentinel" aria-hidden="true"></div>
     </article>
+    @* Die schwebende Aktionsleiste: immer im Dokument, nur unsichtbar - sie liegt ueber der Seite und
+       schiebt deshalb nichts, wenn sie erscheint. *@
+    <div id="receipts-bar" class="receipts-actionbar" role="toolbar">
+        <span data-bar-count></span>
+        <button type="button" class="btn btn-secondary" data-bar="all" data-i18n="receipts.selectAll">@Text.Get("receipts.selectAll", language)</button>
+        <button type="button" class="btn btn-secondary" data-bar="none" data-i18n="receipts.selectNone">@Text.Get("receipts.selectNone", language)</button>
+        <button type="button" class="btn btn-primary" data-bar="confirm" data-i18n="purchases.confirm">@Text.Get("purchases.confirm", language)</button>
+        <button type="button" class="btn btn-primary" data-bar="retry" data-i18n="receipts.retry" hidden>@Text.Get("receipts.retry", language)</button>
+    </div>
     <input id="receipts-file" type="file" accept="image/*,.pdf" multiple hidden>
 </section>
 

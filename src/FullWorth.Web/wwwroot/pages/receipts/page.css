@@ -13,7 +13,6 @@
 .receipts-row:last-child { border-bottom: 0; }
 .receipts-row .row-main { flex: 1; min-width: 0; }
 .receipts-name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.receipts-actions { display: flex; gap: var(--s2); }
 .receipts-warning { color: var(--warning); }
 .receipts-more { display: flex; justify-content: center; padding: var(--s4) 0; }
 
@@ -27,10 +26,25 @@
 
 @media (max-width: 640px) {
   .receipts-row { flex-wrap: wrap; }
-  .receipts-actions { width: 100%; justify-content: flex-end; }
 }
 
 /* Vier Reiter sind auf dem Telefon breiter als die Karte: sie laufen seitlich, statt umzubrechen. */
 #view-receipts .fw-cycle { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 #view-receipts .fw-cycle button { white-space: nowrap; }
-.receipts-actions a { text-decoration: none; }
+.receipts-row a { text-decoration: none; }
+
+.receipts-check { display: grid; place-items: center; flex: none; }
+.receipts-check input { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: currentColor; }
+.receipts-row.is-selected { background: var(--surface-2); }
+
+/* Platzhalter, bis die erste Seite da ist: dieselbe Hoehe wie eine Zeile. */
+.receipts-skeleton { min-height: 64px; }
+.receipts-sk-line { display: block; height: 12px; width: 60%; border-radius: var(--radius-sm); }
+.receipts-sk-line + .receipts-sk-line { margin-top: var(--s2); width: 35%; }
+
+/* Die schwebende Leiste unten. Auf dem Telefon sitzt sie ueber der unteren Navigation (56px + Rand). */
+.receipts-actionbar { position: fixed; left: 50%; bottom: var(--s6); z-index: 15; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-pill); box-shadow: var(--shadow-menu); transform: translate(-50%, var(--s6)); opacity: 0; visibility: hidden; transition: transform .2s ease, opacity .2s ease, visibility .2s; }
+.receipts-actionbar.is-open { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
+.receipts-actionbar [data-bar-count] { padding: 0 var(--s2); font-weight: 600; white-space: nowrap; }
+@media (max-width: 767px) { .receipts-actionbar { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - var(--s4)); } }
+@media (prefers-reduced-motion: reduce) { .receipts-actionbar { transition: none; } }
