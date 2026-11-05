@@ -15,4 +15,4 @@ await startShellPage(async context => {
     bound = true;
   }
   await renderReceipts(context);
-}, { primaryAction: () => ['receipts.upload', () => chooseFiles(pageContext)] });
+}, { primaryAction: () => ['receipts.upload', () => chooseFiles(pageContext), 'upload'] });

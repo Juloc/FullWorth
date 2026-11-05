@@ -73,7 +73,8 @@ function brandLogoPath(name) {
 // pages/merchants/page.js - keine dritte Symbolzeichnung fuer dieselbe Bedeutung.
 const PRIMARY_ACTION_GLYPH = Object.freeze({
   add: 'ui-plus',
-  edit: 'ui-edit'
+  edit: 'ui-edit',
+  upload: 'ui-upload'
 });
 
 /**

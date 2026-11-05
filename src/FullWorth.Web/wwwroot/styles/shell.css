@@ -58,10 +58,9 @@ html.nav-collapsed .sidebar-user-meta,html.nav-collapsed #theme-toggle,html.nav-
 html.nav-auto-collapsed #nav-collapse:disabled{opacity:.45;cursor:default}
 
 /* Main + top header (§3.1) */
-main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max);margin-inline:auto}
+main{min-width:0;padding:0 var(--s6) calc(var(--s8) + 72px);width:100%;max-width:var(--content-max);margin-inline:auto}
 main:focus{outline:none}
 .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0;padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
-.topbar-title{min-width:0;flex:1 1 auto}
 /* Brotkrumenpfad statt Ueberschrift: Gruppe > Seite, daneben das Suchfeld. Der Pfad und die Aktionen
    teilen sich den Rest gleich, das Suchfeld sitzt in der Mitte und gibt zuerst nach. */
 .breadcrumb{flex:1 1 0;min-width:0}
@@ -74,16 +73,6 @@ main:focus{outline:none}
 .topbar-search:hover{border-color:var(--cta)}
 .topbar-search svg{flex:none;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .topbar-search span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.topbar--crumbs .topbar-actions{flex:1 1 0;width:auto;grid-template-columns:repeat(2,auto) minmax(0,1fr)}
-.topbar-title h1{font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.08}
-.topbar-title p{margin:4px 0 0;color:var(--muted);font-size:13px}
-/* Raster statt flex, und die letzte Spalte nimmt den Rest. Damit stehen die drei Symbole an
-   festen Stellen und nur der Aktionsknopf ändert seine Breite. Vorher war die Leiste rechtsbündig
-   und flexibel, also schob jeder Wechsel der Beschriftung ("Dashboard bearbeiten" -> "Buchung") die
-   Symbole zur Seite - auf jeder Seite, bei jedem Laden.
-   Die Drei in repeat(3,auto) sind die drei Symbolknöpfe im Markup; ein vierter braucht hier eine Zahl. */
-.topbar-actions{display:grid;grid-template-columns:repeat(3,auto) minmax(0,1fr);align-items:center;gap:var(--s2);width:300px;min-width:0}
-.topbar-actions #primary-action{justify-self:end;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* padding:0 ist der Punkt, nicht Kosmetik: components.css gibt JEDEM button 9px 11px, und mit
    border-box bleiben von 36px dann 12px Inhaltsbreite für ein 18px-Symbol. Ein Rasterelement, das
    über seine Fläche hinausragt, richtet der Browser sicherheitshalber am Anfang aus - place-items:center
@@ -93,11 +82,6 @@ main:focus{outline:none}
 .icon-button:hover{border-color:var(--cta)}
 .icon-button.active{background:var(--surface-2);color:var(--text);border-color:var(--line)}
 
-/* #primary-action traegt IMMER Text UND ein echtes Symbol (features/ux-kit.js setPrimaryAction) - CSS
-   entscheidet je Breite, welches davon zu sehen ist. Auf dem Desktop bleibt es die Textaktion von
-   heute; am Telefon wird daraus dieselbe runde Symbolflaeche wie jeder andere Icon-Knopf (Scheibe 13:
-   keine zweite, aus CSS-content:'+'/'✎' erzeugte Umsetzung derselben Aktion mehr). */
-#primary-action svg{display:none}
 #privacy-toggle .pv-on{display:none}
 #privacy-toggle.active .pv-on{display:block}
 #privacy-toggle.active .pv-off{display:none}
@@ -130,33 +114,20 @@ html:not([data-privacy="on"]) #privacy-toggle{display:none}
 @media(max-width:767px){
   .topbar{min-height:56px;padding-top:8px;padding-bottom:8px;align-items:center;flex-direction:row;gap:8px}
   html.pwa-standalone .topbar{padding-top:calc(8px + env(safe-area-inset-top,0px))}
-  .topbar-title{min-width:0;flex:1 1 auto}
   .topbar-search{flex:none;justify-content:center;width:40px;min-width:0;padding:0;border-radius:50%}
   .topbar-search span{display:none}
-  .topbar--crumbs .topbar-actions{flex:none;grid-template-columns:none}
-  .topbar-title h1{font-size:22px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
-  #page-subtitle{display:none}
-  /* Eine Spur je sichtbarem Knopf, alle 40px breit - kein festes Raster mehr.
-     Vorher stand hier "repeat(3, auto) 40px", damit die Leiste gleich breit bleibt, egal ob die Seite
-     eine Aktion hat. Das ging nicht auf: der Privatmodus-Schalter ist normalerweise display:none, also
-     füllten nur drei Kinder die vier Spuren, und die feste 40px-Spur stand leer am Ende. Nahm
-     JavaScript den Aktionsknopf heraus, rutschte alles eine Spur nach links - 40px, und das war der
-     letzte gemessene Sprung der Anwendung (0,003 auf jeder Seite ohne eigene Aktion). */
-  .topbar-actions{width:auto;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:40px;gap:4px}
-  .topbar-actions .icon-button{width:40px;height:40px;min-width:40px;min-height:40px}
-
-  /* Dieselbe runde Symbolflaeche wie jeder andere Icon-Knopf (.icon-button oben), nur 40px statt 36px -
-     das war schon die vertretbare Touch-Zielgroesse der alten FAB-Umsetzung. Der Text bleibt im DOM
-     (er traegt keine eigene Bedeutung mehr, aria-label deckt den Namen ab) und wird nur unsichtbar,
-     das Symbol wird sichtbar - kein content:'+'/'✎' mehr, das den Rest der Anwendung nicht kennt. */
-  /* !important bleibt hier noetig - nicht wegen der Ladereihenfolge (die stimmt schon), sondern weil
-     app.css global [hidden]{display:none!important} setzt (Regel 6: label{display:grid} schlug sonst
-     ein <label hidden> durch). Ohne diese Zeile wuerde eine Seite ohne eigene Aktion den Knopf ganz aus
-     dem Gitter nehmen und .topbar-actions auf eine Spur weniger schrumpfen - genau der Sprung, den die
-     Spur-je-sichtbarem-Knopf-Regel drei Zeilen weiter oben eigentlich verhindern soll. */
-  .topbar-actions #primary-action{display:grid!important;place-items:center;width:40px;height:40px;min-width:40px;min-height:40px;max-width:40px;margin-left:0;padding:0;border-radius:50%;overflow:hidden}
-  /* Reserviert ihre Gitterspur weiter (unsichtbar, nicht entfernt), wenn die Seite keine Aktion hat. */
-  #primary-action[hidden]{visibility:hidden}
-  #primary-action .btn-primary-label{display:none}
-  #primary-action svg{display:block;width:18px;height:18px}
 }
+
+/* Die schwebende Aktionsleiste (Jularr-Muster): Hauptaktion der Seite, Auswahl-Aktionen, Menue "Mehr".
+   Sie liegt ueber der Seite und schiebt nichts; mit Auswahl ersetzen deren Aktionen die Hauptaktion. */
+.action-bar{position:fixed;left:50%;bottom:var(--s6);z-index:15;display:flex;align-items:center;gap:var(--s2);max-width:calc(100vw - var(--s4));padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-pill);box-shadow:var(--shadow-menu);transform:translateX(-50%)}
+.action-bar #primary-action{display:inline-flex;align-items:center;gap:var(--s2);white-space:nowrap}
+.action-bar #primary-action svg{order:-1;width:18px;height:18px}
+.action-bar #primary-action[hidden]{display:none}
+.action-bar-selection{display:none;align-items:center;gap:var(--s2)}
+.action-bar.has-selection .action-bar-selection{display:flex}
+.action-bar.has-selection #primary-action,.action-bar.has-selection #topbar-more,.action-bar.has-selection #privacy-toggle{display:none}
+.action-bar-count{padding:0 var(--s2);font-weight:600;white-space:nowrap}
+.action-bar .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.action-bar .btn{display:inline-flex;align-items:center;gap:var(--s2)}
+@media(max-width:767px){.action-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px))}}

@@ -195,7 +195,6 @@
 
 .tx-row:hover .tx-go-caret{opacity:1;color:var(--text)}
 
-.tx-select-wrap input{width:16px;height:16px;min-height:0;margin:0;accent-color:currentColor}
 
 .tx-row.tx-selected{background:var(--surface-2)}
 

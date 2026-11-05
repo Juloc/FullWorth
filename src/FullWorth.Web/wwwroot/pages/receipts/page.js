@@ -7,6 +7,7 @@
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { confirmMessage } from '../../components/confirm.js';
+import { spriteHref } from '../../components/sprite.js';
 
 const TABS = ['queue', 'history', 'review', 'failed'];
 const PAGE = 40;
@@ -33,7 +34,7 @@ export function bindReceipts(context) {
   ctx = context;
   ctx.$('#view-receipts').addEventListener('click', onClick);
   ctx.$('#view-receipts').addEventListener('change', onSelect);
-  ctx.$('#receipts-bar').addEventListener('click', onBar);
+  document.getElementById('action-bar-selection').addEventListener('click', onBar);
   ctx.$('#receipts-file').addEventListener('change', upload);
   // Endloses Nachladen: der Wachposten am Ende der Liste fragt die naechste Seite an, sobald er in die
   // Naehe des Bildschirms kommt. Eine Seitenzahl gibt es nicht - in fast allen Faellen liest man von oben.
@@ -113,17 +114,24 @@ function onSelect(event) {
   showBar();
 }
 
-// Die schwebende Leiste: sie erscheint erst, wenn etwas angehakt ist, und traegt die Aktionen fuer
-// genau diese Belege - statt Knoepfen an jeder Zeile.
+// Die Auswahl-Aktionen wohnen in der globalen Aktionsleiste (layout: #action-bar-selection) und ersetzen
+// dort die Hauptaktion, solange etwas angehakt ist. Neu gezeichnet wird nur, wenn sich Zahl oder Reiter
+// aendern - ein Knopf, den man gerade drueckt, soll seinen Fokus behalten.
+let barKey = '';
 function showBar() {
-  const bar = ctx.$('#receipts-bar');
   const open = selected.size > 0 && (tab === 'review' || tab === 'failed');
-  bar.classList.toggle('is-open', open);
-  ctx.$('[data-bar-count]').textContent = t(`${selected.size} ausgewählt`, `${selected.size} selected`);
-  const confirmButton = ctx.$('[data-bar="confirm"]');
-  const retryButton = ctx.$('[data-bar="retry"]');
-  confirmButton.hidden = tab !== 'review';
-  retryButton.hidden = tab !== 'failed';
+  document.getElementById('action-bar').classList.toggle('has-selection', open);
+  const key = open ? `${tab}:${selected.size}` : '';
+  if (key === barKey) return;
+  barKey = key;
+  const glyph = id => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref(id)}"></use></svg>`;
+  const review = tab === 'review';
+  document.getElementById('action-bar-selection').innerHTML = open
+    ? `<span class="action-bar-count">${ctx.esc(t(`${selected.size} ausgewählt`, `${selected.size} selected`))}</span>
+       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bar="all">${ctx.esc(ctx.get('receipts.selectAll'))}</button>
+       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bar="none">${ctx.esc(ctx.get('receipts.selectNone'))}</button>
+       <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-bar="${review ? 'confirm' : 'retry'}">${glyph(review ? 'ui-check' : 'ui-refresh')}<span>${ctx.esc(review ? ctx.get('purchases.confirm') : ctx.get('receipts.retry'))}</span></button>`
+    : '';
 }
 
 async function onBar(event) {
@@ -325,7 +333,7 @@ function purchaseSub(job) {
 }
 
 function checkbox(job) {
-  return `<label class="receipts-check"><input type="checkbox" data-select="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''} aria-label="${ctx.esc(t('Auswählen', 'Select'))}"></label>`;
+  return `<label class="fw-check"><input type="checkbox" data-select="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''} aria-label="${ctx.esc(t('Auswählen', 'Select'))}"></label>`;
 }
 
 function historyRow(job) {

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 namespace FullWorth.Web.Navigation;
 
 /// <summary>
-/// Ueberschrift und Unterzeile einer Seite, serverseitig (#154).
+/// Ueberschrift einer Seite, serverseitig (#154).
 ///
 /// Sie muessen im Dokument stehen, nicht nachgetragen werden. Die alte Huelle hatte deshalb die
 /// Ueberschrift der Startseite fest im Markup - fuer jede Seite, und JavaScript tauschte sie danach
@@ -20,7 +20,7 @@ namespace FullWorth.Web.Navigation;
 /// </summary>
 public sealed class PageHeadings
 {
-    private readonly Dictionary<string, (string Title, string Subtitle)> headings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> headings = new(StringComparer.Ordinal);
 
     public PageHeadings(IWebHostEnvironment environment)
     {
@@ -36,8 +36,7 @@ public sealed class PageHeadings
             {
                 var title = page.Value.TryGetProperty("title", out var t) ? t.GetString() : null;
                 if (title is null) continue;
-                var subtitle = page.Value.TryGetProperty("subtitle", out var s) ? s.GetString() : null;
-                headings[page.Name] = (title, subtitle ?? string.Empty);
+                headings[page.Name] = title;
             }
         }
 
@@ -48,7 +47,7 @@ public sealed class PageHeadings
         {
             if (headings.ContainsKey(entry.View)) continue;
             var label = Lookup(document.RootElement, entry.Label);
-            if (label is not null) headings[entry.View] = (label, string.Empty);
+            if (label is not null) headings[entry.View] = label;
         }
     }
 
@@ -65,9 +64,5 @@ public sealed class PageHeadings
     }
 
     public string Title(string? view) =>
-        view is not null && headings.TryGetValue(view, out var heading) ? heading.Title : string.Empty;
-
-    /// <summary>Eine Seite ohne Unterzeile hat keinen Schluessel dafuer - das ist Absicht, kein Fehler.</summary>
-    public string Subtitle(string? view) =>
-        view is not null && headings.TryGetValue(view, out var heading) ? heading.Subtitle : string.Empty;
+        view is not null && headings.TryGetValue(view, out var heading) ? heading : string.Empty;
 }

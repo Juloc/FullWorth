@@ -24,8 +24,10 @@
 .receipts-bar { display: block; height: 6px; margin-top: var(--s2); background: var(--surface-2); border-radius: var(--radius-pill); overflow: hidden; }
 .receipts-bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s ease; }
 
+/* Auf dem Telefon geht "Ansehen" in eine eigene Zeile unter dem Beleg, statt ihm die Breite zu nehmen. */
 @media (max-width: 640px) {
   .receipts-row { flex-wrap: wrap; }
+  .receipts-row > a { order: 3; flex: 1 0 100%; text-align: center; }
 }
 
 /* Vier Reiter sind auf dem Telefon breiter als die Karte: sie laufen seitlich, statt umzubrechen. */
@@ -33,8 +35,6 @@
 #view-receipts .fw-cycle button { white-space: nowrap; }
 .receipts-row a { text-decoration: none; }
 
-.receipts-check { display: grid; place-items: center; flex: none; }
-.receipts-check input { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: currentColor; }
 .receipts-row.is-selected { background: var(--surface-2); }
 
 /* Platzhalter, bis die erste Seite da ist: dieselbe Hoehe wie eine Zeile. */
@@ -42,9 +42,3 @@
 .receipts-sk-line { display: block; height: 12px; width: 60%; border-radius: var(--radius-sm); }
 .receipts-sk-line + .receipts-sk-line { margin-top: var(--s2); width: 35%; }
 
-/* Die schwebende Leiste unten. Auf dem Telefon sitzt sie ueber der unteren Navigation (56px + Rand). */
-.receipts-actionbar { position: fixed; left: 50%; bottom: var(--s6); z-index: 15; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-pill); box-shadow: var(--shadow-menu); transform: translate(-50%, var(--s6)); opacity: 0; visibility: hidden; transition: transform .2s ease, opacity .2s ease, visibility .2s; }
-.receipts-actionbar.is-open { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
-.receipts-actionbar [data-bar-count] { padding: 0 var(--s2); font-weight: 600; white-space: nowrap; }
-@media (max-width: 767px) { .receipts-actionbar { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - var(--s4)); } }
-@media (prefers-reduced-motion: reduce) { .receipts-actionbar { transition: none; } }

@@ -172,21 +172,17 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
   const NAV = JSON.parse(readFileSync(new URL('locales/de.json', WWWROOT), 'utf8')).nav ?? {};
   const heading = HEADINGS[data.ActiveView] ?? (NAV[data.ActiveView] ? { title: NAV[data.ActiveView] } : {});
 
-  const crumbs = data.Header === 'breadcrumb';
-  const crumbLabel = crumbs ? groupLabelOf(data.ActiveView) : undefined;
+  const crumbLabel = groupLabelOf(data.ActiveView);
   let html = evaluateConditions(layout
-    .replace(/@\*[^]*?\*@/g, '')
-    .replace('@(crumbs ? " topbar--crumbs" : "")', crumbs ? ' topbar--crumbs' : ''),
-    { crumbs, '!crumbs': !crumbs, 'crumbGroup is not null': crumbLabel !== undefined })
+    .replace(/@\*[^]*?\*@/g, ''),
+    { 'crumbGroup is not null': crumbLabel !== undefined })
     .replace('@crumbGroup.Label', crumbLabel ?? '')
     .replace('@Text.Get(crumbGroup.Label, language)', crumbLabel ? localeText(crumbLabel, language) : '')
-    .replace('@Headings.Title(view)', heading.title ?? '')
     .replace(/@Text\.Get\("([\w.]+)", language\)/g, (_, key) => localeText(key, language))
     // @inject und der Kopfblock des Rahmens tragen keine Ausgabe.
     .replace(/^@inject .*$/gm, '')
     .replace(/^@\{[^]*?\n?\}$/m, '')
     .replace('@(ViewData["PageTitle"] as string ?? Headings.Title(view))', heading.title ?? '')
-    .replace('@(ViewData["PageSubtitle"] as string ?? Headings.Subtitle(view))', heading.subtitle ?? '')
     .replace('@(view ?? string.Empty)', data.ActiveView ?? '')
     .replace('<partial name="_Navigation" />', navigation)
     .replace('<partial name="_BottomNavigation" />', bottomNavigation)

@@ -29,10 +29,9 @@
 @inject FullWorth.Web.Navigation.LocaleText Text
 @{
     var view = ViewData["ActiveView"] as string;
-    // Eine Seite kann statt Ueberschrift und Unterzeile einen Brotkrumenpfad mit Suchfeld zeigen
-    // (ViewData["Header"] = "breadcrumb"). Der Titel bleibt die <h1> - als letztes Glied des Pfads.
-    var crumbs = ViewData["Header"] as string == "breadcrumb";
-    var crumbGroup = crumbs ? FullWorth.Web.Navigation.NavigationCatalog.Groups.FirstOrDefault(group => group.Items.Any(item => item.View == view)) : null;
+    // Jede Seite zeigt statt Ueberschrift und Unterzeile einen Brotkrumenpfad (Gruppe > Seite) mit dem
+    // Suchfeld daneben. Der Titel bleibt die <h1> - als letztes Glied des Pfads.
+    var crumbGroup = FullWorth.Web.Navigation.NavigationCatalog.Groups.FirstOrDefault(group => group.Items.Any(item => item.View == view));
     var language = FullWorth.Web.Navigation.LocaleText.Language(Context);
 }
 <!doctype html>
@@ -87,54 +86,40 @@
 <div class="shell">
     <partial name="_Navigation" />
     <main id="main" tabindex="-1">
-        <header class="topbar@(crumbs ? " topbar--crumbs" : "")">
-            @if (crumbs)
-            {
-                <nav class="breadcrumb" aria-label="Breadcrumb">
-                    <ol>
-                        @if (crumbGroup is not null)
-                        {
-                            <li data-i18n="@crumbGroup.Label">@Text.Get(crumbGroup.Label, language)</li>
-                        }
-                        <li aria-current="page"><h1 id="page-title">@Headings.Title(view)</h1></li>
-                    </ol>
-                </nav>
-                <button id="global-search" class="topbar-search" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-search")"></use></svg>
-                    <span data-i18n="search.placeholder">@Text.Get("search.placeholder", language)</span>
-                </button>
-            }
-            else
-            {
-            <div class="topbar-title">
-                @* Steht im Dokument, statt nachgetragen zu werden: eine Ueberschrift, die erst
-                   nach dem ersten Zeichnen erscheint, schiebt alles darunter nach unten - und
-                   LayoutStabilityTests hat genau das gemessen. *@
-                <h1 id="page-title">@(ViewData["PageTitle"] as string ?? Headings.Title(view))</h1>
-                <p id="page-subtitle">@(ViewData["PageSubtitle"] as string ?? Headings.Subtitle(view))</p>
-            </div>
-            }
-            <div class="topbar-actions">
-                @if (!crumbs)
-                {
-                <button id="global-search" class="icon-button" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-search")"></use></svg>
-                </button>
-                }
-                <button id="privacy-toggle" class="icon-button" type="button" aria-pressed="false" data-i18n-title="privacy.toggle" title="Privatmodus umschalten" aria-label="Privacy">
-                    <svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye")"></use></svg>
-                    <svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye-off")"></use></svg>
-                </button>
-                <button id="topbar-more" class="icon-button" type="button" data-i18n-title="nav.more" title="Mehr" aria-label="More">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-more")"></use></svg>
-                </button>
-                @* Versteckt im Markup und nicht weggelassen: die Seite meldet ihre Hauptaktion beim
-                   Start an, und ein Knopf, der erst dann ins Markup kaeme, schoebe die Leiste. *@
-                <button id="primary-action" class="btn btn-primary" type="button" hidden><span class="btn-primary-label"></span></button>
-            </div>
+        <header class="topbar">
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+                <ol>
+                    @if (crumbGroup is not null)
+                    {
+                        <li data-i18n="@crumbGroup.Label">@Text.Get(crumbGroup.Label, language)</li>
+                    }
+                    @* Steht im Dokument, statt nachgetragen zu werden: eine Ueberschrift, die erst nach dem
+                       ersten Zeichnen erscheint, schiebt alles darunter nach unten - und LayoutStabilityTests
+                       hat genau das gemessen. *@
+                    <li aria-current="page"><h1 id="page-title">@(ViewData["PageTitle"] as string ?? Headings.Title(view))</h1></li>
+                </ol>
+            </nav>
+            <button id="global-search" class="topbar-search" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-search")"></use></svg>
+                <span data-i18n="search.placeholder">@Text.Get("search.placeholder", language)</span>
+            </button>
         </header>
         @RenderBody()
     </main>
+</div>
+@* Die schwebende Aktionsleiste: die Hauptaktion der Seite, ihre Auswahl-Aktionen und das Menue "Mehr".
+   Sie liegt ueber der Seite (fixed) und schiebt deshalb nichts. Die Hauptaktion steht VERSTECKT im
+   Markup und nicht weggelassen: die Seite meldet sie beim Start an. *@
+<div id="action-bar" class="action-bar" role="toolbar" aria-label="Aktionen">
+    <div id="action-bar-selection" class="action-bar-selection"></div>
+    <button id="privacy-toggle" class="icon-button" type="button" aria-pressed="false" data-i18n-title="privacy.toggle" title="Privatmodus umschalten" aria-label="Privacy">
+        <svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye")"></use></svg>
+        <svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye-off")"></use></svg>
+    </button>
+    <button id="primary-action" class="btn btn-primary" type="button" hidden><span class="btn-primary-label"></span></button>
+    <button id="topbar-more" class="icon-button" type="button" data-i18n-title="nav.more" title="Mehr" aria-label="More">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-more")"></use></svg>
+    </button>
 </div>
 <partial name="_BottomNavigation" />
 @* Coach-Starter und Coach-Andockbereich.
