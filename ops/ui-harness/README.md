@@ -11,8 +11,7 @@ node ops/ui-harness/server.mjs 8096     # different port
 It serves `src/FullWorth.Web/wwwroot` unchanged and injects `fixtures.js` before `app.js`, which
 stubs the BFF. Nothing here is served by the app; it is a tool, not a feature.
 
-`node ops/ui-harness/check-receipt-vision.mjs` is a separate check, not part of the server: it runs the
-receipt camera's image detection (`receipt-vision.js`) on synthetic images.
+The receipt camera's image detection and stitching are measured separately, in `ops/receipt-vision-bench`.
 
 ## Why it exists
 

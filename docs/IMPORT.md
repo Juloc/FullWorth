@@ -530,14 +530,34 @@ to `tesseract` to get local OCR.
 ## Receipt camera and storing receipts in Paperless
 
 **Camera.** On the purchases page "Mit Kamera" opens the browser camera (`getUserMedia`, so it needs
-HTTPS). The page finds the receipt in the live image (the largest bright area, reduced to a
-quadrilateral), shows it, and takes the photo by itself once the image is still and sharp. The photo is
-straightened by perspective before it is stored. A long receipt is photographed section by section: the
-bottom of the last photo is shown faintly over the live image so the next one overlaps. The photos go
-into the normal scan set (review, reorder, "analyze as one receipt"); the camera knows neither the
-server nor the purchase. The detection assumes a receipt lighter than its surface and has no manual
-corner adjustment; the shutter button is always available. The thresholds were tuned on synthetic
-images, not on a phone.
+HTTPS). It has two modes.
+
+- *Einzelfoto*: the page finds the receipt in the live image, shows it, and takes the photo by itself once the image is
+  still and sharp. The photo is straightened by perspective before it is stored. Several photos with overlap are fine.
+- *Langer Bon*: tap start and move slowly down the receipt. The page compares its live image with the part it took last,
+  takes the next part when about half of it is new, and takes the last one when the bottom end of the receipt comes into
+  view. "Zusammensetzen" then joins the parts into one tall image - but only at seams that can be found reliably
+  (good correlation, no second equally good place). Where a seam is not certain the receipt stays in separate parts and the
+  camera says so. A seam that is wrong would duplicate or swallow lines, which is worse than no seam. The joined image is
+  then cut into pages of at most 1 : 1.6 at rows with (almost) no ink, without overlap: a 1000 x 5000 px image would be
+  scaled down so far for the analysis that the print loses three quarters of its pixels, and because the seams are proven
+  there is no overlap left that would have to be removed again.
+
+Photos that do not come from the camera (the phone's own camera app, the gallery) are straightened the same way when they
+are added to the scan set, marked "Begradigt" or "Rand nicht erkannt", and the edge can be dragged by hand ("Zuschneiden")
+or the original used ("Original", one tap). The automatic crop can cut off part of a receipt when a shadow lies across the
+paper (2 of 130 synthetic scenes; the rating of such a result is no lower than that of a good one, so it cannot be told apart
+automatically) - which is why the straightened photo is shown before anything is analysed. The camera app has the better optics and autofocus, which matters most on iPhone and iPad, where the
+browser camera has no light switch and no focus control.
+
+The detection looks for the paper from three sources (bright region, region full of text, long straight edges) and rates
+each candidate; when nothing rates well enough it shows no outline and leaves the shutter to the user. It assumes a
+receipt lighter than its surface; a white receipt on a white table is usually not found. The photos go into the normal
+scan set (review, reorder, "analyze as one receipt"); the camera knows neither the server nor the purchase.
+
+The thresholds come from `ops/receipt-vision-bench`: synthetic receipt photos with a known answer (tilted, rotated,
+crumpled, shadows, a finger on the edge, white table, ...), measured on seeds never used for tuning, see its README for the
+numbers. They say what the generator can draw, not how a real phone behaves; that has not been tested on a device.
 
 **Paperless.** A purchase with a receipt file can be stored in Paperless from its detail dialog, after
 an explicit confirmation - nothing is ever sent automatically. Photos become **one** PDF (the JPEG

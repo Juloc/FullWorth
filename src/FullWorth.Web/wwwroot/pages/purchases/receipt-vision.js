@@ -1,11 +1,26 @@
 // Bilderkennung fuer die Belegkamera - ohne Bibliothek, ohne nachgeladenen Code.
 //
-// Alles hier arbeitet auf Pixelfeldern (Uint8Array / RGBA), nicht auf dem DOM: so laesst es sich mit
-// Testbildern pruefen, und die Kamera ruft es nur mit einem kleinen Vorschaubild auf. Nur das
-// Geraderechnen laeuft auf dem vollen Foto.
+// Alles hier arbeitet auf Pixelfeldern (Uint8Array / RGBA), nicht auf dem DOM: so laesst es sich an
+// kuenstlichen Fotos messen (ops/receipt-vision-bench), und die Kamera ruft es nur mit einem kleinen
+// Vorschaubild auf. Nur das Geraderechnen laeuft auf dem vollen Foto.
 //
-// Annahme, die jede Erkennung hier trifft: ein Beleg ist heller als das, worauf er liegt. Liegt er auf
-// einem weissen Tisch, wird nichts erkannt - dann bleibt der Ausloeser von Hand, und nichts wird geraten.
+// Den Bon im Bild zu finden geht in drei Schritten:
+//   1. Kandidaten: Vierecke, die ein Blatt sein koennten. Sie kommen aus drei Quellen, weil jede
+//      dort versagt, wo eine andere traegt:
+//        helligkeit  das groesste helle Gebiet            (scheitert bei weissem Tisch, Schatten)
+//        textur      das Gebiet voller Schrift             (scheitert auf gemustertem Tisch)
+//        kanten      vier lange gerade Kanten, die ein Blatt umschliessen (scheitert bei kaum Kontrast)
+//   2. Bewertung: jedes Viereck bekommt Zahlen - wie sehr seine Seiten echte Kanten sind, wie sehr sein
+//      Inneres sich von der Umgebung unterscheidet, wie viel Schrift darin steht - und ein lineares
+//      Modell macht eine Wertung daraus. Die Gewichte stehen in MODEL und kommen aus
+//      ops/receipt-vision-bench (learn.mjs), nicht aus dem Bauch.
+//   3. Nachschaerfen: jede Seite des Siegers rutscht auf die staerkste Kante in ihrer Naehe.
+//
+// Annahme, die alles hier trifft: ein Bon ist ein Rechteck aus hellem Papier mit Schrift. Wo das nicht
+// stimmt oder nichts Beleghaftes da ist, kommt null - dann bleibt der Ausloeser von Hand, und nichts
+// wird geraten.
+
+export const SOURCES = ['helligkeit', 'textur', 'kanten'];
 
 /** RGBA -> Graubild (Luma), verkleinert auf hoechstens `targetWidth` Pixel Breite (Mittelwert je Block). */
 export function toGray(rgba, width, height, targetWidth = width) {
@@ -57,38 +72,105 @@ export function motion(a, b) {
   return sum / a.length;
 }
 
+// ------------------------------------------------------------------ Erkennung
+
 /**
- * Sucht den Beleg im Bild: das groesste helle Gebiet, dessen Huelle auf vier Ecken reduziert wird.
- * Ergebnis: Ecken oben links, oben rechts, unten rechts, unten links in 0..1 - oder null, wenn nichts
- * Beleghaftes da ist (zu klein, zu unregelmaessig).
+ * Die Gewichte der Bewertung und die Mindestwertung, angelernt mit ops/receipt-vision-bench/learn.mjs an
+ * kuenstlichen Fotos (Seeds 101-122) und geprueft an anderen (1001-1012). Lieber keine Antwort als eine
+ * falsche: die Mindestwertung ist dort gesetzt, wo auf den Pruefbildern ohne Bon nichts mehr erkannt wird.
  */
-export function findReceipt({ gray, width, height }) {
-  const smooth = blur(gray, width, height);
-  const threshold = otsu(smooth);
-  const mask = new Uint8Array(width * height);
-  for (let i = 0; i < mask.length; i++) mask[i] = smooth[i] > threshold ? 1 : 0;
+export const MODEL = {
+  threshold: 0.1,
+  bias: -20.064,
+  weights: { edgeMean: 1.197, edgeMin: 5.56, contrast: 7.399, texture: 2.074, area: 3.891, borders: -0.299, known: 2.903 }
+};
 
-  const region = largestRegion(mask, width, height);
-  if (!region || region.size < width * height * 0.12) return null;
+/**
+ * Sucht den Beleg im Bild. Ergebnis: Ecken oben links, oben rechts, unten rechts, unten links in 0..1,
+ * die Bewertung, und ob der Beleg oben/unten ueber den Bildrand hinausgeht (bei langen Bons der
+ * Normalfall) - oder null, wenn nichts Beleghaftes da ist. `sources` waehlt die Kandidatenquellen.
+ */
+export function findReceipt({ gray, width, height }, { sources = SOURCES, model = MODEL } = {}) {
+  const found = bestCandidate(candidatePool(analyse(gray, width, height), sources), model);
+  return found ? finish(found, width, height) : null;
+}
 
-  const quad = reduceToQuad(convexHull(region.edge));
-  if (!quad) return null;
-  const quadArea = polygonArea(quad);
-  // Ein Beleg fuellt sein Viereck fast ganz. Ein Gebiet, das es nicht tut, ist etwas anderes: ein
-  // heller Fleck, ein Fenster, ein Tisch mit Reflexion.
-  if (quadArea <= 0 || region.size / quadArea < 0.8) return null;
+/** Wie `findReceipt`, aber mit allen bewerteten Kandidaten - fuer das Anlernen der Gewichte. */
+export function rateCandidates({ gray, width, height }, { sources = SOURCES } = {}) {
+  const field = analyse(gray, width, height);
+  return candidatePool(field, sources).map(candidate => rateRaw(field, candidate)).filter(Boolean);
+}
 
-  // Die Maske reicht ueber den Papierrand hinaus (Weichzeichnen, Raster des Vorschaubildes): einen
-  // Pixel nach innen, damit im geraden Ergebnis kein Streifen Tisch bleibt.
-  const ordered = orderUpright(insetQuad(quad, 1));
+function candidatePool(field, sources) {
+  const pool = [];
+  if (sources.includes('helligkeit')) pool.push(...brightCandidates(field));
+  if (sources.includes('textur')) pool.push(...textureCandidates(field));
+  if (sources.includes('kanten')) pool.push(...edgeCandidates(field));
+  return pool.map(candidate => ({ ...candidate, field }));
+}
+
+function bestCandidate(pool, model) {
+  let best = null;
+  for (const candidate of pool) {
+    const rated = rateRaw(candidate.field, candidate);
+    if (!rated) continue;
+    rated.score = scoreOf(rated.features, model);
+    if (!best || rated.score > best.score) best = rated;
+  }
+  return best && best.score >= model.threshold ? best : null;
+}
+
+function finish(best, width, height) {
+  const snapped = snap(best.field, best);
+  const ordered = orderUpright(snapped);
   return {
     corners: ordered.map(p => ({ x: p.x / width, y: p.y / height })),
-    coverage: quadArea / (width * height),
-    // Der Beleg geht ueber den Bildrand hinaus: bei langen Bons der Normalfall, dann folgt ein
-    // weiteres Foto mit Ueberlappung.
-    continuesUp: region.minY <= 1,
-    continuesDown: region.maxY >= height - 2
+    coverage: best.area,
+    score: best.score,
+    source: best.source,
+    // der Beleg geht weiter, wenn eine seiner Seiten auf dem Bildrand liegt
+    continuesUp: best.border.top,
+    continuesDown: best.border.bottom
   };
+}
+
+export function scoreOf(features, model = MODEL) {
+  let z = model.bias;
+  for (const key of Object.keys(model.weights)) z += model.weights[key] * features[key];
+  return 1 / (1 + Math.exp(-z));
+}
+
+/**
+ * Die Ecken des Stuecks, das beim Zusammensetzen eines langen Bons gerade gerechnet wird (Pixel, TL TR BR BL).
+ *
+ * Geht der Bon oben oder unten ueber den Bildrand hinaus, liegt dort keine Papierkante, sondern der
+ * Bildrand - und der verlaeuft nicht rechtwinklig zu den Seiten des Bons, sobald das Handy leicht
+ * gedreht ist. Wuerde man ihn zur oberen Kante machen, wuerde jedes Stueck anders verschert. Stattdessen
+ * wird dort eine Linie rechtwinklig zu den Seiten gelegt, durch die weiter innen liegende Ecke
+ * (es geht ein kleines Dreieck Bild verloren, die Ueberlappung deckt es ab). Eine echte Papierkante
+ * bleibt, wie sie ist.
+ */
+export function stripCorners(quad, continuesUp, continuesDown) {
+  const [tl, tr, br, bl] = quad;
+  const unit = (a, b) => { const l = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: (b.x - a.x) / l, y: (b.y - a.y) / l }; };
+  const dl = unit(tl, bl), dr = unit(tr, br);
+  const dm = Math.hypot(dl.x + dr.x, dl.y + dr.y) || 1;
+  const d = { x: (dl.x + dr.x) / dm, y: (dl.y + dr.y) / dm };
+  const along = p => p.x * d.x + p.y * d.y;
+  const onLine = (a, b, t) => {
+    // der Punkt der Geraden a-b, dessen Abstand entlang d gleich t ist
+    const den = along({ x: b.x - a.x, y: b.y - a.y });
+    return Math.abs(den) < 1e-9 ? a : { x: a.x + (b.x - a.x) * (t - along(a)) / den, y: a.y + (b.y - a.y) * (t - along(a)) / den };
+  };
+  const top = continuesUp ? Math.max(along(tl), along(tr)) : null;
+  const bottom = continuesDown ? Math.min(along(bl), along(br)) : null;
+  if (top !== null && bottom !== null && top >= bottom) return quad;
+  return [
+    top === null ? tl : onLine(tl, bl, top),
+    top === null ? tr : onLine(tr, br, top),
+    bottom === null ? br : onLine(tr, br, bottom),
+    bottom === null ? bl : onLine(tl, bl, bottom)
+  ];
 }
 
 /** Groesse des geraden Ergebnisbildes aus den Ecken in Pixeln; die lange Seite hoechstens `maxLong`. */
@@ -130,7 +212,24 @@ export function warp(src, srcW, srcH, corners, outW, outH) {
   return out;
 }
 
-// --- Bausteine ---------------------------------------------------------------------------------
+// ------------------------------------------------------------------ gemeinsame Messwerte
+
+/** Was alle Quellen und die Bewertung aus dem Bild brauchen, einmal berechnet. */
+function analyse(gray, width, height) {
+  const smooth = blur(gray, width, height);
+  const gx = new Float32Array(width * height), gy = new Float32Array(width * height), mag = new Float32Array(width * height);
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      gx[i] = (smooth[i - width + 1] + 2 * smooth[i + 1] + smooth[i + width + 1]) - (smooth[i - width - 1] + 2 * smooth[i - 1] + smooth[i + width - 1]);
+      gy[i] = (smooth[i + width - 1] + 2 * smooth[i + width] + smooth[i + width + 1]) - (smooth[i - width - 1] + 2 * smooth[i - width] + smooth[i - width + 1]);
+      mag[i] = Math.hypot(gx[i], gy[i]);
+    }
+  }
+  // Schriftdichte: wie viel Kante pro Flaeche (Mittelwert ueber 7x7)
+  const texture = boxMean(mag, width, height, 3);
+  return { gray, smooth, gx, gy, mag, texture, width, height };
+}
 
 function blur(gray, width, height) {
   const out = new Uint8Array(gray.length);
@@ -153,15 +252,44 @@ function blur(gray, width, height) {
   return out;
 }
 
+function boxMean(src, width, height, r) {
+  const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0, n = 0;
+      for (let dx = -r; dx <= r; dx++) { const xx = x + dx; if (xx >= 0 && xx < width) { sum += src[y * width + xx]; n++; } }
+      tmp[y * width + x] = sum / n;
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0, n = 0;
+      for (let dy = -r; dy <= r; dy++) { const yy = y + dy; if (yy >= 0 && yy < height) { sum += tmp[yy * width + x]; n++; } }
+      out[y * width + x] = sum / n;
+    }
+  }
+  return out;
+}
+
+function bilinear(img, width, height, x, y) {
+  const x0 = Math.min(width - 2, Math.max(0, Math.floor(x))), y0 = Math.min(height - 2, Math.max(0, Math.floor(y)));
+  const fx = Math.min(1, Math.max(0, x - x0)), fy = Math.min(1, Math.max(0, y - y0));
+  const i = y0 * width + x0;
+  return (img[i] * (1 - fx) + img[i + 1] * fx) * (1 - fy) + (img[i + width] * (1 - fx) + img[i + width + 1] * fx) * fy;
+}
+
 /** Schwelle nach Otsu: trennt Hell von Dunkel so, dass die Streuung innerhalb der Gruppen minimal ist. */
-function otsu(gray) {
-  const hist = new Float64Array(256);
-  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
-  const total = gray.length;
+function otsu(values, levels = 256) {
+  const hist = new Float64Array(levels);
+  let max = 0;
+  for (let i = 0; i < values.length; i++) if (values[i] > max) max = values[i];
+  const scale = (levels - 1) / Math.max(1e-9, max);
+  for (let i = 0; i < values.length; i++) hist[Math.round(values[i] * scale)]++;
+  const total = values.length;
   let sumAll = 0;
-  for (let i = 0; i < 256; i++) sumAll += i * hist[i];
-  let sumB = 0, weightB = 0, best = 0, threshold = 127;
-  for (let t = 0; t < 256; t++) {
+  for (let i = 0; i < levels; i++) sumAll += i * hist[i];
+  let sumB = 0, weightB = 0, best = 0, threshold = levels / 2;
+  for (let t = 0; t < levels; t++) {
     weightB += hist[t];
     if (!weightB) continue;
     const weightF = total - weightB;
@@ -170,10 +298,40 @@ function otsu(gray) {
     const between = weightB * weightF * (sumB / weightB - (sumAll - sumB) / weightF) ** 2;
     if (between > best) { best = between; threshold = t; }
   }
-  return threshold;
+  return threshold / scale;
 }
 
-/** Das groesste zusammenhaengende helle Gebiet; liefert seine Groesse und je Zeile den linken und rechten Rand. */
+// ------------------------------------------------------------------ Quelle 1 und 2: Gebiete
+
+function brightCandidates({ smooth, width, height }) {
+  const threshold = otsu(smooth);
+  const mask = new Uint8Array(width * height);
+  for (let i = 0; i < mask.length; i++) mask[i] = smooth[i] > threshold ? 1 : 0;
+  return fromMask(mask, width, height, 'helligkeit', 0);
+}
+
+function textureCandidates({ texture, width, height }) {
+  const threshold = otsu(texture);
+  const mask = new Uint8Array(width * height);
+  for (let i = 0; i < mask.length; i++) mask[i] = texture[i] > threshold ? 1 : 0;
+  // Die Schrift fuellt das Papier nicht bis an den Rand: den Rand des Blattes dazugeben
+  return fromMask(mask, width, height, 'textur', 0.07);
+}
+
+/** Das groesste Gebiet einer Maske als Viereck; `grow` vergroessert es um diesen Anteil seiner Breite. */
+function fromMask(mask, width, height, source, grow) {
+  const region = largestRegion(mask, width, height);
+  if (!region || region.size < width * height * 0.01) return [];
+  let quad = reduceToQuad(convexHull(region.edge));
+  if (!quad) return [];
+  if (grow > 0) {
+    const shortSide = Math.min(dist(quad[0], quad[1]), dist(quad[1], quad[2]));
+    quad = insetQuad(quad, -grow * shortSide);
+  }
+  return [{ corners: quad, source }];
+}
+
+/** Das groesste zusammenhaengende Gebiet; liefert seine Groesse und je Zeile den linken und rechten Rand. */
 function largestRegion(mask, width, height) {
   const seen = new Uint8Array(mask.length);
   const stack = new Int32Array(mask.length);
@@ -204,7 +362,7 @@ function largestRegion(mask, width, height) {
         if (right[y] < 0) continue;
         edge.push({ x: left[y], y }, { x: right[y] + 1, y }, { x: left[y], y: y + 1 }, { x: right[y] + 1, y: y + 1 });
       }
-      best = { size, edge, minY, maxY };
+      best = { size, edge };
     }
   }
   return best;
@@ -260,7 +418,7 @@ function reduceToQuad(hull) {
   return poly;
 }
 
-/** Jede Kante des Vierecks um `d` nach innen schieben und die Ecken neu schneiden. */
+/** Jede Kante des Vierecks um `d` nach innen schieben (negativ: nach aussen) und die Ecken neu schneiden. */
 function insetQuad(quad, d) {
   const cx = quad.reduce((s, p) => s + p.x, 0) / 4;
   const cy = quad.reduce((s, p) => s + p.y, 0) / 4;
@@ -287,14 +445,294 @@ function intersect(a, b, c, d) {
   return { x: a.x + t * d1x, y: a.y + t * d1y, t };
 }
 
-function polygonArea(poly) {
-  let sum = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i], q = poly[(i + 1) % poly.length];
-    sum += p.x * q.y - q.x * p.y;
-  }
-  return Math.abs(sum) / 2;
+// ------------------------------------------------------------------ Quelle 3: Kanten
+
+const DEGREE = Math.PI / 180;
+
+/**
+ * Vier lange gerade Kanten, die ein Blatt umschliessen: Hough-Transformation ueber die Kantenpixel (die
+ * Richtung des Gradienten sagt, welche Seite die hellere ist), jede Gerade genau nachgezogen, jede
+ * Vierergruppe, deren Normalen sich im rechten Winkel drehen, ein Kandidat. Die Bildraender sind
+ * Geraden ohne eigene Kante: ein Bon, der ueber den Rand hinausgeht, hat dort seine Seite.
+ */
+function edgeCandidates({ gx, gy, mag, width, height }) {
+  const lines = findLines(gx, gy, mag, width, height);
+  for (const border of borderLines(width, height)) lines.push(border);
+  return quadsFromLines(lines, width, height);
 }
+
+function findLines(gx, gy, mag, width, height) {
+  let max = 0;
+  for (let i = 0; i < mag.length; i++) if (mag[i] > max) max = mag[i];
+  // Schwelle: die staerksten sieben Prozent, aber nicht Rauschen
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < mag.length; i++) hist[Math.min(255, Math.floor(mag[i] / Math.max(1, max) * 255))]++;
+  let acc = 0, cut = 255;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > mag.length * 0.07) { cut = v; break; } }
+  const threshold = Math.max(36, cut / 255 * max);
+
+  // Kantenpixel: dort, wo der Gradient laengs seiner Richtung sein Maximum hat
+  const edge = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x, m = mag[i];
+      if (m < threshold) continue;
+      const ox = Math.round(gx[i] / m), oy = Math.round(gy[i] / m);
+      if (m < mag[i + oy * width + ox] || m < mag[i - oy * width - ox]) continue;
+      edge.push({ x, y, angle: (Math.atan2(gy[i], gx[i]) / DEGREE + 360) % 360 });
+    }
+  }
+
+  const diagonal = Math.ceil(Math.hypot(width, height));
+  const rhoBins = 2 * diagonal + 1;
+  const votes = new Float32Array(360 * rhoBins);
+  const cosT = new Float32Array(360), sinT = new Float32Array(360);
+  for (let t = 0; t < 360; t++) { cosT[t] = Math.cos(t * DEGREE); sinT[t] = Math.sin(t * DEGREE); }
+  for (const p of edge) {
+    const centre = Math.round(p.angle) % 360;
+    for (let d = -2; d <= 2; d++) {
+      const t = (centre + d + 360) % 360;
+      votes[t * rhoBins + Math.round(p.x * cosT[t] + p.y * sinT[t]) + diagonal] += Math.abs(d) === 2 ? 0.5 : 1;
+    }
+  }
+
+  // Spitzen: lokale Maxima; eine Seite ist mindestens ein Zehntel des kleineren Bildmasses lang
+  const minVotes = Math.min(width, height) / 10;
+  const peaks = [];
+  for (let t = 0; t < 360; t++) {
+    for (let r = 4; r < rhoBins - 4; r++) {
+      const v = votes[t * rhoBins + r];
+      if (v < minVotes) continue;
+      let top = true;
+      for (let dt = -4; dt <= 4 && top; dt++) {
+        const tt = (t + dt + 360) % 360;
+        for (let dr = -4; dr <= 4; dr++) { if ((dt || dr) && votes[tt * rhoBins + r + dr] > v) { top = false; break; } }
+      }
+      if (top) peaks.push({ theta: t, rho: r - diagonal, votes: v });
+    }
+  }
+  peaks.sort((a, b) => b.votes - a.votes);
+
+  const lines = [];
+  for (const peak of peaks.slice(0, 26)) {
+    const line = refine(edge, peak);
+    if (!line) continue;
+    if (lines.some(other => Math.abs(angleDiff(other.theta, line.theta)) < 6 && Math.abs(other.rho - line.rho) < 4)) continue;
+    lines.push(line);
+  }
+  return lines;
+}
+
+/** Die Gerade aus den Kantenpixeln einer Spitze: Hauptachse ihrer Punkte (genauer als ein Stimmbehaelter). */
+function refine(edge, peak) {
+  const c = Math.cos(peak.theta * DEGREE), s = Math.sin(peak.theta * DEGREE);
+  const inliers = [];
+  for (const p of edge) {
+    if (Math.abs(p.x * c + p.y * s - peak.rho) < 2.2 && Math.abs(angleDiff(p.angle, peak.theta)) < 15) inliers.push(p);
+  }
+  if (inliers.length < 8) return null;
+  let mx = 0, my = 0;
+  for (const p of inliers) { mx += p.x; my += p.y; }
+  mx /= inliers.length; my /= inliers.length;
+  let sxx = 0, sxy = 0, syy = 0;
+  for (const p of inliers) { const dx = p.x - mx, dy = p.y - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+  const angle = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  let nx = -Math.sin(angle), ny = Math.cos(angle);
+  if (nx * c + ny * s < 0) { nx = -nx; ny = -ny; }
+  return { theta: (Math.atan2(ny, nx) / DEGREE + 360) % 360, rho: nx * mx + ny * my, nx, ny, border: null };
+}
+
+function angleDiff(a, b) { return ((a - b + 540) % 360) - 180; }
+
+function borderLines(width, height) {
+  const make = (nx, ny, rho, border) => ({ theta: (Math.atan2(ny, nx) / DEGREE + 360) % 360, rho, nx, ny, border });
+  return [make(1, 0, 0.5, 'left'), make(0, 1, 0.5, 'top'), make(-1, 0, -(width - 1.5), 'right'), make(0, -1, -(height - 1.5), 'bottom')];
+}
+
+function intersectLines(a, b) {
+  const det = a.nx * b.ny - a.ny * b.nx;
+  if (Math.abs(det) < 1e-6) return null;
+  return { x: (a.rho * b.ny - b.rho * a.ny) / det, y: (a.nx * b.rho - b.nx * a.rho) / det };
+}
+
+/** Jede Vierergruppe, deren nach innen zeigende Normalen sich ungefaehr im rechten Winkel im Uhrzeigersinn drehen. */
+function quadsFromLines(lines, width, height) {
+  const sorted = [...lines].sort((a, b) => a.theta - b.theta);
+  const pool = [];
+  const n = sorted.length;
+  const turn = (a, b) => ((b.theta - a.theta) + 360) % 360;
+  const ok = d => d >= 40 && d <= 140;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    if (!ok(turn(sorted[i], sorted[j]))) continue;
+    for (let k = j + 1; k < n; k++) {
+      if (!ok(turn(sorted[j], sorted[k]))) continue;
+      for (let l = k + 1; l < n; l++) {
+        if (!ok(turn(sorted[k], sorted[l])) || !ok(turn(sorted[l], sorted[i]))) continue;
+        const four = [sorted[i], sorted[j], sorted[k], sorted[l]];
+        // Ohne mindestens zwei echte Kanten ist es nur der Bildrand
+        if (four.filter(x => x.border).length > 2) continue;
+        const corners = [intersectLines(four[3], four[0]), intersectLines(four[0], four[1]), intersectLines(four[1], four[2]), intersectLines(four[2], four[3])];
+        if (corners.some(p => !p || Math.abs(p.x - width / 2) > width * 1.6 || Math.abs(p.y - height / 2) > height * 1.6)) continue;
+        if (!isConvex(corners)) continue;
+        pool.push({ corners, source: 'kanten' });
+      }
+    }
+  }
+  return pool;
+}
+
+function isConvex(c) {
+  let sign = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = c[i], b = c[(i + 1) % 4], d = c[(i + 2) % 4];
+    const z = (b.x - a.x) * (d.y - b.y) - (b.y - a.y) * (d.x - b.x);
+    if (Math.abs(z) < 1e-6) return false;
+    if (sign && Math.sign(z) !== sign) return false;
+    sign = Math.sign(z);
+  }
+  return true;
+}
+
+// ------------------------------------------------------------------ Bewertung
+
+function insidePolygon(poly, x, y) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) c = !c;
+  }
+  return c;
+}
+
+/** Seite k eines Vierecks mit ihrer nach innen zeigenden Einheitsnormale. */
+function side(corners, k, cx, cy) {
+  const a = corners[k], b = corners[(k + 1) % 4];
+  const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  let nx = -(b.y - a.y) / length, ny = (b.x - a.x) / length;
+  if ((cx - a.x) * nx + (cy - a.y) * ny < 0) { nx = -nx; ny = -ny; }
+  return { a, b, length, nx, ny };
+}
+
+/**
+ * Die Zahlen, nach denen ein Viereck beurteilt wird:
+ *   edgeMean/edgeMin  wie viel der Seiten (im Mittel, an der schwaechsten) wirklich eine Kante ist
+ *   contrast          wie viel heller sein Inneres als seine Umgebung ist
+ *   texture           wie viel mehr Schrift innen als aussen steht
+ *   area, borders, known  Groesse, Seiten auf dem Bildrand, Anteil der Seiten, die sich pruefen liessen
+ * Seiten auf dem Bildrand zaehlen bei den Kanten nicht (dort ist nichts zu sehen).
+ */
+function rateRaw(field, candidate) {
+  const { smooth, texture, width, height } = field;
+  const corners = candidate.corners;
+  const cx = corners.reduce((s, p) => s + p.x, 0) / 4, cy = corners.reduce((s, p) => s + p.y, 0) / 4;
+
+  const supports = [];
+  let knownTotal = 0;
+  const border = { top: false, right: false, bottom: false, left: false };
+  for (let k = 0; k < 4; k++) {
+    const { a, b, length, nx, ny } = side(corners, k, cx, cy);
+    if (length < 4) return null;
+    const steps = Math.max(6, Math.floor(length / 2));
+    let known = 0, sum = 0;
+    for (let t = 0; t < steps; t++) {
+      const x = a.x + (b.x - a.x) * (t + 0.5) / steps, y = a.y + (b.y - a.y) * (t + 0.5) / steps;
+      if (x < 3 || y < 3 || x > width - 4 || y > height - 4) continue;
+      const step = bilinear(smooth, width, height, x + nx * 2.5, y + ny * 2.5) - bilinear(smooth, width, height, x - nx * 2.5, y - ny * 2.5);
+      sum += Math.min(1, Math.abs(step) / 16);
+      known++;
+    }
+    knownTotal += known / steps;
+    if (known / steps > 0.3) supports.push(sum / known);
+    else {
+      // eine Seite fast ganz am Bildrand: der Bon geht dort weiter
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      if (my < 4 && Math.abs(a.y - b.y) < 6) border.top = true;
+      else if (my > height - 5 && Math.abs(a.y - b.y) < 6) border.bottom = true;
+      else if (mx < 4 && Math.abs(a.x - b.x) < 6) border.left = true;
+      else if (mx > width - 5 && Math.abs(a.x - b.x) < 6) border.right = true;
+    }
+  }
+  if (supports.length < 2) return null;
+  const edgeMean = supports.reduce((s, v) => s + v, 0) / supports.length;
+  const edgeMin = Math.min(...supports);
+
+  // Inneres: ein Raster ueber das Bild
+  let insideSum = 0, textureIn = 0, insideCount = 0;
+  const grid = 28;
+  for (let gy = 0; gy < grid; gy++) {
+    for (let gx = 0; gx < grid; gx++) {
+      const x = (gx + 0.5) / grid * width, y = (gy + 0.5) / grid * height;
+      if (insidePolygon(corners, x, y)) {
+        insideSum += bilinear(smooth, width, height, x, y);
+        textureIn += bilinear(texture, width, height, x, y);
+        insideCount++;
+      }
+    }
+  }
+  const area = insideCount / (grid * grid);
+  if (area < 0.012 || area > 0.97) return null;
+
+  // Umgebung: knapp ausserhalb der Seiten
+  let outSum = 0, textureOut = 0, outCount = 0;
+  for (let k = 0; k < 4; k++) {
+    const { a, b, nx, ny } = side(corners, k, cx, cy);
+    for (let t = 1; t < 8; t++) {
+      const x = a.x + (b.x - a.x) * t / 8 - nx * 6, y = a.y + (b.y - a.y) * t / 8 - ny * 6;
+      if (x < 1 || y < 1 || x > width - 2 || y > height - 2 || insidePolygon(corners, x, y)) continue;
+      outSum += bilinear(smooth, width, height, x, y);
+      textureOut += bilinear(texture, width, height, x, y);
+      outCount++;
+    }
+  }
+  const brightnessIn = insideSum / insideCount, textureMeanIn = textureIn / insideCount;
+  const brightnessOut = outCount ? outSum / outCount : brightnessIn - 20;
+  const textureMeanOut = outCount ? textureOut / outCount : textureMeanIn * 0.5;
+  const contrast = Math.min(1, Math.max(-0.5, (brightnessIn - brightnessOut) / 255 / 0.2));
+  const textureContrast = (textureMeanIn - textureMeanOut) / (textureMeanIn + textureMeanOut + 1);
+
+  const features = { edgeMean, edgeMin, contrast, texture: textureContrast, area: Math.min(1, area / 0.05), borders: 4 - supports.length, known: knownTotal / 4 };
+  return { corners, area, border, source: candidate.source, features, field };
+}
+
+// ------------------------------------------------------------------ Nachschaerfen
+
+/**
+ * Jede Seite rutscht auf die staerkste Kante in ihrer Naehe (bis zu vier Pixel des Analysebildes):
+ * die Quellen liefern den Rand auf ein, zwei Pixel genau, und das sind bei einem schmalen Bon schnell
+ * zehn Prozent seiner Breite. Seiten am Bildrand bleiben, wo sie sind.
+ */
+function snap(field, rated) {
+  const { smooth, width, height } = field;
+  const corners = rated.corners;
+  const cx = corners.reduce((s, p) => s + p.x, 0) / 4, cy = corners.reduce((s, p) => s + p.y, 0) / 4;
+  const lines = [];
+  for (let k = 0; k < 4; k++) {
+    const { a, b, length, nx, ny } = side(corners, k, cx, cy);
+    const steps = Math.max(8, Math.floor(length / 2));
+    let bestOffset = 0, bestStrength = -1, strengthAtZero = 0, usable = 0;
+    for (let offset = -4; offset <= 4; offset += 0.5) {
+      let sum = 0, count = 0;
+      for (let t = 1; t < steps; t++) {
+        const x = a.x + (b.x - a.x) * t / steps + nx * offset, y = a.y + (b.y - a.y) * t / steps + ny * offset;
+        if (x < 3 || y < 3 || x > width - 4 || y > height - 4) continue;
+        sum += Math.abs(bilinear(smooth, width, height, x + nx * 1.5, y + ny * 1.5) - bilinear(smooth, width, height, x - nx * 1.5, y - ny * 1.5));
+        count++;
+      }
+      if (count < steps * 0.3) continue;
+      usable++;
+      const strength = sum / count;
+      if (offset === 0) strengthAtZero = strength;
+      if (strength > bestStrength) { bestStrength = strength; bestOffset = offset; }
+    }
+    // nur verschieben, wenn die Kante dort deutlich staerker ist als an der alten Stelle
+    const shift = usable && bestStrength > strengthAtZero * 1.15 ? bestOffset : 0;
+    lines.push({ a: { x: a.x + nx * shift, y: a.y + ny * shift }, b: { x: b.x + nx * shift, y: b.y + ny * shift } });
+  }
+  const moved = corners.map((_, i) => intersect(lines[(i + 3) % 4].a, lines[(i + 3) % 4].b, lines[i].a, lines[i].b));
+  return moved.every(Boolean) ? moved.map(({ x, y }) => ({ x, y })) : corners;
+}
+
+// ------------------------------------------------------------------ Geraderechnen
 
 /**
  * Ecken so ordnen, dass der Beleg aufrecht steht: die Kante, die am ehesten waagerecht liegt und in

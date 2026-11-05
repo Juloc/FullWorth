@@ -1075,3 +1075,24 @@ form.purchase-detail .reconcile {
 /* Der Paperless-Knopf im Beleg-Dialog: von Anfang an da, nur unsichtbar, bis feststeht, dass er gilt. */
 .paperless-upload{visibility:hidden}
 .paperless-upload.is-ready{visibility:visible}
+
+/* Aufnahmeart der Belegkamera und der Ausloeser im Modus "Langer Bon". */
+.receipt-camera-modes{display:flex;gap:.5rem}
+.receipt-camera-shutter.is-record::after{content:"";width:1.1rem;height:1.1rem;border-radius:50%;background:var(--danger)}
+.receipt-camera-shutter.is-record{display:grid;place-items:center}
+.receipt-camera-shutter.is-recording::after{border-radius:.2rem}
+
+/* Foto im Scan-Set: gerade gerechnet oder nicht, und der Weg, den Rand von Hand zu ziehen. */
+.receipt-set-photo{display:flex;align-items:center;gap:.5rem}
+.receipt-set-photo small{opacity:.7}
+
+/* Rand von Hand ziehen (receipt-adjust.js). Die Buehne hat das Seitenverhaeltnis des Fotos von Anfang an. */
+.receipt-adjust-dialog{border:0;background:transparent;padding:0;max-width:min(96vw,720px);width:100%}
+.receipt-adjust-dialog::backdrop{background:rgba(12,18,28,.46);backdrop-filter:blur(6px)}
+.receipt-adjust{display:grid;gap:.7rem;overflow:auto}
+.receipt-adjust-stage{position:relative;width:100%;max-height:68dvh;margin-inline:auto;background:var(--surf2);touch-action:none}
+.receipt-adjust-stage canvas,.receipt-adjust-frame{position:absolute;inset:0;width:100%;height:100%}
+.receipt-adjust-frame polygon{fill:var(--info);fill-opacity:.12;stroke:var(--info);stroke-width:2;vector-effect:non-scaling-stroke}
+.receipt-adjust-handle{position:absolute;width:2.6rem;height:2.6rem;margin:-1.3rem 0 0 -1.3rem;padding:0;border:2px solid var(--info);border-radius:50%;background:var(--bg);opacity:.9;touch-action:none;cursor:grab}
+.receipt-adjust-handle:active{cursor:grabbing}
+@media(max-width:620px){.receipt-adjust-dialog{max-width:100vw;margin:auto 0 0}.receipt-adjust{border-radius:1rem 1rem 0 0;max-height:96dvh}}

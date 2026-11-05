@@ -78,7 +78,7 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
         var scanSet = Read("receipt-scan-set.js");
 
         Assert.Contains("const single = files.length === 1", scanSet);
-        Assert.Contains("function singleRow(file)", scanSet);
+        Assert.Contains("function singleRow(draft, file", scanSet);
         Assert.Contains("data-file-preview=\"0\"", scanSet);
 
         // The add-page button sits outside the single/multi branch, so it is rendered once for both.
