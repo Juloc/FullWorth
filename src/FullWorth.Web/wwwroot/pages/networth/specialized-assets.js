@@ -1,3 +1,4 @@
+import { isPrivate } from '../../components/privacy.js';
 import { api as sharedApi, jsonBody } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
 import { emitAppEvent } from '../../core/event-bus.js';
@@ -45,7 +46,7 @@ const TEXT = {
 function lang() { return (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en'; }
 function t(key) { return TEXT[lang()][key] || key; }
 function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
-function privacy() { return document.querySelector('#privacy-toggle')?.getAttribute('aria-pressed') === 'true'; }
+function privacy() { return isPrivate(); }
 function money(value, currency) {
   if (privacy()) return '••••••';
   if (value == null || Number.isNaN(Number(value))) return '—';

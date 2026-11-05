@@ -632,7 +632,6 @@
     "saved": "Gespeichert.",
     "delete": "Löschen",
     "deleted": "Gelöscht.",
-    "refresh": "Aktualisieren",
     "confirmTitle": "Bist du sicher?",
     "confirm": "Bestätigen",
     "fxIncomplete": "Ohne Beträge in Währungen ohne Umrechnungskurs.",
@@ -972,7 +971,6 @@
     "accounts": "Konten"
   },
   "privacy": {
-    "toggle": "Privatmodus umschalten",
     "rememberOn": "Beim Start im Privatmodus starten",
     "hidden": "Ausgeblendet"
   },

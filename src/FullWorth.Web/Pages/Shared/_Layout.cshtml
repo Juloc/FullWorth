@@ -107,19 +107,12 @@
         @RenderBody()
     </main>
 </div>
-@* Die schwebende Aktionsleiste: die Hauptaktion der Seite, ihre Auswahl-Aktionen und das Menue "Mehr".
+@* Die schwebende Aktionsleiste: die Hauptaktion der Seite und ihre Auswahl-Aktionen.
    Sie liegt ueber der Seite (fixed) und schiebt deshalb nichts. Die Hauptaktion steht VERSTECKT im
    Markup und nicht weggelassen: die Seite meldet sie beim Start an. *@
 <div id="action-bar" class="action-bar" role="toolbar" aria-label="Aktionen">
     <div id="action-bar-selection" class="action-bar-selection"></div>
-    <button id="privacy-toggle" class="icon-button" type="button" aria-pressed="false" data-i18n-title="privacy.toggle" title="Privatmodus umschalten" aria-label="Privacy">
-        <svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye")"></use></svg>
-        <svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye-off")"></use></svg>
-    </button>
     <button id="primary-action" class="btn btn-primary" type="button" hidden><span class="btn-primary-label"></span></button>
-    <button id="topbar-more" class="icon-button" type="button" data-i18n-title="nav.more" title="Mehr" aria-label="More">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "nav-more")"></use></svg>
-    </button>
 </div>
 <partial name="_BottomNavigation" />
 @* Coach-Starter und Coach-Andockbereich.

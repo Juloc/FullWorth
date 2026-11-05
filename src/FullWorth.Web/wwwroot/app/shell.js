@@ -20,7 +20,6 @@
 
 import { i18n } from '../core/services.js';
 import { state } from '../core/state.js';
-import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from '../components/privacy.js';
 import { installTopbarMetrics } from '../components/topbar-metrics.js';
 import { spriteHref } from '../components/sprite.js';
 import { installNavigation } from '../core/navigation.js';
@@ -57,19 +56,6 @@ export function createShell({
   primaryAction = () => null
 } = {}) {
   const ctx = context ?? createPageContext({ reload });
-
-  function syncPrivacyToggle() {
-    const button = $('#privacy-toggle');
-    if (!button) return;
-    button.setAttribute('aria-pressed', String(isPrivate()));
-    button.classList.toggle('active', isPrivate());
-    // Nur in der Leiste, solange er AN ist: ein ausgeschalteter Schalter sagt nichts, und genau
-    // dafür gibt es das Überlaufmenü. Das Attribut sitzt am <html>, weil app/boot.js es vor dem
-    // ersten Zeichnen setzt — ein hidden, das JavaScript später nachträgt, schiebt die Leiste.
-    root.dataset.privacy = isPrivate() ? 'on' : 'off';
-    const preference = $('#privacy-default');
-    if (preference) preference.checked = privacyDefault();
-  }
 
   // Der Fuss der Seitenleiste: Raumname, Waehrung und ein Buchstabe als Zeichen (§3.1).
   function renderUserBlock() {
@@ -123,29 +109,6 @@ export function createShell({
       button.hidden = true;
       button.onclick = null;
     }
-  }
-
-  // Das Überlaufmenü der Topbar. Dieselbe Darstellung wie „Mehr" unten, damit es im Haus ein
-  // Menümuster gibt und nicht ein zweites.
-  function openTopbarMenu() {
-    const entries = [
-      ['privacy', get('privacy.toggle'),
-        `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-eye')}"></use></svg>`,
-        () => togglePrivacy()],
-      ['refresh', get('common.refresh'),
-        `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-refresh')}"></use></svg>`,
-        () => reload()]
-    ];
-    const items = entries
-      .map(([key, label, icon]) => `<button type="button" data-menu="${key}">${icon}<span>${esc(label)}</span></button>`)
-      .join('');
-    const dialog = ctx.dialog(
-      `<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,
-      { mobileMode: 'sheet' });
-    dialog.classList.add('more-sheet-dialog');
-    for (const [key, , , run] of entries)
-      dialog.querySelector(`[data-menu="${key}"]`)?.addEventListener('click', () => { dialog.close(); run(); });
-    dialog.showModal();
   }
 
   function openMoreSheet() {
@@ -207,9 +170,7 @@ export function createShell({
     // "Zeichne neu" kam bis #154 bei der alten Huelle an. Ohne diesen Zuhoerer bliebe die Seite nach
     // einer Aenderung stehen, ohne dass irgendwo ein Fehler auftaucht.
     onAppEvent('surface:reload', () => reload());
-    $('#privacy-toggle')?.addEventListener('click', () => togglePrivacy());
     $('#global-search')?.addEventListener('click', () => openGlobalSearch(ctx));
-    $('#topbar-more')?.addEventListener('click', openTopbarMenu);
     $('#bottom-more')?.addEventListener('click', openMoreSheet);
     $$('.nav-group-head').forEach(head => head.addEventListener('click', () => toggleGroup(head)));
     // Desktop-Tastenkürzel: „/" öffnet die Suche, solange nicht in einem Feld getippt wird (§19).
@@ -370,10 +331,8 @@ export function createShell({
     syncNavToggle,
     resetLayout,
     initResizableSidebar,
-    syncPrivacyToggle,
     syncThemeToggle,
     openMoreSheet,
-    openTopbarMenu,
     /** Sitzungssperre: nach zehn Minuten Ruhe, und danach wird die Oberfläche neu gezeichnet. */
     startLock: () => initLock(ctx, { onUnlock: reload })
   };
@@ -400,8 +359,6 @@ export async function startShellPage(render, { primaryAction = () => null } = {}
   shell.renderPageHeader();
   shell.bind();
   shell.syncThemeToggle();
-  shell.syncPrivacyToggle();
-  onPrivacyChange(() => { shell.syncPrivacyToggle(); location.reload(); });
 
   await loadSession(shell.ctx.toast);
   shell.renderUserBlock();

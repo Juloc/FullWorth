@@ -155,7 +155,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("api/loans", js);
         Assert.Contains("api/liabilities", js);
         Assert.Contains("method: 'internal_estimate'", js);
-        Assert.Contains("aria-pressed", js);
+        Assert.Contains("isPrivate()", js);
         Assert.Contains("••••••", js);
         Assert.DoesNotContain("api/investments/market", js);
         Assert.Contains("var(--", css);

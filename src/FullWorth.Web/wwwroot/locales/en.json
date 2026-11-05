@@ -632,7 +632,6 @@
     "saved": "Saved.",
     "delete": "Delete",
     "deleted": "Deleted.",
-    "refresh": "Refresh",
     "confirmTitle": "Are you sure?",
     "confirm": "Confirm",
     "fxIncomplete": "Excludes amounts in currencies without a conversion rate.",
@@ -972,7 +971,6 @@
     "accounts": "Accounts"
   },
   "privacy": {
-    "toggle": "Toggle privacy mode",
     "rememberOn": "Start in privacy mode",
     "hidden": "Hidden"
   },
