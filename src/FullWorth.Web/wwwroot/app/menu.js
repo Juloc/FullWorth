@@ -21,6 +21,7 @@ export const MENU = [
     { view: 'accounts', label: 'nav.accounts', icon: 'nav-accounts' },
     { view: 'transactions', label: 'nav.transactions', icon: 'nav-transactions' },
     { view: 'purchases', label: 'nav.purchases', icon: 'nav-purchases' },
+    { view: 'receipts', label: 'nav.receipts', icon: 'nav-receipts' },
     { view: 'merchants', label: 'nav.merchants', icon: 'nav-merchants' },
     { view: 'collections', label: 'nav.collections', icon: 'nav-collections' }
   ] },

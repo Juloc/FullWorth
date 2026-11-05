@@ -5,7 +5,7 @@
 // alten Huelle, nur dass ihn jetzt die Seite erzeugt statt app.js fuer alle.
 
 import { startShellPage } from '../../app/shell.js';
-import { renderPurchases, bindPurchases } from './page.js';
+import { renderPurchases, bindPurchases, openPurchaseFromHash } from './page.js';
 
 let bound = false;
 
@@ -15,4 +15,5 @@ await startShellPage(async context => {
     bound = true;
   }
   await renderPurchases(context);
+  await openPurchaseFromHash();
 });

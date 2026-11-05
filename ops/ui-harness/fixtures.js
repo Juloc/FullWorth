@@ -1810,6 +1810,30 @@
     const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
     const status = write?.status ?? 200;
     let body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
+    // Belege: die Zaehler und die drei Listen. "scope" ist der eine Parameter, den match() nicht kennt.
+    // Bewusst verschiedene Faelle: ein digitales PDF (lokal, ohne KI), ein Scan (KI), eine OCR-Notloesung,
+    // ein Fehler, und ein Beleg mit Warnung - ein Layout bricht nur an den unbequemen Faellen.
+    if (method === 'GET' && url.pathname.endsWith('/receipt-scan/counts'))
+      body = { queued: 3, processing: 1, failed: 1, needsReview: 4 };
+    if (method === 'GET' && url.pathname.endsWith('/receipt-scan/jobs')) {
+      const now = Date.now(), ago = minutes => new Date(now - minutes * 60000).toISOString();
+      const base = { fullWorthSpaceId: SPACE, userId: 'u1', contentType: 'application/pdf', sourceCount: 1, attempts: 1, warningsJson: null, currency: 'EUR', itemCount: 0 };
+      const scope = url.searchParams.get('scope');
+      body = scope === 'queue' ? [
+        { ...base, id: 'q1', purchaseId: 'pq1', fileName: 'Penny 25.06.2026.pdf', status: 'processing', stage: 'analyzing', engine: 'gpt', reason: 'scan', startedAt: ago(1), createdAt: ago(9), totalAmount: 0, merchant: null },
+        { ...base, id: 'q2', purchaseId: 'pq2', fileName: 'Kaufland Sehr Langer Dateiname Mit Vielen Woertern Damit Er Umbrechen Muss 2026-06-24.pdf', status: 'queued', stage: 'queued', queuePosition: 1, createdAt: ago(8), totalAmount: 0, merchant: null },
+        { ...base, id: 'q3', purchaseId: 'pq3', fileName: 'REWE.jpg', contentType: 'image/jpeg', status: 'queued', stage: 'queued', queuePosition: 2, createdAt: ago(8), totalAmount: 0, merchant: null },
+        { ...base, id: 'q4', purchaseId: 'pq4', fileName: 'IKEA.pdf', status: 'queued', stage: 'queued', queuePosition: 3, createdAt: ago(7), totalAmount: 0, merchant: null }
+      ] : scope === 'history' ? [
+        { ...base, id: 'h1', purchaseId: 'ph1', fileName: 'p.pdf', status: 'done', stage: 'done', engine: 'text', readerVersion: 'text/2', reason: 'digital_pdf', merchant: 'Penny', totalAmount: 5.52, purchaseDate: '2026-06-25', itemCount: 3, purchaseStatus: 'confirmed', createdAt: ago(40), completedAt: ago(39) },
+        { ...base, id: 'h2', purchaseId: 'ph2', fileName: 'k.pdf', status: 'done', stage: 'done', engine: 'gpt', readerVersion: 'codex/default', reason: 'scan', merchant: 'Kaufland', totalAmount: 41.3, purchaseDate: '2026-06-24', itemCount: 12, purchaseStatus: 'review', createdAt: ago(60), completedAt: ago(55) },
+        { ...base, id: 'h3', purchaseId: 'ph3', fileName: 'o.pdf', status: 'done', stage: 'done', engine: 'tesseract', readerVersion: 'tesseract/2', reason: 'ai_unavailable', merchant: 'OBI', totalAmount: 19.99, purchaseDate: '2026-06-20', itemCount: 2, purchaseStatus: 'review', createdAt: ago(90), completedAt: ago(88) },
+        { ...base, id: 'h4', purchaseId: 'ph4', fileName: 'kaputt.pdf', status: 'error', stage: 'error', error: 'Receipt scan processing failed.', merchant: null, totalAmount: 0, createdAt: ago(120), completedAt: ago(119) }
+      ] : [
+        { ...base, id: 'h2', purchaseId: 'ph2', fileName: 'k.pdf', status: 'done', stage: 'done', engine: 'gpt', readerVersion: 'codex/default', reason: 'scan', merchant: 'Kaufland', totalAmount: 41.3, purchaseDate: '2026-06-24', itemCount: 12, purchaseStatus: 'review', warningsJson: '["Abgekuerzte Bezeichnung bei Position 4 - bitte pruefen","Pfandrueckgabe, kein Rabatt"]', createdAt: ago(60), completedAt: ago(55) },
+        { ...base, id: 'h3', purchaseId: 'ph3', fileName: 'o.pdf', status: 'done', stage: 'done', engine: 'tesseract', readerVersion: 'tesseract/2', reason: 'ai_unavailable', merchant: 'OBI', totalAmount: 19.99, purchaseDate: '2026-06-20', itemCount: 2, purchaseStatus: 'review', createdAt: ago(90), completedAt: ago(88) }
+      ];
+    }
     // #131, Abschnitt 6: mit gewaehltem Zielkonto steht die Moebelhaus-Zahlung dort schon, so wie Finanzguru
     // sie benannt hat - die Zeile kommt als 'vermutlich vorhanden'. Wie bei der Blaetterung unten liest die
     // Fixture hier ausnahmsweise einen Parameter, weil match() nur den Pfad kennt.

@@ -155,6 +155,14 @@ async function scanReceipt() {
   finally { input.value = ''; }
 }
 
+// "/purchases#purchase=<id>" - how the receipts page sends someone to the details of one purchase.
+export async function openPurchaseFromHash() {
+  const id = /^#purchase=([0-9a-f-]{36})$/i.exec(location.hash)?.[1];
+  if (!id) return;
+  history.replaceState(null, '', location.pathname);
+  await openDetail(id);
+}
+
 async function openDetail(id) {
   let purchase, options, categories, reconciliation, amazon = null;
   try {
@@ -183,7 +191,7 @@ async function openDetail(id) {
     ${amazonBlock}
     <h3 class="notif-h">${ctx.esc(ctx.get('purchases.lineItems'))}</h3>
     <div class="purchase-items">${items || `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`}</div>
-    <div class="dialog-actions"><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
+    <div class="dialog-actions">${purchase.status !== 'confirmed' ? `<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-confirm>${ctx.esc(ctx.get('purchases.confirm'))}</button>` : ''}<button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   (purchase.items || []).forEach((i, index) => { const s = dlg.querySelector(`.purchase-item[data-index="${index}"] .item-category`); if (s && i.categoryId) s.value = i.categoryId; });
   dlg.querySelectorAll('.item-category').forEach(select => attachCombobox(ctx, select, {
@@ -198,6 +206,13 @@ async function openDetail(id) {
 
   dlg.querySelector('[data-view-receipt]')?.addEventListener('click', () => window.open(ctx.bffUrl(`api/purchases/${id}/receipt`), '_blank', 'noopener'));
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-confirm]')?.addEventListener('click', async () => {
+    try {
+      await ctx.api(`api/purchases/${id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ createSafeAllocations: true, allowUnlinked: true }) });
+      dlg.close();
+      await renderPurchases(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  });
   dlg.querySelector('[data-save]').onclick = async () => {
     const rows = [...dlg.querySelectorAll('.purchase-item')];
     const payload = rows.map(r => {

@@ -40,6 +40,7 @@ public static class NavigationCatalog
             new("accounts", "/accounts", "nav.accounts", "nav-accounts"),
             new("transactions", "/transactions", "nav.transactions", "nav-transactions"),
             new("purchases", "/purchases", "nav.purchases", "nav-purchases"),
+            new("receipts", "/receipts", "nav.receipts", "nav-receipts"),
             new("merchants", "/merchants", "nav.merchants", "nav-merchants"),
             new("collections", "/collections", "nav.collections", "nav-collections"),
         ]),

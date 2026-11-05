@@ -3,6 +3,7 @@
     "dashboard": "Overview",
     "transactions": "Transactions",
     "purchases": "Purchases",
+    "receipts": "Receipts",
     "tax": "Taxes",
     "contracts": "Contracts",
     "budgets": "Budgets",
@@ -51,6 +52,10 @@
     "purchases": {
       "title": "Purchases",
       "subtitle": "Receipts, Amazon orders and individual items"
+    },
+    "receipts": {
+      "title": "Receipts",
+      "subtitle": "Queue, history and what still needs review"
     },
     "tax": {
       "title": "Taxes",
@@ -274,6 +279,16 @@
     "learnFuture": "Future and past, with a rule",
     "learnExisting": "Past ones only"
   },
+  "receipts": {
+    "title": "Receipts",
+    "queue": "Queue",
+    "history": "History",
+    "review": "Needs review",
+    "upload": "Upload receipt",
+    "queued": "Waiting",
+    "processing": "In progress",
+    "failed": "Failed"
+  },
   "purchases": {
     "title": "Purchases",
     "receipt": "Receipt",
@@ -294,6 +309,7 @@
     "itemsJson": "Items as JSON",
     "import": "Import",
     "needsReview": "Needs review",
+    "confirm": "Confirm",
     "recent": "Recent purchases",
     "byMerchant": "Spend by merchant",
     "lineItems": "Line items",

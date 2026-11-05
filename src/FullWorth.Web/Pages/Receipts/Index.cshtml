@@ -1,0 +1,44 @@
+@page "/receipts"
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var language = FullWorth.Web.Navigation.LocaleText.Language(ViewContext.HttpContext);
+    ViewData["Title"] = "Belege · FullWorth";
+    ViewData["ActiveView"] = "receipts";
+}
+
+@*
+    Die Belege-Seite: was der Server gerade liest (Warteschlange), was er gelesen hat (Verlauf) und
+    was noch ein Mensch ansehen muss (Zu pruefen). Der Platz fuer Zaehler und Liste steht von Anfang an
+    im Dokument - die Zahlen kommen spaeter, die Hoehe nicht.
+*@
+
+<section id="view-receipts">
+    <div class="receipts-head">
+        <div class="receipts-stats" id="receipts-stats">
+            <div class="receipts-stat"><span class="receipts-stat-k" data-i18n="receipts.queued">@Text.Get("receipts.queued", language)</span><span class="receipts-stat-v is-pending" data-count="queued">0</span></div>
+            <div class="receipts-stat"><span class="receipts-stat-k" data-i18n="receipts.processing">@Text.Get("receipts.processing", language)</span><span class="receipts-stat-v is-pending" data-count="processing">0</span></div>
+            <div class="receipts-stat receipts-stat--review"><span class="receipts-stat-k" data-i18n="receipts.review">@Text.Get("receipts.review", language)</span><span class="receipts-stat-v is-pending" data-count="needsReview">0</span></div>
+            <div class="receipts-stat receipts-stat--failed"><span class="receipts-stat-k" data-i18n="receipts.failed">@Text.Get("receipts.failed", language)</span><span class="receipts-stat-v is-pending" data-count="failed">0</span></div>
+        </div>
+        <button type="button" id="receipts-upload" class="btn btn-primary" data-i18n="receipts.upload">@Text.Get("receipts.upload", language)</button>
+        <input id="receipts-file" type="file" accept="image/*,.pdf" multiple hidden>
+    </div>
+    <article class="panel">
+        <div class="panel-head">
+            <div class="fw-cycle" role="tablist">
+                <button type="button" role="tab" data-receipts-tab="queue" data-i18n="receipts.queue">@Text.Get("receipts.queue", language)</button>
+                <button type="button" role="tab" data-receipts-tab="history" data-i18n="receipts.history">@Text.Get("receipts.history", language)</button>
+                <button type="button" role="tab" data-receipts-tab="review" data-i18n="receipts.review">@Text.Get("receipts.review", language)</button>
+            </div>
+        </div>
+        <div id="receipts-list" class="rows receipts-list" aria-live="polite"></div>
+    </article>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/pages/receipts/page.css">
+}
+
+@section Scripts {
+    <script type="module" src="~/pages/receipts/entry.js"></script>
+}

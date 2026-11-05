@@ -3,6 +3,7 @@
     "dashboard": "Übersicht",
     "transactions": "Buchungen",
     "purchases": "Käufe",
+    "receipts": "Belege",
     "tax": "Steuern",
     "contracts": "Verträge",
     "budgets": "Budgets",
@@ -51,6 +52,10 @@
     "purchases": {
       "title": "Käufe",
       "subtitle": "Belege, Amazon-Bestellungen und einzelne Artikel"
+    },
+    "receipts": {
+      "title": "Belege",
+      "subtitle": "Warteschlange, Verlauf und was noch geprüft werden muss"
     },
     "tax": {
       "title": "Steuern",
@@ -274,6 +279,16 @@
     "learnFuture": "Künftige und bisherige, mit Regel",
     "learnExisting": "Nur die bisherigen"
   },
+  "receipts": {
+    "title": "Belege",
+    "queue": "Warteschlange",
+    "history": "Verlauf",
+    "review": "Zu prüfen",
+    "upload": "Beleg hochladen",
+    "queued": "Wartet",
+    "processing": "In Arbeit",
+    "failed": "Fehler"
+  },
   "purchases": {
     "title": "Käufe",
     "receipt": "Kassenbon",
@@ -294,6 +309,7 @@
     "itemsJson": "Artikel als JSON",
     "import": "Importieren",
     "needsReview": "Zu prüfen",
+    "confirm": "Bestätigen",
     "recent": "Letzte Käufe",
     "byMerchant": "Ausgaben nach Händler",
     "lineItems": "Positionen",
