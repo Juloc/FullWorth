@@ -26,7 +26,11 @@ public sealed class ReceiptScanQueueProcessor(
 {
     private readonly PurchaseStorageOptions storage = storageOptions.Value;
 
-    public async Task ProcessAsync(ReceiptScanJobRow job, CancellationToken ct)
+    /// <param name="digitalOnly">
+    /// The fast lane's mode: read the receipt if it is a digital PDF whose sums add up, otherwise hand it
+    /// to the AI lane untouched - the model is slow and strictly serial, and must not be called from here.
+    /// </param>
+    public async Task ProcessAsync(ReceiptScanJobRow job, CancellationToken ct, bool digitalOnly = false)
     {
         var documentIds = new HashSet<Guid>();
         try
@@ -74,6 +78,13 @@ public sealed class ReceiptScanQueueProcessor(
                     }
                     reason = ReceiptRoutes.DigitalUnverified;
                 }
+            }
+
+            if (digitalOnly)
+            {
+                await SetDocumentStatusesAsync(documentIds, "uploaded", ct);
+                await jobs.HandToAiLaneAsync(job.Id, reason, ct);
+                return;
             }
 
             await jobs.SetStageAsync(job.Id, "connecting", null, ct, reason);

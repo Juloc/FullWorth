@@ -70,6 +70,42 @@ public sealed class ReceiptScanDigitalRoutingTests
     }
 
     [Fact]
+    public async Task Fast_lane_reads_a_digital_pdf_and_leaves_nothing_for_the_ai_lane()
+    {
+        if (!PopplerAvailable()) return;
+        var run = await ProcessAsync(Pdf(PennyReceipt, scannedImage: false), digitalOnly: true);
+
+        Assert.Equal(ReceiptScanJobStatuses.Done, run.Job.Status);
+        Assert.Equal(ReceiptReaders.Text, run.Job.Engine);
+        Assert.False(run.TakenByAiLane);
+        Assert.False(run.TakenByFastLane);
+    }
+
+    [Fact]
+    public async Task Fast_lane_hands_a_scan_to_the_ai_lane_without_calling_a_model()
+    {
+        if (!PopplerAvailable()) return;
+        var run = await ProcessAsync(Pdf(PennyReceipt, scannedImage: true), digitalOnly: true);
+
+        // Queued again with its road noted, and only the AI lane may claim it now.
+        Assert.Equal(ReceiptScanJobStatuses.Queued, run.Job.Status);
+        Assert.Equal(ReceiptRoutes.Scan, run.Job.Reason);
+        Assert.Null(run.Job.Engine);
+        Assert.True(run.TakenByAiLane);
+    }
+
+    [Fact]
+    public async Task Fast_lane_hands_a_digital_pdf_whose_sums_do_not_add_up_to_the_ai_lane()
+    {
+        if (!PopplerAvailable()) return;
+        var run = await ProcessAsync(Pdf(BrokenReceipt, scannedImage: false), digitalOnly: true);
+
+        Assert.Equal(ReceiptScanJobStatuses.Queued, run.Job.Status);
+        Assert.Equal(ReceiptRoutes.DigitalUnverified, run.Job.Reason);
+        Assert.True(run.TakenByAiLane);
+    }
+
+    [Fact]
     public async Task Finished_job_moves_from_the_queue_to_history_and_review_until_it_is_confirmed()
     {
         if (!PopplerAvailable()) return;
@@ -119,9 +155,9 @@ public sealed class ReceiptScanDigitalRoutingTests
 
     private sealed record Run(
         ReceiptScanJobView Job, decimal TotalAmount, string? Merchant, int ItemCount, string? RunProvider, string? RunProviderVersion,
-        int Queue, int History, int Review, int Failed, ReceiptScanCounts Counts, HttpStatusCode UnknownScope);
+        int Queue, int History, int Review, int Failed, ReceiptScanCounts Counts, HttpStatusCode UnknownScope, bool TakenByAiLane, bool TakenByFastLane);
 
-    private static async Task<Run> ProcessAsync(byte[] pdf)
+    private static async Task<Run> ProcessAsync(byte[] pdf, bool digitalOnly = false)
     {
         using var factory = new BackendWebApplicationFactory();
         using var client = factory.CreateClient();
@@ -154,15 +190,16 @@ public sealed class ReceiptScanDigitalRoutingTests
         // The queue worker is switched off in the test host; claim and process the job by hand.
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var claimed = await scope.ServiceProvider.GetRequiredService<ReceiptScanJobStore>().ClaimNextAsync(CancellationToken.None);
+            var claimed = await scope.ServiceProvider.GetRequiredService<ReceiptScanJobStore>().ClaimNextAsync(null, CancellationToken.None);
             Assert.NotNull(claimed);
-            await scope.ServiceProvider.GetRequiredService<ReceiptScanQueueProcessor>().ProcessAsync(claimed!, CancellationToken.None);
+            await scope.ServiceProvider.GetRequiredService<ReceiptScanQueueProcessor>().ProcessAsync(claimed!, CancellationToken.None, digitalOnly);
         }
 
         using var read = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/jobs/{jobId:D}?fullWorthSpaceId={spaceId:D}", userId);
         using var response = await client.SendAsync(read);
         var job = JsonSerializer.Deserialize<ReceiptScanJobView>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
+        (bool Ai, bool Fast) takenBy;
         async Task<int> CountAsync(string scope)
         {
             using var list = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/jobs?fullWorthSpaceId={spaceId:D}&scope={scope}", userId);
@@ -177,6 +214,16 @@ public sealed class ReceiptScanDigitalRoutingTests
         using var unknown = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/jobs?fullWorthSpaceId={spaceId:D}&scope=everything", userId);
         using var unknownResponse = await client.SendAsync(unknown);
 
+        // Which lane would take the job now: only a job handed over by the fast lane is the AI lane's.
+        var store = factory.Services.CreateAsyncScope();
+        await using (store)
+        {
+            var jobs = store.ServiceProvider.GetRequiredService<ReceiptScanJobStore>();
+            var ai = await jobs.ClaimNextAsync(ReceiptScanLanes.Ai, CancellationToken.None) is not null;
+            var fast = await jobs.ClaimNextAsync(null, CancellationToken.None) is not null;
+            takenBy = (ai, fast);
+        }
+
         Run? result = null;
         await factory.SeedAsync(async db =>
         {
@@ -186,7 +233,7 @@ public sealed class ReceiptScanDigitalRoutingTests
                 .Where(x => db.PurchaseDocuments.Any(d => d.Id == x.PurchaseDocumentId && d.PurchaseId == job.PurchaseId))
                 .FirstOrDefaultAsync();
             result = new Run(job, purchase.TotalAmount, purchase.Merchant, itemCount, attempt?.Provider, attempt?.ProviderVersion,
-                queue, history, review, failed, counts, unknownResponse.StatusCode);
+                queue, history, review, failed, counts, unknownResponse.StatusCode, takenBy.Ai, takenBy.Fast);
         });
         return result!;
     }

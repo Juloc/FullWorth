@@ -20,7 +20,7 @@ public sealed class ReceiptScanQueueSignalTests
         var signal = new ReceiptScanQueueSignal();
         var stopwatch = Stopwatch.StartNew();
 
-        var waiting = signal.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
+        var waiting = signal.WaitAsync(true, TimeSpan.FromSeconds(30), CancellationToken.None);
         signal.Notify();
 
         Assert.True(await waiting);
@@ -36,7 +36,7 @@ public sealed class ReceiptScanQueueSignalTests
 
         signal.Notify();
 
-        Assert.True(await signal.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None));
+        Assert.True(await signal.WaitAsync(true, TimeSpan.FromSeconds(30), CancellationToken.None));
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed class ReceiptScanQueueSignalTests
     {
         var signal = new ReceiptScanQueueSignal();
 
-        Assert.False(await signal.WaitAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None));
+        Assert.False(await signal.WaitAsync(true, TimeSpan.FromMilliseconds(50), CancellationToken.None));
     }
 
     // Several uploads in a row must not queue up several wake-ups: the worker re-checks the queue anyway,
@@ -58,7 +58,20 @@ public sealed class ReceiptScanQueueSignalTests
         signal.Notify();
         signal.Notify();
 
-        Assert.True(await signal.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None));
-        Assert.False(await signal.WaitAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None));
+        Assert.True(await signal.WaitAsync(true, TimeSpan.FromSeconds(1), CancellationToken.None));
+        Assert.False(await signal.WaitAsync(true, TimeSpan.FromMilliseconds(50), CancellationToken.None));
+    }
+
+    // Two workers wait - one per lane. One shared permit would wake only one of them, and the other would
+    // sit out its whole backoff with a job waiting.
+    [Fact]
+    public async Task A_signal_wakes_the_fast_lane_and_the_ai_lane_alike()
+    {
+        var signal = new ReceiptScanQueueSignal();
+
+        signal.Notify();
+
+        Assert.True(await signal.WaitAsync(false, TimeSpan.FromSeconds(1), CancellationToken.None));
+        Assert.True(await signal.WaitAsync(true, TimeSpan.FromSeconds(1), CancellationToken.None));
     }
 }

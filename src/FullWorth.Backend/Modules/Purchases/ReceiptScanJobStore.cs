@@ -162,7 +162,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
     {
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs" AS j
-            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Error" = NULL,
+            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Lane" = NULL, "Error" = NULL,
                 "CompletedAt" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
             WHERE j."Id" = {jobId} AND j."UserId" = {userId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
               AND j."Status" = 'draft'
@@ -178,7 +178,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
     {
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs" AS j
-            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Error" = NULL,
+            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Lane" = NULL, "Error" = NULL,
                 "StartedAt" = NULL, "CompletedAt" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
             WHERE j."Id" = {jobId} AND j."UserId" = {userId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
               AND j."Status" = 'error'
@@ -189,11 +189,28 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
     }
 
     /// <summary>
-    /// Claims exactly one queued job across all FullWorth Spaces. PostgreSQL executes the CTE + UPDATE
+    /// Hands a job the fast lane could not read locally to the AI lane: it is queued again - at its old
+    /// place, the claim order is by creation time - and remembers why.
+    /// </summary>
+    public async Task<int> HandToAiLaneAsync(Guid jobId, string reason, CancellationToken ct)
+    {
+        var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ReceiptScanJobs"
+            SET "Status" = 'queued', "Stage" = 'queued', "Lane" = {ReceiptScanLanes.Ai}, "Reason" = {reason},
+                "UpdatedAt" = {DateTimeOffset.UtcNow}
+            WHERE "Id" = {jobId} AND "Status" = 'processing'
+            """, ct);
+        if (affected == 1) signal?.Notify();
+        return affected;
+    }
+
+    /// <summary>
+    /// Claims exactly one queued job of one lane across all FullWorth Spaces. <paramref name="lane"/> null is
+    /// the fast lane's queue: jobs nobody has looked at yet. PostgreSQL executes the CTE + UPDATE
     /// as one statement/transaction; SKIP LOCKED keeps this safe if multiple backend replicas exist.
     /// Draft jobs are intentionally invisible until the user explicitly starts the complete scan set.
     /// </summary>
-    public async Task<ReceiptScanJobRow?> ClaimNextAsync(CancellationToken ct)
+    public async Task<ReceiptScanJobRow?> ClaimNextAsync(string? lane, CancellationToken ct)
     {
         await db.Database.OpenConnectionAsync(ct);
         try
@@ -203,7 +220,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
                 WITH next_job AS (
                     SELECT "Id"
                     FROM "ReceiptScanJobs"
-                    WHERE "Status" = 'queued'
+                    WHERE "Status" = 'queued' AND "Lane" IS NOT DISTINCT FROM CAST(@lane AS text)
                     ORDER BY "CreatedAt", "Id"
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1
@@ -221,6 +238,11 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
                           j."Status", j."Stage", j."Engine", j."Error", j."WarningsJson", j."Attempts", j."CreatedAt",
                           j."StartedAt", j."CompletedAt", j."UpdatedAt";
                 """;
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "lane";
+            parameter.Value = (object?)lane ?? DBNull.Value;
+            command.Parameters.Add(parameter);
 
             await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, ct);
             if (!await reader.ReadAsync(ct)) return null;
@@ -292,7 +314,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
         var now = DateTimeOffset.UtcNow;
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs"
-            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL,
+            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Lane" = NULL,
                 "StartedAt" = NULL, "CompletedAt" = NULL, "UpdatedAt" = {now},
                 "Error" = NULL
             WHERE "Status" = 'processing' AND "UpdatedAt" < {staleBefore}

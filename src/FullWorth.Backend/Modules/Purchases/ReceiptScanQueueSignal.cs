@@ -14,21 +14,27 @@ namespace FullWorth.Backend.Modules.Purchases;
 /// </summary>
 public sealed class ReceiptScanQueueSignal
 {
-    private readonly SemaphoreSlim gate = new(0, 1);
+    // One gate per lane: a single gate would wake only one of the two workers waiting on it.
+    private readonly SemaphoreSlim fast = new(0, 1);
+    private readonly SemaphoreSlim ai = new(0, 1);
 
-    /// <summary>A job is queued. Never blocks, and collapses repeated calls into one wake-up.</summary>
+    /// <summary>A job is queued. Never blocks, and collapses repeated calls into one wake-up per lane.</summary>
     public void Notify()
     {
-        if (gate.CurrentCount == 0)
-        {
-            try { gate.Release(); }
-            catch (SemaphoreFullException) { /* another thread got there first */ }
-        }
+        Release(fast);
+        Release(ai);
+    }
+
+    private static void Release(SemaphoreSlim gate)
+    {
+        if (gate.CurrentCount != 0) return;
+        try { gate.Release(); }
+        catch (SemaphoreFullException) { /* another thread got there first */ }
     }
 
     /// <summary>
     /// Waits for a signal or the timeout, whichever comes first. Returns true when it was a signal, which
     /// the worker uses only for logging - it re-checks the queue either way.
     /// </summary>
-    public Task<bool> WaitAsync(TimeSpan timeout, CancellationToken ct) => gate.WaitAsync(timeout, ct);
+    public Task<bool> WaitAsync(bool aiLane, TimeSpan timeout, CancellationToken ct) => (aiLane ? ai : fast).WaitAsync(timeout, ct);
 }

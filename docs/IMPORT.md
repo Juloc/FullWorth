@@ -539,6 +539,12 @@ confirms anything by itself. `ReceiptExtraction:Provider` can be set to `none` t
 | A photo, a scanned PDF (even with an OCR layer from paperless), or several pages | the model | `scan` |
 | The model is unreachable | OCR (`tesseract`) | `ai_unavailable` |
 
+**Two lanes.** The queue worker runs two loops. The *fast lane* takes every new job first (`Lane` is
+`NULL`) and reads a digital PDF locally in milliseconds; whatever it cannot read it hands over untouched
+(`Lane = 'ai'`, with its `Reason`). The *AI lane* takes only those, strictly one at a time under the
+advisory lock - the model is slow and must stay serial. So a digital receipt never waits behind a model
+call. Retrying or requeueing a job clears its lane and the fast lane looks at it again.
+
 `ReceiptScanJobs.ReaderVersion` holds the reader and the generation of its rules (`text/2`,
 `tesseract/2`, `codex/<model>`); each `PurchaseExtractionRuns` row carries the same in `ProviderVersion`.
 `ReceiptTextParser.Version` is bumped whenever a change can alter what a receipt reads as, so the

@@ -34,3 +34,10 @@ public static class ReceiptRoutes
     /// <summary>The model could not be reached, so OCR read it.</summary>
     public const string AiUnavailable = "ai_unavailable";
 }
+
+/// <summary>The worker lanes. A job with no lane has not been looked at yet and belongs to the fast lane.</summary>
+public static class ReceiptScanLanes
+{
+    /// <summary>Needs the model, so only the serial AI lane may take it.</summary>
+    public const string Ai = "ai";
+}

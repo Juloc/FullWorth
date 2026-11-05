@@ -3,10 +3,14 @@ using Npgsql;
 namespace FullWorth.Backend.Modules.Purchases;
 
 /// <summary>
-/// Persistent FIFO receipt worker. Browser lifetime is irrelevant: uploads are already stored as
-/// Purchases + ReceiptScanJobs before this worker sees them. A PostgreSQL session advisory lock is
-/// held for the full processing duration, guaranteeing only one GPT/OCR receipt job globally even if
-/// FullWorth later runs multiple backend replicas.
+/// Persistent receipt worker with two lanes. Browser lifetime is irrelevant: uploads are already stored as
+/// Purchases + ReceiptScanJobs before this worker sees them.
+///
+/// The AI lane is strictly serial: a PostgreSQL session advisory lock is held for the full processing
+/// duration, guaranteeing only one GPT/OCR receipt job globally even if FullWorth later runs multiple
+/// backend replicas. The fast lane looks at every new job first and reads a digital PDF locally in
+/// milliseconds - so such a receipt never waits behind a slow model call. Whatever it cannot read is
+/// handed to the AI lane; the claim is SKIP LOCKED, so the two lanes never take the same job.
 /// </summary>
 public sealed class ReceiptScanQueueWorker(
     IServiceScopeFactory scopes,
@@ -33,7 +37,43 @@ public sealed class ReceiptScanQueueWorker(
     // lease. Checking it once a minute is ample; it used to run on every single poll.
     private static readonly TimeSpan StaleCheckInterval = TimeSpan.FromMinutes(1);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        Task.WhenAll(RunAiLaneAsync(stoppingToken), RunFastLaneAsync(stoppingToken));
+
+    private async Task RunFastLaneAsync(CancellationToken stoppingToken)
+    {
+        var idleDelay = MinimumIdleDelay;
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            ReceiptScanJobRow? job = null;
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                job = await scope.ServiceProvider.GetRequiredService<ReceiptScanJobStore>().ClaimNextAsync(null, stoppingToken);
+                if (job is null)
+                {
+                    await WaitForWorkAsync(aiLane: false, idleDelay, stoppingToken);
+                    idleDelay = TimeSpan.FromTicks(Math.Min(idleDelay.Ticks * 2, MaximumIdleDelay.Ticks));
+                    continue;
+                }
+
+                idleDelay = MinimumIdleDelay;
+                await scope.ServiceProvider.GetRequiredService<ReceiptScanQueueProcessor>().ProcessAsync(job, stoppingToken, digitalOnly: true);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Receipt scan fast lane failed{JobSuffix}", job is null ? string.Empty : $" for job {job.Id}");
+                try { await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            }
+        }
+    }
+
+    private async Task RunAiLaneAsync(CancellationToken stoppingToken)
     {
         var connectionString = configuration.GetConnectionString("FullWorth");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -55,7 +95,7 @@ public sealed class ReceiptScanQueueWorker(
                 if (!await TryAcquireQueueLockAsync(lockConnection, stoppingToken))
                 {
                     // Another processor holds the queue; nothing to do until it releases.
-                    await WaitForWorkAsync(MaximumIdleDelay, stoppingToken);
+                    await WaitForWorkAsync(aiLane: true, MaximumIdleDelay, stoppingToken);
                     continue;
                 }
 
@@ -70,11 +110,11 @@ public sealed class ReceiptScanQueueWorker(
                     nextStaleCheck = now + StaleCheckInterval;
                 }
 
-                job = await store.ClaimNextAsync(stoppingToken);
+                job = await store.ClaimNextAsync(ReceiptScanLanes.Ai, stoppingToken);
                 if (job is null)
                 {
                     // Closing lockConnection releases the session advisory lock automatically.
-                    await WaitForWorkAsync(idleDelay, stoppingToken);
+                    await WaitForWorkAsync(aiLane: true, idleDelay, stoppingToken);
                     idleDelay = idleDelay >= MaximumIdleDelay
                         ? MaximumIdleDelay
                         : TimeSpan.FromTicks(Math.Min(idleDelay.Ticks * 2, MaximumIdleDelay.Ticks));
@@ -103,9 +143,9 @@ public sealed class ReceiptScanQueueWorker(
     }
 
     /// <summary>Waits for an enqueue signal or the delay, whichever comes first.</summary>
-    private async Task WaitForWorkAsync(TimeSpan delay, CancellationToken ct)
+    private async Task WaitForWorkAsync(bool aiLane, TimeSpan delay, CancellationToken ct)
     {
-        try { await signal.WaitAsync(delay, ct); }
+        try { await signal.WaitAsync(aiLane, delay, ct); }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
     }
 
