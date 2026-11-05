@@ -1,38 +1,64 @@
-# 0.80.0
+# 0.81.0
 
-Die erste Version in der neuen Zählung: Statt `1.3.0-alpha.N` gibt es jetzt `0.x.y`. FullWorth ist weiter Alpha (darum
-die 0), aber jede Version hat eine Nummer, die man lesen kann, und **`:latest` zeigt auf die jeweils neueste**. Die bisherigen
-Alphas (bis `1.3.0-alpha.79`) bleiben in GHCR; wer eine davon festgesteckt hat, ändert nichts. Wer auf `0.80.0` wechselt,
-ändert die Version im Compose-File - die Daten und die Verschlüsselungs-Schlüssel bleiben, die eine neue Tabelle
-(`PaperlessUploads`) wird beim Start angelegt.
+Bons werden jetzt, wo es geht, **ohne KI** gelesen, die Belege haben eine eigene Seite mit Warteschlange, Verlauf und
+„Zu prüfen“, Käufe und Belege sind Tabellen, und die Oberfläche hat eine neue Kopfleiste und eine Aktionsleiste je Seite.
+Wer `latest` zieht, bekommt diese Version.
 
-## Neu
+## Bons lesen – ohne KI, wo es geht
 
-- **Belegkamera** (Käufe → „Mit Kamera"): Livebild, Randerkennung, automatische Aufnahme, wenn das Bild ruhig und scharf ist, die
-  Aufnahme wird gerade gerechnet.
-- **Langer Bon**: am Bon entlangfahren, die Kamera nimmt Stücke auf und setzt sie an sicher gefundenen Nähten zu einem Bild zusammen. Wo
-  eine Naht nicht sicher ist, bleibt der Bon dort getrennt (eine falsche Naht würde Zeilen doppeln oder verschlucken). Das Ergebnis wird in
-  lesbar große Seiten ohne Überlappung geteilt.
-- **Fotos aus der Kamera-App** werden beim Hinzufügen ebenfalls begradigt. „Zuschneiden" zieht den Rand von Hand, „Original" nimmt das
-  Foto, wie es ist.
-- **Belege in Paperless ablegen** (Beleg-Dialog → „In Paperless ablegen"): nur nach Bestätigung, Fotos als ein PDF, mit Titel, Datum und,
-  wenn es ihn dort gibt, dem Korrespondenten des Händlers. FullWorth erkennt das Dokument beim späteren Import wieder und legt keinen
-  zweiten Kauf an.
-- Die Erkennung des Bons wurde neu aufgebaut (drei Quellen statt eines hellen Gebiets, gemessen an künstlichen Testbildern: 90 % sauber
-  gefunden statt 54 %). Wo sie unsicher ist, zeigt die Kamera keinen Rahmen statt eines falschen.
+- **Digitale PDFs werden aus ihrem exakten Text gelesen**, ohne OCR und ohne KI. Der Leser prüft die Rechnung des Bons selbst
+  (Positionen − Rabatte + Pfand = Summe). Nur wenn sie aufgeht, gilt das Ergebnis als sicher.
+- **Scans und Fotos gehen zur KI** (auch Paperless-PDFs mit OCR-Textschicht, denn dieser Text ist nur OCR). Ist die KI nicht
+  erreichbar, liest Tesseract: zwei Seitenlayouts bei 300 dpi plus die Textschicht, gewählt wird die Lesung, deren Summen aufgehen.
+  Eine einzelne verlesene Ziffer wird nur korrigiert, wenn genau eine Korrektur die Rechnung aufgehen lässt; das Ergebnis bleibt
+  dann auf „zu prüfen“.
+- **Zwei Spuren in der Warteschlange:** Eine schnelle Spur liest digitale PDFs in Millisekunden, eine KI-Spur arbeitet die Scans
+  streng nacheinander ab. Ein digitaler Beleg wartet nicht mehr hinter einem langsamen KI-Scan.
+- **Jeder Beleg merkt sich, wie er gelesen wurde:** Leser, Version seiner Regeln (`text/2`, `tesseract/2`, `codex/<Modell>`) und
+  der Grund (`digital_pdf`, `scan`, `digital_unverified`, `ai_unavailable`). Ändert sich der Leser, lassen sich die Belege einer
+  älteren Version gezielt wiederfinden und neu lesen.
+- Ein sauber gelesener digitaler Beleg wird automatisch bestätigt, wenn `ReceiptImports__AutoConfirm` an ist.
+
+Gemessen an 28 echten Bons (Soll: das KI-Ergebnis): Mit Textschicht und Tesseract sind 13 sicher erkannt, mit RapidOCR im Labor 16,
+jeweils ohne einen falschen Treffer unter den als sicher eingestuften. Der Rest wird nicht geraten, sondern bleibt zur Prüfung.
+Unscharfe Scans und Sonderformate (Tankstelle, Schnellrestaurant, Gutschriften) bleiben bei der KI.
+
+## Neue Seite „Belege“
+
+Warteschlange, Verlauf, Zu prüfen und Fehlgeschlagen, mit Zahlen an den Reitern. Die Warteschlange zeigt live, welcher Beleg gerade
+gelesen wird, von wem und wie weit er ist. In „Zu prüfen“ lassen sich Belege einzeln oder gesammelt bestätigen (jeder durch dieselbe
+Summenprüfung wie sonst), fehlgeschlagene Belege erneut versuchen. Die Liste lädt beim Scrollen nach.
+
+## Käufe
+
+- Die Liste ist eine Tabelle mit klebender Kopfzeile und Gesamt-Auswahl, vom Server seitenweise geladen. Filter: Quelle und
+  „Zu prüfen“ / „Noch nicht verknüpft“, mit Zählern vom Server.
+- Mehrere unbestätigte Käufe lassen sich gemeinsam bestätigen. Der Kauf-Dialog hat einen Bestätigen-Knopf.
+- **Entfallen:** der Summenstreifen (Gesamtausgaben, Anzahl) und das Händler-Ranking unter der Liste. Sie wurden im Browser über die
+  komplette Liste gerechnet und brauchen eine Zusammenfassung vom Server, um wiederzukommen.
+
+## Oberfläche
+
+- Jede Seite zeigt einen Brotkrumenpfad mit Suchfeld statt Titel und Unterzeile.
+- Die **Aktionsleiste** gehört der Seite: Hauptaktion (z. B. „Beleg scannen“, „Beleg hochladen“), weitere Aktionen (Import, Kamera,
+  Amazon) und die Aktionen einer Auswahl stehen in einer Leiste am unteren Rand der Seite.
+- Eine einheitliche Checkbox; die Buchungsliste führt ihre Auswahl-Aktionen ebenfalls in der Aktionsleiste.
+- **Entfernt:** der Privatmodus-Schalter und das ⋯-Menü in der Kopfleiste. „Beim Start im Privatmodus starten“ bleibt eine Einstellung.
+  Der schwebende Coach-Knopf ist vorerst ausgeblendet; der Coach bleibt über das Menü und „Coach fragen“ erreichbar.
+
+## Für die Aktualisierung
+
+- Beim Start laufen **zwei Datenbank-Migrationen** automatisch (`ReaderVersion`/`Reason` und `Lane` an `ReceiptScanJobs`). Sie
+  fügen nur Spalten hinzu. Vorher wie immer die Volumes sichern.
+- `ReceiptExtraction:Provider` steht jetzt standardmäßig auf `tesseract` (vorher `none`): Ohne KI liest FullWorth lokal. Wer das nicht
+  will, setzt `none`.
+- Neue Endpunkte: `GET /api/purchases/receipt-scan/jobs?scope=queue|history|review|failed`, `GET /api/purchases/receipt-scan/counts`,
+  `GET /api/purchases?scope=&limit=&offset=` und `GET /api/purchases/counts`. Der Parameter `includeCompleted` der Jobliste entfällt.
+- Keine Änderung an Konfiguration oder Volumes nötig.
 
 ## Wichtig
 
-- **Auf einem echten Handy ist nichts davon getestet.** Die Schwellen stammen von künstlichen Bildern. Das Ablegen in Paperless ist nur gegen einen
-  Fake-Server geprüft: ob deine Instanz Titel, Datum und Korrespondent so annimmt, zeigt der erste echte Upload. Der Paperless-Token braucht
-  das Recht, Dokumente hinzuzufügen.
-- Ein weißer Beleg auf weißem Tisch wird nicht erkannt; dann bleibt der Auslöser von Hand.
-- Bei Schatten über dem Papier kann der automatische Zuschnitt einen Teil des Bons abschneiden (in 2 von 130 Testbildern). Das begradigte
-  Foto wird vor der Analyse gezeigt, „Original" ist ein Tipp.
-- Auf iPhone und iPad hat die Web-Kamera kein Licht und keine Fokussteuerung; die Kamera-App des Geräts liefert dort die bessere Optik.
-
-## Technik
-
-- Release-Ablauf: `ops/release-request.txt` (Version) und `ops/release-notes.md` (diese Notizen) werden zusammen nach `main` gepusht; die Notizen
-  müssen mit der Version überschrieben sein, sonst wird nichts getaggt. Stabile Versionen (ohne `-rc`/`-alpha`) setzen `latest`, `0` und `0.80`.
-- Messwerkzeug für die Kamera: `ops/receipt-vision-bench` (Szenen-Generator, Messungen, Schnelltest `check.mjs`).
+- Die Browser-Layouttests laufen nur in der CI; die Oberfläche wurde zusätzlich im UI-Harness auf Desktop, Tablet und Handy angesehen,
+  nicht auf einem echten Gerät.
+- Die KI-Spur ist bewusst seriell. Wie viele parallele Aufrufe die Codex-Bridge verträgt, ist nicht gemessen.
+- Der Foto-Scan-Dialog und der Paperless-Import liegen noch auf der Käufe-Seite, nicht auf der Belege-Seite.
