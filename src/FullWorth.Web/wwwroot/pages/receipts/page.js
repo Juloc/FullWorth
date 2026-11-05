@@ -8,6 +8,7 @@ import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { spriteHref } from '../../components/sprite.js';
+import { createSelectionList } from '../../components/selection-list.js';
 
 const TABS = ['queue', 'history', 'review', 'failed'];
 const PAGE = 40;
@@ -28,12 +29,21 @@ let hasMore = false;
 let loading = false;
 let timer = null;
 // Was der Benutzer angehakt hat - die Schluessel sind die Auftrags-Ids und ueberleben jedes Neuzeichnen.
-const selected = new Set();
+let selected = new Set();
+// Haken, Gesamt-Haken und Zaehlung kommen vom gemeinsamen Baustein; die Seite haelt nur die Ids, damit
+// die Auswahl ein Neuzeichnen der Tabelle ueberlebt.
+const selection = createSelectionList({
+  onChange: ({ selectedIds }) => {
+    selected = new Set(selectedIds);
+    for (const row of document.querySelectorAll('#receipts-list .receipts-row'))
+      row.classList.toggle('is-selected', selected.has(row.querySelector('[data-select-item]')?.value));
+    showBar();
+  }
+});
 
 export function bindReceipts(context) {
   ctx = context;
   ctx.$('#view-receipts').addEventListener('click', onClick);
-  ctx.$('#view-receipts').addEventListener('change', onSelect);
   document.getElementById('action-bar-selection').addEventListener('click', onBar);
   ctx.$('#receipts-file').addEventListener('change', upload);
   // Endloses Nachladen: der Wachposten am Ende der Liste fragt die naechste Seite an, sobald er in die
@@ -106,14 +116,6 @@ function onClick(event) {
   if (tabButton) switchTab(tabButton.dataset.receiptsTab);
 }
 
-function onSelect(event) {
-  const box = event.target.closest('[data-select]');
-  if (!box) return;
-  if (box.checked) selected.add(box.dataset.select); else selected.delete(box.dataset.select);
-  box.closest('.receipts-row')?.classList.toggle('is-selected', box.checked);
-  showBar();
-}
-
 // Die Auswahl-Aktionen wohnen in der globalen Aktionsleiste (layout: #action-bar-selection) und ersetzen
 // dort die Hauptaktion, solange etwas angehakt ist. Neu gezeichnet wird nur, wenn sich Zahl oder Reiter
 // aendern - ein Knopf, den man gerade drueckt, soll seinen Fokus behalten.
@@ -128,8 +130,6 @@ function showBar() {
   const review = tab === 'review';
   document.getElementById('action-bar-selection').innerHTML = open
     ? `<span class="action-bar-count">${ctx.esc(t(`${selected.size} ausgewählt`, `${selected.size} selected`))}</span>
-       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bar="all">${ctx.esc(ctx.get('receipts.selectAll'))}</button>
-       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bar="none">${ctx.esc(ctx.get('receipts.selectNone'))}</button>
        <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-bar="${review ? 'confirm' : 'retry'}">${glyph(review ? 'ui-check' : 'ui-refresh')}<span>${ctx.esc(review ? ctx.get('purchases.confirm') : ctx.get('receipts.retry'))}</span></button>`
     : '';
 }
@@ -137,17 +137,10 @@ function showBar() {
 async function onBar(event) {
   const button = event.target.closest('[data-bar]');
   if (!button) return;
-  const action = button.dataset.bar;
-  if (action === 'all') for (const row of rows) selected.add(row.id);
-  else if (action === 'none') selected.clear();
-  else {
-    button.disabled = true;
-    try { await (action === 'confirm' ? confirmSelected() : retrySelected()); }
-    catch (error) { ctx.toast(error?.message || ctx.get('common.error')); }
-    finally { button.disabled = false; }
-    return;
-  }
-  draw();
+  button.disabled = true;
+  try { await (button.dataset.bar === 'confirm' ? confirmSelected() : retrySelected()); }
+  catch (error) { ctx.toast(error?.message || ctx.get('common.error')); }
+  finally { button.disabled = false; }
 }
 
 // Eine Sammelbestaetigung wiegt schwer, also fragt sie einmal nach - und bestaetigt dann Beleg fuer
@@ -194,7 +187,7 @@ async function switchTab(next) {
   tab = next;
   history.replaceState(null, '', `#${tab}`);
   rows = [];
-  selected.clear();
+  selected = new Set();
   lastCountsKey = '';
   drawn = '';
   await refresh(true);
@@ -238,6 +231,28 @@ async function upload() {
   }
 }
 
+// Welche Spalten ein Reiter hat. "select" ist die Haken-Spalte, deren Kopf alles an- und abwaehlt.
+const COLUMNS = {
+  queue: ['file', 'state', 'reader'],
+  history: ['file', 'date', 'items', 'reader', 'amount'],
+  review: ['select', 'file', 'date', 'items', 'reader', 'amount', 'view'],
+  failed: ['select', 'file', 'when']
+};
+
+function heading(column) {
+  return {
+    file: t('Beleg', 'Receipt'), state: t('Stand', 'State'), date: t('Datum', 'Date'), items: t('Positionen', 'Items'),
+    reader: t('Gelesen von', 'Read by'), amount: t('Betrag', 'Amount'), when: t('Wann', 'When'), view: ''
+  }[column] ?? '';
+}
+
+function headRow() {
+  const cells = COLUMNS[tab].map(column => column === 'select'
+    ? `<label class="fw-check"><input type="checkbox" data-select-all aria-label="${ctx.esc(t('Alle auswählen', 'Select all'))}"></label>`
+    : `<span class="receipts-th receipts-th--${column}">${ctx.esc(heading(column))}</span>`);
+  return `<div class="receipts-head" role="row">${cells.join('')}</div>`;
+}
+
 function draw() {
   for (const button of ctx.$('#view-receipts').querySelectorAll('[data-receipts-tab]')) {
     const active = button.dataset.receiptsTab === tab;
@@ -246,20 +261,23 @@ function draw() {
   }
   // Solange die erste Seite noch aussteht, stehen Platzhalter da: so hoch wie die Zeilen, die kommen.
   const first = loading && !rows.length;
+  const list = ctx.$('#receipts-list');
+  list.dataset.tab = tab;
   const html = first
     ? skeleton(4)
     : (rows.length
-      ? rows.map(row => (tab === 'queue' ? queueRow(row) : tab === 'review' ? reviewRow(row) : historyRow(row))).join('')
+      ? headRow() + rows.map(row => dataRow(row)).join('')
       : emptyRow(emptyText())) + (loading ? skeleton(2) : '');
   if (html !== drawn) {
     drawn = html;
-    ctx.$('#receipts-list').innerHTML = html;
+    list.innerHTML = html;
+    selection.mount(list);
   }
   showBar();
 }
 
 function skeleton(count) {
-  return Array.from({ length: count }, () => '<div class="receipts-row receipts-skeleton" aria-hidden="true"><span class="row-main"><span class="receipts-sk-line shimmer"></span><span class="receipts-sk-line short shimmer"></span></span></div>').join('');
+  return Array.from({ length: count }, () => '<div class="receipts-row receipts-skeleton" aria-hidden="true"><span class="receipts-sk-line shimmer"></span><span class="receipts-sk-line short shimmer"></span></div>').join('');
 }
 
 function emptyText() {
@@ -306,56 +324,62 @@ function stageLabel(job) {
 function readerTag(job) {
   if (!job.engine) return '';
   const version = job.readerVersion ? ` <span class="receipts-version">${ctx.esc(job.readerVersion)}</span>` : '';
-  const reason = reasonLabel(job.reason);
-  return `<span class="receipts-tag receipts-tag--${ctx.esc(job.engine)}">${ctx.esc(readerLabel(job.engine))}</span>${version}${reason ? ` <span class="receipts-reason">${ctx.esc(reason)}</span>` : ''}`;
+  return `<span class="receipts-tag receipts-tag--${ctx.esc(job.engine)}">${ctx.esc(readerLabel(job.engine))}</span>${version}`;
 }
 
-function queueRow(job) {
-  const running = job.status === 'processing';
-  const progress = running
+// Eine Zeile ist ein Gitter mit den Spalten ihres Reiters. Am Telefon bleiben nur Haken, Beleg und Betrag;
+// was die ausgeblendeten Spalten sagen, steht dort in der Zeile unter dem Namen (.receipts-meta).
+function dataRow(job) {
+  const cells = COLUMNS[tab].map(column => cell(column, job)).join('');
+  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}${job.status === 'processing' ? ' is-active' : ''}" role="row">${cells}</div>`;
+}
+
+function cell(column, job) {
+  switch (column) {
+    case 'select': return checkbox(job);
+    case 'file': return fileCell(job);
+    case 'state': return `<span class="receipts-cell">${stateCell(job)}</span>`;
+    case 'date': return `<span class="receipts-cell receipts-cell--date">${ctx.esc(job.purchaseDate ? ctx.date(job.purchaseDate) : '–')}</span>`;
+    case 'items': return `<span class="receipts-cell receipts-cell--items">${job.itemCount}</span>`;
+    case 'reader': return `<span class="receipts-cell receipts-cell--reader">${readerTag(job) || '–'}</span>`;
+    case 'amount': return `<span class="receipts-cell receipts-cell--amount amount">${ctx.money(job.totalAmount, job.currency)}</span>`;
+    case 'when': return `<span class="receipts-cell receipts-cell--when">${ctx.esc(ago(job.completedAt))}</span>`;
+    case 'view': return `<a class="receipts-cell receipts-cell--view" href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>`;
+    default: return '';
+  }
+}
+
+function fileCell(job) {
+  const warnings = parseWarnings(job.warningsJson);
+  const detail = tab === 'failed'
+    ? `<span class="receipts-sub receipts-error">${ctx.esc(job.error || '')}</span>`
+    : tab === 'review' && warnings.length
+      ? `<span class="receipts-sub receipts-warning">${ctx.esc(warnings[0])}${warnings.length > 1 ? ` (+${warnings.length - 1})` : ''}</span>`
+      : tab === 'history' && reasonLabel(job.reason)
+        ? `<span class="receipts-sub">${ctx.esc(reasonLabel(job.reason))}</span>`
+        : '';
+  const progress = job.status === 'processing'
     ? `<span class="receipts-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${STAGE_PROGRESS[job.stage] ?? 8}"><span style="width:${STAGE_PROGRESS[job.stage] ?? 8}%"></span></span>`
     : '';
-  const state = running
-    ? `${ctx.esc(stageLabel(job))} · ${ctx.esc(ago(job.startedAt, true))}`
-    : ctx.esc(t(`Position ${job.queuePosition} · wartet seit ${ago(job.createdAt, true)}`, `Position ${job.queuePosition} · waiting ${ago(job.createdAt, true)}`));
-  return `<div class="receipts-row${running ? ' is-active' : ''}">
-    <span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}</span>
-      <span class="row-sub">${state}</span>
-      ${running ? `<span class="row-sub">${readerTag(job)}</span>` : ''}${progress}</span>
-    <span class="receipts-tag receipts-tag--state">${ctx.esc(running ? t('In Arbeit', 'Working') : t('Wartet', 'Waiting'))}</span>
-  </div>`;
+  const meta = tab === 'queue'
+    ? stateCell(job)
+    : [job.purchaseDate ? ctx.esc(ctx.date(job.purchaseDate)) : '', tab === 'failed' ? '' : `${job.itemCount} ${ctx.esc(t('Positionen', 'items'))}`, tab === 'failed' ? ctx.esc(ago(job.completedAt)) : readerTag(job)]
+      .filter(Boolean).join(' · ');
+  const view = tab === 'review'
+    ? ` · <a href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>` : '';
+  return `<span class="receipts-cell receipts-cell--file"><span class="receipts-name">${ctx.esc(name(job))}</span>${detail}${progress}<span class="receipts-meta">${meta}${view}</span></span>`;
 }
 
-function purchaseSub(job) {
-  const date = job.purchaseDate ? ctx.date(job.purchaseDate) : '';
-  const items = `${job.itemCount} ${t('Positionen', 'items')}`;
-  return [date, items].filter(Boolean).map(part => ctx.esc(part)).join(' · ');
+function stateCell(job) {
+  const running = job.status === 'processing';
+  const text = running
+    ? `${stageLabel(job)} · ${ago(job.startedAt, true)}`
+    : t(`Position ${job.queuePosition} · wartet seit ${ago(job.createdAt, true)}`, `Position ${job.queuePosition} · waiting ${ago(job.createdAt, true)}`);
+  return `<span class="receipts-tag receipts-tag--state">${ctx.esc(running ? t('In Arbeit', 'Working') : t('Wartet', 'Waiting'))}</span> <span class="receipts-state-text">${ctx.esc(text)}</span>`;
 }
 
 function checkbox(job) {
-  return `<label class="fw-check"><input type="checkbox" data-select="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''} aria-label="${ctx.esc(t('Auswählen', 'Select'))}"></label>`;
-}
-
-function historyRow(job) {
-  const failed = job.status === 'error';
-  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}">
-    ${failed ? checkbox(job) : ''}<span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}${failed ? ` <span class="receipts-tag receipts-tag--failed">${ctx.esc(t('Fehler', 'Failed'))}</span>` : ''}</span>
-      <span class="row-sub">${failed ? ctx.esc(job.error || '') : purchaseSub(job)} · ${ctx.esc(ago(job.completedAt))}</span>
-      <span class="row-sub">${readerTag(job)}</span></span>
-    ${failed ? '' : `<span class="amount">${ctx.money(job.totalAmount, job.currency)}</span>`}
-  </div>`;
-}
-
-function reviewRow(job) {
-  const warnings = parseWarnings(job.warningsJson);
-  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}">
-    ${checkbox(job)}<span class="row-main"><span class="receipts-name">${ctx.esc(name(job))}</span>
-      <span class="row-sub">${purchaseSub(job)}</span>
-      <span class="row-sub">${readerTag(job)}</span>
-      ${warnings.length ? `<span class="row-sub receipts-warning">${ctx.esc(warnings[0])}${warnings.length > 1 ? ` (+${warnings.length - 1})` : ''}</span>` : ''}</span>
-    <span class="amount">${ctx.money(job.totalAmount, job.currency)}</span>
-    <a class="${buttonClass(ButtonRole.Secondary)}" href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>
-  </div>`;
+  return `<label class="fw-check"><input type="checkbox" data-select-item value="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''} aria-label="${ctx.esc(t('Auswählen', 'Select'))}"></label>`;
 }
 
 function parseWarnings(json) {

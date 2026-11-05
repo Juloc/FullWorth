@@ -6,41 +6,59 @@
 [data-count="needsReview"] { color: var(--warning); }
 [data-count="failed"] { color: var(--danger); }
 
-/* Die Liste kennt ihre Hoehe erst nach dem Laden; der Platz steht vorher da. */
-.receipts-list { min-height: 320px; align-content: start; }
+/* Vier Reiter sind auf dem Telefon breiter als die Karte: sie laufen seitlich, statt umzubrechen. */
+#view-receipts .fw-cycle { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+#view-receipts .fw-cycle button { white-space: nowrap; }
 
-.receipts-row { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+/* Die Tabelle. Jeder Reiter hat seine Spalten (--cols); Kopf und Zeilen teilen sich dasselbe Gitter.
+   Die Kopfzeile klebt unter der Topbar, damit die Gesamt-Auswahl beim Scrollen erreichbar bleibt - dafuer
+   darf die Karte nichts abschneiden (overflow), sonst haette der Kopf nichts, woran er kleben koennte. */
+#view-receipts .panel { overflow: visible; }
+.receipts-list { min-height: 320px; align-content: start; font-size: 14px; }
+.receipts-list[data-tab="queue"] { --cols: minmax(0, 1fr) minmax(220px, 300px) minmax(150px, 200px); }
+.receipts-list[data-tab="history"] { --cols: minmax(240px, 1fr) 100px 84px minmax(150px, 200px) 100px; }
+.receipts-list[data-tab="review"] { --cols: 20px minmax(240px, 1fr) 100px 84px minmax(150px, 200px) 100px 72px; }
+.receipts-list[data-tab="failed"] { --cols: 20px minmax(0, 1fr) 140px; }
+
+.receipts-head, .receipts-row { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: var(--s4); padding: var(--s3) var(--s4); }
+.receipts-head { position: sticky; top: var(--topbar-h, 64px); z-index: 3; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--muted); }
+.receipts-row { padding-block: var(--s4); border-bottom: 1px solid var(--line); }
 .receipts-row:last-child { border-bottom: 0; }
-.receipts-row .row-main { flex: 1; min-width: 0; }
-.receipts-row .row-sub { display: block; }
-.receipts-name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.receipts-warning { color: var(--warning); }
-.receipts-more { display: flex; justify-content: center; padding: var(--s4) 0; }
+.receipts-row:hover, .receipts-row.is-selected { background: var(--surface-2); }
+.receipts-th--amount, .receipts-cell--amount { text-align: right; }
 
-.receipts-tag { display: inline-block; padding: var(--s1) var(--s2); border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+.receipts-cell { min-width: 0; font-variant-numeric: tabular-nums; }
+.receipts-cell--file { display: grid; gap: var(--s1); }
+.receipts-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
+.receipts-sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.receipts-warning { color: var(--warning); }
+.receipts-error { color: var(--danger); }
+.receipts-meta { display: none; font-size: 13px; color: var(--muted); }
+.receipts-state-text { color: var(--muted); }
+.receipts-cell--view { text-decoration: none; font-weight: 600; }
+
+.receipts-tag { display: inline-block; padding: var(--s1) var(--s2); border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.receipts-row:hover .receipts-tag, .receipts-row.is-selected .receipts-tag { background: var(--surface); }
 .receipts-tag--text { color: var(--success); }
-.receipts-tag--failed { color: var(--danger); }
-.receipts-reason { font-size: 12px; color: var(--muted); }
-.receipts-version { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.receipts-version { font-size: 12px; color: var(--muted); }
 
 .receipts-bar { display: block; height: 6px; margin-top: var(--s2); background: var(--surface-2); border-radius: var(--radius-pill); overflow: hidden; }
 .receipts-bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s ease; }
 
-/* Auf dem Telefon geht "Ansehen" in eine eigene Zeile unter dem Beleg, statt ihm die Breite zu nehmen. */
-@media (max-width: 640px) {
-  .receipts-row { flex-wrap: wrap; }
-  .receipts-row > a { order: 3; flex: 1 0 100%; text-align: center; }
-}
-
-/* Vier Reiter sind auf dem Telefon breiter als die Karte: sie laufen seitlich, statt umzubrechen. */
-#view-receipts .fw-cycle { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-#view-receipts .fw-cycle button { white-space: nowrap; }
-.receipts-row a { text-decoration: none; }
-
-.receipts-row.is-selected { background: var(--surface-2); }
-
 /* Platzhalter, bis die erste Seite da ist: dieselbe Hoehe wie eine Zeile. */
-.receipts-skeleton { min-height: 64px; }
-.receipts-sk-line { display: block; height: 12px; width: 60%; border-radius: var(--radius-sm); }
-.receipts-sk-line + .receipts-sk-line { margin-top: var(--s2); width: 35%; }
+.receipts-skeleton { display: grid; gap: var(--s2); min-height: 72px; }
+.receipts-sk-line { display: block; height: 14px; width: 60%; border-radius: var(--radius-sm); }
+.receipts-sk-line + .receipts-sk-line { width: 35%; }
 
+/* Am Telefon: Haken, Beleg, Betrag. Die uebrigen Spalten stehen in der Zeile unter dem Namen. */
+@media (max-width: 767px) {
+  .receipts-list[data-tab="queue"] { --cols: minmax(0, 1fr); }
+  .receipts-list[data-tab="history"] { --cols: minmax(0, 1fr) auto; }
+  .receipts-list[data-tab="review"] { --cols: 20px minmax(0, 1fr) auto; }
+  .receipts-list[data-tab="failed"] { --cols: 20px minmax(0, 1fr); }
+  .receipts-th--state, .receipts-th--date, .receipts-th--items, .receipts-th--reader, .receipts-th--when, .receipts-th--view,
+  .receipts-cell--date, .receipts-cell--items, .receipts-cell--reader, .receipts-cell--when, .receipts-cell--view { display: none; }
+  .receipts-cell--state { display: none; }
+  .receipts-meta { display: block; }
+  .receipts-name { white-space: normal; }
+}

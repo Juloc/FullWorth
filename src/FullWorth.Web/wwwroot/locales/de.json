@@ -284,8 +284,6 @@
     "queue": "Warteschlange",
     "history": "Verlauf",
     "review": "Zu prüfen",
-    "selectAll": "Alle",
-    "selectNone": "Keine",
     "retry": "Erneut versuchen",
     "upload": "Beleg hochladen",
     "failed": "Fehlgeschlagen"
