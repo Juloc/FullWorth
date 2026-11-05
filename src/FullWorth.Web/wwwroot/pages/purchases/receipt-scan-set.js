@@ -1,5 +1,8 @@
 import { createDialog } from '../../components/dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { openReceiptCamera } from './receipt-camera.js';
+import { openReceiptAdjust } from './receipt-adjust.js';
+import { fileFromQuad, isImage, loadBitmap, preparePhoto } from './receipt-photo.js';
 // FullWorth receipt scan-set builder.
 //
 // One logical receipt may contain several independently captured photos or one/more PDFs. Files are
@@ -14,28 +17,44 @@ export function runReceiptScanSet(ctx, files) {
   return addReceiptScanFiles(ctx, files);
 }
 
-export function addReceiptScanFiles(ctx, files) {
+/**
+ * Dateien in das Scan-Set legen. Fotos, die nicht aus der Belegkamera kommen, werden dabei gerade gerechnet,
+ * wenn sich der Bon darin findet (receipt-photo.js); Dateien der Belegkamera sind es schon (`prepared`).
+ */
+export async function addReceiptScanFiles(ctx, files, { prepared = false } = {}) {
   const incoming = [...(files || [])].filter(Boolean);
-  if (!incoming.length) return activeDraft?.promise || Promise.resolve(null);
+  if (!incoming.length) return activeDraft?.promise || null;
 
   if (!activeDraft || activeDraft.finished) activeDraft = createDraft(ctx);
   else activeDraft.ctx = ctx;
+  const draft = activeDraft;
 
   for (const file of incoming) {
-    if (activeDraft.files.length >= MAX_FILES) {
-      activeDraft.ctx.toast?.(t(`Maximal ${MAX_FILES} Dateien pro Beleg.`, `Maximum ${MAX_FILES} files per receipt.`));
+    if (draft.files.length >= MAX_FILES) {
+      draft.ctx.toast?.(t(`Maximal ${MAX_FILES} Dateien pro Beleg.`, `Maximum ${MAX_FILES} files per receipt.`));
       break;
     }
-    activeDraft.files.push(file);
+    const info = prepared ? { file, original: file, quad: null, straightened: false, camera: true } : await preparePhoto(file);
+    draft.files.push(info.file);
+    draft.info.set(info.file, info);
   }
-  renderDraft(activeDraft);
-  return activeDraft.promise;
+  renderDraft(draft);
+  return draft.promise;
+}
+
+/** Fotos mit der Kamera machen und dem Scan-Set hinzufuegen - der Weg ueber "Mit Kamera" auf der Seite wie im Dialog. */
+export async function addReceiptScanCameraShots(ctx) {
+  const taken = activeDraft && !activeDraft.finished ? activeDraft.files.length : 0;
+  const files = await openReceiptCamera({ limit: MAX_FILES - taken, toast: ctx.toast });
+  return files.length ? addReceiptScanFiles(ctx, files, { prepared: true }) : null;
 }
 
 function createDraft(ctx) {
   const draft = {
     ctx,
     files: [],
+    // zu jeder Datei: das Original und der Rand, mit dem sie gerade gerechnet wurde
+    info: new Map(),
     dialog: null,
     state: 'collecting',
     row: null,
@@ -74,7 +93,7 @@ function renderDraft(draft) {
     return `<li class="receipt-set-source" data-index="${index}">
       <span class="receipt-set-order">${index + 1}</span>
       <div class="receipt-set-thumb">${image}</div>
-      <div class="receipt-set-source-main"><strong>${esc(file.name || t('Foto', 'Photo'))}</strong><small>${humanBytes(file.size)}${isPdf(file) ? ` · ${t('alle PDF-Seiten', 'all PDF pages')}` : ''}</small></div>
+      <div class="receipt-set-source-main"><strong>${esc(file.name || t('Foto', 'Photo'))}</strong><small>${humanBytes(file.size)}${isPdf(file) ? ` · ${t('alle PDF-Seiten', 'all PDF pages')}` : ''}</small>${photoControls(draft, file, index)}</div>
       <div class="receipt-set-source-actions">
         <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-up="${index}" ${index === 0 ? 'disabled' : ''} aria-label="${t('Nach oben', 'Move up')}">↑</button>
         <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-down="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="${t('Nach unten', 'Move down')}">↓</button>
@@ -103,7 +122,7 @@ function renderDraft(draft) {
     ? ''
     : `<p>${t('Fotografiere einen langen Bon abschnittsweise. Alle Bilder und alle PDF-Seiten werden gemeinsam als ein Einkauf analysiert.', 'Photograph a long receipt section by section. All images and every PDF page are analyzed together as one purchase.')}</p>`;
   const sources = single
-    ? `<div class="receipt-set-single">${singleRow(files[0])}</div>`
+    ? `<div class="receipt-set-single">${singleRow(draft, files[0])}</div>`
     : `<ol class="receipt-set-sources">${rows || `<li class="receipt-set-empty">${t('Noch keine Seite ausgewählt.', 'No page selected yet.')}</li>`}</ol>`;
   const counter = single ? '' : `<span class="row-sub">${files.length}/${MAX_FILES} ${t('Dateien', 'files')}</span>`;
   const startLabel = files.length === 1
@@ -116,6 +135,7 @@ function renderDraft(draft) {
     ${sources}
     <div class="receipt-set-add-row">
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-camera>${t('+ Mit Kamera', '+ With camera')}</button>
       ${counter}
     </div>
     <div class="dialog-actions receipt-set-actions">
@@ -131,17 +151,20 @@ function renderDraft(draft) {
     input.multiple = true;
     input.click();
   });
+  dialog.querySelector('[data-camera]')?.addEventListener('click', () => { void addReceiptScanCameraShots(draft.ctx); });
   dialog.querySelector('[data-start]')?.addEventListener('click', () => submitDraft(draft));
   dialog.querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
     draft.files.splice(Number(button.dataset.remove), 1);
     renderDraft(draft);
   }));
+  dialog.querySelectorAll('[data-adjust]').forEach(button => button.addEventListener('click', () => { void adjustPhoto(draft, Number(button.dataset.adjust)); }));
+  dialog.querySelectorAll('[data-original]').forEach(button => button.addEventListener('click', () => useOriginal(draft, Number(button.dataset.original))));
   dialog.querySelectorAll('[data-up]').forEach(button => button.addEventListener('click', () => move(draft, Number(button.dataset.up), -1)));
   dialog.querySelectorAll('[data-down]').forEach(button => button.addEventListener('click', () => move(draft, Number(button.dataset.down), 1)));
   hydratePreviews(dialog, files);
 }
 
-function singleRow(file) {
+function singleRow(draft, file, controls = true) {
   const preview = isImage(file)
     ? `<img data-file-preview="0" alt="">`
     : `<div class="receipt-set-pdf">PDF</div>`;
@@ -149,9 +172,51 @@ function singleRow(file) {
     <div class="receipt-set-single-main">
       <strong>${esc(file.name || t('Foto', 'Photo'))}</strong>
       <small>${humanBytes(file.size)}${isPdf(file) ? ` · ${t('alle PDF-Seiten', 'all PDF pages')}` : ''}</small>
+      ${controls ? photoControls(draft, file, 0) : ''}
     </div>`;
   // No remove button here on purpose: with one page, removing it and cancelling are the same act, and
   // two × in one dialog makes the reader choose between them for nothing.
+}
+
+/** Was mit einem Foto geschah (gerade gerechnet oder nicht) und der Weg, den Rand von Hand zu ziehen. */
+function photoControls(draft, file, index) {
+  const info = draft.info.get(file);
+  if (!info || info.camera || !isImage(info.original)) return '';
+  const state = info.straightened ? t('Begradigt', 'Straightened') : t('Rand nicht erkannt', 'Edge not found');
+  // Wer den Zuschnitt nicht will (er kann einen Teil des Bons abschneiden, etwa bei Schatten), kommt mit einem Tipp zurueck
+  const original = info.straightened ? `<button type="button" class="${buttonClass(ButtonRole.Quiet)}" data-original="${index}">${t('Original', 'Original')}</button>` : '';
+  return `<div class="receipt-set-photo"><small>${state}</small><button type="button" class="${buttonClass(ButtonRole.Quiet)}" data-adjust="${index}">${t('Zuschneiden', 'Crop')}</button>${original}</div>`;
+}
+
+/** Zurueck auf das unveraenderte Foto. */
+function useOriginal(draft, index) {
+  const file = draft.files[index];
+  const info = draft.info.get(file);
+  if (!info) return;
+  const next = { file: info.original, original: info.original, quad: null, straightened: false };
+  draft.info.delete(file);
+  draft.files[index] = next.file;
+  draft.info.set(next.file, next);
+  renderDraft(draft);
+}
+
+/** Den Rand eines Fotos von Hand ziehen und die Datei danach neu rechnen - oder auf das Original zurueck. */
+async function adjustPhoto(draft, index) {
+  const file = draft.files[index];
+  const info = draft.info.get(file);
+  if (!info) return;
+  const answer = await openReceiptAdjust(info.original, info.quad);
+  if (!answer) return;
+  let next = { file: info.original, original: info.original, quad: null, straightened: false };
+  if (answer.quad) {
+    const bitmap = await loadBitmap(info.original);
+    try { next = { file: await fileFromQuad(bitmap, answer.quad, info.original.name), original: info.original, quad: answer.quad, straightened: true }; }
+    finally { bitmap.close?.(); }
+  }
+  draft.info.delete(file);
+  draft.files[index] = next.file;
+  draft.info.set(next.file, next);
+  renderDraft(draft);
 }
 
 function move(draft, index, delta) {
@@ -256,7 +321,7 @@ function renderProgress(draft) {
   const failed = draft.state === 'error';
   const single = draft.files.length === 1;
   const sources = single
-    ? `<div class="receipt-set-single">${singleRow(draft.files[0])}</div>`
+    ? `<div class="receipt-set-single">${singleRow(draft, draft.files[0], false)}</div>`
     : `<ol class="receipt-set-sources">${draft.files.map((file, index) => `<li class="receipt-set-source">
         <span class="receipt-set-order">${index + 1}</span>
         <div class="receipt-set-thumb">${isImage(file) ? `<img data-file-preview="${index}" alt="">` : `<div class="receipt-set-pdf">PDF</div>`}</div>
@@ -390,7 +455,6 @@ function stageLabel(stage, engine) {
   return engine && stage === 'ocr' ? `${base} (${engine})` : base;
 }
 
-function isImage(file) { return String(file?.type || '').startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(file?.name || ''); }
 function isPdf(file) { return file?.type === 'application/pdf' || /\.pdf$/i.test(file?.name || ''); }
 function humanBytes(bytes) { const n = Number(bytes || 0); if (n < 1024) return `${n} B`; if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`; return `${(n / 1024 / 1024).toFixed(1)} MB`; }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }

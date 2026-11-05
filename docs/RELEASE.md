@@ -2,26 +2,34 @@
 
 ## Versioning
 
-Use Semantic Versioning tags. FullWorth is still being built, so versions are `0.MINOR.PATCH`: a release with
-features bumps the minor (`v0.81.0`), a fix-only release the patch (`v0.80.1`). Up to `v1.3.0-alpha.79` releases were
-numbered `1.3.0-alpha.N`; `v0.80.0` continues that count and is the first with a stable tag.
+Semantic Versioning tags. While FullWorth is alpha the major version is `0`, so releases are `v0.80.0`, `v0.81.0`, ...
+(a feature release raises the minor number, a fix on top of one the patch number). `1.0.0` is for the day the data model and the
+upgrade path are meant to stay.
 
-- Stable: `v0.80.0`
+- Stable: `v0.80.0`, later `v1.4.0` - moves `latest`
 - Release candidate: `v0.81.0-rc.1`
 - Other pre-release: `v0.81.0-alpha.1`
 
-Only stable releases move `latest`, major and major/minor aliases (`0`, `0.80`).
+Only stable releases move `latest`, the major and the major/minor aliases. The older `v1.3.0-alpha.N` tags (up to
+`v1.3.0-alpha.79`) stay in GHCR and on GitHub as pre-releases.
 
-### Requesting a release
+## Request a release
 
-1. Write the notes in `docs/releases/<version>.md` (without the `v`). They become the body of the GitHub release;
-   without a file GitHub generates a list of changes.
-2. Put the tag in `ops/release-request.txt` (`v0.80.0`) and push to `main`. The **Release Request** workflow creates
-   the tag and starts **Release**, which publishes the image, the multi-architecture manifests and the GitHub release
-   (marked *Latest* for a stable tag, *Pre-release* otherwise).
-3. Verify with `docker manifest inspect ghcr.io/juloc/fullworth:<version>`.
+1. Write the notes for this release into `ops/release-notes.md`. Its first line is `# 0.80.0` (the version); it is the text
+   of the GitHub release, so write it for whoever updates: what is new, what to know before updating, what is not tested.
+2. Put the tag into `ops/release-request.txt`:
 
-A failed release burns its tag: fix the cause and request the next version.
+   ```bash
+   printf 'v0.80.0\n' > ops/release-request.txt
+   git add ops/release-request.txt ops/release-notes.md
+   git commit -m "release: request v0.80.0" && git push origin main
+   ```
+
+3. The `Release Request` workflow checks the tag and (for a stable one) that the notes start with the same version - **before**
+   it creates the tag, because a failed release burns its tag. Then `Release` builds and publishes the image and creates the
+   GitHub release with the notes and the "Latest" mark (a pre-release gets neither).
+
+Without notes file or with notes of another version nothing is tagged; fix the file and push again.
 
 ## Verify
 
@@ -52,27 +60,26 @@ Backend and Banking remain separate projects internally for module boundaries an
 
 ## Publish
 
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
+Normally through the request above. Pushing a `v*` tag by hand also starts `Release`, but then the notes come from
+`ops/release-notes.md` only if it is headed by that version, otherwise GitHub generates them from the merged pull requests -
+which for direct pushes to `main` is close to nothing.
 
 AMD64 and ARM64 start in parallel. AMD64 tags are available as soon as that architecture finishes; after ARM64 succeeds the normal tags become multi-architecture manifests.
 
 ## Tag policy
 
-For stable `v1.4.0`:
+For stable `v0.80.0`:
 
-- `1.4.0`
-- `1.4`
-- `1`
+- `0.80.0`
+- `0.80`
+- `0`
 - `latest`
 - `sha-<commit>`
 - matching `-amd64` and `-arm64` tags
 
-For pre-release `v1.4.0-alpha.1`:
+For pre-release `v0.81.0-rc.1`:
 
-- `1.4.0-alpha.1`
+- `0.81.0-rc.1`
 - `sha-<commit>`
 - matching `-amd64` and `-arm64` tags
 

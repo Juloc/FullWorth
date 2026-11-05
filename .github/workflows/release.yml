@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release tag, for example v0.80.0 (stable, moves latest) or v0.81.0-alpha.1
+        description: Release tag, for example v0.80.0
         required: true
         type: string
       source_sha:
@@ -190,13 +190,18 @@ jobs:
           version="${RELEASE_TAG#v}"
           args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --verify-tag)
 
-          # Written notes (docs/releases/<version>.md) win; without them GitHub generates a list of changes.
-          if [[ -f "docs/releases/$version.md" ]]; then
-            args+=(--notes-file "docs/releases/$version.md")
+          # Notes: the file the release request committed, if it is headed by this version; otherwise
+          # whatever GitHub can generate. The title line is dropped, the release already has one.
+          heading="$(head -n 1 ops/release-notes.md 2>/dev/null | tr -d '[:space:]')"
+          if [[ "$heading" == "#${RELEASE_TAG}" || "$heading" == "#${version}" ]]; then
+            tail -n +2 ops/release-notes.md > "$RUNNER_TEMP/release-notes.md"
+            args+=(--notes-file "$RUNNER_TEMP/release-notes.md")
           else
             args+=(--generate-notes)
           fi
 
+          # A pre-release never becomes "latest"; a stable one always does (the images' "latest" tag moves
+          # with it, see the multi-arch job).
           if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
           else

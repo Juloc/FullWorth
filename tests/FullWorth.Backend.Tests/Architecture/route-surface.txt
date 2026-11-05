@@ -256,6 +256,7 @@ GET              /api/purchases/receipt-imports/folder/status
 GET              /api/purchases/receipt-imports/paperless/connection
 GET              /api/purchases/receipt-imports/paperless/options
 GET              /api/purchases/receipt-imports/paperless/presets
+GET              /api/purchases/receipt-imports/paperless/uploads/{purchaseId:guid}
 GET              /api/purchases/receipt-scan/counts
 GET              /api/purchases/receipt-scan/jobs
 GET              /api/purchases/receipt-scan/jobs/{jobId:guid}
@@ -492,6 +493,7 @@ POST             /api/purchases/receipt-imports/paperless/import
 POST             /api/purchases/receipt-imports/paperless/presets
 POST             /api/purchases/receipt-imports/paperless/preview
 POST             /api/purchases/receipt-imports/paperless/test
+POST             /api/purchases/receipt-imports/paperless/uploads/{purchaseId:guid}
 POST             /api/purchases/receipt-imports/upload
 POST             /api/purchases/receipt-scan
 POST             /api/purchases/receipt-scan/jobs

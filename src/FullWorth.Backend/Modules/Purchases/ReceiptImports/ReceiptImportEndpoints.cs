@@ -165,6 +165,39 @@ public static class ReceiptImportEndpoints
             return batch is null ? Results.NotFound() : Results.Ok(batch);
         });
 
+        group.MapGet("/paperless/uploads/{purchaseId:guid}", async (
+            Guid purchaseId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            if (await authorization.GetAccessAsync(userId, fullWorthSpaceId, purchaseId, ct) == PurchaseAccessLevel.None) return Results.NotFound();
+            return Results.Ok(await service.GetPaperlessUploadStatusAsync(fullWorthSpaceId, purchaseId, ct));
+        });
+
+        group.MapPost("/paperless/uploads/{purchaseId:guid}", async (
+            Guid purchaseId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            var access = await authorization.GetAccessAsync(userId, fullWorthSpaceId, purchaseId, ct);
+            if (access == PurchaseAccessLevel.None) return Results.NotFound();
+            if (access != PurchaseAccessLevel.Write) return Results.Forbid();
+            var purchase = await authorization.GetForUserAsync(userId, fullWorthSpaceId, purchaseId, ct);
+            if (purchase is null) return Results.NotFound();
+            try { return Results.Ok(await service.UploadToPaperlessAsync(userId, fullWorthSpaceId, purchase, ct)); }
+            catch (ReceiptImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
         group.MapGet("/paperless/connection", async (
             Guid fullWorthSpaceId,
             CurrentUserContext user,

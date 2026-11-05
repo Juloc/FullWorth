@@ -96,9 +96,9 @@ cast of transient failures that all pass in isolation. 2 matches the CI runner, 
 
 `Juloc/FullWorth` is public, so the parallel jobs cost no Actions minutes.
 
-A release is requested by writing the tag into `ops/release-request.txt` and pushing to `main`;
-`alpha-release-request.yml` validates it against `^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$`, creates the
-tag, and `release.yml` publishes the images. CI does not run on that path — dispatch it yourself
+A release is requested by writing the tag into `ops/release-request.txt` (and the notes into `ops/release-notes.md`) and pushing
+to `main`; `release-request.yml` validates the tag (`v0.80.0`, or with `-rc.N`/`-alpha.N`) and, for a stable one, that the notes
+are headed by the same version, creates the tag, and `release.yml` publishes the images and the GitHub release. CI does not run on that path — dispatch it yourself
 first. See [Release](RELEASE.md).
 
 ## Frontend checks

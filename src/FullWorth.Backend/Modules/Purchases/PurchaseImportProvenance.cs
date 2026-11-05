@@ -31,11 +31,14 @@ internal static class PurchaseImportProvenance
     //
     // Four tables are deliberately NOT guarded here, because they are the purchase's own disposable
     // content and already cascade away with it today (PurchaseWorkspaceService.DeletePurchaseAsync):
-    // "PurchaseItems", "PurchaseDiscounts", "PurchaseDocuments", "PurchaseTagLinks". Three more join
+    // "PurchaseItems", "PurchaseDiscounts", "PurchaseDocuments", "PurchaseTagLinks". Four more join
     // them for the same reason even though they were not part of that older path - they describe how a
     // purchase's OWN content was produced, not a decision the user made about it, and have no meaning
     // once the purchase is gone: "AmazonOrderMetadata" (the purchase's own payment-source breakdown),
-    // "ReceiptScanJobs" and "ReceiptScanItemSources" (the OCR run that produced it).
+    // "ReceiptScanJobs" and "ReceiptScanItemSources" (the OCR run that produced it), and
+    // "PaperlessUploads" (the note that this purchase's receipt file was stored in Paperless; it cascades,
+    // so after a rollback the same Paperless document may be imported again - which is what a rollback
+    // of that import expects).
     internal const string DeleteImportedPurchasesSql = """
 DELETE FROM "Purchases" p
 USING "PurchaseImportLinks" l

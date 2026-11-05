@@ -292,6 +292,7 @@
     "title": "Purchases",
     "receipt": "Receipt",
     "scan": "Scan receipt",
+    "camera": "With camera",
     "amazonImport": "Import Amazon",
     "items": "Items",
     "linked": "Transaction linked",

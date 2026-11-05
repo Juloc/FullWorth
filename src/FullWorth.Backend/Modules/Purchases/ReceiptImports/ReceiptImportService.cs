@@ -232,6 +232,7 @@ public sealed class ReceiptImportService(
                     PaperlessSourcePrefix(connection.BaseUrl),
                     newDocuments.Select(x => x.Id).ToArray(),
                     ct);
+                imported.UnionWith(await OwnDocumentIdsAsync(preset.FullWorthSpaceId, newDocuments, ct));
                 newDocuments = newDocuments.Where(x => !imported.Contains(x.Id)).ToList();
             }
 
@@ -276,11 +277,26 @@ public sealed class ReceiptImportService(
             PaperlessSourcePrefix(baseUrl),
             preview.Documents.Select(x => x.Id).ToArray(),
             ct);
+        imported.UnionWith(await OwnDocumentIdsAsync(fullWorthSpaceId, preview.Documents, ct));
         if (imported.Count == 0) return preview;
         return preview with
         {
             Documents = preview.Documents.Select(x => x with { Imported = imported.Contains(x.Id) }).ToList()
         };
+    }
+
+    /// <summary>
+    /// Die Dokumente der Liste, die FullWorth selbst nach Paperless abgelegt hat. Sie liegen schon als
+    /// Kauf vor; wuerden sie wieder importiert, stuende derselbe Einkauf zweimal in den Auswertungen.
+    /// </summary>
+    private async Task<HashSet<int>> OwnDocumentIdsAsync(
+        Guid fullWorthSpaceId,
+        IReadOnlyList<PaperlessDocumentSummary> documents,
+        CancellationToken ct)
+    {
+        var checksums = documents.Where(x => !string.IsNullOrWhiteSpace(x.Checksum)).Select(x => x.Checksum!).ToArray();
+        var own = await store.GetOwnPaperlessChecksumsAsync(fullWorthSpaceId, checksums, ct);
+        return documents.Where(x => x.Checksum is not null && own.Contains(x.Checksum)).Select(x => x.Id).ToHashSet();
     }
 
     public async Task<ReceiptImportBatchView> ImportPaperlessAsync(
@@ -310,6 +326,7 @@ public sealed class ReceiptImportService(
         var batch = await store.CreateBatchAsync(userId, fullWorthSpaceId, ReceiptImportSourceTypes.Paperless, "Paperless-ngx", currency, autoStart, null, ct);
         var sourcePrefix = PaperlessSourcePrefix(connection.BaseUrl);
 
+        var ownDocuments = await OwnDocumentIdsAsync(fullWorthSpaceId, documents, ct);
         foreach (var document in documents)
         {
             ct.ThrowIfCancellationRequested();
@@ -335,6 +352,11 @@ public sealed class ReceiptImportService(
                     document.Modified));
 
             if (!created.Created && created.Item.ReceiptScanJobId.HasValue) continue;
+            if (ownDocuments.Contains(document.Id))
+            {
+                await store.MarkSkippedDuplicateAsync(created.Item.Id, "Dieser Beleg stammt aus FullWorth und liegt schon als Kauf vor.", ct);
+                continue;
+            }
             if (prior is not null && prior.BatchId != batch.Id && prior.ReceiptScanJobId.HasValue && prior.JobStatus != ReceiptScanJobStatuses.Error)
             {
                 await store.MarkSkippedDuplicateAsync(created.Item.Id, "Paperless document was imported previously.", ct);
@@ -711,6 +733,83 @@ public sealed class ReceiptImportService(
             if (!start.Success) throw new ReceiptImportException(start.Error ?? "receipt analysis could not be started.");
         }
     }
+
+    /// <summary>Ob sich der Beleg eines Kaufs nach Paperless ablegen laesst - und wenn nicht, warum nicht, in einem Satz fuer den Benutzer.</summary>
+    public async Task<PaperlessUploadStatus> GetPaperlessUploadStatusAsync(Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct)
+    {
+        var connection = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
+        if (connection is not { IsEnabled: true }) return new(false, false, "Paperless ist nicht verbunden.", null);
+        var existing = await store.GetPaperlessUploadAsync(fullWorthSpaceId, purchaseId, ct);
+        if (existing is not null) return new(true, false, "Dieser Beleg liegt schon in Paperless.", existing.UploadedAt);
+        var files = await store.ListPurchaseSourceFilesAsync(fullWorthSpaceId, purchaseId, ct);
+        return PaperlessUploadBlocker(files) is { } blocker ? new(true, false, blocker, null) : new(true, true, null, null);
+    }
+
+    /// <summary>
+    /// Legt den Beleg eines Kaufs - die Fotos als ein PDF, ein hochgeladenes PDF unveraendert - mit Titel,
+    /// Datum und, wenn es ihn dort gibt, dem Korrespondenten des Haendlers in Paperless ab.
+    ///
+    /// Die Ablage wird vor dem Senden eingetragen und bei einem Fehler wieder entfernt: so gibt es nie
+    /// einen Moment, in dem Paperless die Datei hat und FullWorth sie nicht als eigene kennt - und ein
+    /// zweiter Klick legt sie nicht noch einmal ab.
+    /// </summary>
+    public async Task<PaperlessUploadStatus> UploadToPaperlessAsync(Guid userId, Guid fullWorthSpaceId, PurchaseView purchase, CancellationToken ct)
+    {
+        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
+        if (await store.GetPaperlessUploadAsync(fullWorthSpaceId, purchase.Id, ct) is not null)
+            throw new ReceiptImportException("Dieser Beleg liegt schon in Paperless.");
+        var files = await store.ListPurchaseSourceFilesAsync(fullWorthSpaceId, purchase.Id, ct);
+        if (PaperlessUploadBlocker(files) is { } blocker) throw new ReceiptImportException(blocker);
+
+        var contents = new List<byte[]>();
+        foreach (var file in files) contents.Add(await File.ReadAllBytesAsync(PurchaseStorageFiles.Resolve(receiptStorage, file.StoragePath), ct));
+        if (contents.Sum(x => (long)x.Length) > MaxPaperlessUploadBytes)
+            throw new ReceiptImportException("Der Beleg ist zu gross, um ihn nach Paperless abzulegen.");
+        var isPdf = IsPdf(files[0]);
+        var document = isPdf ? contents[0] : ImagePdf.Build(contents);
+        var checksum = Convert.ToHexString(MD5.HashData(document)).ToLowerInvariant();
+
+        var date = purchase.PurchaseDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var merchant = string.IsNullOrWhiteSpace(purchase.Merchant) ? null : purchase.Merchant.Trim();
+        var title = merchant is null
+            ? $"Beleg {date:yyyy-MM-dd}"
+            : $"{merchant} {date:yyyy-MM-dd} {purchase.TotalAmount.ToString("0.00", System.Globalization.CultureInfo.GetCultureInfo("de-DE"))} {purchase.Currency}";
+
+        if (!await store.AddPaperlessUploadAsync(fullWorthSpaceId, purchase.Id, userId, checksum, null, ct))
+            throw new ReceiptImportException("Diese Datei liegt schon in Paperless.");
+        try
+        {
+            var correspondent = merchant is null ? null : await paperless.FindCorrespondentIdAsync(connection.BaseUrl, connection.Token, merchant, ct);
+            var outcome = await paperless.UploadAsync(connection.BaseUrl, connection.Token,
+                new PaperlessUploadRequest(document, $"beleg-{date:yyyyMMdd}.pdf", "application/pdf", title, date, correspondent), ct);
+            if (!outcome.Success) throw new ReceiptImportException(outcome.Error ?? "Paperless hat die Ablage abgelehnt.");
+        }
+        catch (Exception ex)
+        {
+            // Ohne Eintrag gilt der Beleg wieder als nicht abgelegt. CancellationToken.None, weil genau ein
+            // abgebrochener Aufruf diesen Eintrag sonst stehen liesse.
+            await store.RemovePaperlessUploadAsync(fullWorthSpaceId, purchase.Id, CancellationToken.None);
+            if (ex is ReceiptImportException or OperationCanceledException) throw;
+            throw new ReceiptImportException(ex is HttpRequestException or TaskCanceledException or UriFormatException
+                ? "Paperless ist nicht erreichbar."
+                : SafeError(ex));
+        }
+        return await GetPaperlessUploadStatusAsync(fullWorthSpaceId, purchase.Id, ct);
+    }
+
+    /// <summary>Das, was einer Ablage im Weg steht, als Satz; null, wenn sich die Dateien zu einem Dokument zusammenfassen lassen.</summary>
+    private static string? PaperlessUploadBlocker(IReadOnlyList<PurchaseSourceFile> files)
+    {
+        if (files.Count == 0) return "Zu diesem Kauf gibt es keine Belegdatei.";
+        if (files.Count == 1 && IsPdf(files[0])) return null;
+        return files.All(x => string.Equals(x.MimeType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+            ? null
+            : "Nur Fotos im JPEG-Format oder ein einzelnes PDF lassen sich als ein Dokument ablegen.";
+    }
+
+    private static bool IsPdf(PurchaseSourceFile file) => string.Equals(file.MimeType, "application/pdf", StringComparison.OrdinalIgnoreCase);
+
+    private const long MaxPaperlessUploadBytes = 100L * 1024 * 1024;
 
     private async Task<PaperlessRuntimeConnection> RequirePaperlessAsync(Guid fullWorthSpaceId, CancellationToken ct)
     {
