@@ -113,6 +113,7 @@ public sealed class CodexReceiptBridgeClient(
                 logger.LogInformation("Codex receipt scan unavailable for queued job: {Error}", envelope?.Error ?? envelope?.ParseError ?? response.StatusCode.ToString());
                 return null;
             }
+            envelope.Model = model;
             return envelope;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -138,6 +139,8 @@ public sealed class CodexReceiptScanEnvelope
 {
     public bool Success { get; set; }
     public string? RequestId { get; set; }
+    // The model that read the receipt (null = the bridge's default); recorded with the result.
+    public string? Model { get; set; }
     public string? Error { get; set; }
     public string? ParseError { get; set; }
     public CodexReceiptResult? Result { get; set; }

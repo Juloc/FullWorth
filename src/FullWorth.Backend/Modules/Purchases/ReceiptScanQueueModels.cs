@@ -43,6 +43,9 @@ public sealed class ReceiptScanJobView
     public string Status { get; set; } = ReceiptScanJobStatuses.Draft;
     public string Stage { get; set; } = "draft";
     public string? Engine { get; set; }
+    // Which reader (and which version of it) produced the result, and why the job took that road.
+    public string? ReaderVersion { get; set; }
+    public string? Reason { get; set; }
     public string? Error { get; set; }
     public string? WarningsJson { get; set; }
     public int Attempts { get; set; }

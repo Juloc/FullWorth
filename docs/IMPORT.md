@@ -530,6 +530,22 @@ whose sums agree - and which most readings agree on - wins. A result whose sums 
 one price had to be corrected, is left with a low confidence and stays in review; the local reader never
 confirms anything by itself. `ReceiptExtraction:Provider` can be set to `none` to switch it off.
 
+**Which road a receipt takes.** The queue decides per job, and stores the decision:
+
+| Receipt | Reader (`Engine`) | Reason |
+|---|---|---|
+| One digital PDF page (real text, no picture covering the page) whose own sums add up | `text`, read by `ReceiptTextParser`, no model | `digital_pdf` |
+| A digital PDF whose sums do not add up | the model | `digital_unverified` |
+| A photo, a scanned PDF (even with an OCR layer from paperless), or several pages | the model | `scan` |
+| The model is unreachable | OCR (`tesseract`) | `ai_unavailable` |
+
+`ReceiptScanJobs.ReaderVersion` holds the reader and the generation of its rules (`text/2`,
+`tesseract/2`, `codex/<model>`); each `PurchaseExtractionRuns` row carries the same in `ProviderVersion`.
+`ReceiptTextParser.Version` is bumped whenever a change can alter what a receipt reads as, so the
+receipts an older generation read can be found and read again. A digital result with trusted confidence
+is confirmed without a human when `ReceiptImports__AutoConfirm` is on and the purchase passes the same
+reconciliation check as a manual confirmation.
+
 ## Amazon order sync
 
 `/api/purchases/amazon` (`AmazonIntegrationEndpoints.cs`, `AmazonOrderSyncService.cs`):

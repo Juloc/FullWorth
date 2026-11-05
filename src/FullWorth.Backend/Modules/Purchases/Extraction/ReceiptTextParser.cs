@@ -14,6 +14,15 @@ namespace FullWorth.Backend.Modules.Purchases.Extraction;
 /// </summary>
 public static partial class ReceiptTextParser
 {
+    /// <summary>
+    /// Which generation of the reading rules produced a result. Bump it whenever a change can alter what
+    /// a receipt reads as, so receipts read by an older generation can be found and read again.
+    /// </summary>
+    public const string Version = "2";
+
+    /// <summary>The least confidence at which a locally read receipt may be taken without a human look.</summary>
+    public const decimal TrustedConfidence = 0.85m;
+
     internal const decimal ConsistentConfidence = 0.9m;
     internal const decimal InconsistentConfidence = 0.4m;
     internal const decimal RepairedConfidence = 0.7m;

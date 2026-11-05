@@ -1,4 +1,5 @@
 using System.Globalization;
+using FullWorth.Backend.Modules.Purchases.Extraction;
 using FullWorth.Backend.Modules.Purchases.ReceiptImports;
 using Microsoft.Extensions.Options;
 
@@ -45,18 +46,42 @@ public sealed class ReceiptAutoConfirmService(
     }
 
     /// <summary>
+    /// Warum ein lokal gelesener Beleg NICHT von selbst bestaetigt wird. Der Text eines digitalen PDFs ist
+    /// exakt - das einzige, was falsch sein kann, ist unser Lesen, und das prueft die Rechnung des Belegs
+    /// selbst: nur eine Fassung, deren Summen aufgehen, erreicht <see cref="ReceiptTextParser.TrustedConfidence"/>.
+    /// </summary>
+    internal static string? RefusalReason(ReceiptExtractionResult result, IReadOnlyList<string> warnings)
+    {
+        if (warnings.Count > 0) return "warnings";
+        if (string.IsNullOrWhiteSpace(result.Merchant)) return "no_merchant";
+        if (result.PurchaseDate is null) return "no_date";
+        if (result.Total is not > 0m) return "no_total";
+        if (result.Items.Count == 0) return "no_items";
+        if (result.Confidence < ReceiptTextParser.TrustedConfidence) return "low_confidence";
+        return null;
+    }
+
+    /// <summary>
     /// Versucht, den Beleg zu bestaetigen. Ein Fehler hier darf den Scan nicht mehr kippen: er ist
     /// dann schon fertig, und der Beleg bleibt einfach auf "zu pruefen".
     /// </summary>
-    public async Task<bool> TryConfirmAsync(
+    public Task<bool> TryConfirmAsync(
         ReceiptScanJobRow job,
         CodexReceiptResult result,
         IReadOnlyList<string> warnings,
-        CancellationToken ct)
+        CancellationToken ct) => TryConfirmAsync(job, RefusalReason(result, warnings), ct);
+
+    /// <summary>Dasselbe fuer einen Beleg, den der deterministische Leser aus dem Text eines digitalen PDFs gelesen hat.</summary>
+    public Task<bool> TryConfirmLocalAsync(
+        ReceiptScanJobRow job,
+        ReceiptExtractionResult result,
+        IReadOnlyList<string> warnings,
+        CancellationToken ct) => TryConfirmAsync(job, RefusalReason(result, warnings), ct);
+
+    private async Task<bool> TryConfirmAsync(ReceiptScanJobRow job, string? reason, CancellationToken ct)
     {
         if (!options.Value.AutoConfirm) return false;
 
-        var reason = RefusalReason(result, warnings);
         if (reason is not null)
         {
             logger.LogInformation("Receipt scan {JobId} stays in review: {Reason}.", job.Id, reason);

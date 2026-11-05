@@ -47,9 +47,38 @@ public sealed class ReceiptScanQueueProcessor(
             var categoryPaths = BuildCategoryPaths(categories);
             var categoryMap = BuildCategoryMap(categories, categoryPaths);
 
-            await jobs.SetStageAsync(job.Id, "connecting", null, ct);
+            // A digital eBon carries its exact text: read that deterministically, no model involved. Only
+            // when its own sums do not add up - or the page is a scan - does a model look at it.
+            var reason = "scan";
+            if (sources is [{ SourceType: "pdf_page" } single])
+            {
+                var text = await ReceiptPdfRasterizer.ReadDigitalPageTextAsync(SafeAbsolutePath(single.StoragePath), single.PageNumber ?? 1, ct);
+                if (text is not null)
+                {
+                    var parsed = ReceiptTextParser.Parse(text, purchase.Currency) with { Provider = ReceiptReaders.Text };
+                    var readLocally = new List<LocalSourceExtraction> { new(0, single, parsed) };
+                    var prepared = parsed.Confidence >= ReceiptTextParser.TrustedConfidence
+                        ? BuildLocalExtraction(readLocally, purchase.Currency, categoryMap, 1)
+                        : null;
+                    if (prepared is not null)
+                    {
+                        await jobs.SetStageAsync(job.Id, "saving", ReceiptReaders.Text, ct, ReceiptRoutes.DigitalPdf);
+                        await PersistWarningsAsync(job.Id, prepared.Warnings, ct);
+                        await ApplyAndPersistProvenanceAsync(job, prepared, sources, ct);
+                        await RecordLocalRunsAsync(documentIds, readLocally, ReceiptReaders.Text, ct);
+                        await SetDocumentStatusesAsync(documentIds, "review", ct);
+                        await jobs.CompleteAsync(job.Id, ReceiptReaders.Text, ReceiptReaders.LocalVersion(ReceiptReaders.Text), ct);
+                        if (autoConfirm is not null)
+                            await autoConfirm.TryConfirmLocalAsync(job, parsed, prepared.Warnings, ct);
+                        return;
+                    }
+                    reason = ReceiptRoutes.DigitalUnverified;
+                }
+            }
+
+            await jobs.SetStageAsync(job.Id, "connecting", null, ct, reason);
             var codexInput = await BuildCodexInputAsync(sources, ct);
-            await jobs.SetStageAsync(job.Id, "analyzing", "gpt", ct);
+            await jobs.SetStageAsync(job.Id, "analyzing", ReceiptReaders.Gpt, ct);
             var gpt = await codex.TryScanAsync(
                 job.UserId,
                 job.FullWorthSpaceId,
@@ -65,9 +94,10 @@ public sealed class ReceiptScanQueueProcessor(
                 await PersistWarningsAsync(job.Id, prepared.Warnings, ct);
                 await jobs.SetStageAsync(job.Id, "saving", "gpt", ct);
                 await ApplyAndPersistProvenanceAsync(job, prepared, sources, ct);
-                await RecordSetExtractionRunsAsync(documentIds, "codex", "completed", JsonSerializer.Serialize(gpt.Result), null, ct);
+                var gptVersion = $"codex/{gpt.Model ?? "default"}";
+                await RecordSetExtractionRunsAsync(documentIds, "codex", "completed", JsonSerializer.Serialize(gpt.Result), null, ct, gptVersion);
                 await SetDocumentStatusesAsync(documentIds, "review", ct);
-                await jobs.CompleteAsync(job.Id, "gpt", ct);
+                await jobs.CompleteAsync(job.Id, ReceiptReaders.Gpt, gptVersion, ct);
                 // Erst NACH dem Abschluss: der Scan ist dann fertig, und was die Bestaetigung auch tut -
                 // ein Beleg, der ihr nicht genuegt, bleibt einfach auf "zu pruefen". Nur die KI-Fassung,
                 // nie die der lokalen Erkennung: sie sagt nicht, wann sie unsicher ist.
@@ -79,8 +109,9 @@ public sealed class ReceiptScanQueueProcessor(
             // GPT unavailability is a normal fallback. Keep an auditable empty attempt without logging
             // receipt text or persisting bridge diagnostics into application logs.
             await RecordSetExtractionRunsAsync(documentIds, "codex", "empty", null, null, ct);
-            await jobs.SetStageAsync(job.Id, "ocr", extraction.ActiveProvider, ct);
+            await jobs.SetStageAsync(job.Id, "ocr", extraction.ActiveProvider, ct, ReceiptRoutes.AiUnavailable);
 
+            var ocrEngine = string.IsNullOrWhiteSpace(extraction.ActiveProvider) ? "none" : extraction.ActiveProvider;
             var local = await ExtractLocallyAsync(sources, purchase.Currency, ct);
             var localPrepared = BuildLocalExtraction(local, purchase.Currency, categoryMap, sources.Count);
             if (localPrepared is not null)
@@ -90,7 +121,7 @@ public sealed class ReceiptScanQueueProcessor(
                 await ApplyAndPersistProvenanceAsync(job, localPrepared, sources, ct);
                 await RecordLocalRunsAsync(documentIds, local, extraction.ActiveProvider, ct);
                 await SetDocumentStatusesAsync(documentIds, "review", ct);
-                await jobs.CompleteAsync(job.Id, string.IsNullOrWhiteSpace(extraction.ActiveProvider) ? "none" : extraction.ActiveProvider, ct);
+                await jobs.CompleteAsync(job.Id, ocrEngine, ReceiptReaders.LocalVersion(ocrEngine), ct);
                 return;
             }
 
@@ -99,7 +130,7 @@ public sealed class ReceiptScanQueueProcessor(
             await RecordLocalRunsAsync(documentIds, local, extraction.ActiveProvider, ct);
             await SetDocumentStatusesAsync(documentIds, "review", ct);
             await jobs.SetPurchaseStatusAsync(job.PurchaseId, "captured", ct);
-            await jobs.CompleteAsync(job.Id, string.IsNullOrWhiteSpace(extraction.ActiveProvider) ? "none" : extraction.ActiveProvider, ct);
+            await jobs.CompleteAsync(job.Id, ocrEngine, ReceiptReaders.LocalVersion(ocrEngine), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -454,6 +485,7 @@ public sealed class ReceiptScanQueueProcessor(
         int sourceCount)
     {
         if (sourceResults.Count == 0 || !sourceResults.Any(x => HasUsefulData(x.Result))) return null;
+        var provider = sourceResults[0].Result.Provider;
         var currency = NormalizeCurrency(sourceResults.Select(x => x.Result.Currency).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)), fallbackCurrency);
         var warnings = new List<string>();
         var lines = new List<LineDraft>();
@@ -533,16 +565,16 @@ public sealed class ReceiptScanQueueProcessor(
         var confidenceRows = orderedResults.Where(HasUsefulData).Select(x => x.Confidence).ToList();
         var confidence = confidenceRows.Count == 0 ? 0m : confidenceRows.Average();
         var notes = BuildNotes(
-            $"OCR scan set · {sourceCount} Quelle(n) · {extraction.ActiveProvider} · confidence {confidence:0.000}",
+            $"{(provider == ReceiptReaders.Text ? "Text-PDF" : "OCR scan set")} · {sourceCount} Quelle(n) · {provider} · confidence {confidence:0.000}",
             declaredDiscount > 0m ? declaredDiscount : null,
             lastSubtotal,
             depositTotal > 0m ? depositTotal : null,
             lastTax,
             currency,
             warnings.Count == 0 ? null : $"Scan-Hinweise: {string.Join(" | ", warnings)}");
-        var sourceName = string.IsNullOrWhiteSpace(extraction.ActiveProvider) || string.Equals(extraction.ActiveProvider, "none", StringComparison.OrdinalIgnoreCase)
+        var sourceName = string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "none", StringComparison.OrdinalIgnoreCase)
             ? "ocr"
-            : extraction.ActiveProvider.Trim().ToLowerInvariant();
+            : provider.Trim().ToLowerInvariant();
         var request = new PurchaseExtractionRequest(
             Merchant: merchant,
             PurchaseDate: date,
@@ -778,7 +810,8 @@ public sealed class ReceiptScanQueueProcessor(
         string status,
         string? normalizedResultJson,
         string? safeError,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? providerVersion = null)
     {
         var ids = documentIds.Distinct().OrderBy(x => x).ToList();
         if (ids.Count == 0) return;
@@ -789,6 +822,7 @@ public sealed class ReceiptScanQueueProcessor(
             {
                 PurchaseDocumentId = ids[index],
                 Provider = Cap(string.IsNullOrWhiteSpace(provider) ? "none" : provider, 64),
+                ProviderVersion = providerVersion,
                 Status = Cap(status, 32),
                 StartedAt = now,
                 CompletedAt = now,
@@ -821,6 +855,7 @@ public sealed class ReceiptScanQueueProcessor(
             {
                 PurchaseDocumentId = documentId,
                 Provider = Cap(string.IsNullOrWhiteSpace(provider) ? "none" : provider, 64),
+                ProviderVersion = ReceiptReaders.LocalVersion(string.IsNullOrWhiteSpace(provider) ? "none" : provider),
                 Status = result is not null && result.Any(x => HasUsefulData(x.Result)) ? "completed" : "empty",
                 StartedAt = now,
                 CompletedAt = now,

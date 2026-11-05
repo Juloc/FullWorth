@@ -25,7 +25,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
         var terminalCutoff = DateTimeOffset.UtcNow.AddDays(-7);
         return db.Database.SqlQuery<ReceiptScanJobView>($"""
             SELECT j."Id", j."FullWorthSpaceId", j."UserId", j."PurchaseId", j."FileName", j."ContentType",
-                   j."Status", j."Stage", j."Engine", j."Error", j."WarningsJson", j."Attempts",
+                   j."Status", j."Stage", j."Engine", j."ReaderVersion", j."Reason", j."Error", j."WarningsJson", j."Attempts",
                    (SELECT COUNT(*)::integer FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id") AS "SourceCount",
                    j."CreatedAt", j."StartedAt", j."CompletedAt", j."UpdatedAt", p."Merchant", p."TotalAmount", p."Currency"
             FROM "ReceiptScanJobs" j
@@ -44,7 +44,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
     public Task<ReceiptScanJobView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid jobId, CancellationToken ct) =>
         db.Database.SqlQuery<ReceiptScanJobView>($"""
             SELECT j."Id", j."FullWorthSpaceId", j."UserId", j."PurchaseId", j."FileName", j."ContentType",
-                   j."Status", j."Stage", j."Engine", j."Error", j."WarningsJson", j."Attempts",
+                   j."Status", j."Stage", j."Engine", j."ReaderVersion", j."Reason", j."Error", j."WarningsJson", j."Attempts",
                    (SELECT COUNT(*)::integer FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id") AS "SourceCount",
                    j."CreatedAt", j."StartedAt", j."CompletedAt", j."UpdatedAt", p."Merchant", p."TotalAmount", p."Currency"
             FROM "ReceiptScanJobs" j
@@ -139,7 +139,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
     {
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs" AS j
-            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "Error" = NULL,
+            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Error" = NULL,
                 "CompletedAt" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
             WHERE j."Id" = {jobId} AND j."UserId" = {userId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
               AND j."Status" = 'draft'
@@ -155,7 +155,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
     {
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs" AS j
-            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "Error" = NULL,
+            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL, "Error" = NULL,
                 "StartedAt" = NULL, "CompletedAt" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
             WHERE j."Id" = {jobId} AND j."UserId" = {userId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
               AND j."Status" = 'error'
@@ -227,25 +227,26 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
         }
     }
 
-    public Task<int> SetStageAsync(Guid jobId, string stage, string? engine, CancellationToken ct)
+    public Task<int> SetStageAsync(Guid jobId, string stage, string? engine, CancellationToken ct, string? reason = null)
     {
         var safeStage = stage.Length <= 32 ? stage : stage[..32];
         var safeEngine = engine is null ? null : (engine.Length <= 32 ? engine : engine[..32]);
         var now = DateTimeOffset.UtcNow;
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs"
-            SET "Stage" = {safeStage}, "Engine" = COALESCE({safeEngine}, "Engine"), "UpdatedAt" = {now}
+            SET "Stage" = {safeStage}, "Engine" = COALESCE({safeEngine}, "Engine"),
+                "Reason" = COALESCE({reason}, "Reason"), "UpdatedAt" = {now}
             WHERE "Id" = {jobId} AND "Status" = 'processing'
             """, ct);
     }
 
-    public Task<int> CompleteAsync(Guid jobId, string engine, CancellationToken ct)
+    public Task<int> CompleteAsync(Guid jobId, string engine, string readerVersion, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs"
-            SET "Status" = 'done', "Stage" = 'done', "Engine" = {engine}, "Error" = NULL,
-                "CompletedAt" = {now}, "UpdatedAt" = {now}
+            SET "Status" = 'done', "Stage" = 'done', "Engine" = {engine}, "ReaderVersion" = {readerVersion},
+                "Error" = NULL, "CompletedAt" = {now}, "UpdatedAt" = {now}
             WHERE "Id" = {jobId}
             """, ct);
     }
@@ -268,7 +269,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
         var now = DateTimeOffset.UtcNow;
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "ReceiptScanJobs"
-            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL,
+            SET "Status" = 'queued', "Stage" = 'queued', "Engine" = NULL, "ReaderVersion" = NULL, "Reason" = NULL,
                 "StartedAt" = NULL, "CompletedAt" = NULL, "UpdatedAt" = {now},
                 "Error" = NULL
             WHERE "Status" = 'processing' AND "UpdatedAt" < {staleBefore}

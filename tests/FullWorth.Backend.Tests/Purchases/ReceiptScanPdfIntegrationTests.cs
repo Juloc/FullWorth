@@ -68,8 +68,8 @@ public sealed class ReceiptScanPdfIntegrationTests
         {
             Assert.Equal(1, await db.Purchases.CountAsync(x => x.Id == purchaseId && x.FullWorthSpaceId == spaceId));
             var sources = await db.Database.SqlQuery<ReceiptScanSourceRow>($"""
-                SELECT "Id", "ReceiptScanJobId", "SortOrder", "SourceType", "OriginalFileName", "MimeType",
-                       "StoragePath", "PageNumber", "Fingerprint", "SizeBytes", "CreatedAt"
+                SELECT "Id", "ReceiptScanJobId", "PurchaseDocumentId", "SortOrder", "SourceType", "OriginalFileName", "MimeType",
+                       "StoragePath", "PageNumber", "Fingerprint", "SizeBytes", "CreatedAt", "UpdatedAt"
                 FROM "ReceiptScanSources"
                 WHERE "ReceiptScanJobId" = {jobId}
                 ORDER BY "SortOrder"
