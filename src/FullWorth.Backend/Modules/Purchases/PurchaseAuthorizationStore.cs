@@ -85,6 +85,11 @@ public sealed record PurchaseCandidateOutcome(PurchaseMutationResult Result, IRe
 /// </summary>
 public sealed class PurchaseAuthorizationStore(FullWorthDbContext db)
 {
+    /// <param name="scope">
+    /// <c>review</c>: not confirmed yet. <c>unlinked</c>: confirmed receipt without a bank booking. Anything
+    /// else (or null) is every purchase. These are the two reasons a purchase asks for attention.
+    /// </param>
+    /// <param name="limit">With <paramref name="offset"/>, one page of the newest-first list; null returns all.</param>
     public Task<List<PurchaseView>> ListForUserAsync(
         Guid userId,
         Guid? fullWorthSpaceId,
@@ -92,17 +97,40 @@ public sealed class PurchaseAuthorizationStore(FullWorthDbContext db)
         string? source,
         DateOnly? from,
         DateOnly? to,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? scope = null,
+        int? limit = null,
+        int offset = 0)
     {
-        var query = VisiblePurchases(userId, fullWorthSpaceId);
+        var query = Scoped(VisiblePurchases(userId, fullWorthSpaceId), scope);
         if (transactionId.HasValue)
             query = query.Where(x => x.TransactionId == transactionId.Value || x.PaymentLinks.Any(link => link.TransactionId == transactionId.Value));
         if (!string.IsNullOrWhiteSpace(source)) query = query.Where(x => x.Source == source);
         if (from.HasValue) query = query.Where(x => x.PurchaseDate >= from.Value);
         if (to.HasValue) query = query.Where(x => x.PurchaseDate <= to.Value);
 
-        return Project(query.OrderByDescending(x => x.PurchaseDate).ThenByDescending(x => x.CreatedAt)).ToListAsync(ct);
+        var ordered = query.OrderByDescending(x => x.PurchaseDate).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id);
+        var page = limit.HasValue ? ordered.Skip(Math.Max(0, offset)).Take(limit.Value) : ordered;
+        return Project(page).ToListAsync(ct);
     }
+
+    /// <summary>How many purchases ask for attention - the numbers on the list's tabs.</summary>
+    public async Task<PurchaseCounts> CountsForUserAsync(Guid userId, Guid? fullWorthSpaceId, string? source, CancellationToken ct)
+    {
+        var query = VisiblePurchases(userId, fullWorthSpaceId);
+        if (!string.IsNullOrWhiteSpace(source)) query = query.Where(x => x.Source == source);
+        return new PurchaseCounts(
+            await query.CountAsync(ct),
+            await Scoped(query, "review").CountAsync(ct),
+            await Scoped(query, "unlinked").CountAsync(ct));
+    }
+
+    private static IQueryable<Purchase> Scoped(IQueryable<Purchase> query, string? scope) => scope switch
+    {
+        "review" => query.Where(x => x.Status != "confirmed"),
+        "unlinked" => query.Where(x => x.Status == "confirmed" && x.Source != "amazon" && x.TransactionId == null),
+        _ => query
+    };
 
     public Task<PurchaseView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct) =>
         Project(VisiblePurchases(userId, fullWorthSpaceId).Where(x => x.Id == purchaseId)).SingleOrDefaultAsync(ct);

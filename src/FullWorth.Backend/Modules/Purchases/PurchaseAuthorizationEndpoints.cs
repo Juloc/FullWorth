@@ -14,17 +14,33 @@ public static class PurchaseAuthorizationEndpoints
             string? source,
             DateOnly? from,
             DateOnly? to,
+            string? scope,
+            int? limit,
+            int? offset,
             CurrentUserContext currentUser,
             PurchaseAuthorizationStore store,
             CancellationToken ct) =>
-            Results.Ok(await store.ListForUserAsync(
-                currentUser.RequireUserId(),
-                fullWorthSpaceId,
-                transactionId,
-                source,
-                from,
-                to,
-                ct)));
+            scope is not (null or "all" or "review" or "unlinked")
+                ? Results.BadRequest(new { error = "scope must be all, review or unlinked." })
+                : Results.Ok(await store.ListForUserAsync(
+                    currentUser.RequireUserId(),
+                    fullWorthSpaceId,
+                    transactionId,
+                    source,
+                    from,
+                    to,
+                    ct,
+                    scope,
+                    limit.HasValue ? Math.Clamp(limit.Value, 1, 100) : null,
+                    offset ?? 0)));
+
+        group.MapGet("/counts", async (
+            Guid? fullWorthSpaceId,
+            string? source,
+            CurrentUserContext currentUser,
+            PurchaseAuthorizationStore store,
+            CancellationToken ct) =>
+            Results.Ok(await store.CountsForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, source, ct)));
 
         group.MapGet("/{id:guid}", async (
             Guid id,

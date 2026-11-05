@@ -261,6 +261,7 @@ GET              /api/purchases/receipt-scan/jobs
 GET              /api/purchases/receipt-scan/jobs/{jobId:guid}
 GET              /api/purchases/receipt-scan/jobs/{jobId:guid}/sources
 GET              /api/purchases/warranty/upcoming
+GET              /api/purchases/counts
 GET              /api/purchases/{id:guid}
 GET              /api/purchases/{id:guid}/amazon-details
 GET              /api/purchases/{id:guid}/amazon-payment-candidates

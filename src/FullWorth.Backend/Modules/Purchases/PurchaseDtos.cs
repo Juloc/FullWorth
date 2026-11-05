@@ -67,3 +67,5 @@ public sealed record PurchaseItemWrite(
     string? DiscountLabel = null);
 
 public sealed record LinkPurchaseRequest(Guid TransactionId, decimal? Confidence);
+
+public sealed record PurchaseCounts(int All, int Review, int Unlinked);
