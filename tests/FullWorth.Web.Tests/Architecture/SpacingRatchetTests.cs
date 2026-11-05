@@ -49,13 +49,13 @@ public sealed class SpacingRatchetTests
         ["pages/settings/page.css"] = 3,
         ["pages/tax/page.css"] = 42,
         ["pages/transactions/page.css"] = 35,
-        ["styles/app.css"] = 95,
+        ["styles/app.css"] = 93,
         ["styles/bank-connections.css"] = 10,
         ["styles/investment-performance.css"] = 48,
         ["styles/components.css"] = 25,
         ["styles/design-depth.css"] = 8,
         ["styles/dialogs.css"] = 30,
-        ["styles/responsive.css"] = 39,
+        ["styles/responsive.css"] = 36,
         ["styles/shell.css"] = 21
     };
 

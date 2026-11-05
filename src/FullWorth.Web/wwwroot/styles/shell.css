@@ -113,7 +113,7 @@ html.nav-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items,html.
 
 /* Die schwebende Aktionsleiste (Jularr-Muster): Hauptaktion der Seite und Auswahl-Aktionen.
    Sie liegt ueber der Seite und schiebt nichts; mit Auswahl ersetzen deren Aktionen die Hauptaktion. */
-.action-bar{position:fixed;left:50%;bottom:var(--s6);z-index:15;display:flex;align-items:center;gap:var(--s2);max-width:calc(100vw - var(--s4));padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-pill);box-shadow:var(--shadow-menu);transform:translateX(-50%)}
+.action-bar{position:fixed;left:50%;bottom:var(--s6);z-index:15;display:flex;align-items:center;gap:var(--s2);max-width:calc(100vw - 168px);flex-wrap:wrap;justify-content:center;padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-menu);transform:translateX(-50%)}
 .action-bar #primary-action{display:inline-flex;align-items:center;gap:var(--s2);white-space:nowrap}
 .action-bar #primary-action svg{order:-1;width:18px;height:18px}
 .action-bar #primary-action[hidden]{display:none}
@@ -125,4 +125,4 @@ html.nav-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items,html.
 .action-bar-count{padding:0 var(--s2);font-weight:600;white-space:nowrap}
 .action-bar .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .action-bar .btn{display:inline-flex;align-items:center;gap:var(--s2)}
-@media(max-width:767px){.action-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
+@media(max-width:767px){.action-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 88px)}}

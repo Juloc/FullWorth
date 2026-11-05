@@ -50,20 +50,18 @@ function openCoachWith(detail) {
 }
 function updateCoachSelectionBar() {
   const view = ctx.$('#view-transactions'); if (!view) return;
-  let bar = view.querySelector('#tx-coach-selection');
   // Mobile renders a selection mode for this view. It is part of the selection state and belongs
   // here, where that state changes - a MutationObserver on the list used to rediscover it from the
   // rendered checkboxes instead, which is the repair layer the architecture guard forbids.
   view.classList.toggle('tx-mobile-selection-mode', coachSelection.count > 0);
-  if (!coachSelection.count) { bar?.remove(); return; }
-  if (!bar) {
-    bar = document.createElement('div'); bar.id = 'tx-coach-selection'; bar.className = 'tx-coach-selection';
-    view.querySelector('.table-panel')?.before(bar);
-  }
+  // Die Aktionen der Auswahl wohnen in der globalen Aktionsleiste (layout: #action-bar-selection).
+  const bar = document.getElementById('action-bar-selection');
+  document.getElementById('action-bar').classList.toggle('has-selection', coachSelection.count > 0);
+  if (!coachSelection.count) { bar.innerHTML = ''; return; }
   const items = coachSelection.getSelectedIds().map(id => currentItemsById.get(id)).filter(Boolean);
   const currency = items.every(item => item.currency === items[0]?.currency) ? (items[0]?.currency || '') : '';
   const total = currency ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
-  bar.innerHTML = `<span><strong>${coachSelection.count}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-collect>${ctx.esc(ctx.get('collections.addToCollection'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-edit>${deLabel('Bearbeiten','Edit')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  bar.innerHTML = `<span class="action-bar-count">${coachSelection.count} ${deLabel('ausgewählt','selected')}</span><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-collect>${ctx.esc(ctx.get('collections.addToCollection'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-edit>${deLabel('Bearbeiten','Edit')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button>`;
   // #124: die Massenzuordnung. Die Auswahl gab es hier schon, sie fuehrte aber nur zum Coach - eine
   // Reise oder Renovierung ist damit Zeile fuer Zeile zuzuordnen gewesen, obwohl der Endpunkt eine
   // ganze Liste auf einmal nimmt.
