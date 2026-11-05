@@ -1,4 +1,4 @@
-name: Alpha Release Request
+name: Release Request
 
 on:
   push:
@@ -12,8 +12,8 @@ permissions:
   actions: write
 
 jobs:
-  create-alpha-tag:
-    name: Create alpha release tag
+  create-release-tag:
+    name: Create release tag
     runs-on: ubuntu-latest
 
     steps:
@@ -26,9 +26,25 @@ jobs:
         shell: bash
         run: |
           tag="$(tr -d '[:space:]' < ops/release-request.txt)"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]; then
-            echo "Invalid alpha release tag: $tag" >&2
+          # 0.80.0, 1.4.0 (stable: moves "latest") or 0.81.0-rc.1, 1.4.0-alpha.2 (pre-release: does not)
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9]+)?)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
             exit 1
+          fi
+
+          # A stable release needs its notes in ops/release-notes.md, headed by its own version, so that
+          # notes from the last release can never be published under this one. Checked BEFORE the tag is
+          # created: a failed release burns its tag, a failed check burns nothing.
+          if [[ "$tag" != *-* ]]; then
+            if [[ ! -s ops/release-notes.md ]]; then
+              echo "ops/release-notes.md is missing or empty; a stable release needs release notes." >&2
+              exit 1
+            fi
+            heading="$(head -n 1 ops/release-notes.md | tr -d '[:space:]')"
+            if [[ "$heading" != "#${tag}" && "$heading" != "#${tag#v}" ]]; then
+              echo "ops/release-notes.md must start with '# ${tag#v}' (found: $heading)." >&2
+              exit 1
+            fi
           fi
 
           git fetch --tags --force
@@ -47,7 +63,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push alpha tag
+      - name: Create and push release tag
         if: steps.version.outputs.exists != 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}

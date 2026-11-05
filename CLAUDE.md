@@ -195,17 +195,17 @@ this matters: when you *move* a file a lost route is obvious, when you *split* o
 
 ## Release
 
-1. Bump `ops/release-request.txt` to `vX.Y.Z-alpha.N`, commit, push to `main`.
-2. `Alpha Release Request` workflow creates the tag → `Release` workflow publishes `ghcr.io/juloc/fullworth`, amd64 + arm64 (~4–16 min). `fullworth-codex` is no longer built — the bridge is in the main image.
-3. Verify: `gh run list`, then `docker manifest inspect ghcr.io/juloc/fullworth:1.3.0-alpha.N`.
+1. Versions are `0.x.y` while FullWorth is alpha (`v0.80.0` first; the old scheme was `v1.3.0-alpha.N`, last `alpha.79`). Write the notes for the GitHub release into `ops/release-notes.md` (first line `# 0.81.0`), set `ops/release-request.txt` to `v0.81.0`, commit both, push to `main`.
+2. `Release Request` workflow checks tag and notes, creates the tag → `Release` workflow publishes `ghcr.io/juloc/fullworth` (`0.81.0`, `0.81`, `0`, `latest`), amd64 + arm64 (~4–16 min), and the GitHub release with the notes and the "Latest" mark. `fullworth-codex` is no longer built — the bridge is in the main image.
+3. Verify: `gh run list`, then `docker manifest inspect ghcr.io/juloc/fullworth:0.81.0`.
 
-**A failed release burns its tag** (alpha.11 was lost that way). The Dockerfiles copy projects one by one, so a new project fails the image build *after* CI is green — check both before bumping.
+**A failed release burns its tag** (alpha.11 was lost that way); the checks of tag and notes run before the tag exists. The Dockerfiles copy projects one by one, so a new project fails the image build *after* CI is green — check both before bumping.
 
 Since v1.3.0-alpha.2 the app ships as **one unified container** (`FullWorthHost__Unified=true`, web+backend+banking on :8080). The old split images (`fullworth-backend`/`-web`/`-banking`) are **no longer built** — anything still referencing them needs a unified migration. Note that the BFF still talks to the backend over loopback HTTP even when unified.
 
 ## Deploy
 
-Deploy repo is `Juloc/docker` at `~/git/docker` (separate repo). FullWorth stacks: `fullworth/` (production, web.fullworth.de), `fullworth-demo/`, `fullworth-landing/` (also serves the apex). The `finance/` stack was retired on 2026-09-09, the `fullworth-cloud/` stack on 2026-09-26. Bump the `FULLWORTH_VERSION` default in the compose files; the server may additionally pin it via its own `.env`.
+Deploy repo is `Juloc/docker` at `~/git/docker` (separate repo). FullWorth stacks: `fullworth/` (production, web.fullworth.de), `fullworth-demo/`, `fullworth-landing/` (also serves the apex). The `finance/` stack was retired on 2026-09-09, the `fullworth-cloud/` stack on 2026-09-26. Bump the `FULLWORTH_VERSION` default in the compose files (to `0.x.y`); the server may additionally pin it via its own `.env`.
 
 `fullworth-platform-secrets` belongs to the **app stack alone**. It holds `data_encryption_key`: never `docker volume prune`, never `docker compose down -v` in a folder that mounts it. It is no longer `external`, so a fresh host needs no preparation; `DataEncryptionKeyGuard` refuses to start when the key cannot be the one this database was encrypted with.
 
