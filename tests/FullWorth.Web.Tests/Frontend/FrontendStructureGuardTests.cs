@@ -383,7 +383,8 @@ public sealed class FrontendStructureGuardTests
     [Fact]
     public void A_synthetic_click_has_a_target()
     {
-        var markup = WebSources.Layout();
+        // Die Aktionsleiste steht nicht im Rahmen, sondern in dem, was eine Seite einbindet.
+        var markup = WebSources.Layout() + WebSources.ActionBar();
         var offenders = new List<string>();
 
         foreach (var path in Scripts("app", "components", "core", "features", "pages"))
@@ -394,6 +395,24 @@ public sealed class FrontendStructureGuardTests
         Assert.True(offenders.Count == 0,
             "Diese Module klicken auf etwas, das es im Dokument nicht gibt:"
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// Die Aktionsleiste gehoert der Seite: sie bindet das Markup in ihrem Abschnitt "Actions" ein und
+    /// befuellt es selbst. Der Rahmen (Layout und Shell) stellt nur den Platz bereit und kennt weder die
+    /// Leiste noch die Hauptaktion - sonst sind Rahmen und Seite wieder vermischt.
+    /// </summary>
+    [Fact]
+    public void The_shell_does_not_know_the_action_bar()
+    {
+        var shell = Code(Path.Combine(WebRoot, "app", "shell.js"));
+        var layout = WebSources.Layout();
+
+        foreach (var name in new[] { "action-bar", "primary-action", "primaryAction", "setPrimaryAction" })
+        {
+            Assert.DoesNotContain(name, shell, StringComparison.Ordinal);
+            Assert.DoesNotContain(name, layout.Replace("RenderSectionAsync(\"Actions\"", string.Empty), StringComparison.Ordinal);
+        }
     }
 
     /// <summary>

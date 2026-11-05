@@ -92,13 +92,18 @@ function body(source) {
     .replace(/^@inject .*$/gm, '')
     .replace(/@\{[^]*?\n\}/, '')
     .replace(/@\*[^]*?\*@/g, '');
-  for (const name of ['Styles', 'Scripts']) {
+  for (const name of ['Styles', 'Scripts', 'Actions']) {
     const start = rest.indexOf('@section ' + name + ' {');
     if (start < 0) continue;
     const close = rest.indexOf('\n}', rest.indexOf('{', start));
     rest = rest.slice(0, start) + rest.slice(close + 2);
   }
   return rest.trim();
+}
+
+/** Das Teilmarkup der Aktionsleiste, ohne den Razor-Kommentar davor. */
+function actionBar() {
+  return read(new URL('Shared/_ActionBar.cshtml', PAGES)).replace(/@\*[^]*?\*@/g, '').trim();
 }
 
 /** Was die Seite in ViewData legt, als einfache Zuweisungen gelesen. */
@@ -172,7 +177,9 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
   const NAV = JSON.parse(readFileSync(new URL('locales/de.json', WWWROOT), 'utf8')).nav ?? {};
   const heading = HEADINGS[data.ActiveView] ?? (NAV[data.ActiveView] ? { title: NAV[data.ActiveView] } : {});
 
-  const crumbLabel = groupLabelOf(data.ActiveView);
+  // Heisst die Seite wie ihre Gruppe, steht sie allein (dieselbe Regel wie im Rahmen).
+  const groupLabel = groupLabelOf(data.ActiveView);
+  const crumbLabel = groupLabel && localeText(groupLabel, language) === heading.title ? undefined : groupLabel;
   let html = evaluateConditions(layout
     .replace(/@\*[^]*?\*@/g, ''),
     { 'crumbGroup is not null': crumbLabel !== undefined })
@@ -189,6 +196,7 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
     .replace('@RenderBody()', localiseBody(body(page.source), language))
     .replace(/@await RenderSectionAsync\("Styles", required: false\)/, section(page.source, 'Styles'))
     .replace(/@await RenderSectionAsync\("Scripts", required: false\)/, section(page.source, 'Scripts'))
+    .replace(/@await RenderSectionAsync\("Actions", required: false\)/, section(page.source, 'Actions').replace('<partial name="_ActionBar" />', actionBar()))
     .replace(/@\(ViewData\["(\w+)"\] as string \?\? "([^"]*)"\)/g, (_, key, fallback) => data[key] ?? fallback)
     .replace(/@\(ViewData\["(\w+)"\] as string \?\? string\.Empty\)/g, (_, key) => data[key] ?? '');
 

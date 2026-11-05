@@ -10,6 +10,7 @@
 import { startShellPage } from '../../app/shell.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './page.js';
 import { renderLoans, bindLoans } from './loans.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite. Der Kontext steht erst fest, wenn
 // gezeichnet wird - der Knopf wird aber vorher beschriftet, also merkt ihn sich der
@@ -27,4 +28,5 @@ await startShellPage(async context => {
   }
   await renderNetWorth(context);
   await renderLoans(context);
-}, { primaryAction: () => ['networth.newAsset', () => newAsset(pageContext)] });
+  setPrimaryAction(context.get('networth.newAsset'), () => newAsset(pageContext));
+});

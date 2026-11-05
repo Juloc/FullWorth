@@ -30,6 +30,9 @@ public static class WebSources
     /// </summary>
     public static string Layout() => Shared("_Layout.cshtml");
 
+    /// <summary>Die Aktionsleiste, die eine Seite in ihrem Abschnitt "Actions" einbindet.</summary>
+    public static string ActionBar() => Shared("_ActionBar.cshtml");
+
     /// <summary>Die Seitenleiste. Trug in der alten Hülle die erzeugte <c>nav</c>-Sektion.</summary>
     public static string Navigation() => Shared("_Navigation.cshtml");
 

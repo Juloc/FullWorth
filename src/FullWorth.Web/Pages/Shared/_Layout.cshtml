@@ -33,6 +33,8 @@
     // Suchfeld daneben. Der Titel bleibt die <h1> - als letztes Glied des Pfads.
     var crumbGroup = FullWorth.Web.Navigation.NavigationCatalog.Groups.FirstOrDefault(group => group.Items.Any(item => item.View == view));
     var language = FullWorth.Web.Navigation.LocaleText.Language(Context);
+    // "Uebersicht > Uebersicht" sagt nichts: heisst die Seite wie ihre Gruppe, steht sie allein.
+    if (crumbGroup is not null && Text.Get(crumbGroup.Label, language) == (ViewData["PageTitle"] as string ?? Headings.Title(view))) crumbGroup = null;
 }
 <!doctype html>
 <html lang="de" data-theme="light">
@@ -105,15 +107,9 @@
             </button>
         </header>
         @RenderBody()
+        @* Der Platz fuer die Aktionsleiste. Was darin steht, bestimmt die Seite (Abschnitt "Actions"). *@
+        @await RenderSectionAsync("Actions", required: false)
     </main>
-</div>
-@* Die schwebende Aktionsleiste: die Hauptaktion der Seite, weitere Aktionen der Seite (action-bar-extra) und ihre Auswahl-Aktionen.
-   Sie liegt ueber der Seite (fixed) und schiebt deshalb nichts. Die Hauptaktion steht VERSTECKT im
-   Markup und nicht weggelassen: die Seite meldet sie beim Start an. *@
-<div id="action-bar" class="action-bar" role="toolbar" aria-label="Aktionen">
-    <div id="action-bar-selection" class="action-bar-selection"></div>
-    <div id="action-bar-extra" class="action-bar-extra"></div>
-    <button id="primary-action" class="btn btn-primary" type="button" hidden><span class="btn-primary-label"></span></button>
 </div>
 <partial name="_BottomNavigation" />
 @* Coach-Starter und Coach-Andockbereich.

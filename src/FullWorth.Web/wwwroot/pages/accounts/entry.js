@@ -10,6 +10,7 @@ import { renderAccounts, bindAccounts, openAddAccount } from './page.js';
 // fuehrt in einen Dialog dieser Seite, nicht auf die Bankverbindungs-Seite - deshalb wird er hier
 // hineingereicht und nicht zu einer Navigation.
 import { openBankConnection } from '../../features/bank-connections.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite. Der Kontext steht erst fest, wenn
 // gezeichnet wird - der Knopf wird aber vorher beschriftet, also merkt ihn sich der
@@ -26,7 +27,8 @@ await startShellPage(async context => {
   }
   await renderAccounts(context);
   reportBankReturn(context);
-}, { primaryAction: () => ['accounts.add', () => openAddAccount(pageContext)] });
+  setPrimaryAction(context.get('accounts.add'), () => openAddAccount(pageContext));
+});
 
 // Die Rueckkehr von der Bank. BankingApplication leitet auf "/?bankConnected=…" bzw. "/?bankError=…"
 // um; die Startseite reicht beides hierher weiter, weil die Nachricht zu den Konten gehoert und der

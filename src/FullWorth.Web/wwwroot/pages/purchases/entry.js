@@ -6,6 +6,7 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderPurchases, bindPurchases, chooseReceipt, openPurchaseFromHash } from './page.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Die Hauptaktion der Aktionsleiste gehoert der Seite; der Kontext steht erst fest, wenn gezeichnet wird.
 let pageContext;
@@ -19,4 +20,5 @@ await startShellPage(async context => {
   }
   await renderPurchases(context);
   await openPurchaseFromHash();
-}, { primaryAction: () => ['purchases.scan', () => chooseReceipt(pageContext), 'scan'] });
+  setPrimaryAction(context.get('purchases.scan'), () => chooseReceipt(pageContext), 'scan');
+});

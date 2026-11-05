@@ -6,6 +6,7 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderCollections, bindCollections, newCollection } from './page.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite. Der Kontext steht erst fest, wenn
 // gezeichnet wird - der Knopf wird aber vorher beschriftet, also merkt ihn sich der
@@ -21,4 +22,5 @@ await startShellPage(async context => {
     bound = true;
   }
   await renderCollections(context);
-}, { primaryAction: () => ['collections.new', () => newCollection(pageContext)] });
+  setPrimaryAction(context.get('collections.new'), () => newCollection(pageContext));
+});

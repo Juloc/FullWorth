@@ -24,7 +24,6 @@ import { installTopbarMetrics } from '../components/topbar-metrics.js';
 import { spriteHref } from '../components/sprite.js';
 import { installNavigation } from '../core/navigation.js';
 import { emitAppEvent, onAppEvent } from '../core/event-bus.js';
-import { setPrimaryAction } from '../features/ux-kit.js';
 import { openGlobalSearch } from './global-search.js';
 import { initLock } from './lock.js';
 import { MENU } from './menu.js';
@@ -45,15 +44,12 @@ const esc = value => String(value ?? '').replace(/[&<>'"]/g, character =>
  * @param {() => void} [options.reload] Wie man die aktuelle Oberfläche neu zeichnet.
  * @param {object} [options.context] Der Seitenkontext für Suche und Sperre.
  * @param {() => string} [options.currentView] Welche Ansicht gerade offen ist.
- * @param {(view: string) => [string, Function, string?]|null} [options.primaryAction]
- *        Die Hauptaktion der Ansicht — in der Hülle aus einer Tabelle, auf einer Seite von ihr selbst.
  */
 export function createShell({
   navigate = view => { location.assign(pathForView(view)); },
   reload = () => location.reload(),
   context = null,
-  currentView = () => document.body.dataset.view || state.view,
-  primaryAction = () => null
+  currentView = () => document.body.dataset.view || state.view
 } = {}) {
   const ctx = context ?? createPageContext({ reload });
 
@@ -83,7 +79,7 @@ export function createShell({
   }
 
   /**
-   * Überschrift, Unterzeile und Hauptaktion.
+   * Die Überschrift der Seite.
    *
    * Auf einer Razor-Seite steht der Text schon im Dokument (PageHeadings) — hier wird er nur für eine
    * andere Sprache ersetzt. Eine Seite ohne Untertitel hat keinen Schlüssel dafür; ein leerer Wert
@@ -96,18 +92,6 @@ export function createShell({
     if (title) {
       const fallback = $(`.sidebar .nav-item[data-entry="${view}"] span`)?.textContent || '';
       title.textContent = page?.title ?? fallback;
-    }
-
-    const action = primaryAction(view);
-    const button = $('#primary-action');
-    if (!button) return;
-    if (action) {
-      button.hidden = false;
-      setPrimaryAction(button, get(action[0]), action[2] || 'add');
-      button.onclick = action[1];
-    } else {
-      button.hidden = true;
-      button.onclick = null;
     }
   }
 
@@ -345,8 +329,8 @@ export function createShell({
  * Sprache und Rahmen zuerst, damit die Seite in eine fertige Umgebung zeichnet und nichts
  * nachträglich springt.
  */
-export async function startShellPage(render, { primaryAction = () => null } = {}) {
-  const shell = createShell({ primaryAction, reload: () => location.reload() });
+export async function startShellPage(render) {
+  const shell = createShell({ reload: () => location.reload() });
   installNavigation((view, options = {}) => {
     const target = pathForView(view);
     const query = options.query ? String(options.query).replace(/^\?/, '') : '';

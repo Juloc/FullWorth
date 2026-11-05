@@ -56,7 +56,7 @@ public sealed class SpacingRatchetTests
         ["styles/design-depth.css"] = 8,
         ["styles/dialogs.css"] = 30,
         ["styles/responsive.css"] = 36,
-        ["styles/shell.css"] = 21
+        ["styles/shell.css"] = 20
     };
 
     private static readonly Regex PropertyDeclaration = new(

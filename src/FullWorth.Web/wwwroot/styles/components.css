@@ -270,3 +270,25 @@ dialog.combobox-popover-host::backdrop{background:transparent}
 :is(.fw-check,label.check) input[type="checkbox"]:checked{background:var(--cta);border-color:var(--cta)}
 :is(.fw-check,label.check) input[type="checkbox"]:checked::after{transform:translateY(-1px) rotate(-45deg) scale(1)}
 @media (prefers-reduced-motion: reduce){:is(.fw-check,label.check) input[type="checkbox"],:is(.fw-check,label.check) input[type="checkbox"]::after{transition:none}}
+
+/* Die Aktionsleiste einer Seite (components/action-bar.js, Pages/Shared/_ActionBar.cshtml). Sie steht am
+   Ende der Seite und klebt am unteren Rand der Ansicht - mittig in der Spalte der Seite, nicht des
+   Fensters. Ohne Hauptaktion und ohne Auswahl ist nichts zu zeigen, dann auch keine leere Pille. */
+.action-bar{position:sticky;bottom:var(--s6);z-index:15;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--s2);width:max-content;max-width:100%;margin:auto auto 0;padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-menu)}
+.action-bar:not(.has-selection):has(#primary-action[hidden]){display:none}
+.action-bar #primary-action{display:inline-flex;align-items:center;gap:var(--s2);white-space:nowrap}
+.action-bar #primary-action svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.action-bar-selection{display:none;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--s2);min-width:0}
+.action-bar.has-selection .action-bar-selection{display:flex}
+.action-bar-extra{display:flex;align-items:center;gap:var(--s2)}
+.action-bar-extra:empty{display:none}
+.action-bar.has-selection #primary-action,.action-bar.has-selection .action-bar-extra{display:none}
+.action-bar-count{padding:0 var(--s2);font-weight:600;white-space:nowrap}
+.action-bar .btn svg,.action-bar-extra button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.action-bar .btn,.action-bar-extra button{display:inline-flex;align-items:center;gap:var(--s2)}
+.action-bar .action-bar-selection .btn{display:inline-flex}
+@media(max-width:767px){
+  .action-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px));gap:var(--s1);padding-inline:var(--s2)}
+  .action-bar .btn,.action-bar-extra button{padding-inline:var(--s3)}
+  .action-bar-extra .action-label{display:none}
+}

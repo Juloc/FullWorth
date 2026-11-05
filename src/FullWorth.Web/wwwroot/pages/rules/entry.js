@@ -6,6 +6,7 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderRules, bindRules, newRule } from './page.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite. Der Kontext steht erst fest, wenn
 // gezeichnet wird - der Knopf wird aber vorher beschriftet, also merkt ihn sich der
@@ -28,4 +29,5 @@ await startShellPage(async context => {
     history.replaceState(null, '', location.pathname);
     newRule(context);
   }
-}, { primaryAction: () => ['rules.new', () => newRule(pageContext)] });
+  setPrimaryAction(context.get('rules.new'), () => newRule(pageContext));
+});

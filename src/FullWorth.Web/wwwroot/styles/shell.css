@@ -58,19 +58,20 @@ html.nav-collapsed .sidebar-user-meta,html.nav-collapsed #theme-toggle,html.nav-
 html.nav-auto-collapsed #nav-collapse:disabled{opacity:.45;cursor:default}
 
 /* Main + top header (§3.1) */
-main{min-width:0;padding:0 var(--s6) calc(var(--s8) + 72px);width:100%;max-width:var(--content-max);margin-inline:auto}
+main{display:flex;flex-direction:column;min-height:100dvh;min-width:0;padding:0 var(--s6) var(--s6);width:100%;max-width:var(--content-max);margin-inline:auto}
 main:focus{outline:none}
-.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0;padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
+.topbar{container:topbar/inline-size;position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0;padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
 /* Brotkrumenpfad statt Ueberschrift: Gruppe > Seite, daneben das Suchfeld. Der Pfad und die Aktionen
    teilen sich den Rest gleich, das Suchfeld sitzt in der Mitte und gibt zuerst nach. */
-.breadcrumb{flex:1 1 0;min-width:0}
+.breadcrumb{flex:none}
 .breadcrumb ol{display:flex;align-items:center;margin:0;padding:0;list-style:none;white-space:nowrap;color:var(--muted);font-size:15px}
 .breadcrumb li{display:flex;align-items:center}
 .breadcrumb li+li::before{content:"\203A";margin:0 var(--s2);color:var(--muted)}
-.breadcrumb li:last-child{min-width:0;color:var(--text)}
-.breadcrumb h1{font-size:inherit;font-weight:600;letter-spacing:0;line-height:inherit;overflow:hidden;text-overflow:ellipsis}
-.topbar-search{display:flex;align-items:center;gap:var(--s2);flex:0 1 420px;min-width:160px;height:40px;padding:0 var(--s4);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--muted);font:inherit;cursor:pointer;text-align:left}
+.breadcrumb li:last-child{color:var(--text)}
+.breadcrumb h1{font-size:inherit;font-weight:600;letter-spacing:0;line-height:inherit}
+.topbar-search{display:flex;align-items:center;gap:var(--s2);flex:1 1 auto;max-width:420px;min-width:40px;margin-left:auto;height:40px;padding:0 var(--s4);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--muted);font:inherit;cursor:pointer;text-align:left}
 .topbar-search:hover{border-color:var(--cta)}
+@container topbar (max-width:520px){.topbar-search{flex:none;justify-content:center;width:40px;padding:0;border-radius:50%}.topbar-search span{display:none}}
 .topbar-search svg{flex:none;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .topbar-search span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* padding:0 ist der Punkt, nicht Kosmetik: components.css gibt JEDEM button 9px 11px, und mit
@@ -110,21 +111,3 @@ html.nav-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items,html.
   .topbar-search{flex:none;justify-content:center;width:40px;min-width:0;padding:0;border-radius:50%}
   .topbar-search span{display:none}
 }
-
-/* Die schwebende Aktionsleiste (Jularr-Muster): Hauptaktion der Seite und Auswahl-Aktionen.
-   Sie liegt ueber der Seite und schiebt nichts; mit Auswahl ersetzen deren Aktionen die Hauptaktion. */
-.action-bar{position:fixed;inset-inline:0;margin-inline:auto;width:max-content;bottom:var(--s6);z-index:15;display:flex;align-items:center;gap:var(--s2);max-width:calc(100vw - 168px);flex-wrap:wrap;justify-content:center;padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-menu)}
-.action-bar #primary-action{display:inline-flex;align-items:center;gap:var(--s2);white-space:nowrap}
-.action-bar #primary-action svg{order:-1;width:18px;height:18px}
-.action-bar #primary-action[hidden]{display:none}
-/* Ohne Hauptaktion und ohne Auswahl ist nichts zu zeigen - dann auch keine leere Pille. */
-.action-bar:not(.has-selection):has(#primary-action[hidden]){display:none}
-.action-bar-selection{display:none;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--s2);min-width:0}
-.action-bar-extra{display:flex;align-items:center;gap:var(--s2)}
-.action-bar-extra:empty{display:none}
-.action-bar.has-selection .action-bar-selection{display:flex}
-.action-bar.has-selection #primary-action,.action-bar.has-selection .action-bar-extra{display:none}
-.action-bar-count{padding:0 var(--s2);font-weight:600;white-space:nowrap}
-.action-bar .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.action-bar .btn,.action-bar-extra button{display:inline-flex;align-items:center;gap:var(--s2)}
-@media(max-width:767px){.action-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px));margin-inline:var(--s3) auto;max-width:calc(100vw - 88px);gap:var(--s1);padding-inline:var(--s2)}.action-bar .btn,.action-bar-extra button{padding-inline:var(--s3)}.action-bar-extra .action-label{display:none}}

@@ -3,6 +3,7 @@
 
 import { startShellPage } from '../../app/shell.js';
 import { renderReceipts, bindReceipts, chooseFiles } from './page.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Die Hauptaktion der Topbar gehoert der Seite; der Kontext steht erst fest, wenn gezeichnet wird.
 let pageContext;
@@ -15,4 +16,5 @@ await startShellPage(async context => {
     bound = true;
   }
   await renderReceipts(context);
-}, { primaryAction: () => ['receipts.upload', () => chooseFiles(pageContext), 'upload'] });
+  setPrimaryAction(context.get('receipts.upload'), () => chooseFiles(pageContext), 'upload');
+});

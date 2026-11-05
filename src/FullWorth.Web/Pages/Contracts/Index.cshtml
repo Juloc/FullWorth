@@ -14,6 +14,10 @@
 
 <section id="view-contracts"><article class="panel"><div class="panel-head"><h2 data-i18n="contracts.title">@Text.Get("contracts.title", language)</h2><div class="panel-head-actions"><label class="check inline"><input id="contracts-archived" type="checkbox"><span data-i18n="contracts.showArchived">@Text.Get("contracts.showArchived", language)</span></label><button id="contracts-detect" class="btn btn-secondary" data-i18n="contracts.detect">@Text.Get("contracts.detect", language)</button></div></div><div id="contracts-price-changes" class="detected-panel" hidden></div><div id="contracts-detected" class="detected-panel" hidden></div><div id="contracts-list" class="rows"></div></article></section>
 
+@section Actions {
+    <partial name="_ActionBar" />
+}
+
 @section Styles {
     <link rel="stylesheet" href="~/pages/contracts/page.css">
 }

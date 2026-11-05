@@ -18,6 +18,7 @@ import { renderDashboard, bindDashboard, toggleDashboardEdit } from './page.js';
 import { renderDashboardInsights } from '../../features/insights.js';
 import { createAccessSetup } from '../../features/access-setup.js';
 import { openBankingSetup } from '../../features/bank-connections.js';
+import { setPrimaryAction } from '../../components/action-bar.js';
 
 // Bevor irgendetwas gezeichnet wird: die Antwort der Bank gehoert auf die Kontenseite. Ein Umweg
 // ueber das erste Bild hier waere ein sichtbares Aufblitzen der Startseite.
@@ -43,4 +44,5 @@ await startShellPage(async context => {
 
   await createAccessSetup(context, (status, options) => openBankingSetup(context, status, options))
     .maybeOpenRegistrationOnboarding();
-}, { primaryAction: () => ['dashboard.edit', () => toggleDashboardEdit(pageContext), 'edit'] });
+  setPrimaryAction(context.get('dashboard.edit'), () => toggleDashboardEdit(pageContext), 'edit');
+});
