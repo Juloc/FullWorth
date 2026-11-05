@@ -72,7 +72,8 @@ public sealed class PageContentVisibilityTests(UiHarness harness)
         """
         (() => {
           const main = document.getElementById('main');
-          const parts = main ? [...main.children].filter(el => !el.classList.contains('topbar')) : [];
+          // Die Aktionsleiste ist kein Rumpf: ohne Hauptaktion und ohne Auswahl ist sie mit Absicht nicht zu sehen.
+          const parts = main ? [...main.children].filter(el => !el.classList.contains('topbar') && !el.classList.contains('action-bar')) : [];
           const hidden = parts.filter(el => {
             const style = getComputedStyle(el);
             return style.display === 'none' || style.visibility === 'hidden' || el.hidden;

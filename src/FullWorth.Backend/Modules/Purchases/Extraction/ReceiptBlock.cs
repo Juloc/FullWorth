@@ -82,18 +82,25 @@ internal sealed partial class ReceiptBlock
 
     private static readonly string[] LookAlikePairs = ["08", "06", "09", "17", "27", "35", "38", "49", "56", "59", "68", "89"];
 
+    // One digit of the price in cents at a time, swapped for the digit it is most often misread as. Plain
+    // integer arithmetic on the cents - no text is parsed here.
     private static IEnumerable<decimal> LookAlikes(decimal price)
     {
-        var digits = Math.Round(price * 100m).ToString("0", System.Globalization.CultureInfo.InvariantCulture);
-        for (var position = 0; position < digits.Length; position++)
+        var sign = price < 0m ? -1m : 1m;
+        var cents = (long)Math.Round(Math.Abs(price) * 100m);
+        var digitCount = cents.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        long place = 1;
+        for (var position = 0; position < digitCount; position++, place *= 10)
+        {
+            var digit = (int)(cents / place % 10);
             foreach (var pair in LookAlikePairs)
             {
-                var index = pair.IndexOf(digits[position]);
+                var index = pair.IndexOf((char)('0' + digit));
                 if (index < 0) continue;
-                var replaced = digits.ToCharArray();
-                replaced[position] = pair[1 - index];
-                yield return decimal.Parse(new string(replaced), System.Globalization.CultureInfo.InvariantCulture) / 100m;
+                var swapped = pair[1 - index] - '0';
+                yield return sign * (cents + (swapped - digit) * place) / 100m;
             }
+        }
     }
 
     private void Add(string head, decimal amount, ref string? pendingName)

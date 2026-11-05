@@ -137,7 +137,9 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         // loadProviders, instanceSettings.load, vault.load) sind bereits alle gleichzeitig unterwegs -
         // das Bimodale kommt davon, ob ihre Antworten alle noch vor dem ersten Bild ankommen oder nicht,
         // nicht von einem Fehler im Code. Nichts hier zu beheben, nur zu messen.
-        ("/admin",           0.102,  0.095), // 0.000/0.102 · 0.000/0.095   fünf parallele Ladevorgänge
+        // Seit die Kopfleiste ein Brotkrumenpfad ist (eine Zeile statt Titel und Unterzeile), liegt der Rumpf hoeher: dieselbe
+        // Verschiebung der Anbieter-Karte (um 220px) trifft einen etwas groesseren Teil des Fensters - 0.104 statt 0.102.
+        ("/admin",           0.105,  0.095), // 0.000/0.104 · 0.000/0.095   fünf parallele Ladevorgänge
         ("/audit",           0.0,    0.0),   // 0.000 / 0.000   nichts
         ("/merchants",       0.0,    0.0),   // 0.000 / 0.000   nichts
         ("/rules",           0.0,    0.0),   // 0.000 / 0.000   nichts
