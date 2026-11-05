@@ -5,20 +5,15 @@
 // alten Huelle, nur dass ihn jetzt die Seite erzeugt statt app.js fuer alle.
 
 import { startShellPage } from '../../app/shell.js';
-import { renderPurchases, bindPurchases, chooseReceipt, openPurchaseFromHash } from './page.js';
-import { setPrimaryAction } from '../../components/action-bar.js';
+import { renderPurchases, bindPurchases, openPurchaseFromHash } from './page.js';
 
-// Die Hauptaktion der Aktionsleiste gehoert der Seite; der Kontext steht erst fest, wenn gezeichnet wird.
-let pageContext;
 let bound = false;
 
 await startShellPage(async context => {
-  pageContext = context;
   if (!bound) {
     bindPurchases(context);
     bound = true;
   }
   await renderPurchases(context);
   await openPurchaseFromHash();
-  setPrimaryAction(context.get('purchases.scan'), () => chooseReceipt(pageContext), 'scan');
 });

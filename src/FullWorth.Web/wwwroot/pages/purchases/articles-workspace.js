@@ -11,7 +11,7 @@ import { showToast } from '../../components/toast.js';
 
 const strings = {
   de: {
-    receipts: 'Belege', articles: 'Artikel', products: 'Produkte', analytics: 'Analysen',
+    receipts: 'Käufe', articles: 'Artikel', products: 'Produkte', analytics: 'Analysen',
     search: 'Suchen…', filter: 'Filter', all: 'Alle', review: 'Zu prüfen', confirmed: 'Bestätigt',
     linked: 'Verknüpft', unlinked: 'Nicht verknüpft', bookmarked: 'Merkliste', refresh: 'Aktualisieren',
     merchant: 'Händler', date: 'Datum', time: 'Uhrzeit', total: 'Gesamt', currency: 'Währung', notes: 'Notizen',
@@ -37,7 +37,7 @@ const strings = {
     status: 'Status', itemDifference: 'Beleg ↔ Artikel', paymentDifference: 'Beleg ↔ Zahlung'
   },
   en: {
-    receipts: 'Receipts', articles: 'Items', products: 'Products', analytics: 'Analytics',
+    receipts: 'Purchases', articles: 'Items', products: 'Products', analytics: 'Analytics',
     search: 'Search…', filter: 'Filter', all: 'All', review: 'Needs review', confirmed: 'Confirmed',
     linked: 'Linked', unlinked: 'Unlinked', bookmarked: 'Bookmarked', refresh: 'Refresh',
     merchant: 'Merchant', date: 'Date', time: 'Time', total: 'Total', currency: 'Currency', notes: 'Notes',

@@ -11,7 +11,7 @@ public static class SecurityHeadersPolicy
         "script-src 'self'; " +
         "style-src 'self'; " +
         "style-src-attr 'unsafe-inline'; " +
-        "img-src 'self' data: https://enablebanking.com https://*.enablebanking.com; " +
+        "img-src 'self' data: blob: https://enablebanking.com https://*.enablebanking.com; " +
         "font-src 'self'; " +
         "connect-src 'self'; " +
         "frame-src 'none'; " +
@@ -21,8 +21,10 @@ public static class SecurityHeadersPolicy
 
     public const string ReferrerPolicy = "strict-origin-when-cross-origin";
 
+    // The camera is allowed for this origin only: the receipt camera (getUserMedia) needs it, and nothing
+    // embedded may ask for it. blob: images are the receipt photos and their previews, made by the page itself.
     public const string PermissionsPolicy =
-        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), " +
+        "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), serial=(), " +
         "accelerometer=(), gyroscope=(), magnetometer=()";
 
     public static readonly TimeSpan HstsMaxAge = TimeSpan.FromDays(180);

@@ -139,7 +139,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var values));
         var csp = string.Join(" ", values!);
 
-        Assert.Contains("img-src 'self' data: https://enablebanking.com https://*.enablebanking.com", csp);
+        Assert.Contains("img-src 'self' data: blob: https://enablebanking.com https://*.enablebanking.com", csp);
         Assert.Contains("script-src 'self'", csp);
         Assert.Contains("connect-src 'self'", csp);
         Assert.DoesNotContain("script-src 'self' https://", csp, StringComparison.OrdinalIgnoreCase);

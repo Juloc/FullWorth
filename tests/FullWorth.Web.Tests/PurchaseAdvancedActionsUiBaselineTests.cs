@@ -116,13 +116,13 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         // REGRESSION (reported, not weakened): receipt-scan-ai.js was deleted, and the branch's later
         // removal of the also-unreachable features/receipt-scan-local-builder.js ("Remove unreachable
         // frontend patch layer") left sw.js's APP_SHELL precache list pointing at that now-nonexistent
-        // file (and its .css) while never listing the real, reachable pages/purchases/receipt-scan-set.js/.css.
+        // file (and its .css) while never listing the real, reachable pages/receipts/receipt-scan-set.js/.css.
         // Because install() precaches via cache.addAll (atomic: one 404 fails the whole precache), this
         // currently breaks service-worker install entirely. Needs a source fix in
         // src/FullWorth.Web/wwwroot/sw.js: replace '/features/receipt-scan-local-builder.js' and
-        // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/pages/purchases/receipt-scan-set.js'
+        // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/pages/receipts/receipt-scan-set.js'
         // and '/pages/purchases/page.css'.
-        PwaAssert.Ships("/pages/purchases/receipt-scan-set.js");
+        PwaAssert.Ships("/pages/receipts/receipt-scan-set.js");
         Assert.DoesNotContain("url.pathname.includes('/receipt')", sw);
     }
 

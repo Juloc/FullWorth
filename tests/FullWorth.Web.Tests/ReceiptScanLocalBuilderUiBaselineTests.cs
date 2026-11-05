@@ -13,15 +13,15 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Normal_scan_collects_locally_before_durable_queue_upload()
     {
-        var normal = Read("pages", "purchases", "gpt-normal.js");
+        var normal = Read("pages", "receipts", "intake.js");
         // The old features/receipt-scan-local-builder.js was an unreachable patch layer that handed
         // locally-collected files to a *separate* durable dialog (features/receipt-scan-ai.js) via a
         // DataTransfer/native-input trick, then used a MutationObserver (autoStartDurableDraft) to
         // auto-click that other dialog's Start button once it appeared. Both files were removed as dead
         // code ("Remove unreachable frontend patch layer"); receipt-scan-set.js is the one reachable
-        // module (wired from gpt-normal.js via addReceiptScanFiles) and now owns durable job
+        // module (wired from intake.js via addReceiptScanFiles) and now owns durable job
         // creation itself instead of handing off to another dialog.
-        var builder = Read("pages", "purchases", "receipt-scan-set.js");
+        var builder = Read("pages", "receipts", "receipt-scan-set.js");
 
         Assert.Contains("addReceiptScanFiles", normal);
         Assert.Contains("const MAX_FILES = 20", builder);
@@ -40,7 +40,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Cancelling_local_builder_never_calls_durable_scanner()
     {
-        var builder = Read("pages", "purchases", "receipt-scan-set.js");
+        var builder = Read("pages", "receipts", "receipt-scan-set.js");
         var cancelStart = builder.IndexOf("function cancelDraft(draft)", StringComparison.Ordinal);
         var nextFunction = builder.IndexOf("function closeDialog(draft)", cancelStart, StringComparison.Ordinal);
         var cancelBody = builder[cancelStart..nextFunction];
@@ -49,8 +49,8 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
         // The old cancel(draft) rejected the promise directly so purchases.js's legacy single-file
         // fallback could never run. Now cancelling resolves the draft promise with null instead; the
         // "must not fall through to the legacy flow" guarantee moved one layer up, into the
-        // tryGptReceiptScan wrapper in gpt-normal.js, which turns a null result into a thrown
-        // Error (see GptPurchasesUiBaselineTests.Cancelling_builder_never_falls_through_to_legacy_single_file_upload).
+        // intake, which ignores a null result - and the legacy single-file upload no longer exists (see
+        // GptPurchasesUiBaselineTests.Cancelling_builder_never_falls_through_to_legacy_single_file_upload).
         Assert.Contains("draft.resolve?.(null)", cancelBody);
         Assert.DoesNotContain("submitDraft", cancelBody);
         Assert.DoesNotContain("draft.ctx.api", cancelBody);
@@ -64,7 +64,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void The_receipt_stays_visible_while_it_is_processed()
     {
-        var builder = Read("pages", "purchases", "receipt-scan-set.js");
+        var builder = Read("pages", "receipts", "receipt-scan-set.js");
         var start = builder.IndexOf("function renderProgress(draft)", StringComparison.Ordinal);
         var end = builder.IndexOf("function engineLine(draft)", start, StringComparison.Ordinal);
         var progress = builder[start..end];
@@ -90,7 +90,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void A_failed_scan_can_be_retried_without_uploading_twice()
     {
-        var builder = Read("pages", "purchases", "receipt-scan-set.js");
+        var builder = Read("pages", "receipts", "receipt-scan-set.js");
 
         Assert.Contains("data-retry", builder);
         Assert.Contains("Erneut versuchen", builder);
@@ -113,7 +113,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     {
         var sw = Read("sw.js");
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        PwaAssert.Ships("/pages/purchases/receipt-scan-set.js");
+        PwaAssert.Ships("/pages/receipts/receipt-scan-set.js");
     }
 
     private string Read(params string[] path)

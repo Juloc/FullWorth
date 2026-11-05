@@ -275,7 +275,7 @@ dialog.combobox-popover-host::backdrop{background:transparent}
    Ende der Seite und klebt am unteren Rand der Ansicht - mittig in der Spalte der Seite, nicht des
    Fensters. Ohne Hauptaktion und ohne Auswahl ist nichts zu zeigen, dann auch keine leere Pille. */
 .action-bar{position:sticky;bottom:var(--s6);z-index:15;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--s2);width:max-content;max-width:100%;margin:auto auto 0;padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-menu)}
-.action-bar:not(.has-selection):has(#primary-action[hidden]){display:none}
+.action-bar:not(.has-selection):has(#primary-action[hidden]):has(.action-bar-extra:empty){display:none}
 .action-bar #primary-action{display:inline-flex;align-items:center;gap:var(--s2);white-space:nowrap}
 .action-bar #primary-action svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .action-bar-selection{display:none;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--s2);min-width:0}

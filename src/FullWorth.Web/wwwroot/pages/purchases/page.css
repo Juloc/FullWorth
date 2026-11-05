@@ -9,11 +9,17 @@
    sie gewinnen, wo sie vorher verloren haben. */
 
 /* Die Spalten der Kaeufe-Tabelle: Haken, Einkauf, Datum, Positionen, Quelle, Status, Betrag. */
+
 #purchases-list { --cols: 20px minmax(240px, 1fr) 100px 84px 90px 120px 110px; --cols-narrow: 20px minmax(0, 1fr) auto; }
+
 /* Identitaet links, Name und Unterzeile daneben; die Zeile darunter (.dt-meta, nur schmal) laeuft ueber die ganze Breite. */
+
 .dt-lead { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--s3); row-gap: var(--s1); min-width: 0; }
+
 .dt-lead .dt-main { display: contents; }
+
 .dt-lead .purchase-ident { grid-row: 1 / span 2; }
+
 .dt-lead .dt-meta { grid-column: 1 / -1; }
 
 .purchase-detail{width:min(760px,94vw)}
@@ -28,6 +34,7 @@
    Spezifitaet (Typ+2 Klassen), um mit design-depth.css's html[data-theme=...] .reconcile gleichzuziehen;
    page.css laedt danach und gewinnt damit den Gleichstand, ohne .reconcile selbst (gemeinsame Datei,
    nicht Teil dieser Slice) oder eine andere Nutzstelle zu treffen. */
+
 form.purchase-detail .reconcile {
   background: none;
   border-color: transparent;
@@ -39,9 +46,11 @@ form.purchase-detail .reconcile {
 .purchase-item input,.purchase-item select{min-width:0}
 
 /* --- Käufe: Kennzeichen (Identität, Wort-Pille). Die Tabelle selbst steht in styles/data-table.css. --- */
+
 .purchase-ident{display:inline-flex;align-items:center;flex:0 0 auto}
 
 /* Ein Wortlabel-Pill traegt die Fussnoten-Rolle (--text-caption), wie .tx-marker bei den Buchungen. */
+
 .purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:var(--text-caption-size);font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
 
 .purchase-tag--review{background:var(--warning-soft);color:var(--warning)}
@@ -50,18 +59,26 @@ form.purchase-detail .reconcile {
 
 /* Aus styles/features/purchase-advanced-insights.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
    und damit seinen eigenen <link>. */
+
 /* 1.35rem (21.6px) passt in keine vorhandene Rolle (zwischen --text-amount, 16px, und --text-amount-lg,
    24px) - dieselbe Lage wie beim Donut-Zentrum der Analyse-/Vertragsseite, bleibt daher roh (Scheibe 11
    Teil 2). */
+
 .pa-advanced-insight .pa-insight-kpi{font-size:1.35rem;font-weight:700}
+
 .pa-advanced-insight .pa-insight-note{font-size:.78rem;color:var(--text-muted);margin-top:5px}
+
 .pa-advanced-insight .pa-analytics-row strong.positive{color:var(--success)}
+
 .pa-advanced-insight .pa-analytics-row strong.negative{color:var(--danger)}
+
 .pa-restock-status{font-size:.74rem;border:1px solid var(--border);border-radius:999px;padding:2px 7px}
+
 .pa-restock-status.overdue,.pa-restock-status.due_soon{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 45%,var(--border))}
 
 /* Aus styles/features/purchase-articles-workspace.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
    und damit seinen eigenen <link>. */
+
 .purchase-subnav {
   display: flex;
   gap: 6px;
@@ -103,6 +120,7 @@ form.purchase-detail .reconcile {
    eine einzelne Kennzahl. #view-purchases-Selektor + ID-Spezifitaet, damit .panel selbst unveraendert
    bleibt und kein anderes Panel im Haus mitgeaendert wird (gleiches Vorgehen wie
    #dashboard-grid .panel-head h2). */
+
 #view-purchases .purchase-advanced-panel,
 #view-purchases .purchase-advanced-panel:hover {
   background: none;
@@ -424,6 +442,7 @@ form.purchase-detail .reconcile {
 
 /* Geldbetraege (Summe/Artikelsumme/Zahlungssumme/Differenzen) - fehlte hier, obwohl jeder andere
    Betrag im Haus (.amount, .tx-amt, ...) tabular-nums traegt. */
+
 .pa-reconcile-grid strong {
   color: var(--text);
   font-size: .94rem;
@@ -464,6 +483,7 @@ form.purchase-detail .reconcile {
    Markup, kein Verschachtelungs-/Typografiefehler. .pa-discount-row selbst haengt sich oben an die
    geteilte .pa-payment-row-/.pa-document-row-/.pa-history-row-/.pa-analytics-row-Trennlinie (Regel 6,
    "nichts Unnoetiges") - nur die Summenzeile und die Aktionsgruppe brauchen eigene Regeln. */
+
 .pa-discount-total {
   display: flex;
   justify-content: space-between;
@@ -513,6 +533,7 @@ form.purchase-detail .reconcile {
 /* 1.12rem (17.92px) passt in keine vorhandene Rolle (zwischen --text-amount, 16px, und --text-amount-lg,
    24px) - dieselbe Lage wie bei .pa-insight-kpi oben und dem Donut-Zentrum der Analyse-/Vertragsseite,
    bleibt daher roh (Scheibe 11 Teil 2). */
+
 .pa-metrics strong {
   font-size: 1.12rem;
   font-variant-numeric: tabular-nums
@@ -749,7 +770,6 @@ form.purchase-detail .reconcile {
   .pa-metrics {
     grid-template-columns: repeat(2,minmax(0,1fr))
   }
-
 }
 
 @media(max-width:640px) {
@@ -844,222 +864,44 @@ form.purchase-detail .reconcile {
   .pa-source-preview iframe {
     height: 50vh
   }
-
 }
 
 @media(max-width:640px) {
   .pa-source-item-chip {
     min-height: 44px
   }
-
 }
 
 /* Aus styles/features/purchase-price-insights.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
    und damit seinen eigenen <link>. */
+
 .pa-price-insight{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:3px;font-size:.78rem;color:var(--text-muted)}
+
 .pa-price-original{text-decoration:line-through;color:var(--text-muted)}
+
 .pa-saving{color:var(--success);font-weight:650}
+
 .pa-reference-note{font-size:.75rem;color:var(--text-muted)}
+
 .pa-price-insights-card{margin:12px 0}
+
 .pa-price-insights-card .pa-metrics{margin-bottom:0}
+
 .pa-price-insights-card .pa-card-head{margin-bottom:8px}
+
 .pa-history-extra{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin-top:3px}
+
 .pa-savings-card .pa-analytics-row span{display:block}
 
-/* Aus styles/features/receipt-imports.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
-   und damit seinen eigenen <link>. */
-.receipt-import-dialog{width:min(980px,calc(100vw - 24px));padding:0;border:0;border-radius:18px;background:var(--surface);color:var(--text)}
-.receipt-import-dialog::backdrop{background:rgba(15,18,24,.42);backdrop-filter:blur(3px)}
-.receipt-import-shell{display:flex;flex-direction:column;max-height:inherit}
-.receipt-import-head{padding:20px 22px 14px;border-bottom:1px solid var(--border)}
-.receipt-import-head h2,.receipt-import-card h3,.receipt-import-batches h3{margin:0}
-.receipt-import-tabs{display:flex;gap:6px;padding:10px 22px;border-bottom:1px solid var(--border);overflow:auto}
-.receipt-import-tabs button{white-space:nowrap}
-.receipt-import-tabs button.active{background:var(--accent);color:var(--cta-text);border-color:transparent}
-.receipt-import-body{padding:18px 22px 24px;overflow:auto;display:grid;gap:16px}
-.receipt-import-card,.receipt-import-batches{border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--surface-2)}
-.receipt-import-card p{margin:6px 0 14px}
-.receipt-import-drop{min-height:150px;border:1px dashed var(--border-strong,#b8bec8);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:24px;text-align:center;cursor:pointer;transition:border-color .15s ease,transform .15s ease,background .15s ease}
-.receipt-import-drop.dragging{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent);transform:translateY(-1px)}
-.receipt-import-drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.receipt-import-drop span{font-size:.88rem;color:var(--text-muted,#707782)}
-.receipt-import-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin-top:14px}
-.receipt-import-actions.compact{margin-top:8px}
-.receipt-import-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-.receipt-import-grid label{display:grid;gap:5px;font-size:.85rem;color:var(--text-muted,#707782)}
-.receipt-import-grid input{width:100%;box-sizing:border-box}
-.receipt-import-grid .wide{grid-column:1/-1}
-.receipt-import-preview{margin-top:12px}
-.receipt-import-preview-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px;font-size:.86rem;color:var(--text-muted,#707782)}
-.receipt-import-docs{max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:10px}
-.receipt-import-doc{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-bottom:1px solid var(--border)}
-.receipt-import-doc:last-child{border-bottom:0}
-.receipt-import-doc span{display:grid;gap:2px;min-width:0;word-break:break-word}
-.receipt-import-doc small{color:var(--text-muted,#707782)}
-.receipt-import-doc.imported{opacity:.58}
-.receipt-import-doc em{margin-left:auto;font-size:.72rem;font-style:normal;color:var(--text-muted,#707782);white-space:nowrap}
-.receipt-import-message{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--surface-subtle);font-size:.9rem}
-.receipt-import-message.error{background:var(--negative-soft);color:var(--negative)}
-.receipt-import-message.ok{background:var(--positive-soft);color:var(--positive)}
-.receipt-import-batches>.panel-head{margin-bottom:8px}
-.receipt-import-batch{padding:12px 0;border-top:1px solid var(--border)}
-.receipt-import-batch:first-child{border-top:0}
-.receipt-import-batch-main{display:flex;justify-content:space-between;gap:10px}
-.receipt-import-batch-main span{font-size:.8rem;color:var(--text-muted,#707782)}
-/* A paused batch has to say so on the card: the counters keep showing work that is deliberately not moving, and without this the screen looks stuck rather than held. */
-.receipt-import-paused{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--warning);align-self:center}
-.receipt-import-stats{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
-.receipt-import-stats span{font-size:.78rem;padding:4px 7px;border-radius:999px;background:var(--surface-subtle);color:var(--text-muted,#707782)}
-.receipt-import-batch-dialog{width:min(860px,calc(100vw - 24px));padding:0;border:0;border-radius:16px;background:var(--surface);color:var(--text)}
-.receipt-import-batch-dialog::backdrop{background:rgba(15,18,24,.32);backdrop-filter:blur(2px)}
-.receipt-import-batch-dialog-shell{display:flex;flex-direction:column;max-height:inherit}
-.receipt-import-batch-dialog-head{padding:16px 18px 12px;border-bottom:1px solid var(--border)}
-.receipt-import-batch-dialog-head h2{margin:0}
-.receipt-import-batch-dialog-body{padding:16px 18px 18px;overflow:auto}
-.receipt-import-batch-detail{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-subtle)}
-.receipt-import-batch-filters{display:grid;grid-template-columns:minmax(150px,220px) minmax(150px,220px) 1fr;gap:10px;align-items:end;margin-bottom:10px}
-.receipt-import-batch-filters label{display:grid;gap:4px;font-size:.78rem;color:var(--text-muted,#707782)}
-.receipt-import-batch-filters select{width:100%}
-.receipt-import-batch-filters>[data-import-item-count]{justify-self:end;padding-bottom:7px}
-.receipt-import-batch-items{display:grid;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2)}
-.receipt-import-empty-items{padding:12px}
-.receipt-import-batch-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 11px;border-top:1px solid var(--border)}
-.receipt-import-batch-item:first-child{border-top:0}
-.receipt-import-batch-item-main{display:grid;gap:3px;min-width:0}
-.receipt-import-batch-item-main>span{font-size:.78rem;color:var(--text-muted,#707782);overflow-wrap:anywhere}
-.receipt-import-item-error{font-size:.78rem;color:var(--negative);overflow-wrap:anywhere}
-.receipt-import-batch-item-actions{display:flex;align-items:center;gap:7px}
-.receipt-import-item-open{white-space:nowrap;text-decoration:none}
-.receipt-import-step-title{display:flex;align-items:center;gap:9px}
-.receipt-import-step-title>span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;background:var(--surface-subtle);font-size:.75rem;font-weight:700;color:var(--text-muted,#707782);flex:0 0 auto}
-.paperless-preset-bar{display:grid;grid-template-columns:minmax(150px,1fr) minmax(170px,1fr) auto auto;gap:8px;align-items:end;margin-top:14px}
-.paperless-preset-bar label,.paperless-simple-toolbar label{display:grid;gap:4px;font-size:.78rem;color:var(--text-muted,#707782)}
-.paperless-preset-bar select,.paperless-preset-bar input,.paperless-simple-toolbar select{width:100%;box-sizing:border-box}
-.paperless-auto-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;padding:9px 10px;border-radius:10px;background:var(--surface-subtle)}
-.paperless-filter-builder{display:grid;gap:10px;margin-top:12px}
-.paperless-simple-toolbar{display:grid;grid-template-columns:minmax(190px,280px) auto auto minmax(0,1fr);gap:8px;align-items:end}
-.paperless-advanced-toggle{align-self:center}
-.paperless-simple-toolbar label.paperless-advanced-toggle{display:flex;align-items:center;gap:5px;color:var(--text-muted,#707782)}
-.paperless-simple-toolbar label.paperless-advanced-toggle input{width:auto}
-.paperless-filter-rule{display:grid;grid-template-columns:82px minmax(150px,190px) minmax(180px,1fr) 38px;gap:7px;align-items:center;padding:9px;border:1px solid var(--border);border-radius:10px;background:var(--surface-subtle)}
-.paperless-filter-rule>[data-rule-join],.paperless-filter-rule>[data-rule-open],.paperless-filter-rule>[data-rule-close]{display:none}
-.paperless-filter-builder.advanced .paperless-filter-rule{grid-template-columns:88px 82px 70px minmax(150px,190px) minmax(180px,1fr) 70px 38px}
-.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-join],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-open],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-close]{display:block}
-.paperless-filter-rule select,.paperless-filter-rule input{width:100%;min-width:0;box-sizing:border-box}
-.paperless-filter-rule [data-rule-join].is-first{opacity:.35}
-.paperless-rule-not{display:flex;align-items:center;gap:5px;font-size:.78rem;white-space:nowrap}
-.paperless-rule-not input{width:auto}
-.paperless-rule-value{min-width:0}
-.paperless-rule-remove{width:34px;height:34px}
-.paperless-filter-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.paperless-advanced-query{border-top:1px solid var(--border);padding-top:8px}
-.paperless-advanced-query summary{cursor:pointer;font-size:.84rem;color:var(--text-muted,#707782)}
-.paperless-advanced-query label{display:grid;gap:5px;margin-top:9px;font-size:.8rem;color:var(--text-muted,#707782)}
-.paperless-advanced-query textarea{width:100%;box-sizing:border-box;resize:vertical}
-.paperless-query-preview{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start;padding:9px 10px;border-radius:10px;background:var(--surface-subtle);font-size:.78rem}
-.paperless-query-preview>span{color:var(--text-muted,#707782)}
-.paperless-query-preview code{white-space:pre-wrap;overflow-wrap:anywhere}
-.paperless-query-preview code.error{color:var(--negative)}
-@media(max-width:900px){.paperless-preset-bar{grid-template-columns:1fr 1fr}.paperless-simple-toolbar{grid-template-columns:1fr auto auto}.paperless-simple-toolbar>[data-paperless-options-state]{grid-column:1/-1}.paperless-filter-builder.advanced .paperless-filter-rule{grid-template-columns:88px 82px 70px minmax(140px,1fr) minmax(160px,1.4fr) 70px 38px}}
-@media(max-width:700px){.receipt-import-dialog,.receipt-import-batch-dialog{width:100vw;max-width:none;height:100dvh;max-height:none;border-radius:0}.receipt-import-shell,.receipt-import-batch-dialog-shell{height:100%}.receipt-import-head{padding:16px}.receipt-import-tabs{padding:8px 16px}.receipt-import-body{padding:14px 16px 24px}.receipt-import-batch-dialog-head{padding:14px 16px 10px}.receipt-import-batch-dialog-body{padding:14px 16px 20px}.receipt-import-grid{grid-template-columns:1fr}.receipt-import-grid .wide{grid-column:auto}.receipt-import-actions{justify-content:stretch}.receipt-import-actions>button{flex:1}.receipt-import-batch-main{display:grid}.receipt-import-batch-filters{grid-template-columns:1fr 1fr}.receipt-import-batch-filters>[data-import-item-count]{grid-column:1/-1;justify-self:start;padding-bottom:0}.receipt-import-batch-item{grid-template-columns:1fr}.receipt-import-batch-item-actions{justify-content:flex-start}.paperless-preset-bar,.paperless-simple-toolbar{grid-template-columns:1fr}.paperless-filter-rule,.paperless-filter-builder.advanced .paperless-filter-rule{grid-template-columns:1fr 1fr}.paperless-filter-rule [data-rule-field],.paperless-rule-value{grid-column:1/-1}.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-join],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-open],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-close]{display:block}.paperless-rule-remove{justify-self:end}.paperless-query-preview{grid-template-columns:1fr}}
-/* Picking a saved filter is one control, not a bar of four: naming and saving moved into the disclosure
-   below the builder, where they belong to the Save they serve. */
-.paperless-preset-pick{margin-top:14px;max-width:320px}
-.paperless-preset-pick label{display:grid;gap:4px;font-size:.78rem;color:var(--text-muted,#707782)}
-.paperless-preset-pick select{width:100%;box-sizing:border-box}
-.paperless-preset-save{margin-top:12px;border-top:1px solid var(--border);padding-top:8px}
-.paperless-preset-save summary{cursor:pointer;font-size:.84rem;color:var(--text-muted,#707782)}
-.paperless-preset-save .paperless-preset-bar{grid-template-columns:minmax(170px,1fr) auto auto}
-
-/* Aus styles/features/receipt-scan-set.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
-   und damit seinen eigenen <link>. */
-.receipt-set-dialog{border:0;background:transparent;padding:0;max-width:min(94vw,680px);width:100%}
-.receipt-set-dialog::backdrop{background:rgba(12,18,28,.46);backdrop-filter:blur(6px)}
-.receipt-set-card{overflow:auto}
-.receipt-set-sources{display:grid;gap:.55rem;margin:1rem 0;padding:0;list-style:none}
-.receipt-set-sources.compact li{display:flex;gap:.65rem;align-items:center;padding:.5rem .7rem;border:1px solid var(--border);border-radius:.65rem}
-.receipt-set-sources.compact li span,.receipt-set-order{display:grid;place-items:center;min-width:1.7rem;height:1.7rem;border-radius:999px;background:var(--surface-2);font-size:.78rem;font-weight:700}
-.receipt-set-source{display:grid;grid-template-columns:auto 58px minmax(0,1fr) auto;gap:.65rem;align-items:center;padding:.55rem .65rem;border:1px solid var(--border);border-radius:.75rem}
-.receipt-set-thumb{width:58px;height:70px;border-radius:.5rem;overflow:hidden;background:var(--surface-2);display:grid;place-items:center}
-.receipt-set-thumb img{width:100%;height:100%;object-fit:cover}
-.receipt-set-pdf{font-weight:800;font-size:.75rem}
-.receipt-set-source-main{min-width:0;display:grid;gap:.15rem}.receipt-set-source-main strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.receipt-set-source-main small{opacity:.7}
-.receipt-set-source-actions{display:flex;gap:.25rem}.receipt-set-source-actions button{min-width:2.1rem;padding:.35rem}
-.receipt-set-add-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin:.75rem 0 1rem}
-.receipt-set-add-row .row-sub{margin-left:auto;white-space:nowrap}
-.receipt-set-actions{position:sticky;bottom:0;background:var(--surface,#fff);padding-top:.7rem}
-.receipt-set-progress{display:flex;gap:.75rem;align-items:center;padding:1rem 0 .25rem}
-.receipt-set-spinner{width:1rem;height:1rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:receipt-set-spin .8s linear infinite}
-.receipt-set-progress .is-error{color:var(--danger)}
-/* Welche Strecke laeuft - Texterkennung oder KI. Steht ueber dem Fortschritt, weil es die Frage
-   beantwortet, die der Benutzer waehrend des Wartens hat, und nicht erst danach (#129). */
-.receipt-set-engine{padding-top:.6rem}
 @keyframes receipt-set-spin{to{transform:rotate(360deg)}}
-@media(max-width:620px){.receipt-set-dialog{max-width:100vw;width:100%;margin:auto 0 0}.receipt-set-card{border-radius:1rem 1rem 0 0;max-height:92dvh}.receipt-set-source{grid-template-columns:auto 48px minmax(0,1fr)}.receipt-set-thumb{width:48px;height:60px}.receipt-set-source-actions{grid-column:2/4;justify-content:flex-end}}
-@media(prefers-reduced-motion:reduce){.receipt-set-spinner{animation:none}}
-@media(max-width:620px){.receipt-set-source-actions button{min-height:44px}}
-/* The single-page view: the preview is the content, so it gets the room the numbered list used to take.
-   Same frame as a multi-page row, because one page and three pages are the same kind of thing. */
-.receipt-set-single{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.8rem;margin:1rem 0;padding:.7rem;border:1px solid var(--border);border-radius:.65rem}
-.receipt-set-single-thumb{width:96px;height:120px;border-radius:.5rem;overflow:hidden;background:var(--surface-2);display:grid;place-items:center}
-.receipt-set-single-thumb img{width:100%;height:100%;object-fit:cover}
-.receipt-set-single-main{display:grid;gap:.2rem;min-width:0}
-.receipt-set-single-main strong{overflow-wrap:anywhere}
 
 /* Gelernte Kategorien (#177). Kein eigener Kasten: es ist ein Nachtrag unter der Produktliste, kein
    zweiter Bereich - und er entsteht nach ihr, schiebt also nichts, was schon steht. */
+
 .pa-learned{margin-top:var(--space-4)}
+
 .pa-learned-row{gap:var(--space-3)}
+
 .pa-learned-row > div{display:flex;flex-direction:column;min-width:0}
 
-/* Die Belegkamera (receipt-camera.js). Die Buehne hat ihre Groesse von Anfang an: das Video kommt
-   hinein, ohne dass sich darunter etwas verschiebt. Rahmen und Video sind gleich eingepasst
-   (contain / meet), damit der Rahmen auf dem Beleg liegt und nicht daneben. */
-.receipt-camera-dialog{border:0;background:transparent;padding:0;max-width:min(96vw,520px);width:100%}
-.receipt-camera-dialog::backdrop{background:rgba(12,18,28,.46);backdrop-filter:blur(6px)}
-.receipt-camera{display:grid;gap:.7rem;overflow:auto}
-.receipt-camera-stage{position:relative;width:100%;aspect-ratio:3/4;max-height:max(14rem,calc(100dvh - 24rem));border-radius:.75rem;overflow:hidden;background:var(--surf2)}
-.receipt-camera-stage video,.receipt-camera-frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-.receipt-camera-frame polygon{fill:var(--info);fill-opacity:.1;stroke:var(--info);stroke-width:3;vector-effect:non-scaling-stroke}
-.receipt-camera-frame.is-ready polygon{fill:var(--positive);stroke:var(--positive)}
-.receipt-camera-ghost{position:absolute;inset:0 0 auto;width:100%;opacity:.38;pointer-events:none}
-.receipt-camera-stage::after{content:"";position:absolute;inset:0;background:var(--bg);opacity:0;pointer-events:none}
-.receipt-camera-stage.is-flash::after{animation:receipt-camera-flash .35s ease-out}
-.receipt-camera-hint{min-height:1.5em;margin:0;text-align:center}
-.receipt-camera-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.75rem}
-.receipt-camera-auto{display:flex;align-items:center;gap:.4rem}
-.receipt-camera-shutter{width:4rem;height:4rem;padding:0;border-radius:50%}
-.receipt-camera-torch{justify-self:end;visibility:hidden}
-.receipt-camera-torch.is-available{visibility:visible}
-.receipt-camera-shots{display:flex;gap:.5rem;min-height:72px;margin:0;padding:0;overflow-x:auto;list-style:none}
-.receipt-camera-shot{position:relative;flex:0 0 auto;width:54px;height:72px;border-radius:.5rem;overflow:hidden;background:var(--surf2)}
-.receipt-camera-shot img{width:100%;height:100%;object-fit:cover}
-.receipt-camera-shot button{position:absolute;top:2px;right:2px;min-width:0;min-height:0;width:1.6rem;height:1.6rem;padding:0;border-radius:50%;line-height:1}
 @keyframes receipt-camera-flash{from{opacity:.8}to{opacity:0}}
-@media(prefers-reduced-motion:reduce){.receipt-camera-stage.is-flash::after{animation:none}}
-@media(max-width:620px){.receipt-camera-dialog{max-width:100vw;margin:auto 0 0}.receipt-camera{border-radius:1rem 1rem 0 0;max-height:96dvh}.receipt-camera-shot button{width:1.9rem;height:1.9rem}}
-
-/* Der Paperless-Knopf im Beleg-Dialog: von Anfang an da, nur unsichtbar, bis feststeht, dass er gilt. */
-.paperless-upload{visibility:hidden}
-.paperless-upload.is-ready{visibility:visible}
-
-/* Aufnahmeart der Belegkamera und der Ausloeser im Modus "Langer Bon". */
-.receipt-camera-modes{display:flex;gap:.5rem}
-.receipt-camera-shutter.is-record::after{content:"";width:1.1rem;height:1.1rem;border-radius:50%;background:var(--danger)}
-.receipt-camera-shutter.is-record{display:grid;place-items:center}
-.receipt-camera-shutter.is-recording::after{border-radius:.2rem}
-
-/* Foto im Scan-Set: gerade gerechnet oder nicht, und der Weg, den Rand von Hand zu ziehen. */
-.receipt-set-photo{display:flex;align-items:center;gap:.5rem}
-.receipt-set-photo small{opacity:.7}
-
-/* Rand von Hand ziehen (receipt-adjust.js). Die Buehne hat das Seitenverhaeltnis des Fotos von Anfang an. */
-.receipt-adjust-dialog{border:0;background:transparent;padding:0;max-width:min(96vw,720px);width:100%}
-.receipt-adjust-dialog::backdrop{background:rgba(12,18,28,.46);backdrop-filter:blur(6px)}
-.receipt-adjust{display:grid;gap:.7rem;overflow:auto}
-.receipt-adjust-stage{position:relative;width:100%;max-height:68dvh;margin-inline:auto;background:var(--surf2);touch-action:none}
-.receipt-adjust-stage canvas,.receipt-adjust-frame{position:absolute;inset:0;width:100%;height:100%}
-.receipt-adjust-frame polygon{fill:var(--info);fill-opacity:.12;stroke:var(--info);stroke-width:2;vector-effect:non-scaling-stroke}
-.receipt-adjust-handle{position:absolute;width:2.6rem;height:2.6rem;margin:-1.3rem 0 0 -1.3rem;padding:0;border:2px solid var(--info);border-radius:50%;background:var(--bg);opacity:.9;touch-action:none;cursor:grab}
-.receipt-adjust-handle:active{cursor:grabbing}
-@media(max-width:620px){.receipt-adjust-dialog{max-width:100vw;margin:auto 0 0}.receipt-adjust{border-radius:1rem 1rem 0 0;max-height:96dvh}}

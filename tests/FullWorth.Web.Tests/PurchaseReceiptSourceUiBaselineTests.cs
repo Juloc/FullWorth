@@ -56,8 +56,8 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     {
         // Dass der Service Worker nichts davon cacht, haelt PwaAssetsTests fuer alle Seiten fest.
         PwaAssert.Ships("/pages/purchases/receipt-source-review.js");
-        PwaAssert.Ships("/pages/purchases/receipt-imports.js");
-        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js");
+        PwaAssert.Ships("/pages/receipts/receipt-imports.js");
+        PwaAssert.Ships("/pages/receipts/receipt-import-batch-details.js");
         PwaAssert.Ships("/pages/purchases/page.css");
     }
 

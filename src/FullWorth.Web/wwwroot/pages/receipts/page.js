@@ -9,6 +9,8 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { spriteHref } from '../../components/sprite.js';
 import { createSelectionList } from '../../components/selection-list.js';
+import { initializeReceiptIntake } from './intake.js';
+import { addReceiptScanCameraShots } from './receipt-scan-set.js';
 
 const TABS = ['queue', 'history', 'review', 'failed'];
 const PAGE = 40;
@@ -45,7 +47,17 @@ export function bindReceipts(context) {
   ctx = context;
   ctx.$('#view-receipts').addEventListener('click', onClick);
   document.getElementById('action-bar-selection').addEventListener('click', onBar);
-  ctx.$('#receipts-file').addEventListener('change', upload);
+  initializeReceiptIntake(ctx);
+  // Mit Kamera: das Livebild; Fotos und Dateien waehlt die Hauptaktion. Beides endet im selben Scan-Set.
+  const camera = document.createElement('button');
+  camera.type = 'button';
+  camera.className = buttonClass(ButtonRole.Secondary);
+  camera.innerHTML = `<svg viewBox="0 0 24 24"><use href="${spriteHref('ui-scan')}"></use></svg><span class="action-label">${ctx.esc(ctx.get('purchases.camera'))}</span>`;
+  camera.addEventListener('click', () => scanWithCamera().catch(error => ctx.toast(error?.message || ctx.get('common.error'))));
+  document.getElementById('action-bar-extra').append(camera);
+  // Ein Beleg ist angelegt oder fertig (Scan-Dialog, Import) - oder der Import schickt einen zur Pruefung.
+  document.addEventListener('fullworth:receipts-changed', () => refresh(true).catch(() => {}));
+  document.addEventListener('fullworth:receipts-show-review', () => switchTab('review'));
   // Endloses Nachladen: der Wachposten am Ende der Liste fragt die naechste Seite an, sobald er in die
   // Naehe des Bildschirms kommt. Eine Seitenzahl gibt es nicht - in fast allen Faellen liest man von oben.
   new IntersectionObserver(entries => { if (entries[0].isIntersecting) more().catch(() => {}); }, { rootMargin: '480px' })
@@ -55,7 +67,7 @@ export function bindReceipts(context) {
 
 // Der Knopf "Beleg hochladen" sitzt in der Topbar; die Seite besitzt nur das Dateifeld dahinter.
 export function chooseFiles(context) {
-  context.$('#receipts-file').click();
+  context.$('#receipt-file').click();
 }
 
 export async function renderReceipts(context) {
@@ -207,28 +219,8 @@ async function more() {
   }
 }
 
-// Eine Datei ist ein Beleg. Mehrere Fotos EINES Belegs gehoeren in den Scan-Dialog der Kaeufe-Seite,
-// der sie zu einem Beleg zusammenfasst - hier wuerde daraus je Foto ein eigener Kauf.
-async function upload() {
-  const input = ctx.$('#receipts-file');
-  const files = [...(input.files || [])];
-  input.value = '';
-  if (!files.length) return;
-  const currency = document.getElementById('user-space-sub')?.textContent?.trim() || 'EUR';
-  try {
-    for (const file of files) {
-      const form = new FormData();
-      form.append('receipt', file, file.name);
-      form.append('currency', currency);
-      form.append('clientJobId', crypto.randomUUID());
-      const job = await ctx.api('api/purchases/receipt-scan/jobs', { method: 'POST', body: form });
-      await ctx.api(`api/purchases/receipt-scan/jobs/${job.id}/start`, { method: 'POST' });
-    }
-    ctx.toast(t(`${files.length} Beleg(e) in die Warteschlange gelegt.`, `${files.length} receipt(s) queued.`));
-    if (tab !== 'queue') await switchTab('queue'); else await refresh(true);
-  } catch (error) {
-    ctx.toast(error?.message || ctx.get('common.error'));
-  }
+async function scanWithCamera() {
+  if (await addReceiptScanCameraShots(ctx)) await refresh(true);
 }
 
 // Welche Spalten ein Reiter hat. "select" ist die Haken-Spalte, deren Kopf alles an- und abwaehlt.

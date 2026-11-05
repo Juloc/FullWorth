@@ -436,9 +436,9 @@ function setMeta(draft, text) {
   if (node) node.textContent = text;
 }
 
-function notifyPurchaseRefresh(ctx) {
-  document.getElementById('purchase-source')?.dispatchEvent(new Event('change'));
-  ctx.reload?.();
+// A receipt was created or finished: whoever lists receipts refreshes itself.
+function notifyPurchaseRefresh() {
+  document.dispatchEvent(new CustomEvent('fullworth:receipts-changed'));
 }
 
 function stageLabel(stage, engine) {

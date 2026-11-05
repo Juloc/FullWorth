@@ -13,10 +13,10 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void Purchases_loads_bulk_receipt_import_module()
     {
-        var normalScan = Read("pages", "purchases", "gpt-normal.js");
-        var importer = Read("pages", "purchases", "receipt-imports.js");
+        var normalScan = Read("pages", "receipts", "intake.js");
+        var importer = Read("pages", "receipts", "receipt-imports.js");
 
-        // The gpt-normal.js entry point now imports named launcher/refresh functions from
+        // The receipts intake module imports named launcher/refresh functions from
         // these modules (owned feature wiring) instead of bare side-effect imports.
         Assert.Contains("import { ensureReceiptImportsLauncher } from './receipt-imports.js'", normalScan);
         Assert.Contains("import { refreshReceiptImportBatchDetails } from './receipt-import-batch-details.js'", normalScan);
@@ -29,7 +29,7 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void Import_source_tabs_cover_files_paperless_and_server_folder()
     {
-        var importer = Read("pages", "purchases", "receipt-imports.js");
+        var importer = Read("pages", "receipts", "receipt-imports.js");
 
         Assert.Contains("data-tab=\"files\"", importer);
         Assert.Contains("data-tab=\"paperless\"", importer);
@@ -55,8 +55,8 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void Batch_ui_exposes_persistent_progress_recovery_and_review_navigation()
     {
-        var importer = Read("pages", "purchases", "receipt-imports.js");
-        var normalScan = Read("pages", "purchases", "gpt-normal.js");
+        var importer = Read("pages", "receipts", "receipt-imports.js");
+        var normalScan = Read("pages", "receipts", "intake.js");
 
         Assert.Contains("receipt-imports/batches?limit=10", importer);
         Assert.Contains("start-pending", importer);
@@ -65,15 +65,15 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("batch.skippedDuplicates", importer);
         Assert.Contains("setInterval", importer);
         Assert.Contains("data-review-import", normalScan);
-        Assert.Contains("purchase-source", normalScan);
+        Assert.Contains("fullworth:receipts-show-review", normalScan);
         Assert.Contains("receipt-import-dialog", normalScan);
     }
 
     [Fact]
     public void Batch_details_support_status_source_filters_and_individual_receipt_links()
     {
-        var details = Read("pages", "purchases", "receipt-import-batch-details.js");
-        var css = Read("pages", "purchases", "page.css");
+        var details = Read("pages", "receipts", "receipt-import-batch-details.js");
+        var css = Read("pages", "receipts", "page.css");
 
         Assert.Contains("data-import-batch-details", details);
         Assert.Contains("data-import-item-status-filter", details);
@@ -82,7 +82,7 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("api/purchases/${encodeURIComponent(purchaseId)}/receipt", details);
         Assert.Contains("target=\"_blank\"", details);
         Assert.Contains("receipt-import-batch-detail", css);
-        PwaAssert.Ships("/pages/purchases/receipt-import-batch-details.js");
+        PwaAssert.Ships("/pages/receipts/receipt-import-batch-details.js");
     }
 
     [Fact]

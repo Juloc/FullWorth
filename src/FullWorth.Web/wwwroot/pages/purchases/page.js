@@ -1,11 +1,10 @@
-import { initializePurchaseEnhancements, tryGptReceiptScan } from './gpt-normal.js';
+import { initializePurchaseEnhancements } from './gpt-normal.js';
 import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { confirmDialog, confirmMessage } from '../../components/confirm.js';
 import { createSelectionList } from '../../components/selection-list.js';
 import { spriteHref } from '../../components/sprite.js';
-import { addReceiptScanCameraShots } from './receipt-scan-set.js';
 // Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
 import { attachCombobox } from '../../components/combobox.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
@@ -42,7 +41,6 @@ export function bindPurchases(context) {
   const reload = () => { purchaseRows = []; selected = new Set(); drawnList = ''; renderPurchases(ctx); };
   ctx.$('#purchase-source').addEventListener('change', reload);
   ctx.$('#purchase-scope').addEventListener('change', reload);
-  ctx.$('#receipt-file').addEventListener('change', scanReceipt);
   ctx.$('#purchases-list').addEventListener('click', event => {
     const row = event.target.closest('.dt-row');
     if (row && !event.target.closest('.fw-check')) openDetail(row.dataset.purchase);
@@ -52,14 +50,7 @@ export function bindPurchases(context) {
   document.getElementById('action-bar-selection').addEventListener('click', event => {
     if (event.target.closest('[data-bar="confirm"]')) confirmSelectedPurchases().catch(err => ctx.toast(err.message || ctx.get('common.error')));
   });
-  // Die weiteren Aktionen der Seite stehen in der Aktionsleiste; die Hauptaktion (Beleg scannen) meldet der Einstieg an.
-  const camera = document.createElement('button');
-  camera.id = 'scan-camera';
-  camera.type = 'button';
-  camera.className = buttonClass(ButtonRole.Secondary);
-  camera.innerHTML = `<svg viewBox="0 0 24 24"><use href="${spriteHref('ui-scan')}"></use></svg><span class="action-label">${ctx.esc(ctx.get('purchases.camera'))}</span>`;
-  camera.addEventListener('click', scanWithCamera);
-  document.getElementById('action-bar-extra').append(camera);
+  // Die Aktion der Seite steht in der Aktionsleiste. Belege annehmen (Scannen, Kamera, Import) ist Sache der Belege-Seite.
   const amazon = document.createElement('button');
   amazon.id = 'amazon-import';
   amazon.type = 'button';
@@ -67,11 +58,6 @@ export function bindPurchases(context) {
   amazon.innerHTML = `<svg viewBox="0 0 24 24"><use href="${spriteHref('ui-cart')}"></use></svg><span class="action-label"></span>`;
   amazon.addEventListener('click', openAmazonConnection);
   document.getElementById('action-bar-extra').append(amazon);
-}
-
-// Der Knopf "Beleg scannen" sitzt in der Aktionsleiste; die Seite besitzt nur das Dateifeld dahinter.
-export function chooseReceipt(context) {
-  context.$('#receipt-file').click();
 }
 
 function listQuery(offset, limit) {
@@ -229,56 +215,12 @@ async function confirmSelectedPurchases() {
   await renderPurchases(ctx);
 }
 
-async function scanReceipt() {
-  const input = ctx.$('#receipt-file');
-  const file = input.files && input.files[0];
-  if (!file) return;
-  try {
-    // GPT is now the normal preferred extractor whenever the current user/FullWorth Space has an
-    // active Codex login. If it is unavailable or returns no usable result, preserve the existing
-    // OCR/manual fallback exactly as before. The explicit GPT test console remains for debugging.
-    const gptPurchase = await tryGptReceiptScan(ctx, file);
-    if (gptPurchase) {
-      await renderPurchases(ctx);
-      ctx.toast(ctx.get('purchases.scanned'));
-      await openDetail(gptPurchase.id);
-      return;
-    }
-
-    const form = new FormData();
-    form.append('receipt', file);
-    form.append('currency', 'EUR');
-    const p = await ctx.api('api/purchases/receipt-scan', { method: 'POST', body: form });
-    await renderPurchases(ctx);
-    if (p && p.status === 'review') { ctx.toast(ctx.get('purchases.scanned')); await openDetail(p.id); }
-    else ctx.toast(ctx.get('purchases.uploaded'));
-  }
-  catch (err) {
-    // The owner closing the scan set is an answer, not a fault - saying "Belegscan abgebrochen" in
-    // the same place errors appear trains people to ignore that spot.
-    if (err?.name !== 'ReceiptScanCancelled') ctx.toast(err.message || ctx.get('common.error'));
-  }
-  finally { input.value = ''; }
-}
-
 // "/purchases#purchase=<id>" - how the receipts page sends someone to the details of one purchase.
 export async function openPurchaseFromHash() {
   const id = /^#purchase=([0-9a-f-]{36})$/i.exec(location.hash)?.[1];
   if (!id) return;
   history.replaceState(null, '', location.pathname);
   await openDetail(id);
-}
-
-async function scanWithCamera() {
-  try {
-    const result = await addReceiptScanCameraShots(ctx);
-    if (!result) return;
-    await renderPurchases(ctx);
-    ctx.toast(ctx.get('purchases.scanned'));
-    await openDetail(result.id);
-  } catch (err) {
-    ctx.toast(err.message || ctx.get('common.error'));
-  }
 }
 
 async function openDetail(id) {

@@ -43,7 +43,7 @@ public sealed class SecurityHeadersPolicyTests
     [Fact]
     public void ImageFontAndMediaSources_AreLimitedToCurrentSameOriginNeeds()
     {
-        Assert.Equal("img-src 'self' data: https://enablebanking.com https://*.enablebanking.com", Directive("img-src"));
+        Assert.Equal("img-src 'self' data: blob: https://enablebanking.com https://*.enablebanking.com", Directive("img-src"));
         Assert.Equal("font-src 'self'", Directive("font-src"));
         Assert.Equal("media-src 'self'", Directive("media-src"));
     }
@@ -54,7 +54,9 @@ public sealed class SecurityHeadersPolicyTests
         Assert.Equal("strict-origin-when-cross-origin", SecurityHeadersPolicy.ReferrerPolicy);
         Assert.DoesNotContain("unsafe-url", SecurityHeadersPolicy.ReferrerPolicy, StringComparison.OrdinalIgnoreCase);
 
-        foreach (var disabledFeature in new[] { "camera=()", "microphone=()", "geolocation=()", "payment=()", "usb=()", "serial=()" })
+        // The receipt camera needs getUserMedia on this origin - and only on it.
+        Assert.Contains("camera=(self)", SecurityHeadersPolicy.PermissionsPolicy, StringComparison.Ordinal);
+        foreach (var disabledFeature in new[] { "microphone=()", "geolocation=()", "payment=()", "usb=()", "serial=()" })
             Assert.Contains(disabledFeature, SecurityHeadersPolicy.PermissionsPolicy, StringComparison.Ordinal);
 
         Assert.DoesNotContain("clipboard", SecurityHeadersPolicy.PermissionsPolicy, StringComparison.OrdinalIgnoreCase);

@@ -30,7 +30,7 @@ public sealed class ReceiptImportProgressUiTests
     private static string Backend(params string[] parts) =>
         File.ReadAllText(Path.Combine([Root(), "src", "FullWorth.Backend", .. parts]));
 
-    private static string Details() => Asset("pages", "purchases", "receipt-import-batch-details.js");
+    private static string Details() => Asset("pages", "receipts", "receipt-import-batch-details.js");
 
     /// <summary>Die Stufe kommt aus dem ohnehin gejointen Scan-Job - kein zweiter Abruf, keine neue Tabelle.</summary>
     [Fact]

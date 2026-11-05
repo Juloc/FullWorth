@@ -349,7 +349,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
                      "'/features/wealth-portability.js'",
                      "'/features/investment-performance.js'",
                      "'/pages/networth/page.css'",
-                     "'/pages/purchases/receipt-imports.js'",
+                     "'/pages/receipts/receipt-imports.js'",
                      "'/components/accessibility-release.js'"
                  })
             PwaAssert.Ships(path);

@@ -16,5 +16,5 @@ await startShellPage(async context => {
     bound = true;
   }
   await renderReceipts(context);
-  setPrimaryAction(context.get('receipts.upload'), () => chooseFiles(pageContext), 'upload');
+  setPrimaryAction(context.get('purchases.scan'), () => chooseFiles(pageContext), 'scan');
 });

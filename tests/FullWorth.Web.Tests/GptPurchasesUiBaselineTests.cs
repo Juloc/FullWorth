@@ -12,14 +12,11 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void Normal_receipt_scan_enters_the_staged_scan_set_builder()
     {
-        var purchases = Read("page.js");
-        var normal = Read("gpt-normal.js");
+        var receipts = Read("intake.js");
         var scanSet = Read("receipt-scan-set.js");
 
-        Assert.Contains("import { initializePurchaseEnhancements, tryGptReceiptScan } from './gpt-normal.js'", purchases);
-        Assert.Contains("await tryGptReceiptScan(ctx, file)", purchases);
-        Assert.Contains("import { addReceiptScanFiles } from './receipt-scan-set.js'", normal);
-        Assert.Contains("return addReceiptScanFiles(ctx, files).then", normal);
+        Assert.Contains("import { addReceiptScanFiles } from './receipt-scan-set.js'", receipts);
+        Assert.Contains("addReceiptScanFiles(latestContext, selected)", receipts);
         Assert.Contains("Ein Beleg · mehrere Seiten", scanSet);
         Assert.Contains("+ Weitere Seite / Foto", scanSet);
     }
@@ -41,7 +38,7 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void Sequential_mobile_camera_captures_are_added_to_the_same_open_receipt()
     {
-        var normal = Read("gpt-normal.js");
+        var normal = Read("intake.js");
         var scanSet = Read("receipt-scan-set.js");
 
         Assert.Contains("event.stopImmediatePropagation()", normal);
@@ -101,8 +98,9 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void Cancelling_the_scan_set_is_not_reported_as_an_error()
     {
-        Assert.Contains("cancelled.name = 'ReceiptScanCancelled'", Read("gpt-normal.js"));
-        Assert.Contains("err?.name !== 'ReceiptScanCancelled'", Read("page.js"));
+        // Cancelling resolves the draft with null; the intake ignores a null result, so nothing is shown where errors go.
+        Assert.Contains("draft.resolve?.(null)", Read("receipt-scan-set.js"));
+        Assert.DoesNotContain("throw", Read("intake.js"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -117,23 +115,15 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void Cancelling_builder_never_falls_through_to_legacy_single_file_upload()
     {
-        var normal = Read("gpt-normal.js");
-        var purchases = Read("page.js");
-
-        Assert.Contains("Belegscan abgebrochen.", normal);
-        // The rule is "reject, never resolve falsy". It used to be checked as the literal text
-        // "throw new Error", so naming the error broke the test while the rule had not moved.
-        Assert.Contains("if (result) return result;", normal);
-        Assert.Contains("throw cancelled", normal);
-        // purchases.js still retains the old compatibility fallback, therefore the wrapper must throw
-        // rather than resolve null when the local scan-set is intentionally cancelled.
-        Assert.Contains("api/purchases/receipt-scan", purchases);
+        // The legacy single-file upload is gone from both pages, so a cancelled scan set has nowhere to fall to.
+        Assert.DoesNotContain("ctx.api('api/purchases/receipt-scan'", Read("page.js"));
+        Assert.DoesNotContain("ctx.api('api/purchases/receipt-scan'", Read("receipts-page.js"));
     }
 
     [Fact]
     public void Pdf_and_multiple_images_share_the_same_logical_receipt_flow()
     {
-        var normal = Read("gpt-normal.js");
+        var normal = Read("intake.js");
         var scanSet = Read("receipt-scan-set.js");
 
         Assert.Contains("input.multiple = true", normal);
@@ -167,6 +157,8 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
     private string Read(string fileName)
     {
         var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
-        return File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "purchases", fileName));
+        // Belege annehmen (Scan-Dialog, Kamera, Import) gehoert der Belege-Seite; page.js ist die der Kaeufe.
+        var page = fileName == "page.js" || fileName.StartsWith("gpt-") ? "purchases" : "receipts";
+        return File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", page, fileName == "receipts-page.js" ? "page.js" : fileName));
     }
 }
