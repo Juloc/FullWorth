@@ -26,7 +26,7 @@ public sealed class ReceiptTextParserTests
     {
         var result = ReceiptTextParser.Parse(GermanReceipt);
 
-        Assert.Equal("REWE Markt GmbH", result.Merchant);
+        Assert.Equal("REWE", result.Merchant); // a known chain gets its one canonical spelling
         Assert.Equal(new DateOnly(2026, 8, 2), result.PurchaseDate);
         Assert.Equal("EUR", result.Currency);
         Assert.Equal(12.76m, result.Total);

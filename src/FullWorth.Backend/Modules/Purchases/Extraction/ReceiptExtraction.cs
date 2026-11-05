@@ -63,8 +63,11 @@ public sealed record ReceiptExtractionResult(
         new(provider, null, null, null, null, null, null, null, [], 0m, StructuredDiscounts: []);
 }
 
-/// <summary>A receipt to extract from — raw bytes plus what little context the caller has.</summary>
-public sealed record ReceiptExtractionRequest(byte[] Content, string ContentType, string FileName, string? CurrencyHint = null);
+/// <summary>
+/// A receipt to extract from — raw bytes plus what little context the caller has. EmbeddedText is the
+/// text a PDF already carries for this page; it is read as one more version of the page.
+/// </summary>
+public sealed record ReceiptExtractionRequest(byte[] Content, string ContentType, string FileName, string? CurrencyHint = null, string? EmbeddedText = null);
 
 /// <summary>A pluggable receipt extraction provider. Implementations name themselves via <see cref="Provider"/>.</summary>
 public interface IReceiptExtractor
@@ -90,8 +93,8 @@ public sealed class ReceiptExtractionOptions
 {
     public const string SectionName = "ReceiptExtraction";
 
-    /// <summary>Name of the extractor to use (matches <see cref="IReceiptExtractor.Provider"/>). Default: none.</summary>
-    public string Provider { get; set; } = "none";
+    /// <summary>Name of the extractor to use (matches <see cref="IReceiptExtractor.Provider"/>). Default: tesseract, which the image ships with.</summary>
+    public string Provider { get; set; } = "tesseract";
 
     /// <summary>Tesseract OCR languages (e.g. "deu+eng"). Only used by the tesseract provider.</summary>
     public string Languages { get; set; } = "deu+eng";

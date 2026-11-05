@@ -5,7 +5,8 @@ namespace FullWorth.Backend.Modules.Purchases.Extraction;
 
 /// <summary>
 /// Local, provider-free OCR via the Tesseract CLI (installed in the backend image). Runs the engine
-/// on a raster receipt image and hands the recognized text to <see cref="ReceiptTextParser"/>. It
+/// on a raster receipt image - twice, with two page layouts - and hands each recognized text to
+/// <see cref="ReceiptTextParser"/>; <see cref="ReceiptReadingSelector"/> keeps the reading whose sums agree. It
 /// fails soft: a missing binary, a PDF (Tesseract needs a rasterizer), an unreadable image or a
 /// timeout all yield an empty result rather than an error, so receipt capture never breaks — manual
 /// entry and review remain available.
@@ -16,6 +17,21 @@ public sealed class TesseractReceiptExtractor(IOptions<ReceiptExtractionOptions>
         { "image/jpeg", "image/png", "image/webp", "image/heic", "image/tiff", "image/bmp" };
 
     public string Provider => "tesseract";
+
+    /// <summary>
+    /// Tesseract page segmentation modes: 6 reads the page as one block of text, which suits a receipt;
+    /// 4 reads it as a single column of variable-size lines. On receipts they fail on different lines.
+    /// </summary>
+    private static readonly int[] PageLayouts = [6, 4];
+
+    private Task<string> ReadAsync(string image, int layout, CancellationToken ct)
+    {
+        var opts = options.Value;
+        return LocalTool.RunAsync(
+            string.IsNullOrWhiteSpace(opts.TesseractPath) ? "tesseract" : opts.TesseractPath,
+            [image, "stdout", "-l", string.IsNullOrWhiteSpace(opts.Languages) ? "eng" : opts.Languages, "--oem", "1", "--psm", layout.ToString(System.Globalization.CultureInfo.InvariantCulture)],
+            TimeSpan.FromSeconds(30), ct);
+    }
 
     public async Task<ReceiptExtractionResult> ExtractAsync(ReceiptExtractionRequest request, CancellationToken ct)
     {
@@ -30,14 +46,14 @@ public sealed class TesseractReceiptExtractor(IOptions<ReceiptExtractionOptions>
         try
         {
             await File.WriteAllBytesAsync(temp, request.Content, ct);
-            var opts = options.Value;
-            var text = await LocalTool.RunAsync(
-                string.IsNullOrWhiteSpace(opts.TesseractPath) ? "tesseract" : opts.TesseractPath,
-                [temp, "stdout", "-l", string.IsNullOrWhiteSpace(opts.Languages) ? "eng" : opts.Languages],
-                TimeSpan.FromSeconds(30), ct);
-            return string.IsNullOrWhiteSpace(text)
-                ? ReceiptExtractionResult.Empty(Provider)
-                : ReceiptTextParser.Parse(text, request.CurrencyHint);
+            var readings = new List<ReceiptExtractionResult>();
+            if (!string.IsNullOrWhiteSpace(request.EmbeddedText)) readings.Add(ReceiptTextParser.Parse(request.EmbeddedText, request.CurrencyHint));
+            foreach (var layout in PageLayouts)
+            {
+                var text = await ReadAsync(temp, layout, ct);
+                if (!string.IsNullOrWhiteSpace(text)) readings.Add(ReceiptTextParser.Parse(text, request.CurrencyHint));
+            }
+            return readings.Count == 0 ? ReceiptExtractionResult.Empty(Provider) : ReceiptReadingSelector.Choose(readings);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

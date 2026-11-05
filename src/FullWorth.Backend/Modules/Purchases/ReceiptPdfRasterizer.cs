@@ -26,7 +26,8 @@ public static class ReceiptPdfRasterizer
         throw new InvalidOperationException("Receipt PDF page count could not be determined.");
     }
 
-    public static async Task<byte[]> RenderPageAsync(string absolutePdfPath, int pageNumber, int maxPages, CancellationToken ct)
+    /// <summary>The page as PNG. 180 dpi is enough to show to a model; text recognition reads small print and wants <paramref name="dpi"/> 300.</summary>
+    public static async Task<byte[]> RenderPageAsync(string absolutePdfPath, int pageNumber, int maxPages, CancellationToken ct, int dpi = 180)
     {
         if (pageNumber <= 0 || pageNumber > maxPages) throw new ArgumentOutOfRangeException(nameof(pageNumber));
 
@@ -41,7 +42,7 @@ public static class ReceiptPdfRasterizer
             await RunAsync(
                 "pdftoppm",
                 ["-f", pageNumber.ToString(invariant), "-l", pageNumber.ToString(invariant),
-                 "-singlefile", "-png", "-r", "180", absolutePdfPath, outputBase],
+                 "-singlefile", "-png", "-r", dpi.ToString(invariant), absolutePdfPath, outputBase],
                 TimeSpan.FromSeconds(30),
                 notRendered,
                 ct);
@@ -52,6 +53,24 @@ public static class ReceiptPdfRasterizer
         finally
         {
             try { Directory.Delete(tempRoot, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
+    /// The text a scanned or digital PDF already carries (paperless-ngx embeds its own OCR in every
+    /// document). It costs nothing to read and is one more reading of the page; null when there is none.
+    /// </summary>
+    public static async Task<string?> ReadPageTextAsync(string absolutePdfPath, int pageNumber, CancellationToken ct)
+    {
+        var page = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        try
+        {
+            var text = await LocalTool.RunAsync("pdftotext", ["-f", page, "-l", page, "-layout", absolutePdfPath, "-"], TimeSpan.FromSeconds(15), ct);
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch (LocalToolException)
+        {
+            return null;
         }
     }
 

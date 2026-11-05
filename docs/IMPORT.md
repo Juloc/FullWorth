@@ -523,9 +523,12 @@ Requests time out after `PaperlessTimeoutSeconds` (clamped 5–300).
 migration's down path drops only the three bulk-import tables and leaves everything the imports
 produced intact.
 
-Note that `ReceiptExtraction:Provider` defaults to `none`, whose extractor extracts nothing. With the
-shipped default an imported receipt is stored and queued but arrives in review empty; set the provider
-to `tesseract` to get local OCR.
+Without an AI connection a receipt is read locally: Tesseract on the rendered page (300 dpi), read twice
+with different page layouts, then `ReceiptTextParser`, which reads the block of lines above the SUMME line
+and checks the receipt's own arithmetic (items - discounts + deposits = total). Of the readings, the one
+whose sums agree - and which most readings agree on - wins. A result whose sums do not agree, or in which
+one price had to be corrected, is left with a low confidence and stays in review; the local reader never
+confirms anything by itself. `ReceiptExtraction:Provider` can be set to `none` to switch it off.
 
 ## Amazon order sync
 

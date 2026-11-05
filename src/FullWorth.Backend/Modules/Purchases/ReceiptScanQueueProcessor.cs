@@ -288,10 +288,12 @@ public sealed class ReceiptScanQueueProcessor(
             byte[] content;
             string contentType;
             string fileName;
+            string? embeddedText = null;
             var absolute = SafeAbsolutePath(source.StoragePath);
             if (source.SourceType == "pdf_page")
             {
-                content = await ReceiptPdfRasterizer.RenderPageAsync(absolute, source.PageNumber ?? 1, storage.MaxReceiptSources, ct);
+                embeddedText = await ReceiptPdfRasterizer.ReadPageTextAsync(absolute, source.PageNumber ?? 1, ct);
+                content = await ReceiptPdfRasterizer.RenderPageAsync(absolute, source.PageNumber ?? 1, storage.MaxReceiptSources, ct, dpi: 300);
                 contentType = "image/png";
                 fileName = $"{Path.GetFileNameWithoutExtension(source.OriginalFileName)}-page-{source.PageNumber ?? 1}.png";
             }
@@ -302,7 +304,7 @@ public sealed class ReceiptScanQueueProcessor(
                 fileName = source.OriginalFileName;
             }
 
-            var result = await extraction.ExtractAsync(new ReceiptExtractionRequest(content, contentType, fileName, fallbackCurrency), ct);
+            var result = await extraction.ExtractAsync(new ReceiptExtractionRequest(content, contentType, fileName, fallbackCurrency, embeddedText), ct);
             results.Add(new(index, source, result));
         }
         return results;
