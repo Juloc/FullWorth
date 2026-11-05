@@ -398,6 +398,39 @@ public sealed class FrontendStructureGuardTests
     }
 
     /// <summary>
+    /// Ein Modul, das etwas importiert, was das andere nicht (mehr) exportiert, bricht nicht den Bau und nicht
+    /// <c>node --check</c> - der Browser lehnt erst beim Laden die ganze Modulkette ab, und jede Seite, die dieses
+    /// Modul beruehrt, bleibt leer. Genau das passierte, als der Privatmodus-Schalter ging und zwei Module noch
+    /// <c>onPrivacyChange</c> verlangten.
+    /// </summary>
+    [Fact]
+    public void Every_named_import_of_a_local_module_is_exported_there()
+    {
+        var offenders = new List<string>();
+
+        foreach (var path in Scripts("app", "components", "core", "features", "pages"))
+            foreach (Match import in Regex.Matches(Code(path), @"import\s*\{([^}]*)\}\s*from\s*'(\.[^']+)'"))
+            {
+                var target = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, import.Groups[2].Value));
+                if (!File.Exists(target)) { offenders.Add($"{Relative(path)}: {import.Groups[2].Value} gibt es nicht"); continue; }
+
+                var exported = File.ReadAllText(target);
+                foreach (var name in import.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                             .Select(part => part.Split(" as ")[0].Trim()))
+                {
+                    var escaped = Regex.Escape(name);
+                    var declared = Regex.IsMatch(exported, @"export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+" + escaped + @"(?![\w$])")
+                        || Regex.IsMatch(exported, @"export\s*\{[^}]*(?<![\w$])" + escaped + @"(?![\w$])")
+                        || Regex.IsMatch(exported, @"export\s+default");
+                    if (!declared) offenders.Add($"{Relative(path)}: {name} aus {import.Groups[2].Value}");
+                }
+            }
+
+        Assert.True(offenders.Count == 0,
+            "Diese Module importieren etwas, das es dort nicht mehr gibt:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
     /// Die Aktionsleiste gehoert der Seite: sie bindet das Markup in ihrem Abschnitt "Actions" ein und
     /// befuellt es selbst. Der Rahmen (Layout und Shell) stellt nur den Platz bereit und kennt weder die
     /// Leiste noch die Hauptaktion - sonst sind Rahmen und Seite wieder vermischt.

@@ -1,5 +1,5 @@
 import { money, setMoneyLocale } from '../../components/money.js';
-import { isPrivate, onPrivacyChange } from '../../components/privacy.js';
+import { isPrivate } from '../../components/privacy.js';
 import { api as sharedApi } from '../../core/services.js';
 import { state } from '../../core/state.js';
 import { createDialog } from '../../components/dialog.js';
@@ -199,11 +199,3 @@ document.addEventListener('fullworth-space-changed', () => {
   void refreshInvestmentConsolidation();
 });
 document.addEventListener('fullworth:investment-dialog-opened', () => void refreshInvestmentConsolidation());
-onPrivacyChange(() => {
-  if (securityDialogState?.dialog?.open) {
-    const id = securityDialogState.securityId;
-    const portfolio = securityDialogState.portfolioId;
-    securityDialogState.dialog.close();
-    void openSecurityDetail(portfolio, id);
-  }
-});

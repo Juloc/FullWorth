@@ -1,5 +1,4 @@
 import { money, percent, setMoneyLocale } from '../components/money.js';
-import { onPrivacyChange } from '../components/privacy.js';
 import { bindChartScrubber } from '../components/chart-scrubber.js';
 import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../components/dialog.js';
@@ -35,7 +34,6 @@ function modal(title,portfolioId){
 }
 
 let active=null;
-onPrivacyChange(()=>active?.render?.());
 
 function setLocale(){setMoneyLocale(lang())}
 function pct(value){return value==null?'—':percent(Number(value)*100)}
