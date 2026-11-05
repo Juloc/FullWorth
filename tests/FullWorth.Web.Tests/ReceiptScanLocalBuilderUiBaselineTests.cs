@@ -71,7 +71,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
 
         // Dieselbe Vorschau wie beim Sammeln, nicht eine Liste von Namen.
         Assert.Contains("data-file-preview", progress);
-        Assert.Contains("singleRow(draft.files[0])", progress);
+        Assert.Contains("singleRow(draft, draft.files[0], false)", progress);
         Assert.Contains("hydratePreviews(dialog, draft.files)", progress);
         Assert.DoesNotContain("receipt-set-sources compact", builder);
 
