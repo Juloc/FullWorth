@@ -106,4 +106,42 @@ public sealed class CodexBridgePrivacyGuardTests
         Assert.Equal(3, Regex.Matches(source, @"invalidateAuth\(ownerScope\);").Count);
         Assert.Contains("not logged|not signed|logged out|unauthor", source);
     }
+
+    /// <summary>
+    /// Ein Belegscan brach nach drei Sekunden mit exit=1 ab, und im Protokoll stand nichts weiter:
+    /// die Ausgabe von codex ist bei einer Inferenz das Ergebnis und bleibt draussen. Eine
+    /// FEHLERmeldung ist es nicht - sie sagt, was schiefging, nicht, was auf dem Beleg steht. Deshalb
+    /// steht sie bei einem Fehlschlag im Protokoll, und nur dann, nur aus Fehlerereignissen, gekuerzt.
+    /// </summary>
+    [Fact]
+    public void A_failed_scan_says_why_but_only_from_error_events_and_only_when_it_failed()
+    {
+        var source = Bridge();
+
+        Assert.Contains("function scanFailureReason(execution, events)", source);
+        // Nur Fehlerereignisse - kein Ergebnis-, kein Nachrichten-Ereignis.
+        Assert.Contains("event?.type === 'error'", source);
+        Assert.Contains("event?.type === 'turn.failed'", source);
+        // Gekuerzt und geschwaerzt.
+        Assert.Matches(@"redact\(message\)[^\n]*\.slice\(0, 300\)", source);
+        // Nur im Fehlerfall: bei Erfolg bleibt die Zeile, wie sie war.
+        Assert.Contains("const failureReason = success ? null : scanFailureReason(", source);
+        Assert.Contains("'Structured result parsed successfully.'", source);
+        // Und das Ergebnis selbst bleibt aus dem Protokoll: die Ausgabe wird nicht zeilenweise geloggt.
+        Assert.Equal(4, Regex.Matches(source, @"logOutput: true").Count);
+    }
+
+    /// <summary>
+    /// Das Ausgabeschema geht als strikt an die API. Strikte Schemas kennen nicht jedes JSON-Schema-
+    /// Schluesselwort; <c>uniqueItems</c> gehoert nicht dazu. Das Backend entfernt doppelte
+    /// Quellindizes ohnehin selbst, das Schluesselwort war nur eine zweite Absicherung - und eine,
+    /// die den ganzen Scan abbrechen lassen konnte, bevor er etwas las.
+    /// </summary>
+    [Fact]
+    public void The_receipt_schema_does_not_use_keywords_that_strict_structured_outputs_reject()
+    {
+        var source = Bridge();
+
+        Assert.DoesNotContain("uniqueItems", source);
+    }
 }

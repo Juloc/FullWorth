@@ -477,7 +477,7 @@ const receiptSchema = {
           totalPrice: { type: ['number', 'null'] }, discountAmount: { type: ['number', 'null'], minimum: 0 },
           discountLabel: { type: ['string', 'null'] }, deposit: { type: ['number', 'null'], minimum: 0 },
           categorySuggestion: { type: ['string', 'null'] }, confidence: { type: 'number', minimum: 0, maximum: 1 },
-          sourceIndexes: { type: 'array', uniqueItems: true, items: { type: 'integer', minimum: 0 } }
+          sourceIndexes: { type: 'array', items: { type: 'integer', minimum: 0 } }
         }
       }
     },
@@ -495,7 +495,7 @@ const receiptSchema = {
           rawText: { type: ['string', 'null'] },
           itemIndex: { type: ['integer', 'null'], minimum: 0 },
           confidence: { type: 'number', minimum: 0, maximum: 1 },
-          sourceIndexes: { type: 'array', uniqueItems: true, items: { type: 'integer', minimum: 0 } }
+          sourceIndexes: { type: 'array', items: { type: 'integer', minimum: 0 } }
         }
       }
     },
@@ -503,6 +503,22 @@ const receiptSchema = {
     confidence: { type: 'number', minimum: 0, maximum: 1 }
   }
 };
+
+// Warum ein Belegscan scheitert, stand nirgends: die Ausgabe von codex ist bei einer Inferenz das
+// Ergebnis und darf nicht ins Protokoll (#156), und so blieb von einem Abbruch nach drei Sekunden nur
+// "exit=1". Eine FEHLERmeldung ist nicht das Ergebnis - sie sagt, was schiefging, nicht, was auf dem
+// Beleg steht. Genommen wird deshalb nur sie, nur bei einem Fehlschlag, nur die erste, gekuerzt.
+function scanFailureReason(execution, events) {
+  const fromEvent = events
+    .map(event => {
+      if (event?.type === 'error' && typeof event.message === 'string') return event.message;
+      if (event?.type === 'turn.failed' && typeof event.error?.message === 'string') return event.error.message;
+      return null;
+    })
+    .find(Boolean);
+  const message = fromEvent ?? String(execution.stderr ?? '').split(/\r?\n/).find(line => line.trim());
+  return message ? redact(message).replace(/\s+/g, ' ').trim().slice(0, 300) : null;
+}
 
 function buildPrompt(categories, sources) {
   const allowed = Array.isArray(categories) && categories.length ? JSON.stringify(categories) : '[]';
@@ -767,7 +783,8 @@ async function scanReceipt(payload, ownerScope) {
       try { return JSON.parse(line); } catch { return { raw: line }; }
     });
     const success = execution.code === 0 && result !== null && !parseError;
-    addLog(ownerScope, 'scan', 'result', 'system', success ? 'Structured result parsed successfully.' : `Scan failed: exit=${execution.code} parseError=${parseError || 'none'}`, requestId);
+    const failureReason = success ? null : scanFailureReason(execution, rawEvents);
+    addLog(ownerScope, 'scan', 'result', 'system', success ? 'Structured result parsed successfully.' : `Scan failed: exit=${execution.code} parseError=${parseError || 'none'}${failureReason ? ` reason=${failureReason}` : ''}`, requestId);
 
     return {
       success,
