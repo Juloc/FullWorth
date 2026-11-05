@@ -290,5 +290,6 @@ dialog.combobox-popover-host::backdrop{background:transparent}
 @media(max-width:767px){
   .action-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px));gap:var(--s1);padding-inline:var(--s2)}
   .action-bar .btn,.action-bar-extra button{padding-inline:var(--s3)}
-  .action-bar-extra .action-label{display:none}
 }
+/* Mit offener Seitenleiste ist die Spalte schmal: dann zeigen die weiteren Aktionen nur ihr Symbol. */
+@media(max-width:1100px){.action-bar-extra .action-label{display:none}.action-bar-extra button{padding-inline:var(--s3)}}

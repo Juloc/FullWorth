@@ -19,8 +19,8 @@
             <button type="button" data-receipts-tab="review"><span data-i18n="receipts.review">@Text.Get("receipts.review", language)</span> <span class="receipts-count is-pending" data-count="needsReview">0</span></button>
             <button type="button" data-receipts-tab="failed"><span data-i18n="receipts.failed">@Text.Get("receipts.failed", language)</span> <span class="receipts-count is-pending" data-count="failed">0</span></button>
         </div>
-    <article class="panel">
-        <div id="receipts-list" class="rows receipts-list"></div>
+    <article class="panel dt-card">
+        <div id="receipts-list" class="dt"></div>
         <div id="receipts-sentinel"></div>
     </article>
     <input id="receipts-file" type="file" accept="image/*,.pdf" multiple hidden>
@@ -31,6 +31,7 @@
 }
 
 @section Styles {
+    <link rel="stylesheet" href="~/styles/data-table.css">
     <link rel="stylesheet" href="~/pages/receipts/page.css">
 }
 

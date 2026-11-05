@@ -35,7 +35,7 @@ let selected = new Set();
 const selection = createSelectionList({
   onChange: ({ selectedIds }) => {
     selected = new Set(selectedIds);
-    for (const row of document.querySelectorAll('#receipts-list .receipts-row'))
+    for (const row of document.querySelectorAll('#receipts-list .dt-row'))
       row.classList.toggle('is-selected', selected.has(row.querySelector('[data-select-item]')?.value));
     showBar();
   }
@@ -249,8 +249,8 @@ function heading(column) {
 function headRow() {
   const cells = COLUMNS[tab].map(column => column === 'select'
     ? `<label class="fw-check"><input type="checkbox" data-select-all></label>`
-    : `<span class="receipts-th receipts-th--${column}">${ctx.esc(heading(column))}</span>`);
-  return `<div class="receipts-head">${cells.join('')}</div>`;
+    : `<span class="${['date', 'items', 'reader', 'state', 'when', 'view'].includes(column) ? 'dt-wide' : column === 'amount' ? 'dt-right' : ''}">${ctx.esc(heading(column))}</span>`);
+  return `<div class="dt-head">${cells.join('')}</div>`;
 }
 
 function draw() {
@@ -276,7 +276,7 @@ function draw() {
 }
 
 function skeleton(count) {
-  return Array.from({ length: count }, () => '<div class="receipts-row receipts-skeleton"><span class="receipts-sk-line shimmer"></span><span class="receipts-sk-line short shimmer"></span></div>').join('');
+  return Array.from({ length: count }, () => '<div class="dt-row dt-skeleton"><span class="dt-sk-line shimmer"></span><span class="dt-sk-line short shimmer"></span></div>').join('');
 }
 
 function emptyText() {
@@ -323,27 +323,27 @@ function stageLabel(job) {
 function readerTag(job) {
   if (!job.engine) return '';
   const version = job.readerVersion ? ` <span class="receipts-version">${ctx.esc(job.readerVersion)}</span>` : '';
-  return `<span class="receipts-tag receipts-tag--${ctx.esc(job.engine)}">${ctx.esc(readerLabel(job.engine))}</span>${version}`;
+  return `<span class="dt-tag receipts-tag--${ctx.esc(job.engine)}">${ctx.esc(readerLabel(job.engine))}</span>${version}`;
 }
 
 // Eine Zeile ist ein Gitter mit den Spalten ihres Reiters. Am Telefon bleiben nur Haken, Beleg und Betrag;
-// was die ausgeblendeten Spalten sagen, steht dort in der Zeile unter dem Namen (.receipts-meta).
+// was die ausgeblendeten Spalten sagen, steht dort in der Zeile unter dem Namen (.dt-meta).
 function dataRow(job) {
   const cells = COLUMNS[tab].map(column => cell(column, job)).join('');
-  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}${job.status === 'processing' ? ' is-active' : ''}">${cells}</div>`;
+  return `<div class="dt-row${selected.has(job.id) ? ' is-selected' : ''}${job.status === 'processing' ? ' is-active' : ''}">${cells}</div>`;
 }
 
 function cell(column, job) {
   switch (column) {
     case 'select': return checkbox(job);
     case 'file': return fileCell(job);
-    case 'state': return `<span class="receipts-cell receipts-cell--state">${stateCell(job)}</span>`;
-    case 'date': return `<span class="receipts-cell receipts-cell--date">${ctx.esc(job.purchaseDate ? ctx.date(job.purchaseDate) : '–')}</span>`;
-    case 'items': return `<span class="receipts-cell receipts-cell--items">${job.itemCount}</span>`;
-    case 'reader': return `<span class="receipts-cell receipts-cell--reader">${readerTag(job) || '–'}</span>`;
-    case 'amount': return `<span class="receipts-cell receipts-cell--amount amount">${ctx.money(job.totalAmount, job.currency)}</span>`;
-    case 'when': return `<span class="receipts-cell receipts-cell--when">${ctx.esc(ago(job.completedAt))}</span>`;
-    case 'view': return `<a class="receipts-cell receipts-cell--view" href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>`;
+    case 'state': return `<span class="dt-cell dt-wide">${stateCell(job)}</span>`;
+    case 'date': return `<span class="dt-cell dt-wide">${ctx.esc(job.purchaseDate ? ctx.date(job.purchaseDate) : '–')}</span>`;
+    case 'items': return `<span class="dt-cell dt-wide">${job.itemCount}</span>`;
+    case 'reader': return `<span class="dt-cell dt-wide">${readerTag(job) || '–'}</span>`;
+    case 'amount': return `<span class="dt-cell dt-right amount">${ctx.money(job.totalAmount, job.currency)}</span>`;
+    case 'when': return `<span class="dt-cell dt-wide">${ctx.esc(ago(job.completedAt))}</span>`;
+    case 'view': return `<a class="dt-cell dt-link dt-wide" href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>`;
     default: return '';
   }
 }
@@ -351,11 +351,11 @@ function cell(column, job) {
 function fileCell(job) {
   const warnings = parseWarnings(job.warningsJson);
   const detail = tab === 'failed'
-    ? `<span class="receipts-sub receipts-error">${ctx.esc(job.error || '')}</span>`
+    ? `<span class="dt-sub dt-error">${ctx.esc(job.error || '')}</span>`
     : tab === 'review' && warnings.length
-      ? `<span class="receipts-sub receipts-warning">${ctx.esc(warnings[0])}${warnings.length > 1 ? ` (+${warnings.length - 1})` : ''}</span>`
+      ? `<span class="dt-sub dt-warning">${ctx.esc(warnings[0])}${warnings.length > 1 ? ` (+${warnings.length - 1})` : ''}</span>`
       : tab === 'history' && reasonLabel(job.reason)
-        ? `<span class="receipts-sub">${ctx.esc(reasonLabel(job.reason))}</span>`
+        ? `<span class="dt-sub">${ctx.esc(reasonLabel(job.reason))}</span>`
         : '';
   const progress = job.status === 'processing'
     ? `<span class="receipts-bar"><span style="width:${STAGE_PROGRESS[job.stage] ?? 8}%"></span></span>`
@@ -366,7 +366,7 @@ function fileCell(job) {
       .filter(Boolean).join(' · ');
   const view = tab === 'review'
     ? ` · <a href="/purchases#purchase=${ctx.esc(job.purchaseId)}">${ctx.esc(t('Ansehen', 'View'))}</a>` : '';
-  return `<span class="receipts-cell receipts-cell--file"><span class="receipts-name">${ctx.esc(name(job))}</span>${detail}${progress}<span class="receipts-meta">${meta}${view}</span></span>`;
+  return `<span class="dt-cell dt-main"><span class="dt-name">${ctx.esc(name(job))}</span>${detail}${progress}<span class="dt-meta">${meta}${view}</span></span>`;
 }
 
 function stateCell(job) {
@@ -374,7 +374,7 @@ function stateCell(job) {
   const text = running
     ? `${stageLabel(job)} · ${ago(job.startedAt, true)}`
     : t(`Position ${job.queuePosition} · wartet seit ${ago(job.createdAt, true)}`, `Position ${job.queuePosition} · waiting ${ago(job.createdAt, true)}`);
-  return `<span class="receipts-tag receipts-tag--state">${ctx.esc(running ? t('In Arbeit', 'Working') : t('Wartet', 'Waiting'))}</span> <span class="receipts-state-text">${ctx.esc(text)}</span>`;
+  return `<span class="dt-tag">${ctx.esc(running ? t('In Arbeit', 'Working') : t('Wartet', 'Waiting'))}</span> <span class="receipts-state-text">${ctx.esc(text)}</span>`;
 }
 
 function checkbox(job) {

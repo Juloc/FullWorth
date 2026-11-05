@@ -2,7 +2,8 @@ import { initializePurchaseEnhancements, tryGptReceiptScan } from './gpt-normal.
 import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
-import { confirmDialog } from '../../components/confirm.js';
+import { confirmDialog, confirmMessage } from '../../components/confirm.js';
+import { createSelectionList } from '../../components/selection-list.js';
 import { spriteHref } from '../../components/sprite.js';
 // Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
 import { attachCombobox } from '../../components/combobox.js';
@@ -14,17 +15,48 @@ import { categoryComboboxItems } from '../../components/category-combobox.js';
 
 let ctx = null;
 
+// Die Tabelle der Kaeufe: Spalten stehen in page.css, Kopf, Zeilen und Platzhalter in styles/data-table.css.
+// Der Server blaettert (limit/offset) und zaehlt (counts); die Seite laedt die naechste Seite, sobald das Ende
+// der Liste in die Naehe des Bildschirms kommt.
+const PAGE = 40;
+let purchaseRows = [];
+let hasMore = false;
+let loading = false;
+let drawnList = '';
+let selected = new Set();
+// Haken, Gesamt-Haken und Zaehlung kommen vom gemeinsamen Baustein; die Seite haelt nur die Ids, damit die
+// Auswahl ein Neuzeichnen der Tabelle ueberlebt. Gewaehlt werden kann, was noch nicht bestaetigt ist.
+const selection = createSelectionList({
+  onChange: ({ selectedIds }) => {
+    selected = new Set(selectedIds);
+    for (const row of document.querySelectorAll('#purchases-list .dt-row'))
+      row.classList.toggle('is-selected', selected.has(row.dataset.purchase));
+    showPurchaseBar();
+  }
+});
+
 export function bindPurchases(context) {
   ctx = context;
   initializePurchaseEnhancements(ctx);
-  ctx.$('#purchase-source').addEventListener('change', () => renderPurchases(ctx));
+  const reload = () => { purchaseRows = []; selected = new Set(); drawnList = ''; renderPurchases(ctx); };
+  ctx.$('#purchase-source').addEventListener('change', reload);
+  ctx.$('#purchase-scope').addEventListener('change', reload);
   ctx.$('#receipt-file').addEventListener('change', scanReceipt);
+  ctx.$('#purchases-list').addEventListener('click', event => {
+    const row = event.target.closest('.dt-row');
+    if (row && !event.target.closest('.fw-check')) openDetail(row.dataset.purchase);
+  });
+  new IntersectionObserver(entries => { if (entries[0].isIntersecting) morePurchases().catch(() => {}); }, { rootMargin: '480px' })
+    .observe(ctx.$('#purchases-sentinel'));
+  document.getElementById('action-bar-selection').addEventListener('click', event => {
+    if (event.target.closest('[data-bar="confirm"]')) confirmSelectedPurchases().catch(err => ctx.toast(err.message || ctx.get('common.error')));
+  });
   // Die weiteren Aktionen der Seite stehen in der Aktionsleiste; die Hauptaktion (Beleg scannen) meldet der Einstieg an.
   const amazon = document.createElement('button');
   amazon.id = 'amazon-import';
   amazon.type = 'button';
   amazon.className = buttonClass(ButtonRole.Secondary);
-  amazon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-cart')}"></use></svg><span class="action-label"></span>`;
+  amazon.innerHTML = `<svg viewBox="0 0 24 24"><use href="${spriteHref('ui-cart')}"></use></svg><span class="action-label"></span>`;
   amazon.addEventListener('click', openAmazonConnection);
   document.getElementById('action-bar-extra').append(amazon);
 }
@@ -34,47 +66,88 @@ export function chooseReceipt(context) {
   context.$('#receipt-file').click();
 }
 
+function listQuery(offset, limit) {
+  const query = new URLSearchParams({ limit, offset });
+  for (const [name, id] of [['source', '#purchase-source'], ['scope', '#purchase-scope']]) {
+    const value = ctx.$(id).value;
+    if (value) query.set(name, value);
+  }
+  return `api/purchases?${query}`;
+}
+
 export async function renderPurchases(context) {
   ctx = context;
   await ensureOfficialBrandCatalog(ctx.api);
+  refreshAmazonButton().catch(() => {});
   const source = ctx.$('#purchase-source').value;
-  const q = source ? `?source=${encodeURIComponent(source)}` : '';
-  const rows = (await ctx.api(`api/purchases${q}`)) || [];
-  const el = ctx.$('#purchases-list');
-  el.innerHTML = '';
-  await refreshAmazonButton().catch(() => {});
-  if (!rows.length) { el.innerHTML = emptyRow(ctx.get('common.empty')); return; }
-
-  const needsReview = rows.filter(r => r.status !== 'confirmed' || (r.source !== 'amazon' && !r.transactionId));
-  const reviewIds = new Set(needsReview.map(r => r.id));
-  const recent = rows.filter(r => !reviewIds.has(r.id));
-
-  const frag = document.createDocumentFragment();
-  frag.appendChild(summaryHeader(rows, needsReview.length));
-  if (needsReview.length) section(frag, ctx.get('purchases.needsReview'), needsReview);
-  if (recent.length) section(frag, ctx.get('purchases.recent'), recent);
-  frag.appendChild(merchantSummary(rows));
-  el.appendChild(frag);
+  if (!purchaseRows.length) { loading = true; drawPurchases(); }
+  try {
+    const limit = Math.min(100, Math.max(PAGE, purchaseRows.length));
+    const [counts, rows] = await Promise.all([
+      ctx.api(`api/purchases/counts${source ? `?source=${encodeURIComponent(source)}` : ''}`),
+      ctx.api(listQuery(0, limit))
+    ]);
+    showScopeCounts(counts);
+    purchaseRows = rows || [];
+    hasMore = purchaseRows.length === limit;
+  } finally {
+    loading = false;
+  }
+  for (const id of selected) if (!purchaseRows.some(row => row.id === id)) selected.delete(id);
+  drawPurchases();
 }
 
-// Concise summary strip (Finanzguru-style header): total spend, purchase count and — only when
-// something is pending — an attention-tinted "needs review" tile. Amounts use tabular numerals via
-// the shared .amount class. Naive cross-currency sum matches the merchant summary below.
-function summaryHeader(rows, needsReviewCount) {
-  const total = rows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
-  const cur = rows[0]?.currency || 'EUR';
-  const wrap = document.createElement('div');
-  wrap.className = 'purchase-summary';
-  wrap.innerHTML =
-    `<div class="purchase-stat"><span class="purchase-stat-k">${ctx.esc(ctx.get('purchases.total'))}</span><span class="purchase-stat-v amount">${ctx.money(total, cur)}</span></div>` +
-    `<div class="purchase-stat"><span class="purchase-stat-k">${ctx.esc(ctx.get('purchases.title'))}</span><span class="purchase-stat-v">${rows.length}</span></div>` +
-    (needsReviewCount ? `<div class="purchase-stat purchase-stat--review"><span class="purchase-stat-k">${ctx.esc(ctx.get('purchases.needsReview'))}</span><span class="purchase-stat-v">${needsReviewCount}</span></div>` : '');
-  return wrap;
+async function morePurchases() {
+  if (loading || !hasMore) return;
+  loading = true;
+  drawPurchases();
+  try {
+    const rows = (await ctx.api(listQuery(purchaseRows.length, PAGE))) || [];
+    purchaseRows = purchaseRows.concat(rows);
+    hasMore = rows.length === PAGE;
+  } finally {
+    loading = false;
+    drawPurchases();
+  }
+}
+
+// Die Zahlen stehen an den Auswahlpunkten des Filters.
+function showScopeCounts(counts) {
+  const labels = { review: ['purchases.needsReview', counts.review], unlinked: ['purchases.unlinked', counts.unlinked] };
+  for (const option of ctx.$('#purchase-scope').options)
+    if (labels[option.value]) option.textContent = `${ctx.get(labels[option.value][0])} (${labels[option.value][1]})`;
+}
+
+function drawPurchases() {
+  const list = ctx.$('#purchases-list');
+  const html = loading && !purchaseRows.length
+    ? Array.from({ length: 4 }, () => '<div class="dt-skeleton"><span class="dt-sk-line shimmer"></span><span class="dt-sk-line shimmer"></span></div>').join('')
+    : (purchaseRows.length
+      ? purchaseHead() + purchaseRows.map(purchaseRow).join('')
+      : emptyRow(ctx.get('common.empty'))) + (loading ? '<div class="dt-skeleton"><span class="dt-sk-line shimmer"></span><span class="dt-sk-line shimmer"></span></div>' : '');
+  if (html !== drawnList) {
+    drawnList = html;
+    list.innerHTML = html;
+    selection.mount(list);
+  }
+  showPurchaseBar();
+}
+
+function purchaseHead() {
+  return `<div class="dt-head">
+    <label class="fw-check"><input type="checkbox" data-select-all></label>
+    <span>${ctx.esc(ctx.get('purchases.title'))}</span>
+    <span class="dt-wide">${ctx.esc(t('Datum', 'Date'))}</span>
+    <span class="dt-wide">${ctx.esc(ctx.get('purchases.items'))}</span>
+    <span class="dt-wide">${ctx.esc(t('Quelle', 'Source'))}</span>
+    <span class="dt-wide"></span>
+    <span class="dt-right">${ctx.esc(t('Betrag', 'Amount'))}</span>
+  </div>`;
 }
 
 // A word-label pill hung on a purchase name (Design System §10, matching the transactions markers):
 // amber "Prüfen" while a purchase is unconfirmed, neutral "Nicht verknüpft" while a confirmed receipt
-// still has no bank booking. Confirmed & linked purchases carry no pill, keeping the recent list calm.
+// still has no bank booking. Confirmed & linked purchases carry no pill, keeping the list calm.
 function attentionTag(x) {
   if (x.status !== 'confirmed')
     return `<span class="purchase-tag purchase-tag--review">${ctx.esc(ctx.get('purchases.review'))}</span>`;
@@ -84,55 +157,68 @@ function attentionTag(x) {
   return '';
 }
 
-function section(parent, title, rows) {
-  const head = document.createElement('div');
-  head.className = 'row-group';
-  head.textContent = `${title} (${rows.length})`;
-  parent.appendChild(head);
-  for (const x of rows) {
-    const itemCount = (x.items || []).length;
-    const source = x.source === 'amazon' ? 'Amazon' : x.source;
-    const order = x.source === 'amazon' && x.externalOrderId ? ` · ${x.externalOrderId}` : '';
-    const name = x.merchant || x.externalOrderId || ctx.get('purchases.receipt');
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'purchase-row';
-    // Finanzguru-style identity row: merchant monogram / category icon, name with an attention pill,
-    // a calm sub-line (date · source · positions), and the total right-aligned with tabular numerals.
-    row.innerHTML =
-      `<span class="purchase-ident">${identityIcon(name, { categoryIconKey: x.categoryIconKey })}</span>` +
-      `<span class="row-main"><span class="purchase-title"><span class="purchase-name">${ctx.esc(name)}</span>${attentionTag(x)}</span>` +
-      `<span class="row-sub">${ctx.esc(ctx.date(x.purchaseDate))} · ${ctx.esc(source)}${ctx.esc(order)} · ${itemCount} ${ctx.esc(ctx.get('purchases.items'))}</span></span>` +
-      `<span class="amount">${ctx.money(x.totalAmount, x.currency)}</span>`;
-    row.addEventListener('click', () => openDetail(x.id));
-    parent.appendChild(row);
-  }
+function purchaseRow(x) {
+  const name = x.merchant || x.externalOrderId || ctx.get('purchases.receipt');
+  const source = x.source === 'amazon' ? 'Amazon' : ctx.get('purchases.receipt');
+  const date = ctx.esc(ctx.date(x.purchaseDate));
+  const count = (x.items || []).length;
+  const tag = attentionTag(x);
+  const order = x.source === 'amazon' && x.externalOrderId ? ctx.esc(x.externalOrderId) : '';
+  const check = x.status !== 'confirmed'
+    ? `<label class="fw-check"><input type="checkbox" data-select-item value="${ctx.esc(x.id)}"${selected.has(x.id) ? ' checked' : ''}></label>`
+    : '<span></span>';
+  return `<div class="dt-row is-clickable${selected.has(x.id) ? ' is-selected' : ''}" data-purchase="${ctx.esc(x.id)}">
+    ${check}
+    <span class="dt-cell dt-lead"><span class="purchase-ident">${identityIcon(name, { categoryIconKey: x.categoryIconKey })}</span>
+      <span class="dt-main"><span class="dt-name">${ctx.esc(name)}</span>${order ? `<span class="dt-sub">${order}</span>` : ''}
+        <span class="dt-meta">${date} · ${count} ${ctx.esc(ctx.get('purchases.items'))}${tag ? ` · ${tag}` : ''}</span></span></span>
+    <span class="dt-cell dt-wide">${date}</span>
+    <span class="dt-cell dt-wide">${count}</span>
+    <span class="dt-cell dt-wide">${ctx.esc(source)}</span>
+    <span class="dt-cell dt-wide">${tag}</span>
+    <span class="dt-cell dt-right amount">${ctx.money(x.totalAmount, x.currency)}</span>
+  </div>`;
 }
 
-function merchantSummary(rows) {
-  const wrap = document.createElement('div');
-  wrap.className = 'purchase-merchants';
-  const byMerchant = new Map();
-  for (const r of rows) {
-    const key = r.merchant || ctx.get('purchases.receipt');
-    byMerchant.set(key, (byMerchant.get(key) || 0) + Number(r.totalAmount || 0));
+// Die Auswahl-Aktion wohnt in der Aktionsleiste der Seite und ersetzt dort die Hauptaktion, solange etwas
+// gewaehlt ist. Neu gezeichnet wird nur, wenn sich die Zahl aendert.
+let purchaseBarKey = '';
+function showPurchaseBar() {
+  document.getElementById('action-bar').classList.toggle('has-selection', selected.size > 0);
+  const key = String(selected.size);
+  if (key === purchaseBarKey) return;
+  purchaseBarKey = key;
+  document.getElementById('action-bar-selection').innerHTML = selected.size
+    ? `<span class="action-bar-count">${ctx.esc(t(`${selected.size} ausgewählt`, `${selected.size} selected`))}</span>
+       <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-bar="confirm"><svg viewBox="0 0 24 24"><use href="${spriteHref('ui-check')}"></use></svg><span>${ctx.esc(ctx.get('purchases.confirm'))}</span></button>`
+    : '';
+}
+
+// Eine Sammelbestaetigung wiegt schwer, also fragt sie einmal nach - und bestaetigt dann Kauf fuer Kauf
+// ueber dieselbe Summenpruefung wie die Einzelbestaetigung. Einer, dem sie nicht genuegt, bleibt angehakt und
+// auf "Zu pruefen"; die anderen sind trotzdem durch.
+async function confirmSelectedPurchases() {
+  const ids = [...selected];
+  if (!await confirmMessage({
+    title: t('Käufe bestätigen', 'Confirm purchases'),
+    message: t(`${ids.length} Kauf/Käufe bestätigen? Jeder wird einzeln geprüft; was nicht aufgeht, bleibt in der Liste.`,
+               `Confirm ${ids.length} purchase(s)? Each is checked on its own; anything that does not add up stays in the list.`),
+    confirmLabel: t('Bestätigen', 'Confirm'),
+    cancelLabel: t('Abbrechen', 'Cancel')
+  })) return;
+  let ok = 0;
+  for (const id of ids) {
+    try {
+      await ctx.api(`api/purchases/${id}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ createSafeAllocations: true, allowUnlinked: true }) });
+      selected.delete(id);
+      ok++;
+    } catch { /* bleibt angehakt */ }
   }
-  const top = [...byMerchant.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const cur = rows[0]?.currency || 'EUR';
-  const max = top.length ? top[0][1] : 0;
-  const head = document.createElement('div');
-  head.className = 'row-group';
-  head.textContent = ctx.get('purchases.byMerchant');
-  wrap.appendChild(head);
-  // Ranked merchants with an identity monogram and a monochrome share bar (proportion of the top
-  // spender) so the biggest merchants read at a glance without introducing any non-neutral hue.
-  wrap.insertAdjacentHTML('beforeend', top.map(([m, total]) => {
-    const pct = max > 0 ? Math.max(4, Math.round((total / max) * 100)) : 0;
-    return `<div class="purchase-mrow"><span class="purchase-ident">${identityIcon(m, {})}</span>` +
-      `<span class="purchase-mrow-main"><span class="purchase-mrow-top"><span class="purchase-name">${ctx.esc(m)}</span><span class="amount">${ctx.money(total, cur)}</span></span>` +
-      `<span class="purchase-bar"><span style="width:${pct}%"></span></span></span></div>`;
-  }).join(''));
-  return wrap;
+  const left = ids.length - ok;
+  ctx.toast(left
+    ? t(`${ok} bestätigt, ${left} stimmen nicht und bleiben zu prüfen.`, `${ok} confirmed, ${left} do not add up and stay in review.`)
+    : t(`${ok} bestätigt.`, `${ok} confirmed.`));
+  await renderPurchases(ctx);
 }
 
 async function scanReceipt() {

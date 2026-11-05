@@ -8,9 +8,13 @@
    Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
    sie gewinnen, wo sie vorher verloren haben. */
 
-.purchase-row:last-child{border-bottom:0}
-
-.purchase-row:hover{background:var(--surface-2)}
+/* Die Spalten der Kaeufe-Tabelle: Haken, Einkauf, Datum, Positionen, Quelle, Status, Betrag. */
+#purchases-list { --cols: 20px minmax(240px, 1fr) 100px 84px 90px 120px 110px; --cols-narrow: 20px minmax(0, 1fr) auto; }
+/* Identitaet links, Name und Unterzeile daneben; die Zeile darunter (.dt-meta, nur schmal) laeuft ueber die ganze Breite. */
+.dt-lead { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--s3); row-gap: var(--s1); min-width: 0; }
+.dt-lead .dt-main { display: contents; }
+.dt-lead .purchase-ident { grid-row: 1 / span 2; }
+.dt-lead .dt-meta { grid-column: 1 / -1; }
 
 .purchase-detail{width:min(760px,94vw)}
 
@@ -34,52 +38,15 @@ form.purchase-detail .reconcile {
 
 .purchase-item input,.purchase-item select{min-width:0}
 
-.purchase-merchants{margin-top:var(--s3)}
-
-/* --- Käufe (purchase-*): summary strip + identity rows + share bars --- */
-.purchase-summary{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);margin:0 0 var(--s4);padding:var(--s4);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
-
-.purchase-stat{display:flex;flex-direction:column;gap:6px;min-width:0}
-
-/* War 11px - Drift wie die 11px-Reste bei Dashboard/Vermoegens-/Vertrags-/Budgetseite; --text-caption
-   ist die Fussnoten-Rolle fuer eine Grossbuchstaben-Beschriftung wie diese (Scheibe 11 Teil 2). */
-.purchase-stat-k{color:var(--muted);font-size:var(--text-caption-size);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-
-.purchase-stat--review .purchase-stat-v{color:var(--warning)}
-
+/* --- Käufe: Kennzeichen (Identität, Wort-Pille). Die Tabelle selbst steht in styles/data-table.css. --- */
 .purchase-ident{display:inline-flex;align-items:center;flex:0 0 auto}
 
-.purchase-title{display:flex;align-items:center;gap:var(--s2);min-width:0}
-
-.purchase-name{font-size:15px;font-weight:500;min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-.purchase-row .amount{align-self:center;text-align:right}
-
-/* War 11px - dieselbe Drift wie .purchase-stat-k oben und .tx-marker (Transaktionen); ein Wortlabel-
-   Pill traegt dieselbe Fussnoten-Rolle (Scheibe 11 Teil 2). */
+/* Ein Wortlabel-Pill traegt die Fussnoten-Rolle (--text-caption), wie .tx-marker bei den Buchungen. */
 .purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:var(--text-caption-size);font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
 
 .purchase-tag--review{background:var(--warning-soft);color:var(--warning)}
 
 .purchase-tag--unlinked{background:var(--surface-3);color:var(--text)}
-
-.purchase-mrow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
-
-.purchase-mrow:last-child{border-bottom:0}
-
-.purchase-mrow .fw-ident{width:32px;height:32px;font-size:13px}
-
-.purchase-mrow-main{min-width:0;display:flex;flex-direction:column;gap:6px}
-
-.purchase-mrow-top{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
-
-.purchase-mrow-top .purchase-name{font-weight:500}
-
-.purchase-mrow-top .amount{flex:0 0 auto}
-
-.purchase-bar{display:block;height:4px;border-radius:var(--radius-pill);background:var(--surface-3);overflow:hidden}
-
-.purchase-bar>span{display:block;height:100%;border-radius:inherit;background:var(--k4)}
 
 /* Aus styles/features/purchase-advanced-insights.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
    und damit seinen eigenen <link>. */

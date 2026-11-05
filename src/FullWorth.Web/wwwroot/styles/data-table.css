@@ -1,0 +1,43 @@
+/* Die Tabelle der Listen (Belege, Kaeufe): Kopfzeile, Zeilen, Zellen, Platzhalter.
+   Eine Seite setzt je Ansicht die Spalten (--cols, schmal: --cols-narrow); der Rest ist hier.
+
+   Die Kopfzeile klebt unter der Topbar, damit die Gesamt-Auswahl beim Scrollen erreichbar bleibt - dafuer darf
+   die Karte nichts abschneiden (overflow), sonst haette der Kopf nichts, woran er kleben koennte.
+   Ist die KARTE schmal (Telefon, aber auch ein Tablet mit offener Seitenleiste), bleiben die Spalten ohne
+   .dt-wide; was die uebrigen sagen, steht in der Zeile unter dem Namen (.dt-meta). Gemessen wird die Karte,
+   nicht das Fenster. */
+.dt-card { overflow: visible; container: dt / inline-size; }
+.dt { min-height: 320px; align-content: start; font-size: 14px; }
+
+.dt-head, .dt-row { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: var(--s4); padding: var(--s3) var(--s4); }
+.dt-head { position: sticky; top: var(--topbar-h, 64px); z-index: 3; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--muted); }
+.dt-row { padding-block: var(--s4); border-bottom: 1px solid var(--line); }
+.dt-row:last-child { border-bottom: 0; }
+.dt-row:hover, .dt-row.is-selected { background: var(--surface-2); }
+.dt-row.is-clickable { cursor: pointer; }
+.dt-right { text-align: right; }
+
+.dt-cell { min-width: 0; font-variant-numeric: tabular-nums; }
+.dt-main { display: grid; gap: var(--s1); }
+.dt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
+.dt-sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.dt-meta { display: none; font-size: 13px; color: var(--muted); }
+.dt-meta a { color: var(--text); font-weight: 600; text-decoration: none; }
+.dt-warning { color: var(--warning); }
+.dt-error { color: var(--danger); }
+.dt-link { text-decoration: none; font-weight: 600; }
+
+.dt-tag { display: inline-block; padding: var(--s1) var(--s2); border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.dt-row:hover .dt-tag, .dt-row.is-selected .dt-tag { background: var(--surface); }
+
+/* Platzhalter, bis die erste Seite da ist: dieselbe Hoehe wie eine Zeile. */
+.dt-skeleton { display: grid; gap: var(--s2); min-height: 72px; padding: var(--s4); }
+.dt-sk-line { display: block; height: 14px; width: 60%; border-radius: var(--radius-sm); }
+.dt-sk-line + .dt-sk-line { width: 35%; }
+
+@container dt (max-width: 760px) {
+  .dt-head, .dt-row { grid-template-columns: var(--cols-narrow); }
+  .dt-wide { display: none; }
+  .dt-meta { display: block; }
+  .dt-name { white-space: normal; }
+}

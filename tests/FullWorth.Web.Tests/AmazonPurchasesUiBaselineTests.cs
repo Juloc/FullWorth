@@ -55,7 +55,8 @@ public sealed class AmazonPurchasesUiBaselineTests : IClassFixture<FullWorthWebF
     {
         var js = ReadPurchasesJs();
 
-        Assert.Contains("r.source !== 'amazon' && !r.transactionId", js);
+        // The review/unlinked split moved to the server (scope=unlinked excludes Amazon); the row tag keeps the same rule.
+        Assert.Contains("x.source === 'amazon' ? true : !!x.transactionId", js);
     }
 
     [Fact]

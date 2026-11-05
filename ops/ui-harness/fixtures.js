@@ -1810,6 +1810,23 @@
     const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
     const status = write?.status ?? 200;
     let body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
+    // Kaeufe: die Tabelle blaettert (limit/offset) und filtert (scope). 57 Einkaeufe, damit das Nachladen und die
+    // Zaehler an den Auswahlpunkten sichtbar werden; jeder dritte ist unbestaetigt, jeder fuenfte ohne Buchung.
+    if (method === 'GET' && url.pathname.endsWith('/api/purchases/counts'))
+      body = { all: 57, review: 19, unlinked: 8 };
+    if (method === 'GET' && /\/api\/purchases$/.test(url.pathname) && url.searchParams.has('limit')) {
+      const names = ['REWE', 'Penny', 'Kaufland', 'IKEA', 'OBI', 'Amazon Bestellung', 'dm Drogerie', 'Müller', 'Esso Tankstelle Freudental Süd'];
+      const all = Array.from({ length: 57 }, (_, i) => ({
+        id: `p${i}`, source: i % 7 === 0 ? 'amazon' : 'receipt', merchant: names[i % names.length], externalOrderId: i % 7 === 0 ? `303-${1000 + i}-77` : null,
+        purchaseDate: `2026-06-${String(28 - (i % 27)).padStart(2, '0')}`, totalAmount: 5 + i * 3.17, currency: 'EUR',
+        status: i % 3 === 0 ? 'review' : 'confirmed', transactionId: i % 5 === 0 ? null : 'tx', items: Array.from({ length: 1 + (i % 12) }, () => ({})) }));
+      const scope = url.searchParams.get('scope');
+      const source = url.searchParams.get('source');
+      const rows = all.filter(r => (!source || r.source === source)
+        && (scope === 'review' ? r.status !== 'confirmed' : scope === 'unlinked' ? r.status === 'confirmed' && r.source !== 'amazon' && !r.transactionId : true));
+      const offset = Number(url.searchParams.get('offset')) || 0;
+      body = rows.slice(offset, offset + Number(url.searchParams.get('limit')));
+    }
     // Belege: die Zaehler und die drei Listen. "scope" ist der eine Parameter, den match() nicht kennt.
     // Bewusst verschiedene Faelle: ein digitales PDF (lokal, ohne KI), ein Scan (KI), eine OCR-Notloesung,
     // ein Fehler, und ein Beleg mit Warnung - ein Layout bricht nur an den unbequemen Faellen.

@@ -308,6 +308,8 @@
     "itemsJson": "Items as JSON",
     "import": "Import",
     "needsReview": "Needs review",
+    "allSources": "All sources",
+    "allPurchases": "All purchases",
     "confirm": "Confirm",
     "recent": "Recent purchases",
     "byMerchant": "Spend by merchant",
