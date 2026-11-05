@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release tag, for example v1.3.0-alpha.1
+        description: Release tag, for example v0.80.0 (stable, moves latest) or v0.81.0-alpha.1
         required: true
         type: string
       source_sha:
@@ -178,16 +178,29 @@ jobs:
     needs: build-amd64
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           version="${RELEASE_TAG#v}"
-          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes --verify-tag)
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --verify-tag)
+
+          # Written notes (docs/releases/<version>.md) win; without them GitHub generates a list of changes.
+          if [[ -f "docs/releases/$version.md" ]]; then
+            args+=(--notes-file "docs/releases/$version.md")
+          else
+            args+=(--generate-notes)
+          fi
 
           if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
+          else
+            args+=(--latest)
           fi
 
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

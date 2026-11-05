@@ -2,13 +2,26 @@
 
 ## Versioning
 
-Use Semantic Versioning tags:
+Use Semantic Versioning tags. FullWorth is still being built, so versions are `0.MINOR.PATCH`: a release with
+features bumps the minor (`v0.81.0`), a fix-only release the patch (`v0.80.1`). Up to `v1.3.0-alpha.79` releases were
+numbered `1.3.0-alpha.N`; `v0.80.0` continues that count and is the first with a stable tag.
 
-- Stable: `v1.4.0`
-- Release candidate: `v1.4.0-rc.1`
-- Other pre-release: `v1.4.0-alpha.1`
+- Stable: `v0.80.0`
+- Release candidate: `v0.81.0-rc.1`
+- Other pre-release: `v0.81.0-alpha.1`
 
-Only stable releases move `latest`, major and major/minor aliases.
+Only stable releases move `latest`, major and major/minor aliases (`0`, `0.80`).
+
+### Requesting a release
+
+1. Write the notes in `docs/releases/<version>.md` (without the `v`). They become the body of the GitHub release;
+   without a file GitHub generates a list of changes.
+2. Put the tag in `ops/release-request.txt` (`v0.80.0`) and push to `main`. The **Release Request** workflow creates
+   the tag and starts **Release**, which publishes the image, the multi-architecture manifests and the GitHub release
+   (marked *Latest* for a stable tag, *Pre-release* otherwise).
+3. Verify with `docker manifest inspect ghcr.io/juloc/fullworth:<version>`.
+
+A failed release burns its tag: fix the cause and request the next version.
 
 ## Verify
 

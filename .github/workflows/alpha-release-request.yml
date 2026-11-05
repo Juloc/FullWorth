@@ -1,4 +1,4 @@
-name: Alpha Release Request
+name: Release Request
 
 on:
   push:
@@ -12,8 +12,8 @@ permissions:
   actions: write
 
 jobs:
-  create-alpha-tag:
-    name: Create alpha release tag
+  create-tag:
+    name: Create release tag
     runs-on: ubuntu-latest
 
     steps:
@@ -26,8 +26,10 @@ jobs:
         shell: bash
         run: |
           tag="$(tr -d '[:space:]' < ops/release-request.txt)"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]; then
-            echo "Invalid alpha release tag: $tag" >&2
+          # vX.Y.Z is a stable release (it also moves latest and the major/minor aliases);
+          # vX.Y.Z-alpha.N stays available for a pre-release that must not.
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
             exit 1
           fi
 
@@ -47,7 +49,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push alpha tag
+      - name: Create and push tag
         if: steps.version.outputs.exists != 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
