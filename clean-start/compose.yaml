@@ -1,0 +1,7 @@
+services:
+  fullworth-clean-start:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:8098:8080"
+    restart: unless-stopped

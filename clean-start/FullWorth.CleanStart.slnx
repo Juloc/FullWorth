@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/FullWorth.Backend/FullWorth.Backend.csproj" />
+  <Project Path="src/FullWorth.Frontend/FullWorth.Frontend.csproj" />
+</Solution>
