@@ -7,7 +7,7 @@
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
-const TABS = ['queue', 'history', 'review'];
+const TABS = ['queue', 'history', 'review', 'failed'];
 const PAGE = 30;
 const POLL_BUSY_MS = 2000;
 const POLL_IDLE_MS = 15000;
@@ -28,9 +28,13 @@ let timer = null;
 export function bindReceipts(context) {
   ctx = context;
   ctx.$('#view-receipts').addEventListener('click', onClick);
-  ctx.$('#receipts-upload').addEventListener('click', () => ctx.$('#receipts-file').click());
   ctx.$('#receipts-file').addEventListener('change', upload);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+}
+
+// Der Knopf "Beleg hochladen" sitzt in der Topbar; die Seite besitzt nur das Dateifeld dahinter.
+export function chooseFiles(context) {
+  context.$('#receipts-file').click();
 }
 
 export async function renderReceipts(context) {
@@ -70,9 +74,12 @@ async function load(offset, limit) {
   return { rows: list, more: tab !== 'queue' && list.length === limit };
 }
 
+// Die Zahlen stehen an den Reitern. Der Verlauf hat keine: er waechst nur, und eine Zahl, die nie
+// weniger wird, sagt nichts.
 function showCounts() {
-  for (const el of ctx.$('#receipts-stats').querySelectorAll('[data-count]')) {
-    el.textContent = counts[el.dataset.count] ?? 0;
+  const shown = { queue: counts.queued + counts.processing, needsReview: counts.needsReview, failed: counts.failed };
+  for (const el of ctx.$('#view-receipts').querySelectorAll('[data-count]')) {
+    el.textContent = shown[el.dataset.count] ?? 0;
     el.classList.remove('is-pending');
   }
 }
@@ -158,7 +165,7 @@ function draw() {
   // Die Minuten "vor 3 Min" laufen weiter, auch wenn sich sonst nichts aendert - sie gehoeren deshalb
   // nicht in den Vergleich, sondern werden bei jedem Zeichnen frisch gerechnet.
   const html = rows.length
-    ? rows.map(row => (tab === 'queue' ? queueRow(row) : tab === 'history' ? historyRow(row) : reviewRow(row))).join('')
+    ? rows.map(row => (tab === 'queue' ? queueRow(row) : tab === 'review' ? reviewRow(row) : historyRow(row))).join('')
       + (hasMore ? `<div class="receipts-more"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-action="more">${ctx.esc(t('Mehr anzeigen', 'Show more'))}</button></div>` : '')
     : emptyRow(emptyText());
   if (html === drawn) return;
@@ -169,6 +176,7 @@ function draw() {
 function emptyText() {
   if (tab === 'queue') return t('Nichts in der Warteschlange.', 'Nothing in the queue.');
   if (tab === 'review') return t('Alles geprüft.', 'Everything is reviewed.');
+  if (tab === 'failed') return t('Nichts fehlgeschlagen.', 'Nothing failed.');
   return t('Noch keine verarbeiteten Belege.', 'No processed receipts yet.');
 }
 

@@ -118,6 +118,49 @@ function localiseBody(markup, language) {
   return markup.replace(/@Text\.Get\("([\w.]+)", language\)/g, (_, key) => localeText(key, language));
 }
 
+
+/**
+ * Die Konstrukte, die der Rahmen fuer den Brotkrumenpfad benutzt: `@if (...) { } else { }` mit den drei
+ * Bedingungen, die dort vorkommen. Klammern werden gezaehlt, nicht geraten - ein Block darf Markup mit
+ * eigenen Klammern enthalten.
+ */
+function evaluateConditions(html, facts) {
+  const test = condition => {
+    if (!(condition in facts)) throw new Error(`ui-harness/razor.mjs kennt die Bedingung "${condition}" nicht.`);
+    return facts[condition];
+  };
+  const block = (text, from) => {
+    const open = text.indexOf('{', from);
+    let depth = 0;
+    for (let i = open; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}' && --depth === 0) return { body: text.slice(open + 1, i), end: i + 1 };
+    }
+    throw new Error('ui-harness/razor.mjs: Block ohne Ende.');
+  };
+  for (;;) {
+    const start = html.search(/@if \(/);
+    if (start < 0) return html;
+    const close = html.indexOf(')', start);
+    const condition = html.slice(start + 5, close);
+    const yes = block(html, close);
+    let end = yes.end;
+    let no = '';
+    const rest = html.slice(end).match(/^\s*else\s*/);
+    if (rest) { const other = block(html, end + rest[0].length - 1); no = other.body; end = other.end; }
+    html = html.slice(0, start) + (test(condition) ? yes.body : no) + html.slice(end);
+  }
+}
+
+/** Gruppe und Beschriftung der Seite im Menue (app/menu.js - dieselbe Liste wie NavigationCatalog). */
+function groupLabelOf(view) {
+  const menu = readFileSync(new URL('app/menu.js', WWWROOT), 'utf8');
+  for (const group of menu.split("{ id: '").slice(1)) {
+    if (group.includes(`view: '${view}'`)) return /label: '([\w.]+)'/.exec(group)?.[1];
+  }
+  return undefined;
+}
+
 export function renderRazorPage(route, { navigation, bottomNavigation }, language = 'de') {
   const page = findPages().find(candidate => candidate.route === route);
   if (!page) return null;
@@ -129,8 +172,16 @@ export function renderRazorPage(route, { navigation, bottomNavigation }, languag
   const NAV = JSON.parse(readFileSync(new URL('locales/de.json', WWWROOT), 'utf8')).nav ?? {};
   const heading = HEADINGS[data.ActiveView] ?? (NAV[data.ActiveView] ? { title: NAV[data.ActiveView] } : {});
 
-  let html = layout
+  const crumbs = data.Header === 'breadcrumb';
+  const crumbLabel = crumbs ? groupLabelOf(data.ActiveView) : undefined;
+  let html = evaluateConditions(layout
     .replace(/@\*[^]*?\*@/g, '')
+    .replace('@(crumbs ? " topbar--crumbs" : "")', crumbs ? ' topbar--crumbs' : ''),
+    { crumbs, '!crumbs': !crumbs, 'crumbGroup is not null': crumbLabel !== undefined })
+    .replace('@crumbGroup.Label', crumbLabel ?? '')
+    .replace('@Text.Get(crumbGroup.Label, language)', crumbLabel ? localeText(crumbLabel, language) : '')
+    .replace('@Headings.Title(view)', heading.title ?? '')
+    .replace(/@Text\.Get\("([\w.]+)", language\)/g, (_, key) => localeText(key, language))
     // @inject und der Kopfblock des Rahmens tragen keine Ausgabe.
     .replace(/^@inject .*$/gm, '')
     .replace(/^@\{[^]*?\n?\}$/m, '')

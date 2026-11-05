@@ -285,9 +285,7 @@
     "history": "Verlauf",
     "review": "Zu prüfen",
     "upload": "Beleg hochladen",
-    "queued": "Wartet",
-    "processing": "In Arbeit",
-    "failed": "Fehler"
+    "failed": "Fehlgeschlagen"
   },
   "purchases": {
     "title": "Käufe",

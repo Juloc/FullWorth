@@ -108,11 +108,12 @@ export function createShell({
     const page = state.messages.pages?.[view];
     const title = $('#page-title');
     const subtitle = $('#page-subtitle');
-    if (title && subtitle) {
+    if (title) {
       const fallback = $(`.sidebar .nav-item[data-entry="${view}"] span`)?.textContent || '';
       title.textContent = page?.title ?? fallback;
-      subtitle.textContent = page?.subtitle ?? '';
     }
+    // Eine Seite mit Brotkrumenpfad hat keine Unterzeile.
+    if (subtitle) subtitle.textContent = page?.subtitle ?? '';
 
     const action = primaryAction(view);
     const button = $('#primary-action');

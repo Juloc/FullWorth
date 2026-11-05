@@ -51,8 +51,8 @@ public static class ReceiptScanQueueEndpoints
     {
         var userId = currentUser.RequireUserId();
         if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        if (scope is not ("queue" or "history" or "review"))
-            return Results.BadRequest(new { error = "scope must be queue, history or review." });
+        if (scope is not ("queue" or "history" or "review" or "failed"))
+            return Results.BadRequest(new { error = "scope must be queue, history, review or failed." });
         return Results.Ok(await jobs.ListForUserAsync(userId, fullWorthSpaceId, scope, limit ?? 30, offset ?? 0, ct));
     }
 

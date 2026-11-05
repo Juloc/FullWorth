@@ -26,7 +26,15 @@
     nicht geschaetzt. Bis dahin laedt die Seite ein paar Regeln zu viel und sieht dafuer richtig aus.
 *@
 @inject FullWorth.Web.Navigation.PageHeadings Headings
-@{ var view = ViewData["ActiveView"] as string; }
+@inject FullWorth.Web.Navigation.LocaleText Text
+@{
+    var view = ViewData["ActiveView"] as string;
+    // Eine Seite kann statt Ueberschrift und Unterzeile einen Brotkrumenpfad mit Suchfeld zeigen
+    // (ViewData["Header"] = "breadcrumb"). Der Titel bleibt die <h1> - als letztes Glied des Pfads.
+    var crumbs = ViewData["Header"] as string == "breadcrumb";
+    var crumbGroup = crumbs ? FullWorth.Web.Navigation.NavigationCatalog.Groups.FirstOrDefault(group => group.Items.Any(item => item.View == view)) : null;
+    var language = FullWorth.Web.Navigation.LocaleText.Language(Context);
+}
 <!doctype html>
 <html lang="de" data-theme="light">
 <head>
@@ -79,7 +87,25 @@
 <div class="shell">
     <partial name="_Navigation" />
     <main id="main" tabindex="-1">
-        <header class="topbar">
+        <header class="topbar@(crumbs ? " topbar--crumbs" : "")">
+            @if (crumbs)
+            {
+                <nav class="breadcrumb" aria-label="Breadcrumb">
+                    <ol>
+                        @if (crumbGroup is not null)
+                        {
+                            <li data-i18n="@crumbGroup.Label">@Text.Get(crumbGroup.Label, language)</li>
+                        }
+                        <li aria-current="page"><h1 id="page-title">@Headings.Title(view)</h1></li>
+                    </ol>
+                </nav>
+                <button id="global-search" class="topbar-search" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-search")"></use></svg>
+                    <span data-i18n="search.placeholder">@Text.Get("search.placeholder", language)</span>
+                </button>
+            }
+            else
+            {
             <div class="topbar-title">
                 @* Steht im Dokument, statt nachgetragen zu werden: eine Ueberschrift, die erst
                    nach dem ersten Zeichnen erscheint, schiebt alles darunter nach unten - und
@@ -87,10 +113,14 @@
                 <h1 id="page-title">@(ViewData["PageTitle"] as string ?? Headings.Title(view))</h1>
                 <p id="page-subtitle">@(ViewData["PageSubtitle"] as string ?? Headings.Subtitle(view))</p>
             </div>
+            }
             <div class="topbar-actions">
+                @if (!crumbs)
+                {
                 <button id="global-search" class="icon-button" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-search")"></use></svg>
                 </button>
+                }
                 <button id="privacy-toggle" class="icon-button" type="button" aria-pressed="false" data-i18n-title="privacy.toggle" title="Privatmodus umschalten" aria-label="Privacy">
                     <svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye")"></use></svg>
                     <svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-eye-off")"></use></svg>

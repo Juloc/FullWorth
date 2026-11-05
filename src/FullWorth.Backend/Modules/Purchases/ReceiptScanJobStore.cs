@@ -38,8 +38,8 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
 
     /// <summary>
     /// The jobs of one list: <c>queue</c> (waiting or being read, in the order the worker takes them),
-    /// <c>history</c> (finished or failed, newest first) or <c>review</c> (read, but the purchase is not
-    /// confirmed yet). Drafts are a user's unfinished scan sets and belong to no list.
+    /// <c>history</c> (finished, newest first), <c>review</c> (read, but the purchase is not confirmed
+    /// yet) or <c>failed</c>. Drafts are a user's unfinished scan sets and belong to no list.
     /// </summary>
     public Task<List<ReceiptScanJobView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, string scope, int limit, int offset, CancellationToken ct) =>
         db.Database.SqlQueryRaw<ReceiptScanJobView>(ViewSelect + """
@@ -47,7 +47,8 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
             WHERE j."UserId" = {0} AND j."FullWorthSpaceId" = {1}
               AND CASE {2}
                     WHEN 'queue' THEN j."Status" IN ('queued', 'processing')
-                    WHEN 'history' THEN j."Status" IN ('done', 'error')
+                    WHEN 'history' THEN j."Status" = 'done'
+                    WHEN 'failed' THEN j."Status" = 'error'
                     ELSE j."Status" = 'done' AND p."Status" <> 'confirmed'
                   END
             ORDER BY

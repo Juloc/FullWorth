@@ -285,8 +285,6 @@
     "history": "History",
     "review": "Needs review",
     "upload": "Upload receipt",
-    "queued": "Waiting",
-    "processing": "In progress",
     "failed": "Failed"
   },
   "purchases": {

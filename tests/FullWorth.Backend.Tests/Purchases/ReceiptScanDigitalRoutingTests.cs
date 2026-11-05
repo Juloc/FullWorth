@@ -80,6 +80,7 @@ public sealed class ReceiptScanDigitalRoutingTests
         Assert.Equal(1, run.Review);
         Assert.Equal(1, run.Counts.NeedsReview);
         Assert.Equal(0, run.Counts.Queued + run.Counts.Processing + run.Counts.Failed);
+        Assert.Equal(0, run.Failed);
         Assert.Equal(HttpStatusCode.BadRequest, run.UnknownScope);
     }
 
@@ -118,7 +119,7 @@ public sealed class ReceiptScanDigitalRoutingTests
 
     private sealed record Run(
         ReceiptScanJobView Job, decimal TotalAmount, string? Merchant, int ItemCount, string? RunProvider, string? RunProviderVersion,
-        int Queue, int History, int Review, ReceiptScanCounts Counts, HttpStatusCode UnknownScope);
+        int Queue, int History, int Review, int Failed, ReceiptScanCounts Counts, HttpStatusCode UnknownScope);
 
     private static async Task<Run> ProcessAsync(byte[] pdf)
     {
@@ -169,7 +170,7 @@ public sealed class ReceiptScanDigitalRoutingTests
             Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
             return JsonDocument.Parse(await listed.Content.ReadAsStringAsync()).RootElement.GetArrayLength();
         }
-        var (queue, history, review) = (await CountAsync("queue"), await CountAsync("history"), await CountAsync("review"));
+        var (queue, history, review, failed) = (await CountAsync("queue"), await CountAsync("history"), await CountAsync("review"), await CountAsync("failed"));
         using var countsRequest = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/counts?fullWorthSpaceId={spaceId:D}", userId);
         using var countsResponse = await client.SendAsync(countsRequest);
         var counts = JsonSerializer.Deserialize<ReceiptScanCounts>(await countsResponse.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
@@ -185,7 +186,7 @@ public sealed class ReceiptScanDigitalRoutingTests
                 .Where(x => db.PurchaseDocuments.Any(d => d.Id == x.PurchaseDocumentId && d.PurchaseId == job.PurchaseId))
                 .FirstOrDefaultAsync();
             result = new Run(job, purchase.TotalAmount, purchase.Merchant, itemCount, attempt?.Provider, attempt?.ProviderVersion,
-                queue, history, review, counts, unknownResponse.StatusCode);
+                queue, history, review, failed, counts, unknownResponse.StatusCode);
         });
         return result!;
     }

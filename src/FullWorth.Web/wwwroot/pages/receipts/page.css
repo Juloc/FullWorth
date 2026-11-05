@@ -1,15 +1,10 @@
-/* Belege: Zaehler oben, Warteschlange / Verlauf / Zu pruefen darunter. */
+/* Belege: Warteschlange, Verlauf, Zu pruefen und Fehlgeschlagen; die Zahlen stehen an den Reitern. */
 
-.receipts-head { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s4); }
-.receipts-head .btn { margin-left: auto; }
-
-.receipts-stats { display: flex; gap: var(--s3); flex-wrap: wrap; }
-.receipts-stat { display: flex; flex-direction: column; min-width: 96px; padding: var(--s3) var(--s4); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-md); }
-.receipts-stat-k { font-size: 12px; color: var(--muted); }
-.receipts-stat-v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.receipts-stat-v.is-pending { visibility: hidden; }
-.receipts-stat--review .receipts-stat-v { color: var(--warning); }
-.receipts-stat--failed .receipts-stat-v { color: var(--danger); }
+/* Die Zahlen sitzen an den Reitern; ohne Wert bleibt ihr Platz stehen, damit der Reiter nicht waechst. */
+.receipts-count { margin-left: var(--s1); font-variant-numeric: tabular-nums; }
+.receipts-count.is-pending { visibility: hidden; }
+[data-count="needsReview"] { color: var(--warning); }
+[data-count="failed"] { color: var(--danger); }
 
 /* Die Liste kennt ihre Hoehe erst nach dem Laden; der Platz steht vorher da. */
 .receipts-list { min-height: 320px; }
@@ -31,7 +26,11 @@
 .receipts-bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s ease; }
 
 @media (max-width: 640px) {
-  .receipts-head .btn { margin-left: 0; width: 100%; }
   .receipts-row { flex-wrap: wrap; }
   .receipts-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* Vier Reiter sind auf dem Telefon breiter als die Karte: sie laufen seitlich, statt umzubrechen. */
+#view-receipts .fw-cycle { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+#view-receipts .fw-cycle button { white-space: nowrap; }
+.receipts-actions a { text-decoration: none; }
