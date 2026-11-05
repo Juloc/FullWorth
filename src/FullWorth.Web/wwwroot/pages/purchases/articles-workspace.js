@@ -136,6 +136,8 @@ async function switchTab(tab) {
   host.querySelectorAll('[data-pa-tab]').forEach(button => button.classList.toggle('active', button.dataset.paTab === tab));
   const normal = tab === 'receipts';
   originalToolbar.hidden = !normal;
+  // Scannen, Importieren und Amazon gehoeren zum Reiter Belege - die Leiste zeigt sie nur dort.
+  document.getElementById('action-bar').hidden = !normal;
   originalPanel.hidden = !normal;
   advancedPanel.hidden = normal;
   if (normal) {

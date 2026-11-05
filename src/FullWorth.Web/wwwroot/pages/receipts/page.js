@@ -307,7 +307,7 @@ function readerTag(job) {
   if (!job.engine) return '';
   const version = job.readerVersion ? ` <span class="receipts-version">${ctx.esc(job.readerVersion)}</span>` : '';
   const reason = reasonLabel(job.reason);
-  return `<span class="receipts-tag receipts-tag--${ctx.esc(job.engine)}">${ctx.esc(readerLabel(job.engine))}</span>${version}${reason ? ` <span class="row-sub">${ctx.esc(reason)}</span>` : ''}`;
+  return `<span class="receipts-tag receipts-tag--${ctx.esc(job.engine)}">${ctx.esc(readerLabel(job.engine))}</span>${version}${reason ? ` <span class="receipts-reason">${ctx.esc(reason)}</span>` : ''}`;
 }
 
 function queueRow(job) {

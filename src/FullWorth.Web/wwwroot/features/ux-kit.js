@@ -74,7 +74,8 @@ function brandLogoPath(name) {
 const PRIMARY_ACTION_GLYPH = Object.freeze({
   add: 'ui-plus',
   edit: 'ui-edit',
-  upload: 'ui-upload'
+  upload: 'ui-upload',
+  scan: 'ui-camera'
 });
 
 /**

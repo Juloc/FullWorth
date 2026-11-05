@@ -3,6 +3,7 @@ import { createDialog } from '../../components/dialog.js';
 import { showToast } from '../../components/toast.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { ButtonRole, buttonClass, applyButtonRole } from '../../components/buttons.js';
+import { spriteHref } from '../../components/sprite.js';
 import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 // Bulk receipt archive importer. It deliberately stays separate from the multi-photo scan-set UI:
 // one bulk-selected physical file is one receipt, while the normal scan flow may combine several
@@ -20,15 +21,16 @@ let paperlessPresets = [];
 let activePaperlessPresetId = null;
 
 export function ensureReceiptImportsLauncher() {
-  const scan = document.getElementById('scan-receipt');
-  if (!scan || document.getElementById('receipt-imports-launch')) return;
+  const extra = document.getElementById('action-bar-extra');
+  if (!extra || document.getElementById('receipt-imports-launch')) return;
   const button = document.createElement('button');
   button.id = 'receipt-imports-launch';
   button.type = 'button';
   applyButtonRole(button, ButtonRole.Secondary);
-  button.textContent = t('Belege importieren', 'Import receipts');
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-upload')}"></use></svg><span class="action-label">${esc(t('Belege importieren', 'Import receipts'))}</span>`;
+  button.setAttribute('aria-label', t('Belege importieren', 'Import receipts'));
   button.addEventListener('click', openDialog);
-  scan.insertAdjacentElement('afterend', button);
+  extra.prepend(button);
 }
 
 async function openDialog() {

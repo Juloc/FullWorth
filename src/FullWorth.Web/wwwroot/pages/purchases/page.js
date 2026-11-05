@@ -3,6 +3,7 @@ import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { confirmDialog } from '../../components/confirm.js';
+import { spriteHref } from '../../components/sprite.js';
 // Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
 import { attachCombobox } from '../../components/combobox.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
@@ -17,9 +18,20 @@ export function bindPurchases(context) {
   ctx = context;
   initializePurchaseEnhancements(ctx);
   ctx.$('#purchase-source').addEventListener('change', () => renderPurchases(ctx));
-  ctx.$('#scan-receipt').addEventListener('click', () => ctx.$('#receipt-file').click());
   ctx.$('#receipt-file').addEventListener('change', scanReceipt);
-  ctx.$('#amazon-import').addEventListener('click', openAmazonConnection);
+  // Die weiteren Aktionen der Seite stehen in der Aktionsleiste; die Hauptaktion (Beleg scannen) meldet der Einstieg an.
+  const amazon = document.createElement('button');
+  amazon.id = 'amazon-import';
+  amazon.type = 'button';
+  amazon.className = buttonClass(ButtonRole.Secondary);
+  amazon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref('ui-cart')}"></use></svg><span class="action-label"></span>`;
+  amazon.addEventListener('click', openAmazonConnection);
+  document.getElementById('action-bar-extra').append(amazon);
+}
+
+// Der Knopf "Beleg scannen" sitzt in der Aktionsleiste; die Seite besitzt nur das Dateifeld dahinter.
+export function chooseReceipt(context) {
+  context.$('#receipt-file').click();
 }
 
 export async function renderPurchases(context) {
@@ -445,11 +457,14 @@ function renderReconcile(box, purchase, rec, dlg) {
 async function refreshAmazonButton() {
   const button = ctx?.$('#amazon-import');
   if (!button) return;
+  let label = t('Amazon verbinden', 'Connect Amazon');
   try {
     const status = await ctx.api('api/purchases/amazon/status');
-    button.textContent = status?.connected ? t('Amazon synchronisieren', 'Sync Amazon') : t('Amazon verbinden', 'Connect Amazon');
-    if (status?.status === 'requires_reauth') button.textContent = t('Amazon neu verbinden', 'Reconnect Amazon');
-  } catch { button.textContent = t('Amazon verbinden', 'Connect Amazon'); }
+    if (status?.connected) label = t('Amazon synchronisieren', 'Sync Amazon');
+    if (status?.status === 'requires_reauth') label = t('Amazon neu verbinden', 'Reconnect Amazon');
+  } catch { /* nicht erreichbar: es bleibt bei "verbinden" */ }
+  button.querySelector('.action-label').textContent = label;
+  button.setAttribute('aria-label', label);
 }
 
 async function openAmazonConnection() {

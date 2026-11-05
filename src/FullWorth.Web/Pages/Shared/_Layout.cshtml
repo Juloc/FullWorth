@@ -107,11 +107,12 @@
         @RenderBody()
     </main>
 </div>
-@* Die schwebende Aktionsleiste: die Hauptaktion der Seite und ihre Auswahl-Aktionen.
+@* Die schwebende Aktionsleiste: die Hauptaktion der Seite, weitere Aktionen der Seite (action-bar-extra) und ihre Auswahl-Aktionen.
    Sie liegt ueber der Seite (fixed) und schiebt deshalb nichts. Die Hauptaktion steht VERSTECKT im
    Markup und nicht weggelassen: die Seite meldet sie beim Start an. *@
 <div id="action-bar" class="action-bar" role="toolbar" aria-label="Aktionen">
     <div id="action-bar-selection" class="action-bar-selection"></div>
+    <div id="action-bar-extra" class="action-bar-extra"></div>
     <button id="primary-action" class="btn btn-primary" type="button" hidden><span class="btn-primary-label"></span></button>
 </div>
 <partial name="_BottomNavigation" />
