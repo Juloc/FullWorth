@@ -19,38 +19,60 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueS
             """, ct);
     }
 
-    public Task<List<ReceiptScanJobView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, bool includeCompleted, int limit, CancellationToken ct)
-    {
-        limit = Math.Clamp(limit, 1, 100);
-        var terminalCutoff = DateTimeOffset.UtcNow.AddDays(-7);
-        return db.Database.SqlQuery<ReceiptScanJobView>($"""
-            SELECT j."Id", j."FullWorthSpaceId", j."UserId", j."PurchaseId", j."FileName", j."ContentType",
-                   j."Status", j."Stage", j."Engine", j."ReaderVersion", j."Reason", j."Error", j."WarningsJson", j."Attempts",
-                   (SELECT COUNT(*)::integer FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id") AS "SourceCount",
-                   j."CreatedAt", j."StartedAt", j."CompletedAt", j."UpdatedAt", p."Merchant", p."TotalAmount", p."Currency"
+    // One select for every read of a job, so a column added to the view is added once. The queue
+    // position counts the queued jobs ahead of this one across all spaces - the worker is global FIFO.
+    private const string ViewSelect = """
+        SELECT j."Id", j."FullWorthSpaceId", j."UserId", j."PurchaseId", j."FileName", j."ContentType",
+               j."Status", j."Stage", j."Engine", j."ReaderVersion", j."Reason", j."Error", j."WarningsJson", j."Attempts",
+               (SELECT COUNT(*)::integer FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id") AS "SourceCount",
+               CASE WHEN j."Status" = 'queued' THEN
+                    (SELECT COUNT(*)::integer + 1 FROM "ReceiptScanJobs" q
+                     WHERE q."Status" = 'queued' AND (q."CreatedAt", q."Id") < (j."CreatedAt", j."Id"))
+               END AS "QueuePosition",
+               j."CreatedAt", j."StartedAt", j."CompletedAt", j."UpdatedAt",
+               p."Merchant", p."TotalAmount", p."Currency", p."PurchaseDate", p."Status" AS "PurchaseStatus",
+               (SELECT COUNT(*)::integer FROM "PurchaseItems" i WHERE i."PurchaseId" = p."Id") AS "ItemCount"
+        FROM "ReceiptScanJobs" j
+        JOIN "Purchases" p ON p."Id" = j."PurchaseId"
+        """;
+
+    /// <summary>
+    /// The jobs of one list: <c>queue</c> (waiting or being read, in the order the worker takes them),
+    /// <c>history</c> (finished or failed, newest first) or <c>review</c> (read, but the purchase is not
+    /// confirmed yet). Drafts are a user's unfinished scan sets and belong to no list.
+    /// </summary>
+    public Task<List<ReceiptScanJobView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, string scope, int limit, int offset, CancellationToken ct) =>
+        db.Database.SqlQueryRaw<ReceiptScanJobView>(ViewSelect + """
+
+            WHERE j."UserId" = {0} AND j."FullWorthSpaceId" = {1}
+              AND CASE {2}
+                    WHEN 'queue' THEN j."Status" IN ('queued', 'processing')
+                    WHEN 'history' THEN j."Status" IN ('done', 'error')
+                    ELSE j."Status" = 'done' AND p."Status" <> 'confirmed'
+                  END
+            ORDER BY
+              CASE WHEN {2} = 'queue' AND j."Status" = 'processing' THEN 0 ELSE 1 END,
+              CASE WHEN {2} = 'queue' THEN j."CreatedAt" END ASC,
+              COALESCE(j."CompletedAt", j."UpdatedAt") DESC
+            LIMIT {3} OFFSET {4}
+            """, userId, fullWorthSpaceId, scope, Math.Clamp(limit, 1, 100), Math.Max(0, offset)).ToListAsync(ct);
+
+    public Task<ReceiptScanCounts> CountsForUserAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
+        db.Database.SqlQuery<ReceiptScanCounts>($"""
+            SELECT COUNT(*) FILTER (WHERE j."Status" = 'queued')::integer AS "Queued",
+                   COUNT(*) FILTER (WHERE j."Status" = 'processing')::integer AS "Processing",
+                   COUNT(*) FILTER (WHERE j."Status" = 'error')::integer AS "Failed",
+                   COUNT(*) FILTER (WHERE j."Status" = 'done' AND p."Status" <> 'confirmed')::integer AS "NeedsReview"
             FROM "ReceiptScanJobs" j
             JOIN "Purchases" p ON p."Id" = j."PurchaseId"
-            WHERE j."UserId" = {userId}
-              AND j."FullWorthSpaceId" = {fullWorthSpaceId}
-              AND ({includeCompleted} OR j."Status" IN ('draft', 'queued', 'processing'))
-              AND (j."Status" IN ('draft', 'queued', 'processing') OR j."UpdatedAt" >= {terminalCutoff})
-            ORDER BY
-              CASE WHEN j."Status" IN ('processing', 'queued', 'draft') THEN 0 ELSE 1 END,
-              j."CreatedAt" DESC
-            LIMIT {limit}
-            """).ToListAsync(ct);
-    }
+            WHERE j."UserId" = {userId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
+            """).SingleAsync(ct);
 
     public Task<ReceiptScanJobView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid jobId, CancellationToken ct) =>
-        db.Database.SqlQuery<ReceiptScanJobView>($"""
-            SELECT j."Id", j."FullWorthSpaceId", j."UserId", j."PurchaseId", j."FileName", j."ContentType",
-                   j."Status", j."Stage", j."Engine", j."ReaderVersion", j."Reason", j."Error", j."WarningsJson", j."Attempts",
-                   (SELECT COUNT(*)::integer FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id") AS "SourceCount",
-                   j."CreatedAt", j."StartedAt", j."CompletedAt", j."UpdatedAt", p."Merchant", p."TotalAmount", p."Currency"
-            FROM "ReceiptScanJobs" j
-            JOIN "Purchases" p ON p."Id" = j."PurchaseId"
-            WHERE j."Id" = {jobId} AND j."UserId" = {userId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
-            """).SingleOrDefaultAsync(ct);
+        db.Database.SqlQueryRaw<ReceiptScanJobView>(ViewSelect + """
+
+            WHERE j."Id" = {0} AND j."UserId" = {1} AND j."FullWorthSpaceId" = {2}
+            """, jobId, userId, fullWorthSpaceId).SingleOrDefaultAsync(ct);
 
     public Task<List<ReceiptScanSourceRow>> ListSourcesAsync(Guid jobId, CancellationToken ct) =>
         db.Database.SqlQuery<ReceiptScanSourceRow>($"""

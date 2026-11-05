@@ -54,9 +54,22 @@ public sealed class ReceiptScanJobView
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    // Position among the queued jobs (1 = next); null once the job is no longer waiting.
+    public int? QueuePosition { get; set; }
     public string? Merchant { get; set; }
     public decimal? TotalAmount { get; set; }
     public string? Currency { get; set; }
+    public DateOnly? PurchaseDate { get; set; }
+    public string? PurchaseStatus { get; set; }
+    public int ItemCount { get; set; }
+}
+
+public sealed class ReceiptScanCounts
+{
+    public int Queued { get; set; }
+    public int Processing { get; set; }
+    public int Failed { get; set; }
+    public int NeedsReview { get; set; }
 }
 
 public sealed class ReceiptScanSourceRow

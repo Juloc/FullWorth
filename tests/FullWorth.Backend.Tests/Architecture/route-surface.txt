@@ -256,6 +256,7 @@ GET              /api/purchases/receipt-imports/folder/status
 GET              /api/purchases/receipt-imports/paperless/connection
 GET              /api/purchases/receipt-imports/paperless/options
 GET              /api/purchases/receipt-imports/paperless/presets
+GET              /api/purchases/receipt-scan/counts
 GET              /api/purchases/receipt-scan/jobs
 GET              /api/purchases/receipt-scan/jobs/{jobId:guid}
 GET              /api/purchases/receipt-scan/jobs/{jobId:guid}/sources

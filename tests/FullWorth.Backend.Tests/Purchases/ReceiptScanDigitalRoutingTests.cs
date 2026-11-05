@@ -70,6 +70,20 @@ public sealed class ReceiptScanDigitalRoutingTests
     }
 
     [Fact]
+    public async Task Finished_job_moves_from_the_queue_to_history_and_review_until_it_is_confirmed()
+    {
+        if (!PopplerAvailable()) return;
+        var run = await ProcessAsync(Pdf(PennyReceipt, scannedImage: false));
+
+        Assert.Equal(0, run.Queue);
+        Assert.Equal(1, run.History);
+        Assert.Equal(1, run.Review);
+        Assert.Equal(1, run.Counts.NeedsReview);
+        Assert.Equal(0, run.Counts.Queued + run.Counts.Processing + run.Counts.Failed);
+        Assert.Equal(HttpStatusCode.BadRequest, run.UnknownScope);
+    }
+
+    [Fact]
     public async Task Digital_pdf_whose_sums_do_not_add_up_goes_to_the_model_with_its_reason()
     {
         if (!PopplerAvailable()) return;
@@ -102,7 +116,9 @@ public sealed class ReceiptScanDigitalRoutingTests
         Assert.Equal("warnings", ReceiptAutoConfirmService.RefusalReason(good, ["Hinweis"]));
     }
 
-    private sealed record Run(ReceiptScanJobView Job, decimal TotalAmount, string? Merchant, int ItemCount, string? RunProvider, string? RunProviderVersion);
+    private sealed record Run(
+        ReceiptScanJobView Job, decimal TotalAmount, string? Merchant, int ItemCount, string? RunProvider, string? RunProviderVersion,
+        int Queue, int History, int Review, ReceiptScanCounts Counts, HttpStatusCode UnknownScope);
 
     private static async Task<Run> ProcessAsync(byte[] pdf)
     {
@@ -146,6 +162,20 @@ public sealed class ReceiptScanDigitalRoutingTests
         using var response = await client.SendAsync(read);
         var job = JsonSerializer.Deserialize<ReceiptScanJobView>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
+        async Task<int> CountAsync(string scope)
+        {
+            using var list = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/jobs?fullWorthSpaceId={spaceId:D}&scope={scope}", userId);
+            using var listed = await client.SendAsync(list);
+            Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+            return JsonDocument.Parse(await listed.Content.ReadAsStringAsync()).RootElement.GetArrayLength();
+        }
+        var (queue, history, review) = (await CountAsync("queue"), await CountAsync("history"), await CountAsync("review"));
+        using var countsRequest = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/counts?fullWorthSpaceId={spaceId:D}", userId);
+        using var countsResponse = await client.SendAsync(countsRequest);
+        var counts = JsonSerializer.Deserialize<ReceiptScanCounts>(await countsResponse.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        using var unknown = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/jobs?fullWorthSpaceId={spaceId:D}&scope=everything", userId);
+        using var unknownResponse = await client.SendAsync(unknown);
+
         Run? result = null;
         await factory.SeedAsync(async db =>
         {
@@ -154,7 +184,8 @@ public sealed class ReceiptScanDigitalRoutingTests
             var attempt = await db.PurchaseExtractionRuns.AsNoTracking().OrderByDescending(x => x.CreatedAt)
                 .Where(x => db.PurchaseDocuments.Any(d => d.Id == x.PurchaseDocumentId && d.PurchaseId == job.PurchaseId))
                 .FirstOrDefaultAsync();
-            result = new Run(job, purchase.TotalAmount, purchase.Merchant, itemCount, attempt?.Provider, attempt?.ProviderVersion);
+            result = new Run(job, purchase.TotalAmount, purchase.Merchant, itemCount, attempt?.Provider, attempt?.ProviderVersion,
+                queue, history, review, counts, unknownResponse.StatusCode);
         });
         return result!;
     }

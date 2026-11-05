@@ -9,6 +9,7 @@ public static class ReceiptScanQueueEndpoints
     {
         group.MapPost("/receipt-scan/jobs", EnqueueAsync);
         group.MapGet("/receipt-scan/jobs", ListAsync);
+        group.MapGet("/receipt-scan/counts", CountsAsync);
         group.MapGet("/receipt-scan/jobs/{jobId:guid}", GetAsync);
         group.MapGet("/receipt-scan/jobs/{jobId:guid}/sources", SourcesAsync);
         group.MapPost("/receipt-scan/jobs/{jobId:guid}/sources", AddSourcesAsync);
@@ -40,8 +41,9 @@ public static class ReceiptScanQueueEndpoints
 
     private static async Task<IResult> ListAsync(
         Guid fullWorthSpaceId,
-        bool? includeCompleted,
+        string? scope,
         int? limit,
+        int? offset,
         CurrentUserContext currentUser,
         PurchaseAuthorizationStore authorization,
         ReceiptScanJobStore jobs,
@@ -49,8 +51,21 @@ public static class ReceiptScanQueueEndpoints
     {
         var userId = currentUser.RequireUserId();
         if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var rows = await jobs.ListForUserAsync(userId, fullWorthSpaceId, includeCompleted ?? true, Math.Clamp(limit ?? 30, 1, 100), ct);
-        return Results.Ok(rows);
+        if (scope is not ("queue" or "history" or "review"))
+            return Results.BadRequest(new { error = "scope must be queue, history or review." });
+        return Results.Ok(await jobs.ListForUserAsync(userId, fullWorthSpaceId, scope, limit ?? 30, offset ?? 0, ct));
+    }
+
+    private static async Task<IResult> CountsAsync(
+        Guid fullWorthSpaceId,
+        CurrentUserContext currentUser,
+        PurchaseAuthorizationStore authorization,
+        ReceiptScanJobStore jobs,
+        CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        return Results.Ok(await jobs.CountsForUserAsync(userId, fullWorthSpaceId, ct));
     }
 
     private static async Task<IResult> GetAsync(
