@@ -6,14 +6,15 @@
 [data-count="needsReview"] { color: var(--warning); }
 [data-count="failed"] { color: var(--danger); }
 
-/* Vier Reiter sind auf dem Telefon breiter als die Karte: sie laufen seitlich, statt umzubrechen. */
-#view-receipts .fw-cycle { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+/* Die Reiter stehen ueber der Tabelle, auf dem Seitenhintergrund. Vier sind auf dem Telefon breiter als der
+   Bildschirm: sie laufen seitlich, statt umzubrechen. */
+#view-receipts .fw-cycle { max-width: 100%; margin-bottom: var(--s4); overflow-x: auto; scrollbar-width: none; }
 #view-receipts .fw-cycle button { white-space: nowrap; }
 
 /* Die Tabelle. Jeder Reiter hat seine Spalten (--cols); Kopf und Zeilen teilen sich dasselbe Gitter.
    Die Kopfzeile klebt unter der Topbar, damit die Gesamt-Auswahl beim Scrollen erreichbar bleibt - dafuer
    darf die Karte nichts abschneiden (overflow), sonst haette der Kopf nichts, woran er kleben koennte. */
-#view-receipts .panel { overflow: visible; }
+#view-receipts .panel { overflow: visible; container: receipts / inline-size; }
 .receipts-list { min-height: 320px; align-content: start; font-size: 14px; }
 .receipts-list[data-tab="queue"] { --cols: minmax(0, 1fr) minmax(220px, 300px) minmax(150px, 200px); }
 .receipts-list[data-tab="history"] { --cols: minmax(240px, 1fr) 100px 84px minmax(150px, 200px) 100px; }
@@ -50,8 +51,9 @@
 .receipts-sk-line { display: block; height: 14px; width: 60%; border-radius: var(--radius-sm); }
 .receipts-sk-line + .receipts-sk-line { width: 35%; }
 
-/* Am Telefon: Haken, Beleg, Betrag. Die uebrigen Spalten stehen in der Zeile unter dem Namen. */
-@media (max-width: 767px) {
+/* Ist die Karte schmal (Telefon, aber auch ein Tablet mit Seitenleiste): Haken, Beleg, Betrag. Die uebrigen
+   Spalten stehen in der Zeile unter dem Namen. Gemessen wird die Karte, nicht das Fenster. */
+@container receipts (max-width: 760px) {
   .receipts-list[data-tab="queue"] { --cols: minmax(0, 1fr); }
   .receipts-list[data-tab="history"] { --cols: minmax(0, 1fr) auto; }
   .receipts-list[data-tab="review"] { --cols: 20px minmax(0, 1fr) auto; }
@@ -62,3 +64,4 @@
   .receipts-meta { display: block; }
   .receipts-name { white-space: normal; }
 }
+.receipts-meta a { color: var(--text); font-weight: 600; text-decoration: none; }

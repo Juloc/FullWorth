@@ -13,17 +13,15 @@
 *@
 
 <section id="view-receipts">
-    <article class="panel">
-        <div class="panel-head">
-            <div class="fw-cycle" role="tablist">
-                <button type="button" role="tab" data-receipts-tab="queue"><span data-i18n="receipts.queue">@Text.Get("receipts.queue", language)</span> <span class="receipts-count is-pending" data-count="queue">0</span></button>
-                <button type="button" role="tab" data-receipts-tab="history" data-i18n="receipts.history">@Text.Get("receipts.history", language)</button>
-                <button type="button" role="tab" data-receipts-tab="review"><span data-i18n="receipts.review">@Text.Get("receipts.review", language)</span> <span class="receipts-count is-pending" data-count="needsReview">0</span></button>
-                <button type="button" role="tab" data-receipts-tab="failed"><span data-i18n="receipts.failed">@Text.Get("receipts.failed", language)</span> <span class="receipts-count is-pending" data-count="failed">0</span></button>
-            </div>
+        <div class="fw-cycle">
+            <button type="button" data-receipts-tab="queue"><span data-i18n="receipts.queue">@Text.Get("receipts.queue", language)</span> <span class="receipts-count is-pending" data-count="queue">0</span></button>
+            <button type="button" data-receipts-tab="history" data-i18n="receipts.history">@Text.Get("receipts.history", language)</button>
+            <button type="button" data-receipts-tab="review"><span data-i18n="receipts.review">@Text.Get("receipts.review", language)</span> <span class="receipts-count is-pending" data-count="needsReview">0</span></button>
+            <button type="button" data-receipts-tab="failed"><span data-i18n="receipts.failed">@Text.Get("receipts.failed", language)</span> <span class="receipts-count is-pending" data-count="failed">0</span></button>
         </div>
-        <div id="receipts-list" class="rows receipts-list" aria-live="polite"></div>
-        <div id="receipts-sentinel" aria-hidden="true"></div>
+    <article class="panel">
+        <div id="receipts-list" class="rows receipts-list"></div>
+        <div id="receipts-sentinel"></div>
     </article>
     <input id="receipts-file" type="file" accept="image/*,.pdf" multiple hidden>
 </section>

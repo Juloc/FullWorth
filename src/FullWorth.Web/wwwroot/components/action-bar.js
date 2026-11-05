@@ -25,9 +25,8 @@ function escapeHtml(value) {
 export function setPrimaryAction(label, onClick, kind = 'add') {
   const button = document.getElementById('primary-action');
   if (!button) return;
-  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref(GLYPH[kind] || GLYPH.add)}"></use></svg>`
+  button.innerHTML = `<svg viewBox="0 0 24 24"><use href="${spriteHref(GLYPH[kind] || GLYPH.add)}"></use></svg>`
     + `<span class="btn-primary-label">${escapeHtml(label)}</span>`;
-  button.setAttribute('aria-label', label);
   button.onclick = onClick;
   button.hidden = false;
 }

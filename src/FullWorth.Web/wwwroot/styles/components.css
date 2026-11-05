@@ -264,10 +264,10 @@ dialog.combobox-popover-host::backdrop{background:transparent}
    <label class="fw-check"><input type="checkbox"></label> - die Beschriftung steht daneben oder im aria-label.
    Dieselbe Darstellung haben die Haekchen der Formulare (label.check): ein Feld, nicht zwei. */
 .fw-check{display:inline-grid;place-items:center;flex:none;cursor:pointer}
-:is(.fw-check,label.check) input[type="checkbox"]{appearance:none;-webkit-appearance:none;display:grid;place-content:center;width:20px;height:20px;min-height:0;margin:0;padding:0;border:1.5px solid var(--muted);border-radius:var(--s1);background:var(--surface);cursor:pointer;transition:background-color .12s ease,border-color .12s ease}
-:is(.fw-check,label.check) input[type="checkbox"]::after{content:"";width:10px;height:6px;border:solid var(--cta-text);border-width:0 0 2px 2px;transform:translateY(-1px) rotate(-45deg) scale(0);transition:transform .12s ease}
-:is(.fw-check,label.check) input[type="checkbox"]:hover{border-color:var(--text)}
-:is(.fw-check,label.check) input[type="checkbox"]:checked{background:var(--cta);border-color:var(--cta)}
+:is(.fw-check,label.check) input[type="checkbox"]{appearance:none;-webkit-appearance:none;display:grid;place-content:center;width:20px;height:20px;min-height:0;margin:0;padding:0;border:1.5px solid var(--line);border-radius:var(--s1);background:var(--surface);cursor:pointer;transition:background-color .12s ease,border-color .12s ease}
+:is(.fw-check,label.check) input[type="checkbox"]::after{content:"";width:10px;height:6px;border:solid var(--surface);border-width:0 0 2px 2px;transform:translateY(-1px) rotate(-45deg) scale(0);transition:transform .12s ease}
+:is(.fw-check,label.check) input[type="checkbox"]:hover{border-color:var(--muted)}
+:is(.fw-check,label.check) input[type="checkbox"]:checked{background:var(--muted);border-color:var(--muted)}
 :is(.fw-check,label.check) input[type="checkbox"]:checked::after{transform:translateY(-1px) rotate(-45deg) scale(1)}
 @media (prefers-reduced-motion: reduce){:is(.fw-check,label.check) input[type="checkbox"],:is(.fw-check,label.check) input[type="checkbox"]::after{transition:none}}
 

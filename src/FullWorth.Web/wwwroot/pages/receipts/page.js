@@ -126,7 +126,7 @@ function showBar() {
   const key = open ? `${tab}:${selected.size}` : '';
   if (key === barKey) return;
   barKey = key;
-  const glyph = id => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref(id)}"></use></svg>`;
+  const glyph = id => `<svg viewBox="0 0 24 24"><use href="${spriteHref(id)}"></use></svg>`;
   const review = tab === 'review';
   document.getElementById('action-bar-selection').innerHTML = open
     ? `<span class="action-bar-count">${ctx.esc(t(`${selected.size} ausgewählt`, `${selected.size} selected`))}</span>
@@ -248,16 +248,15 @@ function heading(column) {
 
 function headRow() {
   const cells = COLUMNS[tab].map(column => column === 'select'
-    ? `<label class="fw-check"><input type="checkbox" data-select-all aria-label="${ctx.esc(t('Alle auswählen', 'Select all'))}"></label>`
+    ? `<label class="fw-check"><input type="checkbox" data-select-all></label>`
     : `<span class="receipts-th receipts-th--${column}">${ctx.esc(heading(column))}</span>`);
-  return `<div class="receipts-head" role="row">${cells.join('')}</div>`;
+  return `<div class="receipts-head">${cells.join('')}</div>`;
 }
 
 function draw() {
   for (const button of ctx.$('#view-receipts').querySelectorAll('[data-receipts-tab]')) {
     const active = button.dataset.receiptsTab === tab;
     button.classList.toggle('active', active);
-    button.setAttribute('aria-selected', String(active));
   }
   // Solange die erste Seite noch aussteht, stehen Platzhalter da: so hoch wie die Zeilen, die kommen.
   const first = loading && !rows.length;
@@ -277,7 +276,7 @@ function draw() {
 }
 
 function skeleton(count) {
-  return Array.from({ length: count }, () => '<div class="receipts-row receipts-skeleton" aria-hidden="true"><span class="receipts-sk-line shimmer"></span><span class="receipts-sk-line short shimmer"></span></div>').join('');
+  return Array.from({ length: count }, () => '<div class="receipts-row receipts-skeleton"><span class="receipts-sk-line shimmer"></span><span class="receipts-sk-line short shimmer"></span></div>').join('');
 }
 
 function emptyText() {
@@ -331,14 +330,14 @@ function readerTag(job) {
 // was die ausgeblendeten Spalten sagen, steht dort in der Zeile unter dem Namen (.receipts-meta).
 function dataRow(job) {
   const cells = COLUMNS[tab].map(column => cell(column, job)).join('');
-  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}${job.status === 'processing' ? ' is-active' : ''}" role="row">${cells}</div>`;
+  return `<div class="receipts-row${selected.has(job.id) ? ' is-selected' : ''}${job.status === 'processing' ? ' is-active' : ''}">${cells}</div>`;
 }
 
 function cell(column, job) {
   switch (column) {
     case 'select': return checkbox(job);
     case 'file': return fileCell(job);
-    case 'state': return `<span class="receipts-cell">${stateCell(job)}</span>`;
+    case 'state': return `<span class="receipts-cell receipts-cell--state">${stateCell(job)}</span>`;
     case 'date': return `<span class="receipts-cell receipts-cell--date">${ctx.esc(job.purchaseDate ? ctx.date(job.purchaseDate) : '–')}</span>`;
     case 'items': return `<span class="receipts-cell receipts-cell--items">${job.itemCount}</span>`;
     case 'reader': return `<span class="receipts-cell receipts-cell--reader">${readerTag(job) || '–'}</span>`;
@@ -359,7 +358,7 @@ function fileCell(job) {
         ? `<span class="receipts-sub">${ctx.esc(reasonLabel(job.reason))}</span>`
         : '';
   const progress = job.status === 'processing'
-    ? `<span class="receipts-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${STAGE_PROGRESS[job.stage] ?? 8}"><span style="width:${STAGE_PROGRESS[job.stage] ?? 8}%"></span></span>`
+    ? `<span class="receipts-bar"><span style="width:${STAGE_PROGRESS[job.stage] ?? 8}%"></span></span>`
     : '';
   const meta = tab === 'queue'
     ? stateCell(job)
@@ -379,7 +378,7 @@ function stateCell(job) {
 }
 
 function checkbox(job) {
-  return `<label class="fw-check"><input type="checkbox" data-select-item value="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''} aria-label="${ctx.esc(t('Auswählen', 'Select'))}"></label>`;
+  return `<label class="fw-check"><input type="checkbox" data-select-item value="${ctx.esc(job.id)}"${selected.has(job.id) ? ' checked' : ''}></label>`;
 }
 
 function parseWarnings(json) {
