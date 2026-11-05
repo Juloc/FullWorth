@@ -54,6 +54,16 @@ public sealed class ReceiptImportOptions
     public int PaperlessPageSize { get; set; } = 100;
     public int PaperlessTimeoutSeconds { get; set; } = 60;
     public int PaperlessAutoImportIntervalMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// Ob ein Beleg, den die KI ohne Einschraenkung gelesen hat, ohne Handarbeit als bestaetigt gilt.
+    ///
+    /// Aus. Bestaetigte Belege fliessen in die Auswertungen ein, und eine Instanz, die das nicht
+    /// ausdruecklich will, bekommt es nicht. Wer es einschaltet (<c>ReceiptImports__AutoConfirm</c>),
+    /// bekommt es nur fuer Belege, bei denen ReceiptAutoConfirmService nichts einzuwenden hat - und
+    /// ConfirmAsync, das dieselbe Pruefung wie die Bestaetigung per Hand anwendet.
+    /// </summary>
+    public bool AutoConfirm { get; set; }
     public string? InboxPath { get; set; }
     public bool FolderEnabled { get; set; }
     public bool FolderRecursive { get; set; } = true;

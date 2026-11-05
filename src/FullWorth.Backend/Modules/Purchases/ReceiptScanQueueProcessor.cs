@@ -21,7 +21,8 @@ public sealed class ReceiptScanQueueProcessor(
     ReceiptExtractionService extraction,
     PurchaseCaptureService capture,
     IOptions<PurchaseStorageOptions> storageOptions,
-    ILogger<ReceiptScanQueueProcessor> logger)
+    ILogger<ReceiptScanQueueProcessor> logger,
+    ReceiptAutoConfirmService? autoConfirm = null)
 {
     private readonly PurchaseStorageOptions storage = storageOptions.Value;
 
@@ -67,6 +68,11 @@ public sealed class ReceiptScanQueueProcessor(
                 await RecordSetExtractionRunsAsync(documentIds, "codex", "completed", JsonSerializer.Serialize(gpt.Result), null, ct);
                 await SetDocumentStatusesAsync(documentIds, "review", ct);
                 await jobs.CompleteAsync(job.Id, "gpt", ct);
+                // Erst NACH dem Abschluss: der Scan ist dann fertig, und was die Bestaetigung auch tut -
+                // ein Beleg, der ihr nicht genuegt, bleibt einfach auf "zu pruefen". Nur die KI-Fassung,
+                // nie die der lokalen Erkennung: sie sagt nicht, wann sie unsicher ist.
+                if (autoConfirm is not null)
+                    await autoConfirm.TryConfirmAsync(job, gpt.Result, prepared.Warnings, ct);
                 return;
             }
 

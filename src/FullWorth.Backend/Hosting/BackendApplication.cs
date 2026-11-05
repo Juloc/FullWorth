@@ -375,6 +375,7 @@ public static class BackendApplication
         builder.Services.AddSingleton<IReceiptExtractor, NullReceiptExtractor>();
         builder.Services.AddSingleton<IReceiptExtractor, TesseractReceiptExtractor>();
         builder.Services.AddScoped<ReceiptExtractionService>();
+        builder.Services.AddScoped<ReceiptAutoConfirmService>();
         builder.Services.AddScoped<ReceiptScanQueueProcessor>();
         if (builder.Configuration.GetValue("ReceiptScanQueue:Enabled", true))
             builder.Services.AddHostedService<ReceiptScanQueueWorker>();

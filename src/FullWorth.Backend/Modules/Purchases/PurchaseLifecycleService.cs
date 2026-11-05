@@ -249,6 +249,30 @@ public sealed class PurchaseLifecycleService(FullWorthDbContext db)
         return (PurchaseMutationResult.Success, new { purchase = Dto(purchase), reconciliation = rec, allocationResult }, null);
     }
 
+    /// <summary>Der Vermerk am Beleg, damit ein automatisch bestaetigter Beleg als solcher erkennbar bleibt.</summary>
+    public const string AutoConfirmedNote = "Automatisch bestätigt: KI ohne Warnung, Positionen ergeben die Belegsumme.";
+
+    /// <summary>
+    /// Bestaetigt einen Beleg ohne Zutun - mit genau der Pruefung, die auch das Bestaetigen per Hand
+    /// anwendet (<see cref="ConfirmAsync"/>): Positionen gegen Summe, Zwischensumme, Rabatt, Pfand und
+    /// Rundung. Besteht eine davon nicht, bleibt der Beleg auf "zu pruefen" und es wird nichts
+    /// veraendert.
+    ///
+    /// Ohne <c>CreateSafeAllocations</c>: das hier fasst keine Bankbuchung an. Der Beleg wird bestaetigt,
+    /// nicht mit einer Buchung verrechnet.
+    /// </summary>
+    public async Task<bool> TryAutoConfirmAsync(Guid userId, Guid fullWorthSpaceId, Guid id, CancellationToken ct)
+    {
+        var (result, _, _) = await ConfirmAsync(userId, fullWorthSpaceId, id,
+            new ConfirmPurchaseRequest(CreateSafeAllocations: false, AllowUnlinked: true), ct);
+        if (result != PurchaseMutationResult.Success) return false;
+
+        var purchase = await db.Purchases.SingleAsync(x => x.Id == id, ct);
+        purchase.Notes = string.IsNullOrWhiteSpace(purchase.Notes) ? AutoConfirmedNote : $"{purchase.Notes}\n{AutoConfirmedNote}";
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<PurchaseMutationResult> SetBookmarkAsync(Guid userId, Guid fullWorthSpaceId, Guid id, bool value, CancellationToken ct)
     {
         var purchase = await Writable(userId, fullWorthSpaceId).SingleOrDefaultAsync(x => x.Id == id, ct);
