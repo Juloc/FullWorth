@@ -379,6 +379,55 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
             """, ct);
     }
 
+    /// <summary>
+    /// Die Dateien eines Kaufs in der Reihenfolge des Scan-Sets (also so, wie der Benutzer sie sortiert
+    /// hat), je Datei einmal - ein mehrseitiges PDF steht dort pro Seite, gehoert aber zu einer Datei.
+    /// </summary>
+    public Task<List<PurchaseSourceFile>> ListPurchaseSourceFilesAsync(Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct) =>
+        db.Database.SqlQuery<PurchaseSourceFile>($"""
+            SELECT s."StoragePath", s."MimeType", s."OriginalFileName"
+            FROM "ReceiptScanSources" s
+            JOIN "ReceiptScanJobs" j ON j."Id" = s."ReceiptScanJobId"
+            WHERE j."PurchaseId" = {purchaseId} AND j."FullWorthSpaceId" = {fullWorthSpaceId}
+            GROUP BY s."StoragePath", s."MimeType", s."OriginalFileName"
+            ORDER BY MIN(s."SortOrder")
+            """).ToListAsync(ct);
+
+    public async Task<PaperlessUploadRow?> GetPaperlessUploadAsync(Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct) =>
+        (await db.Database.SqlQuery<PaperlessUploadRow>($"""
+            SELECT "PurchaseId", "Checksum", "TaskId", "UploadedAt"
+            FROM "PaperlessUploads"
+            WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "PurchaseId" = {purchaseId}
+            LIMIT 1
+            """).ToListAsync(ct)).FirstOrDefault();
+
+    /// <summary>Schreibt die Ablage auf. False, wenn dieser Kauf oder dieselbe Datei schon eingetragen ist.</summary>
+    public async Task<bool> AddPaperlessUploadAsync(
+        Guid fullWorthSpaceId, Guid purchaseId, Guid userId, string checksum, string? taskId, CancellationToken ct) =>
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "PaperlessUploads" ("Id", "FullWorthSpaceId", "PurchaseId", "Checksum", "TaskId", "UploadedByUserId", "UploadedAt")
+            VALUES ({Guid.NewGuid()}, {fullWorthSpaceId}, {purchaseId}, {checksum}, {CapNullable(taskId, 64)}, {userId}, {DateTimeOffset.UtcNow})
+            ON CONFLICT DO NOTHING
+            """, ct) == 1;
+
+    public Task<int> RemovePaperlessUploadAsync(Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "PaperlessUploads" WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "PurchaseId" = {purchaseId}
+            """, ct);
+
+    /// <summary>Welche dieser Paperless-Pruefsummen gehoeren zu Dokumenten, die FullWorth selbst abgelegt hat.</summary>
+    public async Task<HashSet<string>> GetOwnPaperlessChecksumsAsync(
+        Guid fullWorthSpaceId, IReadOnlyCollection<string> checksums, CancellationToken ct)
+    {
+        if (checksums.Count == 0) return [];
+        var wanted = checksums.Select(x => x.ToLowerInvariant()).Distinct().ToArray();
+        var rows = await db.Database.SqlQuery<string>($"""
+            SELECT "Checksum" AS "Value" FROM "PaperlessUploads"
+            WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "Checksum" = ANY ({wanted})
+            """).ToListAsync(ct);
+        return rows.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<HashSet<int>> GetImportedPaperlessDocumentIdsAsync(
         Guid fullWorthSpaceId,
         string sourcePrefix,

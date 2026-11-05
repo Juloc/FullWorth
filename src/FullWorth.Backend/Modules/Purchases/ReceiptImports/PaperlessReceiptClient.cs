@@ -123,6 +123,50 @@ public sealed class PaperlessReceiptClient(
         return new PaperlessDocumentDownload(documentId, fileName, contentType, buffer);
     }
 
+    /// <summary>Die Nummer des Korrespondenten, der genau so heisst (ohne Beachtung der Gross-/Kleinschreibung); null, wenn es keinen gibt.</summary>
+    public async Task<int?> FindCorrespondentIdAsync(string baseUrl, string token, string name, CancellationToken ct)
+    {
+        var found = await ReadNamedOptionsAsync(baseUrl, token, $"api/correspondents/?page_size=100&name__iexact={Uri.EscapeDataString(name)}", ct);
+        return found.Count == 0 ? null : found[0].Id;
+    }
+
+    /// <summary>
+    /// Legt ein Dokument in Paperless ab. Nur ein Versuch: ein erneutes Senden einer Datei, die Paperless
+    /// vielleicht schon angenommen hat, wuerde sie doppelt anlegen - die Wiederholung bei 429/503, die
+    /// <see cref="SendAsync"/> fuer Lesezugriffe macht, gilt hier ausdruecklich nicht.
+    /// </summary>
+    public async Task<PaperlessUploadOutcome> UploadAsync(string baseUrl, string token, PaperlessUploadRequest upload, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(upload.Content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(upload.ContentType);
+        form.Add(file, "document", upload.FileName);
+        form.Add(new StringContent(upload.Title), "title");
+        if (upload.Created is { } created) form.Add(new StringContent(created.ToString("yyyy-MM-dd")), "created");
+        if (upload.CorrespondentId is { } correspondent) form.Add(new StringContent(correspondent.ToString()), "correspondent");
+
+        using var request = CreateRequest(HttpMethod.Post, baseUrl, token, "api/documents/post_document/");
+        request.Content = form;
+        var client = httpClientFactory.CreateClient("PaperlessReceipts");
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.PaperlessTimeoutSeconds, 5, 300));
+        var gate = GateFor(request.RequestUri!);
+        await gate.WaitAsync(ct);
+        try
+        {
+            using var response = await client.SendAsync(request, ct);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+                return new(false, null, "Der Paperless-Zugang darf keine Dokumente ablegen. Gib dem Token das Recht, Dokumente hinzuzufuegen.");
+            if (!response.IsSuccessStatusCode)
+                return new(false, null, $"Paperless hat die Ablage mit HTTP {(int)response.StatusCode} abgelehnt.");
+            var body = (await response.Content.ReadAsStringAsync(ct)).Trim();
+            return new(true, body.Trim('"'), null);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     /// <summary>
     /// Wie viele Anfragen gleichzeitig zu EINER Paperless-Instanz unterwegs sein duerfen (#127).
     ///
@@ -337,9 +381,10 @@ public sealed class PaperlessReceiptClient(
         // mit Offset 0 und wirft sonst - der Import endete mit einem 500 und einem leeren Batch.
         DateTimeOffset? modified = document.TryGetProperty("modified", out var modifiedNode)
             && DateTimeOffset.TryParse(modifiedNode.GetString(), out var parsedModified) ? parsedModified.ToUniversalTime() : null;
+        var checksum = document.TryGetProperty("checksum", out var checksumNode) ? checksumNode.GetString() : null;
         return new PaperlessDocumentSummary(
             id, title, created, documentType, correspondent, tags, originalFileName,
-            Imported: false, MimeType: mimeType, Content: content, Modified: modified);
+            Imported: false, MimeType: mimeType, Content: content, Modified: modified, Checksum: checksum);
     }
 
     private static int? ReadNullableInt(JsonElement element, string property)

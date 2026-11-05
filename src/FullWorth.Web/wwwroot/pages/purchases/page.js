@@ -3,6 +3,7 @@ import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { confirmDialog } from '../../components/confirm.js';
+import { addReceiptScanCameraShots } from './receipt-scan-set.js';
 // Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
 import { attachCombobox } from '../../components/combobox.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
@@ -19,6 +20,7 @@ export function bindPurchases(context) {
   ctx.$('#purchase-source').addEventListener('change', () => renderPurchases(ctx));
   ctx.$('#scan-receipt').addEventListener('click', () => ctx.$('#receipt-file').click());
   ctx.$('#receipt-file').addEventListener('change', scanReceipt);
+  ctx.$('#scan-camera').addEventListener('click', scanWithCamera);
   ctx.$('#amazon-import').addEventListener('click', openAmazonConnection);
 }
 
@@ -155,6 +157,18 @@ async function scanReceipt() {
   finally { input.value = ''; }
 }
 
+async function scanWithCamera() {
+  try {
+    const result = await addReceiptScanCameraShots(ctx);
+    if (!result) return;
+    await renderPurchases(ctx);
+    ctx.toast(ctx.get('purchases.scanned'));
+    await openDetail(result.id);
+  } catch (err) {
+    ctx.toast(err.message || ctx.get('common.error'));
+  }
+}
+
 async function openDetail(id) {
   let purchase, options, categories, reconciliation, amazon = null;
   try {
@@ -178,7 +192,7 @@ async function openDetail(id) {
   const dlg = ctx.dialog(`<form class="dialog-card purchase-detail">
     <div class="panel-head"><h2>${ctx.esc(purchase.merchant || ctx.get('purchases.title'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <div class="row-sub">${ctx.esc(ctx.date(purchase.purchaseDate))} · ${ctx.money(purchase.totalAmount, purchase.currency)}${purchase.externalOrderId ? ` · ${ctx.esc(purchase.externalOrderId)}` : ''}</div>
-    ${purchase.hasReceipt ? `<div class="reconcile-link"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-view-receipt>${ctx.esc(ctx.get('purchases.viewReceipt'))}</button></div>` : ''}
+    ${purchase.hasReceipt ? `<div class="reconcile-link"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-view-receipt>${ctx.esc(ctx.get('purchases.viewReceipt'))}</button> <button type="button" class="${buttonClass(ButtonRole.Secondary, 'paperless-upload')}" data-paperless-upload>${t('In Paperless ablegen', 'Store in Paperless')}</button></div>` : ''}
     <div class="reconcile" data-reconcile></div>
     ${amazonBlock}
     <h3 class="notif-h">${ctx.esc(ctx.get('purchases.lineItems'))}</h3>
@@ -195,6 +209,7 @@ async function openDetail(id) {
   renderReconcile(dlg.querySelector('[data-reconcile]'), purchase, reconciliation, dlg);
   if (amazon) bindAmazonDetails(dlg, purchase, amazon);
   loadPriceHistory(dlg, purchase).catch(() => {});
+  if (purchase.hasReceipt) bindPaperlessUpload(dlg, purchase.id).catch(() => {});
 
   dlg.querySelector('[data-view-receipt]')?.addEventListener('click', () => window.open(ctx.bffUrl(`api/purchases/${id}/receipt`), '_blank', 'noopener'));
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
@@ -241,6 +256,40 @@ async function openDetail(id) {
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
   dlg.showModal();
+}
+
+// Der Knopf steht von Anfang an im Dialog, nur unsichtbar: ob Paperless verbunden ist und der Beleg
+// abgelegt werden kann, kommt erst mit einer Antwort, und die darf nichts verschieben.
+// Abgelegt wird nie von selbst - der Beleg verlaesst FullWorth erst nach der Bestaetigung hier.
+async function bindPaperlessUpload(dlg, purchaseId) {
+  const button = dlg.querySelector('[data-paperless-upload]');
+  const path = `api/purchases/receipt-imports/paperless/uploads/${purchaseId}`;
+  const status = await ctx.api(path);
+  if (!button?.isConnected || !status?.paperlessConfigured) return;
+  if (status.uploadedAt) {
+    button.textContent = t('In Paperless abgelegt', 'Stored in Paperless');
+    button.disabled = true;
+    button.classList.add('is-ready');
+    return;
+  }
+  if (!status.canUpload) return;
+  button.classList.add('is-ready');
+  button.addEventListener('click', async () => {
+    const confirmed = await confirmDialog(ctx,
+      t('Der Beleg wird als ein PDF an deine Paperless-Instanz gesendet - mit Händler, Datum und Betrag im Titel. Das lässt sich in FullWorth nicht zurücknehmen.',
+        'The receipt is sent to your Paperless instance as one PDF, with merchant, date and amount in the title. FullWorth cannot undo this.'),
+      { title: t('In Paperless ablegen', 'Store in Paperless'), confirmLabel: t('Ablegen', 'Store') });
+    if (!confirmed) return;
+    button.disabled = true;
+    try {
+      await ctx.api(path, { method: 'POST' });
+      button.textContent = t('In Paperless abgelegt', 'Stored in Paperless');
+      ctx.toast(t('Beleg in Paperless abgelegt.', 'Receipt stored in Paperless.'));
+    } catch (err) {
+      button.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
+  });
 }
 
 async function loadPriceHistory(dlg, purchase) {

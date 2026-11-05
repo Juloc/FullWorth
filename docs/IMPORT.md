@@ -527,6 +527,33 @@ Note that `ReceiptExtraction:Provider` defaults to `none`, whose extractor extra
 shipped default an imported receipt is stored and queued but arrives in review empty; set the provider
 to `tesseract` to get local OCR.
 
+## Receipt camera and storing receipts in Paperless
+
+**Camera.** On the purchases page "Mit Kamera" opens the browser camera (`getUserMedia`, so it needs
+HTTPS). The page finds the receipt in the live image (the largest bright area, reduced to a
+quadrilateral), shows it, and takes the photo by itself once the image is still and sharp. The photo is
+straightened by perspective before it is stored. A long receipt is photographed section by section: the
+bottom of the last photo is shown faintly over the live image so the next one overlaps. The photos go
+into the normal scan set (review, reorder, "analyze as one receipt"); the camera knows neither the
+server nor the purchase. The detection assumes a receipt lighter than its surface and has no manual
+corner adjustment; the shutter button is always available. The thresholds were tuned on synthetic
+images, not on a phone.
+
+**Paperless.** A purchase with a receipt file can be stored in Paperless from its detail dialog, after
+an explicit confirmation - nothing is ever sent automatically. Photos become **one** PDF (the JPEG
+bytes are embedded unchanged, 300 dpi page size, so Paperless OCRs the real pixels); a single uploaded
+PDF is sent as it is. Other mixes (PNG, HEIC, several PDFs) are refused with a reason. A photo that is
+upright only through its Exif rotation is refused as well, because a PDF has no such flag. Title is
+"merchant date amount", the created date is the purchase date, and the correspondent is set when
+Paperless already has one with exactly that name (none is created). The API token needs the right to
+add documents; a read-only token gives a clear message instead of an error.
+
+**Not imported back.** `PaperlessUploads` records the MD5 of what was sent - Paperless keeps the same
+value as the checksum of the original. Paperless assigns the document number only after processing, so
+this is the only way to recognise its own document later: preview marks it as imported, manual import
+skips it as a duplicate, and the automatic import filters it out. The record is written before the
+upload and removed again if the upload fails, so a second click cannot store the file twice.
+
 ## Amazon order sync
 
 `/api/purchases/amazon` (`AmazonIntegrationEndpoints.cs`, `AmazonOrderSyncService.cs`):

@@ -16,15 +16,20 @@ internal static class PurchaseStorageFiles
     /// </summary>
     public static void Delete(PurchaseStorageOptions storage, IEnumerable<string?> storedPaths)
     {
-        var root = Path.GetFullPath(storage.RootPath);
-        var prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
         foreach (var stored in storedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.Ordinal))
         {
-            var absolute = ResolveSafePath(root, prefix, stored!);
-            if (absolute is null)
-                throw new InvalidOperationException("Stored receipt path escaped the configured purchase root.");
+            var absolute = Resolve(storage, stored!);
             if (File.Exists(absolute)) File.Delete(absolute);
         }
+    }
+
+    /// <summary>Der absolute Pfad einer gespeicherten Belegdatei; wirft, wenn er aus dem Belegverzeichnis herausfuehrt.</summary>
+    public static string Resolve(PurchaseStorageOptions storage, string storedPath)
+    {
+        var root = Path.GetFullPath(storage.RootPath);
+        var prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return ResolveSafePath(root, prefix, storedPath)
+            ?? throw new InvalidOperationException("Stored receipt path escaped the configured purchase root.");
     }
 
     private static string? ResolveSafePath(string root, string prefix, string storedPath)

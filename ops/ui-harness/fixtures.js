@@ -487,6 +487,16 @@
     // saved preset. Shapes follow PaperlessConnectionView / PaperlessFilterOptionsView /
     // PaperlessImportPresetView. Without these the Paperless step stayed at "connect" and everything
     // below it - the whole filter builder - was unreachable in the harness.
+    // Ein gescannter Beleg mit Datei: nur mit ihm zeigt der Dialog "Beleg ansehen" und den Paperless-Knopf.
+    'purchases': [
+      { id: '8a000000-0000-4000-8000-000000000001', source: 'receipt', merchant: 'REWE', purchaseDate: iso('2026-11-03'),
+        totalAmount: 5.37, currency: 'EUR', status: 'review', hasReceipt: true, transactionId: null,
+        items: [
+          { id: '8a000000-0000-4000-8000-0000000000a1', name: 'Bio Vollmilch 3,8%', quantity: 2, totalPrice: 2.58, currency: 'EUR' },
+          { id: '8a000000-0000-4000-8000-0000000000a2', name: 'Bananen', quantity: 0.75, totalPrice: 2.79, currency: 'EUR' }
+        ] }
+    ],
+    'purchases/receipt-imports/paperless/uploads': { paperlessConfigured: true, canUpload: true, reason: null, uploadedAt: null },
     'purchases/receipt-imports/paperless/connection': {
       fullWorthSpaceId: SPACE, baseUrl: 'https://paperless.example.local/', configured: true,
       defaultQuery: null, isEnabled: true, lastSyncAt: '2026-09-11T08:40:00Z', updatedAt: '2026-09-05T19:22:00Z'

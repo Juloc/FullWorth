@@ -1,5 +1,6 @@
 import { createDialog } from '../../components/dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { openReceiptCamera } from './receipt-camera.js';
 // FullWorth receipt scan-set builder.
 //
 // One logical receipt may contain several independently captured photos or one/more PDFs. Files are
@@ -30,6 +31,13 @@ export function addReceiptScanFiles(ctx, files) {
   }
   renderDraft(activeDraft);
   return activeDraft.promise;
+}
+
+/** Fotos mit der Kamera machen und dem Scan-Set hinzufuegen - der Weg ueber "Mit Kamera" auf der Seite wie im Dialog. */
+export async function addReceiptScanCameraShots(ctx) {
+  const taken = activeDraft && !activeDraft.finished ? activeDraft.files.length : 0;
+  const files = await openReceiptCamera({ limit: MAX_FILES - taken, toast: ctx.toast });
+  return files.length ? addReceiptScanFiles(ctx, files) : null;
 }
 
 function createDraft(ctx) {
@@ -116,6 +124,7 @@ function renderDraft(draft) {
     ${sources}
     <div class="receipt-set-add-row">
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-camera>${t('+ Mit Kamera', '+ With camera')}</button>
       ${counter}
     </div>
     <div class="dialog-actions receipt-set-actions">
@@ -131,6 +140,7 @@ function renderDraft(draft) {
     input.multiple = true;
     input.click();
   });
+  dialog.querySelector('[data-camera]')?.addEventListener('click', () => { void addReceiptScanCameraShots(draft.ctx); });
   dialog.querySelector('[data-start]')?.addEventListener('click', () => submitDraft(draft));
   dialog.querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
     draft.files.splice(Number(button.dataset.remove), 1);

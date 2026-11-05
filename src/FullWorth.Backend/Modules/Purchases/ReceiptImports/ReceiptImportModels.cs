@@ -242,7 +242,10 @@ public sealed record PaperlessDocumentSummary(
     bool Imported = false,
     string? MimeType = null,
     string? Content = null,
-    DateTimeOffset? Modified = null);
+    DateTimeOffset? Modified = null,
+    // MD5 der Originaldatei, so wie Paperless sie fuehrt. Daran erkennt FullWorth ein Dokument wieder,
+    // das es selbst abgelegt hat (siehe PaperlessUploads), und holt es nicht ein zweites Mal als Kauf.
+    string? Checksum = null);
 
 public sealed record PaperlessPreviewResult(
     int Count,
@@ -264,3 +267,39 @@ public sealed record FolderPreviewResult(
     long TotalBytes,
     IReadOnlyList<string> Files,
     bool Truncated);
+
+/// <summary>Was an Paperless geht: die Datei und die Angaben, die FullWorth aus der Analyse kennt.</summary>
+public sealed record PaperlessUploadRequest(
+    byte[] Content,
+    string FileName,
+    string ContentType,
+    string Title,
+    DateOnly? Created,
+    int? CorrespondentId);
+
+/// <summary>Antwort von Paperless auf eine Ablage: die Nummer des Verarbeitungsauftrags, oder warum es nicht ging.</summary>
+public sealed record PaperlessUploadOutcome(bool Success, string? TaskId, string? Error);
+
+/// <summary>Ein Beleg, der nach Paperless abgelegt wurde.</summary>
+public sealed class PaperlessUploadRow
+{
+    public Guid PurchaseId { get; set; }
+    public string Checksum { get; set; } = string.Empty;
+    public string? TaskId { get; set; }
+    public DateTimeOffset UploadedAt { get; set; }
+}
+
+/// <summary>Ob und wie sich ein Kauf nach Paperless ablegen laesst - fuer den Knopf im Beleg.</summary>
+public sealed record PaperlessUploadStatus(
+    bool PaperlessConfigured,
+    bool CanUpload,
+    string? Reason,
+    DateTimeOffset? UploadedAt);
+
+/// <summary>Eine Datei eines Belegs in der Reihenfolge, in der sie zusammengehoeren.</summary>
+public sealed class PurchaseSourceFile
+{
+    public string StoragePath { get; set; } = string.Empty;
+    public string MimeType { get; set; } = string.Empty;
+    public string OriginalFileName { get; set; } = string.Empty;
+}
