@@ -875,7 +875,9 @@ function buildRowBlock(items) {
   let lastDate = txLastDay;
   for (const x of items) {
     const day = String(transactionDate(x) || '').slice(0, 10);
-    if (day !== lastDate) {
+    // Eine Zeile ganz ohne Datum steht dort, wo der Server sie einsortiert hat (Tag der ersten
+    // Beobachtung): sie gehoert zur Gruppe davor, nicht in eine eigene mit "—" mitten in der Liste.
+    if (day && day !== lastDate) {
       lastDate = day;
       fragment.appendChild(groupHeaderRow(dateHeading(day), day));
     }

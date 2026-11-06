@@ -125,6 +125,16 @@ public sealed class TransactionForecastTests
     }
 
     /// <summary>
+    /// Eine Zeile ohne Buchungs- und Valutadatum sortiert der Server nach dem Tag der ersten Beobachtung
+    /// ein. Sie darf deshalb keinen eigenen Kopf "—" mitten zwischen zwei Tagen aufmachen.
+    /// </summary>
+    [Fact]
+    public void A_row_without_a_date_does_not_open_a_group_of_its_own()
+    {
+        Assert.Contains("if (day && day !== lastDate) {", PageJs());
+    }
+
+    /// <summary>
     /// "Heute" ist in der Zeitleiste nicht der Listenanfang - dort steht die fernste Zukunft. Heute ist
     /// die Grenze: der erste Tag, der nicht in der Zukunft liegt.
     /// </summary>
