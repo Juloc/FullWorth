@@ -1,7 +1,7 @@
 import { createDialog } from '../../components/dialog.js';
 import { ButtonRole, applyButtonRole, buttonClass } from '../../components/buttons.js';
 import { toGray, sharpness, motion, findReceipt, outputSize, stripCorners, warp } from './receipt-vision.js';
-import { alignPair, splitIntoPages, stitchStrips } from './receipt-stitch.js';
+import { splitIntoPages, stitchStrips, verticalShift } from './receipt-stitch.js';
 
 // Die Belegkamera: Livebild, Randerkennung, automatische Aufnahme - und ein Modus fuer lange Bons.
 //
@@ -46,17 +46,22 @@ const GHOST_SHARE = 0.18;
 
 // Langer Bon
 const LIVE_WIDTH = 240;
-const CAPTURE_OVERLAP = 0.6;
-const TOO_FAST_OVERLAP = 0.32;
+// Wie viel vom Bild neu sein soll, bevor das naechste Stueck aufgenommen wird. Gemessen wird die Fahrt der
+// Kamera am Bon entlang von Livebild zu Livebild (receipt-stitch.js, verticalShift) - nicht die Naht zum
+// letzten Stueck: die liegt gleich nach einer Aufnahme ausserhalb dessen, was eine Suche zuverlaessig
+// findet, und auf echten Fotos mit Rauschen blieb sie unsicher, so dass nie ein zweites Stueck kam.
+const CAPTURE_TRAVEL = 0.45;
+const TOO_FAST_TRAVEL = 0.68;
+// Von Livebild zu Livebild gemessen, in einem Fenster um den letzten Schritt (siehe verticalShift): so
+// bleibt die Messung bei der richtigen Textzeile, auch wenn die Zeile darunter fast genauso aussieht.
+const STEP_WINDOW = 0.12;
+const STEP_MAX = 0.35;
+const STEP_BACK = 0.08;
+const SHIFT_SCORE = 0.6;
 const LOST_TICKS = 8;
+const END_TICKS = 8;
 const MIN_STRIP_WIDTH = 480;
 const MAX_STRIP_WIDTH = 1400;
-// Eine Naht im Livebild gilt nur bei klarer Uebereinstimmung und nur, wenn sie zur Bewegung davor passt:
-// direkt nach einer Aufnahme liegt die wahre Ueberlappung ausserhalb dessen, was die Suche findet, und die
-// beste Stelle ist dann Zufall - mit einer lockeren Grenze loeste sie eine Kette falscher Aufnahmen aus.
-const LIVE_SCORE = 0.8;
-const LIVE_MARGIN = 0.15;
-const LIVE_JUMP = 0.25;
 
 /** Oeffnet die Kamera; liefert die aufgenommenen Fotos (leer, wenn abgebrochen wurde oder keine Kamera da ist). */
 export function openReceiptCamera({ limit = 20, toast } = {}) {
@@ -91,10 +96,12 @@ function run({ limit, toast, resolve }) {
   let recording = false;
   let stitched = false;
   let stripWidth = 0;
-  let lastLive = null;
+  let previousLive = null;  // das Livebild davor: von dort aus wird die Fahrt am Bon entlang gemessen
+  let travel = 0;           // Zeilen, die die Kamera seit dem letzten Stueck gefahren ist
+  let step = 0;             // der letzte Schritt von Bild zu Bild
   let lostTicks = 0;
+  let endTicks = 0;
   let stripPeak = 0;
-  let lastOverlap = 1;
 
   const dialog = createDialog(`<div class="dialog-card receipt-camera">
     <div class="panel-head"><h2>${t('Beleg fotografieren', 'Photograph a receipt')}</h2></div>
@@ -234,8 +241,9 @@ function run({ limit, toast, resolve }) {
     current = found;
     if (!armed && (moved >= STEADY_MOTION || shift > REARM_SHIFT)) { armed = true; waiting = 0; }
 
-    // Die Geduld wird nur gezaehlt, solange eine Einzelaufnahme moeglich waere (scharf gestellt, Beleg erkannt). Beim langen Bon bleiben die Grenzen, wie sie sind: dort entscheidet "ruhig" ueber die Schaerfe jedes Stuecks.
-    if (armed && mode === 'single') waiting++;
+    // Die Geduld wird gezaehlt, solange eine Aufnahme moeglich waere (scharf gestellt, Beleg erkannt) - beim
+    // langen Bon seit dem letzten Stueck.
+    if (armed) waiting++;
     const patience = Math.min(waiting / PATIENCE_FRAMES, 1);
     const loosen = 1 + PATIENCE_LOOSENING * patience;
     steady = moved < STEADY_MOTION * loosen && shift < STEADY_SHIFT * loosen ? steady + 1 : 0;
@@ -245,7 +253,12 @@ function run({ limit, toast, resolve }) {
     const ready = steady >= STEADY_FRAMES && sharpEnough;
     draw(found.corners, ready);
 
-    if (mode === 'strip') { if (recording) stripStep(found, rgba, width, height, sharp, ready); else say(searchingHint()); return; }
+    if (mode === 'strip') {
+      if (recording) stripStep(found, rgba, width, height, sharp, ready, patience);
+      // Nach einer Pause oder dem Zusammensetzen steht dort, was geschehen ist - nicht wieder die Anleitung
+      else if (!strips.length && !stitched) say(searchingHint());
+      return;
+    }
 
     if (shots.length >= limit) say(t(`Mehr als ${limit} Fotos gehen nicht in einen Beleg.`, `A receipt takes at most ${limit} photos.`));
     else if (!armed) say(t('Aufgenommen - für den nächsten Abschnitt das Handy weiterbewegen.', 'Captured - move the phone on for the next section.'));
@@ -293,56 +306,73 @@ function run({ limit, toast, resolve }) {
     recording = !recording;
     shutter.classList.toggle('is-recording', recording);
     shutter.setAttribute('aria-label', recording ? t('Aufnahme beenden', 'Stop recording') : t('Aufnahme starten', 'Start recording'));
-    if (recording) { lostTicks = 0; stripPeak = 0; say(t('Läuft: ruhig halten, dann langsam nach unten fahren.', 'Recording: hold still, then move slowly down.')); }
+    if (recording) { lostTicks = 0; endTicks = 0; stripPeak = 0; say(t('Läuft: ruhig halten, dann langsam nach unten fahren.', 'Recording: hold still, then move slowly down.')); }
     else say(strips.length ? t('Angehalten. „Fertig" setzt die Stücke zusammen.', 'Paused. "Done" joins the parts.') : searchingHint());
   }
 
   /** Ein Schritt der Aufnahme: das Livebild mit dem letzten Stueck vergleichen und entscheiden, ob ein neues faellig ist. */
-  function stripStep(found, rgba, width, height, sharp, ready) {
+  function stripStep(found, rgba, width, height, sharp, ready, patience) {
     if (strips.length >= limit) { say(t(`Mehr als ${limit} Stücke gehen nicht in einen Beleg.`, `A receipt takes at most ${limit} parts.`)); return; }
     const live = liveStrip(rgba, width, height, found);
     stripPeak = Math.max(stripPeak * 0.985, sharp);
 
     if (!strips.length) {
       say(ready ? t('Los: langsam nach unten fahren.', 'Go: move slowly down.') : t('Ruhig halten …', 'Hold still …'));
-      if (ready) void captureStrip(found, live);
+      // Passt der ganze Bon ins Bild, ist das erste Stueck zugleich das letzte
+      if (ready) void captureStrip(found, live, !found.continuesDown);
       return;
     }
     const lastStrip = strips[strips.length - 1];
     if (!lastStrip.continuesDown) { say(t('Das Ende des Bons ist aufgenommen - „Fertig" tippen.', 'The end of the receipt is captured - tap "Done".')); return; }
 
-    // Das Handy steht still: beide Livebilder zeigen dasselbe Stueck, die Suche nach einer Naht waere sinnlos
-    if (unchanged(lastLive, live)) { lostTicks = 0; say(t('Weiter nach unten fahren …', 'Keep moving down …')); return; }
+    // Nach dem Entfernen eines Stuecks fehlt das Vergleichsbild: von hier aus neu messen
+    const before = previousLive;
+    if (!before) { previousLive = live; travel = 0; step = 0; say(t('Weiter nach unten fahren …', 'Keep moving down …')); return; }
 
-    const seam = alignPair(lastLive, live);
-    const overlap = seam.overlap / live.height;
-    const trusted = seam.score >= LIVE_SCORE && seam.margin >= LIVE_MARGIN && Math.abs(overlap - lastOverlap) <= LIVE_JUMP;
-    if (!trusted) {
-      // Dicht am letzten Stueck findet die Suche keine Naht (fast alles ist gleich): einfach weiterfahren
-      if (lastOverlap > 0.7) { say(t('Weiter nach unten fahren …', 'Keep moving down …')); return; }
-      // Sonst hat der Bon dort keine Schrift (leere Stelle) oder ist zu weit weg: nach einer Weile trotzdem aufnehmen
+    // Das untere Ende des Bons ist im Bild: das letzte Stueck aufnehmen, sobald es sich etwa eine Sekunde lang
+    // hält (ein einzelnes Bild ohne erkannte Unterkante ist oft nur ein Ausreisser der Randerkennung).
+    endTicks = found.continuesDown ? Math.max(0, endTicks - 2) : endTicks + 1;
+    if (endTicks >= END_TICKS) { endTicks = 0; void captureStrip(found, live, true); return; }
+
+    // Zwei Livebilder, deren Hoehe sich stark unterscheidet, zeigen nicht dieselbe Stelle: die Randerkennung hat
+    // sich verschaetzt. Das ist keine Messung - und die Hoehe des Vorbilds bleibt der Massstab fuer die Fahrt.
+    const h = before.height;
+    if (Math.abs(live.height - h) > 0.15 * h) {
+      if (++lostTicks > LOST_TICKS) { lostTicks = 0; void captureStrip(found, live); }
+      return;
+    }
+    const measured = verticalShift(before, live, Math.max(-STEP_BACK * h, step - STEP_WINDOW * h), Math.min(STEP_MAX * h, step + STEP_WINDOW * h));
+    if (measured.score < SHIFT_SCORE) {
+      // Leere Stelle ohne Schrift, oder zu schnell gefahren: nach einer Weile trotzdem aufnehmen
       if (++lostTicks > LOST_TICKS) { lostTicks = 0; void captureStrip(found, live); }
       else say(t('Stelle nicht erkannt - weiter oder ein Stück zurück.', 'Spot not recognised - go on or back a little.'));
       return;
     }
     lostTicks = 0;
-    lastOverlap = overlap;
-    // Das untere Ende des Bons ist im Bild: das letzte Stueck gleich aufnehmen, auch wenn noch nicht die Haelfte neu ist
-    if (!found.continuesDown && overlap < 0.9) { void captureStrip(found, live); return; }
-    if (overlap > CAPTURE_OVERLAP) { say(t('Weiter nach unten fahren …', 'Keep moving down …')); return; }
-    if (overlap < TOO_FAST_OVERLAP) {
+    previousLive = live;
+    step = measured.shift;
+    travel += step;
+    const share = travel / h;
+
+    if (share < CAPTURE_TRAVEL) { say(t('Weiter nach unten fahren …', 'Keep moving down …')); return; }
+    if (share > TOO_FAST_TRAVEL) {
       say(t('Zu schnell - ein Stück zurück, sonst reißt die Naht.', 'Too fast - go back a little or the seam will break.'));
       void captureStrip(found, live);
       return;
     }
-    // Jetzt ist die Haelfte neu: aufnehmen, sobald das Bild so scharf ist wie zuletzt
-    if (sharp >= stripPeak * 0.75) void captureStrip(found, live);
+    // Jetzt ist fast die Haelfte neu: aufnehmen, sobald das Bild so scharf ist wie zuletzt - aber nicht
+    // beliebig lange warten, sonst fehlt die Ueberlappung fuer die Naht
+    if (sharp >= stripPeak * (0.75 - 0.3 * patience) || share > TOO_FAST_TRAVEL - 0.08) void captureStrip(found, live);
     else say(t('Jetzt - kurz ruhiger …', 'Now - steadier for a moment …'));
   }
 
-  async function captureStrip(found, live) {
+  // `last`: das Ende des Bons ist erreicht. Das entscheidet nicht das einzelne Bild, in dem aufgenommen wird -
+  // dort fehlt die Unterkante manchmal nur, weil die Randerkennung einmal danebenlag, und eine Aufnahme gilt
+  // dann als letzte und beendet die ganze Fahrt -, sondern der Zaehler in stripStep.
+  async function captureStrip(found, live, last = false) {
     if (capturing || finished) return;
     capturing = true;
+    waiting = 0;
     try {
       const { context, width, height } = grabFrame();
       const quad = found.corners.map(p => ({ x: p.x * width, y: p.y * height }));
@@ -354,15 +384,17 @@ function run({ limit, toast, resolve }) {
       if (!stripWidth) stripWidth = Math.round(Math.min(MAX_STRIP_WIDTH, Math.max(MIN_STRIP_WIDTH, widthPx)));
       const stripHeight = Math.max(8, Math.round(heightPx * stripWidth / widthPx));
       const pixels = warp(context.getImageData(0, 0, width, height).data, width, height, rect, stripWidth, stripHeight);
-      strips.push({ rgba: pixels, width: stripWidth, height: stripHeight, continuesDown: found.continuesDown });
-      lastLive = live;
-      lastOverlap = 1;
+      strips.push({ rgba: pixels, width: stripWidth, height: stripHeight, continuesDown: !last });
+      previousLive = live;
+      travel = 0;
+      step = 0;
+      endTicks = 0;
       stripPeak = 0;
       const canvas = canvasOf(pixels, stripWidth, stripHeight);
       await addShot(canvas);
-      showGhost(found.continuesDown ? canvas : null);
+      showGhost(last ? null : canvas);
       flash();
-      say(found.continuesDown ? t('Aufgenommen - weiter nach unten.', 'Captured - keep going down.') : t('Das Ende des Bons ist aufgenommen - „Fertig" tippen.', 'The end of the receipt is captured - tap "Done".'));
+      say(!last ? t('Aufgenommen - weiter nach unten.', 'Captured - keep going down.') : t('Das Ende des Bons ist aufgenommen - „Fertig" tippen.', 'The end of the receipt is captured - tap "Done".'));
     } catch (error) {
       toast?.(error.message || t('Aufnahme fehlgeschlagen.', 'Capture failed.'));
     } finally {
@@ -453,7 +485,7 @@ function run({ limit, toast, resolve }) {
         URL.revokeObjectURL(shot.url);
         shots.splice(shots.indexOf(shot), 1);
         // Ein Stueck, das fehlt, laesst sich nicht mehr zusammensetzen: dann zaehlt, was uebrig ist
-        if (mode === 'strip' && !stitched) { strips.splice(index, 1); lastLive = null; }
+        if (mode === 'strip' && !stitched) { strips.splice(index, 1); previousLive = null; travel = 0; }
         if (!shots.length) { ghost.hidden = true; stitched = false; stripWidth = 0; strips.length = 0; }
         renderShots();
       });
@@ -503,15 +535,6 @@ function liveStrip(rgba, width, height, found) {
   const heightPx = (Math.hypot(bl.x - tl.x, bl.y - tl.y) + Math.hypot(br.x - tr.x, br.y - tr.y)) / 2;
   const liveHeight = Math.max(8, Math.round(heightPx * LIVE_WIDTH / widthPx));
   return { rgba: warp(rgba, width, height, rect, LIVE_WIDTH, liveHeight), width: LIVE_WIDTH, height: liveHeight };
-}
-
-/** Ob zwei Livebilder dasselbe zeigen (nahezu dieselbe Groesse, kaum Abweichung): das Handy hat sich nicht bewegt. */
-function unchanged(a, b) {
-  if (Math.abs(a.height - b.height) > 3 || a.width !== b.width) return false;
-  const rows = Math.min(a.height, b.height);
-  let sum = 0, n = 0;
-  for (let i = 0; i < rows * a.width * 4; i += 16) { sum += Math.abs(a.rgba[i] - b.rgba[i]); n++; }
-  return sum / n < 6;
 }
 
 function canvasOf(rgba, width, height) {

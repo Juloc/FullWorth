@@ -116,6 +116,65 @@ function crop(rgba, width, from, to) {
   return { rgba: rgba.slice(from * width * 4, to * width * 4), width, height: to - from };
 }
 
+/**
+ * Um wie viele Zeilen hat sich der Inhalt zwischen zwei Livebildern desselben Bons nach oben geschoben?
+ * Positiv: die Kamera ist nach unten gefahren, negativ: ein Stueck zurueck.
+ *
+ * Das ist die Frage der Kamera beim Fahren am Bon entlang, und sie ist eine andere als die der Naht:
+ * `alignPair` sucht, wo der obere Rand des neuen Stuecks im alten liegt, mindestens ein Viertel entfernt.
+ * Zwei Livebilder kurz hintereinander liegen weit naeher beieinander und werden hier gemessen - in einem
+ * Fenster `from..to` um die Verschiebung, die schon galt. Das Fenster ist der Punkt: Schrift auf einem Bon
+ * wiederholt sich Zeile fuer Zeile, und wer ueber den ganzen Bereich sucht, findet bei etwas Rauschen oft
+ * die uebernaechste Zeile statt der richtigen.
+ *
+ * Ergebnis: { shift, score } mit der Verschiebung in Zeilen und der Korrelation (-1..1) an dieser Stelle.
+ * Eine leere Flaeche (kein Text) hat keine Streuung; dann ist `score` -1.
+ */
+export function verticalShift(ref, cur, from, to) {
+  const a = columnsOf(ref), b = columnsOf(cur);
+  const rows = Math.min(a.height, b.height);
+  let best = { shift: 0, score: -1 };
+  for (let d = Math.ceil(from); d <= to && rows - Math.abs(d) >= rows * 0.4; d++) {
+    const score = shiftCorrelation(a, b, d, rows - Math.abs(d));
+    if (score > best.score) best = { shift: d, score };
+  }
+  return best;
+}
+
+/** Graubild, nur in der Breite verkleinert: die senkrechte Aufloesung ist hier der Messwert. */
+function columnsOf(strip) {
+  const step = Math.max(1, Math.floor(strip.width / 60));
+  const w = Math.floor(strip.width / step);
+  const g = new Float32Array(w * strip.height);
+  for (let y = 0; y < strip.height; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let dx = 0; dx < step; dx++) {
+        const i = (y * strip.width + x * step + dx) * 4;
+        sum += strip.rgba[i] * 0.299 + strip.rgba[i + 1] * 0.587 + strip.rgba[i + 2] * 0.114;
+      }
+      g[y * w + x] = sum / step;
+    }
+  }
+  return { g, width: w, height: strip.height };
+}
+
+/** Normierte Kreuzkorrelation der Zeilen d.. von a mit den Zeilen 0.. von b (jede zweite Zeile); bei d < 0 umgekehrt. */
+function shiftCorrelation(a, b, d, rows) {
+  let sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, n = 0;
+  const startA = Math.max(d, 0), startB = Math.max(-d, 0);
+  for (let y = 0; y < rows; y += 2) {
+    const ra = (y + startA) * a.width, rb = (y + startB) * b.width;
+    for (let x = 0; x < a.width; x++) {
+      const va = a.g[ra + x], vb = b.g[rb + x];
+      sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb; n++;
+    }
+  }
+  const varA = saa - sa * sa / n, varB = sbb - sb * sb / n;
+  if (varA < n * 4 || varB < n * 4) return -1;
+  return (sab - sa * sb / n) / Math.sqrt(varA * varB);
+}
+
 /** Wo liegt der obere Rand von `lower` in `upper`? Ergebnis: Ueberlappung in Zeilen, Korrelation, Abstand zur zweitbesten Stelle. */
 export function alignPair(upper, lower) {
   const a = reduced(upper), b = reduced(lower);

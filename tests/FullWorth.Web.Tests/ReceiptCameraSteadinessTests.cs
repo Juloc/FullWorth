@@ -32,8 +32,35 @@ public sealed class ReceiptCameraSteadinessTests : IClassFixture<FullWorthWebFac
         Assert.Contains("const patience = Math.min(waiting / PATIENCE_FRAMES, 1);", js);
         Assert.Contains("STEADY_MOTION * loosen", js);
         Assert.Contains("STEADY_SHIFT * loosen", js);
-        // Beim langen Bon entscheidet "ruhig" ueber die Schaerfe jedes Stuecks - dort wird nichts gelockert.
-        Assert.Contains("if (armed && mode === 'single') waiting++;", js);
+        Assert.Contains("if (armed) waiting++;", js);
+    }
+
+    /// <summary>
+    /// Der lange Bon nahm nach dem ersten Stueck nichts mehr auf. Er hat die Naht zum LETZTEN STUECK gesucht,
+    /// die gleich nach einer Aufnahme ausserhalb dessen liegt, was eine Suche zuverlaessig findet, und auf
+    /// verrauschten Bildern unsicher blieb (nachgestellt: eine Naehgenauigkeit von 0,56 bei Ruhe, nie ein
+    /// zweites Stueck). Jetzt wird die Fahrt von Livebild zu Livebild gemessen, in einem Fenster um den letzten
+    /// Schritt - und das Ende des Bons entscheidet ein Zaehler, nicht das einzelne Aufnahmebild.
+    /// </summary>
+    [Fact]
+    public void The_long_receipt_measures_the_travel_between_live_images()
+    {
+        var js = CameraJs();
+
+        Assert.Contains("import { splitIntoPages, stitchStrips, verticalShift } from './receipt-stitch.js';", js);
+        Assert.Contains("const measured = verticalShift(before, live,", js);
+        Assert.DoesNotContain("alignPair", js);
+    }
+
+    [Fact]
+    public void One_frame_without_a_bottom_edge_does_not_end_the_long_receipt()
+    {
+        var js = CameraJs();
+
+        // Das Ende gilt erst nach einer Weile (Zaehler), und nur der Zaehler macht ein Stueck zum letzten.
+        Assert.Contains("endTicks >= END_TICKS", js);
+        Assert.Contains("captureStrip(found, live, true)", js);
+        Assert.Contains("continuesDown: !last", js);
     }
 
     private string CameraJs()
