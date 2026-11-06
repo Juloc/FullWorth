@@ -9,16 +9,15 @@ namespace FullWorth.Backend.Modules.Transactions;
 /// gueltiger Vergleichswert. <c>&lt; 'nonsense'</c> trifft jede Zeile, deren Schluessel mit einer
 /// Ziffer beginnt, also alle. Die Anfrage saehe erfolgreich aus und begaenne irgendwo.
 ///
-/// Der Schluessel hat eine feste Form: 1 Zeichen "vorgemerkt?", 8 Stellen Tagesnummer, 20 Stellen
-/// Mikrosekunden, 32 Stellen Hex-Kennung.
+/// Der Schluessel hat eine feste Form: 8 Stellen Tagesnummer (Zahltag), 20 Stellen Mikrosekunden,
+/// 32 Stellen Hex-Kennung.
 /// </summary>
 public static class TransactionCursor
 {
-    private const int PendingLength = 1;
     private const int DateLength = 8;
     private const int TimestampLength = 20;
     private const int IdLength = 32;
-    private const int TotalLength = PendingLength + DateLength + TimestampLength + IdLength;
+    private const int TotalLength = DateLength + TimestampLength + IdLength;
 
     /// <summary>
     /// Der Cursor, oder null. Null heisst "von vorn" - sichtbar von vorn, statt still einen Teil der
@@ -30,8 +29,7 @@ public static class TransactionCursor
         var trimmed = value.Trim();
         if (trimmed.Length != TotalLength) return null;
 
-        if (trimmed[0] is not ('0' or '1')) return null;
-        for (var index = PendingLength; index < PendingLength + DateLength + TimestampLength; index++)
+        for (var index = 0; index < DateLength + TimestampLength; index++)
             if (!char.IsAsciiDigit(trimmed[index])) return null;
         for (var index = TotalLength - IdLength; index < TotalLength; index++)
             if (!char.IsAsciiHexDigitLower(trimmed[index]) && !char.IsAsciiDigit(trimmed[index])) return null;

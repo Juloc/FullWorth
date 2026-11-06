@@ -45,13 +45,21 @@
 
 .tx-ident.tx-logo-failed{background:var(--surface-2)}
 
-/* Sticky against the SCROLL CONTAINER, which above 1023px is .table-panel itself (overflow:auto),
-   not the page. top:var(--topbar-h) pinned the group header ~96px down INSIDE the panel, so it sat on
-   top of the first transaction of every group and hid it - even unscrolled. Under 1023px the panel is
-   overflow:visible and the page scrolls, so responsive.css puts the topbar offset back. */
+/* Die Seite scrollt, nicht das Panel: der Topbar steht oben fest, darunter die Tagesleiste, darunter der
+   Kopf der Tagesgruppe. Jeder klebt unter dem davor. Das Panel ist deshalb KEIN Scroll-Container -
+   ein ancestor mit overflow:auto waere der Bezug fuer position:sticky, scrollt aber nie, und dann klebte
+   nichts. (Frueher scrollte das Panel selbst; mit dem festen Topbar tut es das nicht mehr, und die
+   Leiste lag mit top:0 unsichtbar UNTER dem Topbar.) */
+#view-transactions{--tx-daybar-h:38px;--tx-head-h:30px}
+
+#view-transactions .table-panel{overflow:visible}
+
+/* Der Sprung auf "Heute" landet unter allem, was klebt - sonst steht die erste Zeile des Tages dahinter. */
+.tx-row{scroll-margin-top:calc(var(--topbar-h) + var(--tx-daybar-h) + var(--tx-head-h))}
+
 /* War 11px - wie schon bei .dash-group-head/.nw-window-label keine bewusste Stufe, sondern Drift.
    --text-caption ist die passende Fussnoten-Rolle fuer eine Gruppen-Kopfzeile (Scheibe 11 Teil 2). */
-.tx-date-head{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
+.tx-date-head{position:sticky;top:calc(var(--topbar-h) + var(--tx-daybar-h));z-index:1;display:flex;align-items:center;box-sizing:border-box;height:var(--tx-head-h);background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:0 14px}
 
 .tx-date-head>span{opacity:.85}
 
@@ -236,7 +244,7 @@
 
 /* Der Tagesstand steht unter dem Kopf und bleibt beim Scrollen stehen. Seine Hoehe ist fest, damit ein
    Wechsel von Datum und Betrag die Liste nicht verschiebt. */
-.tx-daybar{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);min-height:38px;padding:0 var(--s2);background:var(--surface);border-bottom:1px solid var(--line)}
+.tx-daybar{position:sticky;top:var(--topbar-h);z-index:2;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);height:var(--tx-daybar-h);padding:0 var(--s2);background:var(--surface);border-bottom:1px solid var(--line)}
 
 .tx-daybar-date{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 

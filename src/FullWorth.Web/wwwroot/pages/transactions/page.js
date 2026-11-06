@@ -282,9 +282,6 @@ let txObserver = null;
 // aus renderTransactions() ein zweites Mal treffen, sonst driften erste und weitere Seite auseinander.
 let txPageQuery = null;
 let txScope = null;
-// Der Vorgemerkt-Kopf gehoert zur ganzen Liste, nicht zu einem Block - sonst bekaeme eine zweite
-// Seite, die noch vorgemerkte Buchungen enthaelt, einen zweiten davon.
-let pendingHeaderRendered = false;
 // Wie viele Buchungszeilen gerade gezeichnet sind. Nach einer Aenderung wird die Liste komplett neu
 // aufgebaut (refreshList) - mit nur einer Seite waere jemand, der weit zurueckgescrollt hatte, danach
 // wieder am Anfang, und der Anker, an dem keepListPosition die Stelle festhaelt, existierte gar nicht
@@ -316,16 +313,14 @@ async function loadDayBalances(scope, days) {
   }
 }
 
-// Der "Heute"-Ankerpunkt der Zeitleiste: die Grenze zwischen Zukunft und Vergangenheit. Das ist der
-// Vorgemerkt-Kopf (noch nicht gebucht, also naechste Gegenwart), sonst der erste Tag, der nicht in der
-// Zukunft liegt, sonst nichts - ein Konto ganz ohne Buchungen bleibt, wo es ist. Vom ersten Zeichnen,
+// Der "Heute"-Ankerpunkt der Zeitleiste: die Grenze zwischen Zukunft und Vergangenheit, also der erste
+// Tag, der nicht in der Zukunft liegt, sonst nichts - ein Konto ganz ohne Buchungen bleibt, wo es ist.
+// Vorgemerkte Buchungen stehen an ihrem Zahltag wie alle anderen. Vom ersten Zeichnen,
 // dem Klick auf "Heute" und paintDayBar()s Ist-schon-oben-Pruefung gemeinsam benutzt, statt "was heisst
 // heute" ein drittes Mal zu definieren.
 function todayAnchor() {
   const today = new Date().toISOString().slice(0, 10);
-  return dayAnchors.find(anchor => anchor.kind === 'pending')
-      || dayAnchors.find(anchor => anchor.day && anchor.day <= today)
-      || null;
+  return dayAnchors.find(anchor => anchor.day && anchor.day <= today) || null;
 }
 
 // Der Kopf eines Ankers ist "position:sticky" und meldet dadurch fast immer eine Position innerhalb
@@ -789,7 +784,6 @@ export async function renderTransactions(context, opts = {}) {
   txPageQuery = new URLSearchParams(q);
   txPageQuery.set('limit', String(TX_PAGE_SIZE));
   txScope = { accountId, groupId };
-  pendingHeaderRendered = false;
   txLastDay = null;
   const forecastQuery = new URLSearchParams();
   if (accountId) forecastQuery.set('accountId', accountId);
@@ -876,30 +870,14 @@ export async function renderTransactions(context, opts = {}) {
 // und die zweite Beschreibung waere die gewesen, die irgendwann abweicht.
 function buildRowBlock(items) {
   const fragment = document.createDocumentFragment();
-  // Pending entries are not booked yet: the API sorts them into one contiguous LEADING run, and they
-  // get their own header so a date header next to them still means only booked rows. Without it a
-  // pending row dated today sat under the today header among real bookings, and one with no booking
-  // date at all opened an unlabelled group. inPendingGroup starts true for the first block and the
-  // loop leaves that state for good the moment the first booked row shows up.
-  let inPendingGroup = txLastDay === null && !pendingHeaderRendered;
+  // Nach Zahltag, neueste zuerst: ein Kopf oeffnet jeden neuen Tag. Vorgemerkte Buchungen haben ihren
+  // Zahltag schon und stehen dort; sie tragen nur die Markierung in der Zeile.
   let lastDate = txLastDay;
   for (const x of items) {
-    const isPending = String(x.status || '').toUpperCase() === 'PDNG';
-    if (inPendingGroup && isPending) {
-      if (!pendingHeaderRendered) {
-        pendingHeaderRendered = true;
-        fragment.appendChild(groupHeaderRow(ctx.get('transactions.pending'), '', 'pending'));
-      }
-    } else {
-      inPendingGroup = false;
-      // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
-      // to identity cards via CSS. Items arrive newest-first, a header opens each new booking day
-      // going back in time.
-      const day = String(transactionDate(x) || '').slice(0, 10);
-      if (day !== lastDate) {
-        lastDate = day;
-        fragment.appendChild(groupHeaderRow(dateHeading(day), day));
-      }
+    const day = String(transactionDate(x) || '').slice(0, 10);
+    if (day !== lastDate) {
+      lastDate = day;
+      fragment.appendChild(groupHeaderRow(dateHeading(day), day));
     }
     const name = x.merchantDisplayName || x.counterparty || '—';
     const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
@@ -913,8 +891,6 @@ function buildRowBlock(items) {
     row.tabIndex = 0;
     row.dataset.txId = x.id;
     row.innerHTML =
-      // A pending entry often has no booking date yet - the bank publishes the value date first, and
-      // that is also what the list is sorted by, so showing an em dash left the row looking broken.
       `<div class="tx-date-cell">${ctx.date(transactionDate(x))}</div>` +
       `<div class="tx-cp"><label class="tx-select-wrap fw-check" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}${purpose ? `<span class="row-sub tx-list-purpose">${ctx.esc(purpose)}</span>` : ''}<span class="row-sub tx-mobile-category">${ctx.esc(cat)}</span></span></div>` +
       categoryCell(x, cat) +

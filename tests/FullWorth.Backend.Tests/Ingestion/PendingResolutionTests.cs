@@ -63,7 +63,7 @@ public sealed class PendingResolutionTests
         using var client = factory.CreateClient();
 
         await IngestAsync(client, scenario, [Pending("fp:auth-1", -25m)]);
-        await IngestAsync(client, scenario, [Booked("er:booking-1", -25m)], seenPending: null);
+        await IngestAsync(client, scenario, [Booked("er:booking-1", -99m)], seenPending: null);
 
         Assert.Equal(2, await CountAsync(factory, scenario));
     }
@@ -103,6 +103,108 @@ public sealed class PendingResolutionTests
         var row = Assert.Single(await RowsAsync(factory, scenario));
         Assert.Equal("fp:auth-1", row.ExternalKey);
         Assert.Equal("Kaution Werkstatt", row.UserNote);
+    }
+
+
+    // The bank keeps listing a card payment as pending after it has booked, and the booking arrives under
+    // a key of its own. The pending one is the duplicate - and it must stay gone on the next fetch.
+    [Fact]
+    public async Task A_pending_row_that_has_booked_is_replaced_even_while_the_bank_keeps_listing_it()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, scenario, [Pending("fp:auth-1", -25m)]);
+        await IngestAsync(client, scenario, [Pending("fp:auth-1", -25m), Booked("er:booking-1", -25m)], seenPending: ["fp:auth-1"]);
+
+        Assert.Equal("er:booking-1", Assert.Single(await RowsAsync(factory, scenario)).ExternalKey);
+
+        // The next fetch lists the pending entry again - it must not come back.
+        await IngestAsync(client, scenario, [Pending("fp:auth-1", -25m), Booked("er:booking-1", -25m)], seenPending: ["fp:auth-1"]);
+
+        Assert.Equal("er:booking-1", Assert.Single(await RowsAsync(factory, scenario)).ExternalKey);
+        Assert.Equal(1, await AuditCountAsync(factory, "transaction.pending_superseded"));
+    }
+
+    [Fact]
+    public async Task A_pending_row_and_its_booking_in_the_same_first_sync_become_one_row()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, scenario, [Pending("fp:auth-1", -25m), Booked("er:booking-1", -25m)]);
+
+        Assert.Equal("er:booking-1", Assert.Single(await RowsAsync(factory, scenario)).ExternalKey);
+    }
+
+    // Losing what the user entered is worse than a duplicate: a pending row with a note stays.
+    [Fact]
+    public async Task A_touched_pending_row_is_not_merged_into_its_booking()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, scenario, [Pending("fp:auth-1", -25m)]);
+        await factory.SeedAsync(async db =>
+        {
+            (await db.Transactions.SingleAsync(x => x.ExternalKey == "fp:auth-1")).UserNote = "Kaution";
+            await db.SaveChangesAsync();
+        });
+        await IngestAsync(client, scenario, [Booked("er:booking-1", -25m)]);
+
+        Assert.Equal(2, await CountAsync(factory, scenario));
+    }
+
+    // Two payments of the same amount at the same shop on one day need two bookings.
+    [Fact]
+    public async Task One_booking_replaces_only_one_of_two_identical_pending_rows()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, scenario, [Pending("fp:a", -1.28m, counterparty: "Penny"), Pending("fp:b", -1.28m, counterparty: "Penny")]);
+        await IngestAsync(client, scenario, [Booked("er:one", -1.28m, counterparty: "PENNY SAGT DANKE")]);
+
+        var afterOne = await RowsAsync(factory, scenario);
+        Assert.Equal(2, afterOne.Count);
+        Assert.Single(afterOne, row => row.Status == "BOOK");
+        Assert.Single(afterOne, row => row.Status == "PDNG");
+
+        await IngestAsync(client, scenario, [Booked("er:two", -1.28m, counterparty: "PENNY SAGT DANKE")]);
+
+        Assert.All(await RowsAsync(factory, scenario), row => Assert.Equal("BOOK", row.Status));
+    }
+
+    // Yesterday's coffee is not the resolution of today's pending coffee: a booking that was already
+    // here before the pending row appeared cannot have replaced it.
+    [Fact]
+    public async Task A_booking_that_existed_before_the_pending_row_does_not_replace_it()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, scenario, [Booked("er:yesterday", -3.5m, Today.AddDays(-1), "Backwerk")]);
+        await IngestAsync(client, scenario, [Pending("fp:today", -3.5m, Today, "Backwerk")]);
+
+        Assert.Equal(2, await CountAsync(factory, scenario));
+    }
+
+    [Fact]
+    public async Task A_different_amount_or_shop_is_never_a_replacement()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, scenario, [Pending("fp:a", -25m, counterparty: "Werkstatt"), Pending("fp:b", -30m, counterparty: "Werkstatt")]);
+        await IngestAsync(client, scenario, [Booked("er:wrong-shop", -25m, counterparty: "Tankstelle"), Booked("er:wrong-amount", -25.01m, counterparty: "Werkstatt")]);
+
+        Assert.Equal(4, await CountAsync(factory, scenario));
     }
 
     private sealed record Scenario(Guid Owner, Guid Space, Guid Connection, string Hash);
@@ -146,13 +248,13 @@ public sealed class PendingResolutionTests
         return scenario;
     }
 
-    private static object Pending(string key, decimal amount, DateOnly? date = null) =>
-        Transaction(key, amount, "PDNG", date);
+    private static object Pending(string key, decimal amount, DateOnly? date = null, string counterparty = "Werkstatt") =>
+        Transaction(key, amount, "PDNG", date, counterparty);
 
-    private static object Booked(string key, decimal amount, DateOnly? date = null) =>
-        Transaction(key, amount, "BOOK", date);
+    private static object Booked(string key, decimal amount, DateOnly? date = null, string counterparty = "Werkstatt") =>
+        Transaction(key, amount, "BOOK", date, counterparty);
 
-    private static object Transaction(string key, decimal amount, string status, DateOnly? date) => new
+    private static object Transaction(string key, decimal amount, string status, DateOnly? date, string counterparty) => new
     {
         identificationHash = (string?)null,
         externalKey = key,
@@ -162,7 +264,7 @@ public sealed class PendingResolutionTests
         valueDate = date ?? Today,
         amount,
         currency = "EUR",
-        counterparty = "Werkstatt",
+        counterparty,
         description = (string?)null,
         merchantCategoryCode = (string?)null,
         entryReference = (string?)null,
@@ -252,6 +354,13 @@ public sealed class PendingResolutionTests
             .Where(transaction => transaction.AccountId == accountId)
             .OrderBy(transaction => transaction.ExternalKey)
             .ToListAsync();
+    }
+
+    private static async Task<int> AuditCountAsync(BackendWebApplicationFactory factory, string action)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FullWorthDbContext>();
+        return await db.AuditEvents.CountAsync(x => x.Action == action);
     }
 
     private static async Task<int> CountAsync(BackendWebApplicationFactory factory, Scenario scenario) =>

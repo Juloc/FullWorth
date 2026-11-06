@@ -110,21 +110,23 @@ public sealed class TransactionForecastTests
     }
 
     /// <summary>
-    /// Vorgemerkte Buchungen fuehren die Liste an - direkt unter der Prognose, direkt ueber heute. Die
-    /// Gruppierung beginnt deshalb im Vorgemerkt-Zustand und verlaesst ihn mit der ersten gebuchten
-    /// Zeile endgueltig.
+    /// Vorgemerkte Buchungen haben keinen eigenen Block: sie tragen ihren Zahltag schon und stehen dort
+    /// unter dem Tageskopf wie jede andere Buchung. Ein Kopf "Vorgemerkt" ueber allem war die
+    /// falschherum stehende Liste, an der dieser Wachposten haengt.
     /// </summary>
     [Fact]
-    public void Pending_bookings_lead_the_list()
+    public void Pending_bookings_are_grouped_by_their_pay_date_like_any_other()
     {
         var js = PageJs();
 
-        Assert.Contains("let inPendingGroup = txLastDay === null && !pendingHeaderRendered;", js);
+        Assert.DoesNotContain("inPendingGroup", js);
+        Assert.DoesNotContain("pendingHeaderRendered", js);
+        Assert.DoesNotContain("'pending')", js.Replace("marker('pending'", string.Empty));
     }
 
     /// <summary>
     /// "Heute" ist in der Zeitleiste nicht der Listenanfang - dort steht die fernste Zukunft. Heute ist
-    /// die Grenze: der Vorgemerkt-Kopf, sonst der erste Tag, der nicht in der Zukunft liegt.
+    /// die Grenze: der erste Tag, der nicht in der Zukunft liegt.
     /// </summary>
     [Fact]
     public void Today_is_the_boundary_between_future_and_past()
@@ -134,7 +136,7 @@ public sealed class TransactionForecastTests
         Assert.True(match.Success, "todayAnchor() was not found.");
         var body = match.Groups["body"].Value;
 
-        Assert.Contains("anchor.kind === 'pending'", body);
+        Assert.DoesNotContain("'pending'", body);
         Assert.Contains("anchor.day <= today", body);
         Assert.DoesNotContain("'forecast'", body);
     }

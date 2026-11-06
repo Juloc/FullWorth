@@ -245,13 +245,9 @@ public sealed class TransactionStore(FullWorthDbContext db, TransferRuleStore tr
         {
             "amount" => descending ? q.OrderByDescending(x => x.Amount) : q.OrderBy(x => x.Amount),
             "counterparty" => descending ? q.OrderByDescending(x => x.Counterparty) : q.OrderBy(x => x.Counterparty),
-            // A pending entry is not booked yet, so on the date axis it belongs ahead of everything
-            // that IS booked - including today. Ordering purely by booking date put a pending row
-            // dated today underneath the "today" header among real bookings, and a pending row with
-            // no booking date at all into an unlabelled group above it (PostgreSQL sorts NULLs first
-            // on DESC). Falling back to the value date keeps a row whose booking date the bank has
-            // not published yet in its real place instead of at the very top.
-            // EINE Spalte statt vier (#161). Sie bildet dasselbe Tupel ab - vorgemerkt, Datum,
+            // Nach Zahltag, vorgemerkt oder gebucht: eine vorgemerkte Zeile traegt ihren Zahltag schon
+            // als Buchungsdatum und steht dort, wo sie bezahlt wurde, statt in einem eigenen Block ganz oben.
+            // EINE Spalte statt vier (#161). Sie bildet dasselbe Tupel ab - Datum,
             // UpdatedAt, Id - und wird von der Datenbank aus denselben Spalten gerechnet. Der
             // Unterschied ist nicht kosmetisch: nur ueber eine Spalte wird aus der Cursor-Bedingung
             // ein Index-Bereich. Gemessen an 200 000 Buchungen auf Seite 2000: 80 ms mit OFFSET,

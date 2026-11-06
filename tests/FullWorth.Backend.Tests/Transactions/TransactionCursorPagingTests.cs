@@ -133,7 +133,7 @@ public sealed class TransactionCursorPagingTests
     [Fact]
     public void A_well_formed_key_passes_through_unchanged()
     {
-        var key = "0" + new string('7', 8) + new string('1', 20) + new string('a', 32);
+        var key = new string('7', 8) + new string('1', 20) + new string('a', 32);
 
         Assert.Equal(key, TransactionCursor.Normalize(key));
         Assert.Equal(key, TransactionCursor.Normalize("  " + key + "  "));
@@ -147,9 +147,9 @@ public sealed class TransactionCursorPagingTests
     [Theory]
     [InlineData("")]
     [InlineData("nonsense")]
-    [InlineData("2" + "00000000" + "00000000000000000000" + "00000000000000000000000000000000")]  // erstes Zeichen
-    [InlineData("0" + "0000000" + "00000000000000000000" + "00000000000000000000000000000000")]   // zu kurz
-    [InlineData("0" + "000000x0" + "00000000000000000000" + "00000000000000000000000000000000")]  // keine Ziffer
+    [InlineData("0" + "00000000" + "00000000000000000000" + "00000000000000000000000000000000")]  // zu lang: der alte Schluessel mit Vorgemerkt-Zeichen
+    [InlineData("0000000" + "00000000000000000000" + "00000000000000000000000000000000")]         // zu kurz
+    [InlineData("000000x0" + "00000000000000000000" + "00000000000000000000000000000000")]        // keine Ziffer
     public void Anything_that_is_not_a_key_is_refused(string value)
     {
         Assert.Null(TransactionCursor.Normalize(value));

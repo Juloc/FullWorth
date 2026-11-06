@@ -1,21 +1,30 @@
-# 0.81.1
+# 0.82.0
 
-Ein Fehlerkorrektur-Release für 0.81.0: Die Kamera startet jetzt wirklich, und Beleg-Funktionen gehören nur noch auf die Belege-Seite.
+Die Buchungsliste steht jetzt richtigrum und zeigt jede Zahlung nur noch einmal.
+
+## Geändert
+
+- **Buchungen sind nach Zahltag sortiert.** Vorgemerkte Buchungen stehen nicht mehr als eigener Block über „Heute“, sondern an dem
+  Tag, an dem bezahlt wurde, und tragen dort die Markierung „Vorgemerkt“. Die Liste läuft von oben nach unten: Erwartet (Prognose),
+  Heute, Gestern, davor. Der Kopf „Vorgemerkt“ ist weggefallen.
+- **Vorgemerkte Buchungen verschwinden, sobald die Bank gebucht hat.** Bisher blieb die Vormerkung neben der Buchung stehen, weil die
+  Bank sie weiter als vorgemerkt meldet; jede Zahlung stand doppelt, und der Buchungstag stimmte nicht mit dem Zahltag überein. Jetzt
+  ersetzt die Buchung ihre Vormerkung, wenn **alles** zutrifft: gleicher Betrag auf den Cent, gleiche Währung, gleicher Händler (erstes
+  Wort des Namens), Buchung ein Tag vor bis zehn Tage nach dem Zahltag, und die Buchung wurde nicht schon vor der Vormerkung gesehen.
+  Eine Buchung ersetzt höchstens eine Vormerkung: zwei gleiche Zahlungen am selben Tag brauchen zwei Buchungen. Im Zweifel bleibt ein
+  Doppeltes stehen, statt dass eine echte Zahlung verschwindet.
+- Eine Vormerkung mit Notiz, manueller Kategorie, verknüpftem Beleg, Umbuchung oder Erstattung bleibt unangetastet.
+  Die Banken-Wiederholung der ersetzten Vormerkung wird erkannt und nicht neu angelegt.
 
 ## Behoben
 
-- **Die Kamera ging nie.** Der Server hat sie selbst verboten: Der Header `Permissions-Policy` stand auf `camera=()`, der Browser lehnte die Kamera
-  ab, bevor er überhaupt gefragt hat. Außerdem sperrte die Content-Security-Policy `blob:`-Bilder, also die Foto-Vorschauen. Jetzt gilt
-  `camera=(self)` (nur FullWorth selbst darf die Kamera nutzen) und `img-src` erlaubt `blob:`. **Nach dem Update fragt der Browser einmal
-  nach der Kamera-Berechtigung.**
-- **Beleg-Funktionen standen noch bei den Käufen.** „Beleg scannen“, „Mit Kamera“ und „Belege importieren“ sitzen jetzt in der Aktionsleiste der
-  **Belege**-Seite; Foto-Scan-Dialog, Kamera, Import und ihre Styles sind dorthin umgezogen. Die Käufe-Seite hat nur noch die Kaufliste und
-  „Amazon verbinden“, ihr erster Reiter heißt „Käufe“ statt „Belege“.
-- Ein fertiger oder neu angelegter Beleg lädt die Liste auf der Belege-Seite neu, statt die ganze Seite neu zu laden.
-- Der alte Einzel-Datei-Upload, den nichts mehr erreichte, ist entfernt.
+- **Die Tagesleiste mit „Heute“ und dem Tagesstand war unsichtbar**: sie klebte unter dem Topbar statt darunter. Die Tagesköpfe
+  klebten gar nicht. Beides sitzt jetzt in drei Stufen übereinander (Topbar, Tagesleiste, Tageskopf), und der Sprung auf „Heute“ landet
+  unter allem, was klebt, statt die erste Zeile des Tages dahinter zu verstecken.
 
 ## Wichtig
 
-- Die Kamera ist **nur ohne Gerät geprüft** (kein Header verbietet sie mehr, der Dialog öffnet sich). Ob sie auf deinem Handy startet, zeigt der erste echte Versuch;
-  auf iPhone und iPad hat die Web-Kamera kein Licht und keine Fokussteuerung.
-- Keine Datenbank-Änderung, keine Konfiguration nötig.
+- Beim ersten Start schreibt eine Datenbank-Änderung die Buchungstabelle einmal neu (Sortierschlüssel nach Zahltag). Das dauert bei
+  vielen Buchungen einen Moment; die Anwendung ist währenddessen noch nicht erreichbar.
+- Bereits vorhandene Doppelte verschwinden beim **nächsten Bankabruf** jedes Kontos, nicht sofort beim Update.
+- Eine neue Tabelle merkt sich ersetzte Vormerkungen (90 Tage), damit die Wiederholung der Bank sie nicht zurückbringt.

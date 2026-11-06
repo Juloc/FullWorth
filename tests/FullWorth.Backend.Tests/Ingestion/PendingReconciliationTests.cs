@@ -30,8 +30,12 @@ public sealed class PendingReconciliationTests
         Assert.Equal("stable-entry-1", transaction.EntryReference);
     }
 
+    // Without an entry reference the only link between a pending row and its booking is what they have
+    // in common: amount, shop and a few days. PendingSupersession decides that (see its own tests) -
+    // here only that the result is ONE row, the booked one, and that a payment which merely looks
+    // alike does not take it away.
     [Fact]
-    public async Task SimilarPendingAndBookedRowsWithoutStableEntryReferenceRemainSeparate()
+    public async Task ABookingReplacesTheMatchingPendingRowWithoutStableEntryReference()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         await using var db = database.CreateContext();
@@ -42,6 +46,25 @@ public sealed class PendingReconciliationTests
             CancellationToken.None);
         await service.IngestAsync(
             Batch("fp:booked", "BOOK", -49.99m, new DateOnly(2026, 8, 11), "ACME STORE", null),
+            CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var transaction = Assert.Single(await db.Transactions.AsNoTracking().ToListAsync());
+        Assert.Equal("fp:booked", transaction.ExternalKey);
+    }
+
+    [Fact]
+    public async Task APendingRowAndABookingOfAnotherShopRemainSeparate()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var service = new IngestionService(db);
+
+        await service.IngestAsync(
+            Batch("fp:pending", "PDNG", -49.99m, new DateOnly(2026, 8, 10), "ACME STORE", null),
+            CancellationToken.None);
+        await service.IngestAsync(
+            Batch("fp:booked", "BOOK", -49.99m, new DateOnly(2026, 8, 11), "OTHER SHOP", null),
             CancellationToken.None);
 
         db.ChangeTracker.Clear();
@@ -62,7 +85,7 @@ public sealed class PendingReconciliationTests
             Batch("legacy-b", "PDNG", -11m, new DateOnly(2026, 8, 10), "SHOP", "ambiguous"),
             CancellationToken.None);
         await service.IngestAsync(
-            Batch("er:ambiguous", "BOOK", -10m, new DateOnly(2026, 8, 11), "SHOP", "ambiguous"),
+            Batch("er:ambiguous", "BOOK", -12m, new DateOnly(2026, 8, 11), "SHOP", "ambiguous"),
             CancellationToken.None);
 
         db.ChangeTracker.Clear();

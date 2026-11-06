@@ -3250,6 +3250,36 @@ namespace FullWorth.Backend.Migrations
                     b.ToTable("DismissedSecuritiesBookings");
                 });
 
+            modelBuilder.Entity("FullWorth.Backend.Modules.Ingestion.SupersededPendingTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("FullWorthSpaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SupersededAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FullWorthSpaceId");
+
+                    b.HasIndex("AccountId", "ExternalKey")
+                        .IsUnique();
+
+                    b.ToTable("SupersededPendingTransactions");
+                });
+
             modelBuilder.Entity("FullWorth.Backend.Modules.Tax.TaxAnalysisRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4776,6 +4806,21 @@ namespace FullWorth.Backend.Migrations
 
             modelBuilder.Entity("FullWorth.Backend.Modules.Reconciliation.DismissedSecuritiesBooking", b =>
                 {
+                    b.HasOne("FullWorth.Backend.Modules.FullWorthSpaces.FullWorthSpace", null)
+                        .WithMany()
+                        .HasForeignKey("FullWorthSpaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FullWorth.Backend.Modules.Ingestion.SupersededPendingTransaction", b =>
+                {
+                    b.HasOne("FullWorth.Backend.Modules.Accounts.FinanceAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("FullWorth.Backend.Modules.FullWorthSpaces.FullWorthSpace", null)
                         .WithMany()
                         .HasForeignKey("FullWorthSpaceId")

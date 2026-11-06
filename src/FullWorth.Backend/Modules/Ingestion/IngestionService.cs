@@ -73,6 +73,7 @@ public sealed class IngestionService(
 
         var resolvedPending = await ResolveDisappearedPendingAsync(
             connection.FullWorthSpaceId, accountMap, batch.PendingReconciliations, ct);
+        await SupersedePendingWithBookingsAsync(connection.FullWorthSpaceId, accountMap, batch.Transactions, ct);
 
         if (finanzguruReconciliation is not null)
             await finanzguruReconciliation.ReconcileAsync(connection.FullWorthSpaceId, accountMap.Values, ct);
@@ -355,6 +356,23 @@ public sealed class IngestionService(
     }
 
     /// <summary>
+    /// The pending rows of an account nobody has touched. Removing one only costs a leftover row, never
+    /// something the user entered - so a note, a manual category, a refund or transfer link or a linked
+    /// purchase takes a row out of every automatic clean-up that uses this.
+    /// </summary>
+    private IQueryable<FinanceTransaction> UntouchedPending(Guid accountId) =>
+        db.Transactions.Where(transaction =>
+            transaction.AccountId == accountId &&
+            transaction.Status == "PDNG" &&
+            transaction.CategorizationSource != "manual" &&
+            transaction.UserNote == null &&
+            transaction.RefundOfTransactionId == null &&
+            transaction.TransferGroupId == null &&
+            !db.Purchases.Any(purchase =>
+                purchase.TransactionId == transaction.Id ||
+                purchase.PaymentLinks.Any(link => link.TransactionId == transaction.Id)));
+
+    /// <summary>
     /// Removes the pending rows the provider no longer reports - they have either booked (and arrived as
     /// a separate BOOK row, because a pending key includes the status) or the authorisation was
     /// cancelled. Without this every pending payment stayed behind as a second row forever.
@@ -378,18 +396,7 @@ public sealed class IngestionService(
             if (!accounts.TryGetValue(reconciliation.IdentificationHash, out var account)) continue;
             var seen = reconciliation.SeenExternalKeys.ToHashSet(StringComparer.Ordinal);
 
-            var candidates = await db.Transactions
-                .Where(transaction =>
-                    transaction.AccountId == account.Id &&
-                    transaction.Status == "PDNG" &&
-                    transaction.CategorizationSource != "manual" &&
-                    transaction.UserNote == null &&
-                    transaction.RefundOfTransactionId == null &&
-                    transaction.TransferGroupId == null &&
-                    !db.Purchases.Any(purchase =>
-                        purchase.TransactionId == transaction.Id ||
-                        purchase.PaymentLinks.Any(link => link.TransactionId == transaction.Id)))
-                .ToListAsync(ct);
+            var candidates = await UntouchedPending(account.Id).ToListAsync(ct);
 
             foreach (var candidate in candidates)
             {
@@ -413,6 +420,66 @@ public sealed class IngestionService(
         return removed;
     }
 
+    /// <summary>
+    /// A pending card payment that has booked exists twice: the bank keeps reporting it as pending, and
+    /// the booking arrives under a key of its own. This removes the pending one - and only that one -
+    /// when <see cref="PendingSupersession"/> is sure which booking replaced it, and remembers its key so
+    /// the next fetch does not bring it back.
+    ///
+    /// Only rows nobody has touched (see <see cref="UntouchedPending"/>): a pending row that carries a
+    /// note or a receipt stays, as a visible duplicate, rather than being merged behind the user's back.
+    /// </summary>
+    private async Task SupersedePendingWithBookingsAsync(
+        Guid fullWorthSpaceId,
+        Dictionary<string, FinanceAccount> accounts,
+        IReadOnlyList<TransactionBatchItem> items,
+        CancellationToken ct)
+    {
+        var removed = 0;
+        foreach (var hash in items.Select(x => x.IdentificationHash).Distinct())
+        {
+            if (!accounts.TryGetValue(hash, out var account)) continue;
+
+            var pending = await UntouchedPending(account.Id).Where(x => x.BookingDate != null).ToListAsync(ct);
+            if (pending.Count == 0) continue;
+
+            var from = pending.Min(x => x.BookingDate!.Value).AddDays(-1);
+            var amounts = pending.Select(x => x.Amount).Distinct().ToArray();
+            var booked = await db.Transactions.AsNoTracking()
+                .Where(x => x.AccountId == account.Id && x.Status != "PDNG" && x.BookingDate >= from && amounts.Contains(x.Amount))
+                .Select(x => new BookedCandidate(x.Id, x.Amount, x.Currency, x.BookingDate!.Value, x.NormalizedCounterparty, x.FirstSeenAt))
+                .ToListAsync(ct);
+            if (booked.Count == 0) continue;
+
+            var pairs = PendingSupersession.Pair(
+                pending.Select(x => new PendingCandidate(x.Id, x.Amount, x.Currency, x.BookingDate!.Value, x.NormalizedCounterparty, x.FirstSeenAt)).ToList(),
+                booked);
+
+            foreach (var (pendingId, _) in pairs)
+            {
+                var row = pending.Single(x => x.Id == pendingId);
+                db.Transactions.Remove(row);
+                db.SupersededPendingTransactions.Add(new SupersededPendingTransaction
+                {
+                    FullWorthSpaceId = fullWorthSpaceId,
+                    AccountId = account.Id,
+                    ExternalKey = row.ExternalKey
+                });
+                audit.Record(fullWorthSpaceId, null, "transaction.pending_superseded", "Transaction", row.Id);
+                removed++;
+            }
+        }
+
+        if (removed == 0) return;
+        // The list of remembered keys only has to outlive the time the bank keeps repeating a pending
+        // entry; a key from months ago is not coming back.
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-90);
+        await db.SupersededPendingTransactions
+            .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.SupersededAt < cutoff)
+            .ExecuteDeleteAsync(ct);
+        await db.SaveChangesAsync(ct);
+    }
+
     private async Task<int> InsertBalancesAsync(Dictionary<string, FinanceAccount> accounts, IReadOnlyList<BalanceBatchItem> items, CancellationToken ct)
     {
         var inserted = 0;
@@ -433,6 +500,13 @@ public sealed class IngestionService(
         CancellationToken ct)
     {
         var inserted = 0; var updated = 0;
+        // Every row this batch creates gets the same first-seen time. A pending payment and its booking
+        // that arrive together (a first sync) then tie instead of ordering by loop position, which
+        // PendingSupersession relies on to tell "booked before it appeared" from "booked together".
+        // Cut to microseconds, which is all PostgreSQL stores: a row read back from the database must
+        // compare equal to one still in memory, or the tie is lost.
+        var batchObservedAt = DateTimeOffset.UtcNow;
+        batchObservedAt = batchObservedAt.AddTicks(-(batchObservedAt.Ticks % 10));
         var rules = await db.CategorizationRules.AsNoTracking()
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.IsEnabled && x.Target == "transaction")
             .OrderBy(x => x.Priority).ThenBy(x => x.Id).ToListAsync(ct);
@@ -482,6 +556,10 @@ public sealed class IngestionService(
             var existing = await db.Transactions
                 .Where(x => x.AccountId == account.Id && keys.Contains(x.ExternalKey))
                 .ToDictionaryAsync(x => x.ExternalKey, ct);
+            var superseded = (await db.SupersededPendingTransactions.AsNoTracking()
+                .Where(x => x.AccountId == account.Id && keys.Contains(x.ExternalKey))
+                .Select(x => x.ExternalKey)
+                .ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
 
             // Migration/reconciliation seam: older FullWorth builds used Enable Banking transaction_id
             // as ExternalKey. The provider documents transaction_id as an unstable detail pointer, while
@@ -505,6 +583,9 @@ public sealed class IngestionService(
 
             foreach (var item in sourceItems)
             {
+                // Its booking is already here; the bank is only repeating the pending entry.
+                if (superseded.Contains(item.ExternalKey)) continue;
+
                 FinanceTransaction entity;
                 var wasExisting = false;
                 if (existing.TryGetValue(item.ExternalKey, out var exact))
@@ -535,7 +616,7 @@ public sealed class IngestionService(
                     // into BOOK entries merely because amount/payee/date look similar; that can merge
                     // two real card transactions. The status-scoped deterministic fallback keeps them
                     // separate unless Enable Banking supplies a stable entry_reference.
-                    entity = new FinanceTransaction { AccountId = account.Id, ExternalKey = item.ExternalKey };
+                    entity = new FinanceTransaction { AccountId = account.Id, ExternalKey = item.ExternalKey, FirstSeenAt = batchObservedAt };
                     db.Transactions.Add(entity);
                     existing[item.ExternalKey] = entity;
                     inserted++;

@@ -3,22 +3,21 @@ using System.Text.RegularExpressions;
 namespace FullWorth.Web.Tests;
 
 /// <summary>
-/// The transaction list's date group header ("Vorgemerkt", "10.9.2026") is sticky, and a sticky offset
-/// only means anything relative to its own scroll container.
+/// Die Buchungsliste klebt in drei Stufen: der Topbar, darunter die Tagesleiste ("Heute", Tagesstand),
+/// darunter der Kopf der Tagesgruppe. Eine Stufe sitzt immer am unteren Rand der davor.
 ///
-/// The bug: the header cell said <c>top: var(--topbar-h)</c> — correct when the PAGE scrolls and the
-/// header has to clear the app topbar. Above 1023px the page is not the scroll container: the table panel
-/// is (<c>overflow:auto</c>). So the header pinned itself ~96px DOWN inside the panel and painted over the
-/// first transaction of every group, permanently, without anyone even scrolling. The first booking of
-/// each day was simply not visible.
+/// Der Fehler, den das haelt: der Topbar ist seit der Kopfzeile mit Brotkrumen selbst sticky und die SEITE
+/// scrollt. Die Tagesleiste stand aber noch auf <c>top:0</c> - sie lag unsichtbar UNTER dem Topbar, und
+/// mit ihr der Knopf "Heute". Die Tageskoepfe klebten gar nicht: <c>.table-panel</c> hat
+/// <c>overflow:auto</c> und ist damit der Bezug fuer <c>position:sticky</c>, scrollt aber nicht, also
+/// bleibt der Kopf stehen, wo er ist. Gemessen: Kopf bei -11 px statt geklebt, die erste Zeile jedes
+/// Tages hinter dem Topbar.
 ///
-/// These tests pin the RULE — each offset matches its scroll container — rather than the text of a
-/// declaration, because the same class of bug returns the moment one of the two moves without the other.
+/// Geprueft wird die REGEL - jeder Versatz passt zu dem, was davor klebt -, nicht der Wortlaut einer
+/// Deklaration: der Fehler kommt wieder, sobald sich eine Stufe bewegt und die andere nicht.
 /// </summary>
 public sealed class TransactionGroupHeaderStickyTests : IClassFixture<FullWorthWebFactory>
 {
-    private const string MobileBreakpoint = "@media(max-width:1023px)";
-
     private readonly HttpClient client;
 
     public TransactionGroupHeaderStickyTests(FullWorthWebFactory factory)
@@ -26,38 +25,58 @@ public sealed class TransactionGroupHeaderStickyTests : IClassFixture<FullWorthW
         client = factory.CreateClient();
     }
 
-    /// <summary>
-    /// Default: the panel scrolls itself, so the header sticks to the panel's own top edge. Any non-zero
-    /// offset here is measured against the wrong element and lands on top of a transaction row.
-    /// </summary>
     [Fact]
-    public async Task The_group_header_sticks_to_the_top_of_the_panel_that_scrolls_it()
+    public async Task The_day_bar_sticks_directly_below_the_topbar()
+    {
+        var rule = await RuleForAsync("/pages/transactions/page.css", ".tx-daybar");
+
+        Assert.Contains("position:sticky", rule);
+        Assert.Equal("var(--topbar-h)", Declaration(rule, "top"));
+        Assert.Equal("var(--tx-daybar-h)", Declaration(rule, "height"));
+    }
+
+    [Fact]
+    public async Task The_group_header_sticks_directly_below_the_day_bar()
     {
         var rule = await RuleForAsync("/pages/transactions/page.css", ".tx-date-head");
 
         Assert.Contains("position:sticky", rule);
-
-        var top = Declaration(rule, "top");
-        Assert.Equal("0", top);
+        Assert.Equal("calc(var(--topbar-h) + var(--tx-daybar-h))", Declaration(rule, "top"));
+        Assert.Equal("var(--tx-head-h)", Declaration(rule, "height"));
     }
 
     /// <summary>
-    /// Below the breakpoint the panel is <c>overflow:visible</c>, so the PAGE scrolls and the offset has
-    /// to be the topbar height again. The two belong together: whichever element scrolls is the one the
-    /// offset is measured against.
+    /// Ein Vorfahr mit overflow:auto ist der Bezug fuer position:sticky - auch wenn er nie scrollt. Das
+    /// Panel muss deshalb sichtbar bleiben, sonst klebt nichts mehr.
     /// </summary>
     [Fact]
-    public async Task Where_the_page_scrolls_instead_the_header_clears_the_topbar()
+    public async Task The_panel_is_not_a_scroll_container()
+    {
+        var rule = await RuleForAsync("/pages/transactions/page.css", "#view-transactions .table-panel");
+
+        Assert.Equal("visible", Declaration(rule, "overflow"));
+    }
+
+    /// <summary>
+    /// Der Sprung auf "Heute" richtet die erste Zeile eines Tages am oberen Rand aus. Ohne diesen Abstand
+    /// steht sie hinter Topbar, Tagesleiste und Gruppenkopf.
+    /// </summary>
+    [Fact]
+    public async Task A_row_scrolled_into_view_lands_below_everything_that_sticks()
+    {
+        var rule = await RuleForAsync("/pages/transactions/page.css", ".tx-row");
+
+        Assert.Equal(
+            "calc(var(--topbar-h) + var(--tx-daybar-h) + var(--tx-head-h))",
+            Declaration(rule, "scroll-margin-top"));
+    }
+
+    [Fact]
+    public async Task The_small_screen_layout_does_not_move_the_headers_again()
     {
         var responsive = await GetAsync("/styles/responsive.css");
-        var block = MediaBlock(responsive, MobileBreakpoint);
 
-        // The premise of the override: the panel stops being a scroll container here.
-        var panel = RuleIn(block, "#view-transactions .table-panel");
-        Assert.Equal("visible", Declaration(panel, "overflow"));
-
-        var header = RuleIn(block, "#view-transactions .tx-date-head");
-        Assert.Equal("var(--topbar-h)", Declaration(header, "top"));
+        Assert.DoesNotContain("#view-transactions .tx-date-head{border-radius:8px;margin:8px 0 2px;top:", responsive);
     }
 
     private async Task<string> RuleForAsync(string path, string selector) =>
@@ -69,23 +88,6 @@ public sealed class TransactionGroupHeaderStickyTests : IClassFixture<FullWorthW
         var match = Regex.Match(css, Regex.Escape(selector) + @"\s*\{([^}]*)\}");
         Assert.True(match.Success, $"No rule for '{selector}'.");
         return match.Groups[1].Value;
-    }
-
-    /// <summary>Everything between a media query's brace and its matching close.</summary>
-    private static string MediaBlock(string css, string query)
-    {
-        var start = css.IndexOf(query, StringComparison.Ordinal);
-        Assert.True(start >= 0, $"No '{query}' block.");
-        var open = css.IndexOf('{', start);
-        var depth = 0;
-        for (var i = open; i < css.Length; i++)
-        {
-            if (css[i] == '{') depth++;
-            else if (css[i] == '}' && --depth == 0) return css[(open + 1)..i];
-        }
-
-        Assert.Fail($"'{query}' is never closed.");
-        return string.Empty;
     }
 
     private static string Declaration(string rule, string property)

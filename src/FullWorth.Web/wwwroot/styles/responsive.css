@@ -1,5 +1,5 @@
 @media(max-width:1023px){
-  #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
+  #view-transactions .table-panel{border:0;box-shadow:none;background:transparent}
   /* Unter 1023px zeigt jede Zeile nur noch Identitaet und Betrag - dieselbe Karte, die frueher eine
      verkleidete Tabelle war (Scheibe 13). grid-template-columns:none schaltet das Gitter der Basis-
      regel ab, weil hier stattdessen Flexbox greift. */
@@ -11,9 +11,7 @@
   #view-transactions .tx-row>.number,#view-transactions .tx-skeleton>.number{display:block;flex:0 0 auto;font-size:15px;text-align:right}
   #view-transactions .tx-cp-main{display:flex;min-width:0}
   #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-  /* The panel is overflow:visible here, so the PAGE scrolls and the group header has to clear the
-     app topbar. Above this width the panel scrolls itself and the offset is 0 - see app.css. */
-  #view-transactions .tx-date-head{border-radius:8px;margin:8px 0 2px;top:var(--topbar-h)}
+  #view-transactions .tx-date-head{border-radius:8px;margin:8px 0 2px}
 }
 @media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.nw-custom-range-fields label{flex:1 1 130px}.nw-custom-range-fields input{width:100%;min-width:0}}

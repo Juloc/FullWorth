@@ -9,16 +9,15 @@ using FullWorth.Backend.Tests.Infrastructure;
 namespace FullWorth.Backend.Tests.Transactions;
 
 /// <summary>
-/// The booking list groups by booking date and labels today's group "Heute". Ordering by booking date
-/// alone put a pending entry dated today *underneath* that header, mixed in with real bookings — so the
-/// header no longer marked the boundary between what is booked and what is not. A pending entry with no
-/// booking date at all landed above the header instead, in an unlabelled group, because PostgreSQL sorts
-/// NULLs first on a descending order.
+/// Die Buchungsliste sortiert nach Zahltag. Vorgemerkt war lange ein Sortierkriterium vor dem Datum: jede
+/// vorgemerkte Zeile stand vor jeder gebuchten, die Liste begann mit einem Block, der nicht dorthin
+/// gehoert, und "Heute" stand darunter - falschherum. Die Bank liefert den Zahltag einer vorgemerkten
+/// Karte schon als Buchungsdatum, also steht sie an diesem Tag und nur das Kennzeichen unterscheidet sie.
 /// </summary>
 public sealed class TransactionPendingOrderTests
 {
     [Fact]
-    public async Task Pending_entries_are_listed_ahead_of_every_booked_entry()
+    public async Task Pending_entries_are_listed_at_their_pay_date_between_booked_ones()
     {
         using var factory = new BackendWebApplicationFactory();
         var scenario = await SeedAsync(factory);
@@ -26,16 +25,15 @@ public sealed class TransactionPendingOrderTests
 
         var rows = await RowsAsync(client, scenario);
 
-        var lastPending = rows.FindLastIndex(row => row.Status == "PDNG");
-        var firstBooked = rows.FindIndex(row => row.Status == "BOOK");
-        Assert.True(lastPending >= 0 && firstBooked >= 0, "the scenario has both kinds");
-        Assert.True(
-            lastPending < firstBooked,
-            $"pending must precede every booking, got {string.Join(", ", rows.Select(row => $"{row.Key}/{row.Status}"))}");
+        // Der Zahltag entscheidet, nicht der Status und nicht die Valuta: "pending-last-week" hat eine Valuta in der
+        // Zukunft und steht trotzdem ganz unten.
+        Assert.Equal(
+            ["booked-today", "pending-today", "booked-yesterday", "pending-undated", "pending-last-week"],
+            rows.Select(row => row.Key).ToArray());
     }
 
-    // Within the pending block the value date stands in for a booking date the bank has not published
-    // yet - that entry belongs at its real position, not at the very top of the whole list.
+    // Eine vorgemerkte Zeile ohne Buchungsdatum wird nach der Valuta eingeordnet - dort, wo sie bezahlt
+    // wurde, nicht ganz oben.
     [Fact]
     public async Task A_pending_entry_without_a_booking_date_is_placed_by_its_value_date()
     {
@@ -48,20 +46,6 @@ public sealed class TransactionPendingOrderTests
         Assert.True(
             rows.FindIndex(row => row.Key == "pending-today") < rows.FindIndex(row => row.Key == "pending-undated"),
             $"got {string.Join(", ", rows.Select(row => row.Key))}");
-    }
-
-    [Fact]
-    public async Task Booked_entries_keep_their_newest_first_order()
-    {
-        using var factory = new BackendWebApplicationFactory();
-        var scenario = await SeedAsync(factory);
-        using var client = factory.CreateClient();
-
-        var rows = await RowsAsync(client, scenario);
-
-        Assert.Equal(
-            ["booked-today", "booked-yesterday"],
-            rows.Where(row => row.Status == "BOOK").Select(row => row.Key).ToArray());
     }
 
     private sealed record Scenario(Guid Owner, Guid Space);
@@ -111,17 +95,18 @@ public sealed class TransactionPendingOrderTests
                 OwnershipType = AccountOwnershipTypes.Owner
             });
 
-            // "pending-undated" is the shape Enable Banking delivers for a card authorisation: a status
-            // and a value date, no booking date yet. The observation timestamps are the tie-breaker the
-            // old ordering fell back to inside a booking day, so the booked entry is the one seen last -
-            // exactly the case where a pending row dated today ended up below it.
+            // Die Form, die die Bank liefert: eine vorgemerkte Karte hat ihren Zahltag als Buchungsdatum und
+            // einen Platzhalter als Valuta (hier +9 Tage) - der darf die Reihenfolge nicht bestimmen.
+            // "pending-undated" hat nur die Valuta. Am selben Tag entscheidet der Beobachtungszeitpunkt:
+            // die Buchung heute wurde zuletzt gesehen, steht aber trotzdem ueber der vorgemerkten.
             var seenAt = DateTimeOffset.UtcNow;
             foreach (var (key, status, booking, value, updated) in new[]
                      {
-                         ("booked-yesterday", "BOOK", (DateOnly?)today.AddDays(-1), (DateOnly?)today.AddDays(-1), seenAt.AddMinutes(-4)),
+                         ("pending-last-week", "PDNG", (DateOnly?)today.AddDays(-7), (DateOnly?)today.AddDays(2), seenAt.AddMinutes(-5)),
+                         ("booked-yesterday", "BOOK", (DateOnly?)today.AddDays(-1), (DateOnly?)today.AddDays(-1), seenAt.AddMinutes(-1)),
                          ("pending-undated", "PDNG", null, today.AddDays(-1), seenAt.AddMinutes(-3)),
-                         ("pending-today", "PDNG", today, today, seenAt.AddMinutes(-2)),
-                         ("booked-today", "BOOK", today, today, seenAt.AddMinutes(-1))
+                         ("pending-today", "PDNG", today, today.AddDays(9), seenAt.AddMinutes(-4)),
+                         ("booked-today", "BOOK", today, today, seenAt.AddMinutes(-2))
                      })
                 db.Transactions.Add(new FinanceTransaction
                 {
