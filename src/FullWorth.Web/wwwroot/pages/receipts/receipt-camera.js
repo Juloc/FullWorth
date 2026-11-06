@@ -23,11 +23,21 @@ import { alignPair, splitIntoPages, stitchStrips } from './receipt-stitch.js';
 
 const ANALYSIS_WIDTH = 320;
 const FRAME_MS = 125;
-const STEADY_FRAMES = 5;
-const STEADY_SHIFT = 0.015;
-const STEADY_MOTION = 4;
+const STEADY_FRAMES = 3;
+const STEADY_SHIFT = 0.03;
+const STEADY_MOTION = 5;
+// Bewegung wird auf einem Viertel der Analysebreite gemessen: Sensorrauschen und das Zittern einer
+// Hand, die ruhig zu halten meint, mitteln sich dort weg. Auf voller Analysebreite lag sie bei einem
+// Beleg voller Schrift staendig ueber der Schwelle, und die Kamera wartete ewig auf ein "ruhiges" Bild.
+const MOTION_DIVISOR = 4;
+// Eine Messung, die ein Geraet nie erfuellt, darf nicht fuer immer warten. Je laenger ein erkannter Beleg
+// auf die Aufnahme wartet, desto weiter geben die Grenzen nach - nach PATIENCE_FRAMES (etwa 2 s) auf das
+// Mehrfache. Die Handaufnahme gibt es ohnehin immer; das hier ist fuer den, der sie nicht braucht.
+const PATIENCE_FRAMES = 16;
+const PATIENCE_LOOSENING = 2;
 const REARM_SHIFT = 0.06;
 const SHARP_SHARE = 0.85;
+const SHARP_SHARE_PATIENT = 0.55;
 const SHARP_FLOOR = 15;
 const AUTO_PAUSE_MS = 1500;
 const AUTO_GRACE_MS = 2500;
@@ -73,6 +83,7 @@ function run({ limit, toast, resolve }) {
   let previousGray = null;
   let previousCorners = null;
   let steady = 0;
+  let waiting = 0;
   let peak = 0;
   let current = null;
   let torchOn = false;
@@ -206,11 +217,12 @@ function run({ limit, toast, resolve }) {
     const full = toGray(rgba, width, height, width);
     const found = findReceipt(toGray(rgba, width, height, width / 2));
 
-    const still = motion(previousGray, full.gray) < STEADY_MOTION;
-    previousGray = full.gray;
+    const coarse = toGray(rgba, width, height, width / MOTION_DIVISOR).gray;
+    const moved = motion(previousGray, coarse);
+    previousGray = coarse;
 
     if (!found) {
-      current = null; previousCorners = null; steady = 0; peak = 0;
+      current = null; previousCorners = null; steady = 0; waiting = 0; peak = 0;
       if (!armed) armed = true;
       draw(null, false);
       if (!capturing) say(recording ? t('Bon verloren - zurück zum zuletzt aufgenommenen Stück.', 'Receipt lost - go back to the last captured part.') : searchingHint());
@@ -220,12 +232,16 @@ function run({ limit, toast, resolve }) {
     const shift = previousCorners ? maxShift(found.corners, previousCorners) : 1;
     previousCorners = found.corners;
     current = found;
-    if (!armed && (!still || shift > REARM_SHIFT)) armed = true;
+    if (!armed && (moved >= STEADY_MOTION || shift > REARM_SHIFT)) { armed = true; waiting = 0; }
 
-    steady = still && shift < STEADY_SHIFT ? steady + 1 : 0;
+    // Die Geduld wird nur gezaehlt, solange eine Einzelaufnahme moeglich waere (scharf gestellt, Beleg erkannt). Beim langen Bon bleiben die Grenzen, wie sie sind: dort entscheidet "ruhig" ueber die Schaerfe jedes Stuecks.
+    if (armed && mode === 'single') waiting++;
+    const patience = Math.min(waiting / PATIENCE_FRAMES, 1);
+    const loosen = 1 + PATIENCE_LOOSENING * patience;
+    steady = moved < STEADY_MOTION * loosen && shift < STEADY_SHIFT * loosen ? steady + 1 : 0;
     const sharp = sharpness(full.gray, full.width, full.height, boundingBox(found.corners, full.width, full.height));
     peak = steady === 0 ? sharp : Math.max(peak * 0.98, sharp);
-    const sharpEnough = peak > SHARP_FLOOR && sharp >= peak * SHARP_SHARE;
+    const sharpEnough = peak > SHARP_FLOOR && sharp >= peak * (SHARP_SHARE - (SHARP_SHARE - SHARP_SHARE_PATIENT) * patience);
     const ready = steady >= STEADY_FRAMES && sharpEnough;
     draw(found.corners, ready);
 
@@ -246,6 +262,7 @@ function run({ limit, toast, resolve }) {
     if (capturing || finished || shots.length >= limit || !video.videoWidth) return;
     capturing = true;
     armed = false;
+    waiting = 0;
     lastShotAt = Date.now();
     say(t('Wird aufbereitet …', 'Processing …'));
     try {

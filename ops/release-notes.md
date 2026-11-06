@@ -1,13 +1,19 @@
-# 0.82.1
+# 0.82.2
 
-Kleine Korrektur zu 0.82.0.
+Die Belegkamera löst jetzt auch bei einer normal ruhigen Hand von selbst aus.
 
 ## Behoben
 
-- Eine Buchung ganz ohne Datum (zum Beispiel eine Kartenvormerkung, bei der die Bank noch gar kein Datum geliefert hat) machte mitten in der
-  Liste eine eigene Gruppe „—“ auf und trennte damit zwei Tage („Gestern“, „—“, „Gestern“). Sie steht jetzt in der Gruppe, in die der
-  Server sie einsortiert hat (Tag der ersten Beobachtung).
+- **Die Kamera wartete ewig auf ein „ruhiges“ Bild.** Sie hat die Bewegung auf voller Analysebreite gemessen; Sensorrauschen und das
+  Zittern einer Hand, die ruhig zu halten meint, lagen bei einem Beleg voller Schrift dauernd über der Schwelle. Nachgestellt mit einem
+  verrauschten, leicht zitternden Kamerabild blieb die Anzeige zwölf Sekunden bei „Ruhig halten …“, ohne dass ein Foto kam. Jetzt wird die
+  Bewegung auf einem Viertel der Auflösung gemessen (Rauschen mittelt sich weg), es genügen drei ruhige Bilder statt fünf, und die Grenzen
+  geben nach, je länger ein erkannter Beleg wartet: nach etwa zwei Sekunden gelten sie dreimal so weit. Im selben Test löst die
+  Kamera damit gleich nach der Anlaufzeit aus.
+- Beim **Langen Bon** bleiben die Grenzen, wie sie waren.
 
 ## Wichtig
 
-- Nur Oberfläche, keine Datenbank-Änderung und keine Konfiguration nötig.
+- Nur am Emulator mit künstlichem Rauschen geprüft, nicht an einem echten Handy. Löst sie bei dir weiter zu spät oder zu früh aus, sag
+  Bescheid; der Auslöser von Hand funktioniert immer.
+- Keine Datenbank-Änderung, keine Konfiguration nötig.
