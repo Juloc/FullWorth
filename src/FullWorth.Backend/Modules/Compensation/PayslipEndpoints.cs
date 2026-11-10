@@ -8,12 +8,12 @@ public static class PayslipEndpoints
     {
         var group = app.MapGroup("/api/compensation/payslips").WithTags("Compensation");
 
-        group.MapPost("/extract", async (IFormFile file, CurrentUserContext currentUser, PayslipCodexExtractor codex, CancellationToken ct) =>
+        group.MapPost("/extract", async (IFormFile file, CurrentUserContext currentUser, PayslipExtractionService extraction, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             try
             {
-                return Results.Ok(await ExtractOneAsync(file, userId, codex, ct));
+                return Results.Ok(await ExtractOneAsync(file, userId, extraction, ct));
             }
             catch (ArgumentException exception)
             {
@@ -21,7 +21,7 @@ public static class PayslipEndpoints
             }
         }).DisableAntiforgery();
 
-        group.MapPost("/extract-batch", async (HttpRequest request, CurrentUserContext currentUser, PayslipCodexExtractor codex, CancellationToken ct) =>
+        group.MapPost("/extract-batch", async (HttpRequest request, CurrentUserContext currentUser, PayslipExtractionService extraction, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             if (!request.HasFormContentType) return Results.BadRequest(new { error = "Formulardaten mit Dateien werden erwartet." });
@@ -37,7 +37,7 @@ public static class PayslipEndpoints
                 var name = Path.GetFileName(file.FileName);
                 try
                 {
-                    items.Add(new PayslipBatchItem(name, await ExtractOneAsync(file, userId, codex, ct), null));
+                    items.Add(new PayslipBatchItem(name, await ExtractOneAsync(file, userId, extraction, ct), null));
                 }
                 catch (ArgumentException exception)
                 {
@@ -63,11 +63,11 @@ public static class PayslipEndpoints
             return delta is null ? Results.NoContent() : Results.Ok(delta);
         });
 
-        group.MapPost("/", async (Guid fullWorthSpaceId, PayslipRecordWrite request, CurrentUserContext currentUser, PayslipStore store, CancellationToken ct) =>
+        group.MapPost("/", async (Guid fullWorthSpaceId, Guid? importId, PayslipRecordWrite request, CurrentUserContext currentUser, PayslipStore store, CancellationToken ct) =>
         {
             try
             {
-                var saved = await store.SaveAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
+                var saved = await store.SaveAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, importId, ct);
                 return saved is null ? Results.NotFound() : Results.Created($"/api/compensation/payslips/{saved.Id}?fullWorthSpaceId={fullWorthSpaceId}", saved);
             }
             catch (ArgumentException exception)
@@ -76,9 +76,9 @@ public static class PayslipEndpoints
             }
         });
 
-        group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, PayslipStore store, CancellationToken ct) =>
+        group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, DocumentImportService imports, CancellationToken ct) =>
         {
-            var deleted = await store.DeleteAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
+            var deleted = await imports.DeletePayslipAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return deleted switch
             {
                 null => Results.NotFound(),
@@ -90,14 +90,10 @@ public static class PayslipEndpoints
         return app;
     }
 
-    // OCR once, then let Codex structure the text; fall back to the deterministic regex parser whenever Codex
-    // is unavailable or returns nothing usable, so a payslip is never partially interpreted as complete.
     private static async Task<PayslipExtractionResult> ExtractOneAsync(
-        IFormFile file, Guid userId, PayslipCodexExtractor codex, CancellationToken ct)
+        IFormFile file, Guid userId, PayslipExtractionService extraction, CancellationToken ct)
     {
-        var text = await PayslipExtractor.OcrAsync(file, ct);
-        if (string.IsNullOrWhiteSpace(text))
-            return PayslipTextParser.Empty("OCR konnte keinen Text erkennen.");
-        return await codex.TryStructureAsync(userId, text, ct) ?? PayslipTextParser.Parse(text);
+        await using var stream = file.OpenReadStream();
+        return await extraction.ExtractAsync(userId, stream, file.FileName, ct);
     }
 }

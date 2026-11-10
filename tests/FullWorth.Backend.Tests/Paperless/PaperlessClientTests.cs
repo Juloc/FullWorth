@@ -1,19 +1,20 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using FullWorth.Backend.Modules.Paperless;
 using FullWorth.Backend.Modules.Purchases.ReceiptImports;
 using Microsoft.Extensions.Options;
 
-namespace FullWorth.Backend.Tests.Purchases.ReceiptImports;
+namespace FullWorth.Backend.Tests.Paperless;
 
-public sealed class PaperlessReceiptClientTests
+public sealed class PaperlessClientTests
 {
     [Theory]
     [InlineData("https://paperless.example.test", "https://paperless.example.test/")]
     [InlineData("http://paperless.local:8000/paperless", "http://paperless.local:8000/paperless/")]
     public void NormalizeBaseUriAcceptsHttpAndHttps(string input, string expected)
     {
-        Assert.Equal(expected, PaperlessReceiptClient.NormalizeBaseUri(input).ToString());
+        Assert.Equal(expected, PaperlessClient.NormalizeBaseUri(input).ToString());
     }
 
     [Theory]
@@ -22,7 +23,7 @@ public sealed class PaperlessReceiptClientTests
     [InlineData("")]
     public void NormalizeBaseUriRejectsUnsupportedAddresses(string input)
     {
-        Assert.Throws<UriFormatException>(() => PaperlessReceiptClient.NormalizeBaseUri(input));
+        Assert.Throws<UriFormatException>(() => PaperlessClient.NormalizeBaseUri(input));
     }
 
     [Fact]
@@ -135,14 +136,14 @@ public sealed class PaperlessReceiptClientTests
         Assert.False(options.FolderEnabled);
         Assert.Equal(500, options.MaxBatchItems);
         Assert.Equal(512L * 1024 * 1024, options.MaxUploadBytes);
-        Assert.Equal(60, options.PaperlessAutoImportIntervalMinutes);
+        Assert.Equal(60, new PaperlessOptions().PaperlessAutoImportIntervalMinutes);
         Assert.True(options.AutoStart);
         Assert.Equal("EUR", options.DefaultCurrency);
     }
 
-    private static PaperlessReceiptClient CreateClient(HttpMessageHandler handler) => new(
+    private static PaperlessClient CreateClient(HttpMessageHandler handler) => new(
         new TestHttpClientFactory(handler),
-        Options.Create(new ReceiptImportOptions { MaxBatchItems = 500, PaperlessPageSize = 1, PaperlessTimeoutSeconds = 10 }));
+        Options.Create(new PaperlessOptions { MaxBatchItems = 500, PaperlessPageSize = 1, PaperlessTimeoutSeconds = 10 }));
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
     {

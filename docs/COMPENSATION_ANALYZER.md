@@ -107,13 +107,59 @@ The tax-free benefit option is explicitly a comparison simulation; eligibility o
 Implemented in the first release:
 - PDF/JPG/PNG/WEBP/TIFF/BMP upload.
 - Local-only extraction in the backend container using `pdftoppm` + Tesseract (`deu+eng`).
-- Temporary files are deleted after processing; the original payslip is not intentionally persisted.
+- Temporary files are deleted after processing; a payslip uploaded in the browser is not persisted. A payslip that comes from Paperless (below) is the exception: its original PDF is kept, encrypted.
 - Parser detects period, gross, net, payout, wage tax, solidarity surcharge, church tax, RV, AV, KV, PV, company-car benefit, bAV and bonus/extra payment.
 - Confidence score and warnings are returned.
 - User must review/correct extracted fields before persistence.
 - Confirmed structured monthly observations are persisted per user and finance space.
 - Latest two months can be compared with component-level explanations for net changes.
 - Saved observations form the first salary/payslip history.
+
+#### Employment contracts and the change log
+
+A Paperless preset of kind `contract` finds contracts and addenda through the same pipeline
+(`CompensationDocumentImports.Kind`; routes `/api/compensation/document-imports?kind=`). Reading differs:
+`IDocumentOcr` reads the PDF text layer first (several pages), OCR otherwise, then Codex (`ContractCodexExtractor`),
+and only without a usable answer the regex `ContractTextParser`, a stopgap that fills only what a keyword pins down.
+
+Confirmed states live in `EmploymentContractStates` (valid from, contract/addendum, employer, gross per month, weekly
+hours, vacation days, company car, employer bAV share, notice period, position, named extra fields). Only states are
+stored; `GET /api/compensation/contracts` returns `{ states, events, hints }`:
+
+- `events` is the change log (`ContractChangeLog`): every state against the previous confirmed one, newest first,
+  changed fields with old and new (the salary with its percentage), unchanged fields separately.
+- `hints` is the reconciliation (`ContractReconciliation`): the running gross of each payslip (without bonus and
+  company-car benefit) against the state in force. One deviating month is a note; the same deviation over two months or
+  up to the latest payslip is "change detected" with a suggested state.
+- `POST /contracts?importId=` confirms a find (or creates a state by hand without it), `DELETE /contracts/{id}` removes
+  it and its PDF.
+
+**Why states are not written into `CompensationHistory`:** that timeline holds the user's planning events and feeds the
+profile and its calculations. Copying contract states into it would be a second source for the same salary (deleting one
+leaves the other) and an automatic write would change what the calculator starts from. Contract states stay the record of
+what was agreed; the history stays what the user plans.
+
+#### Payslips from Paperless
+
+A Paperless preset of kind `payslip` (`PaperlessImportPresets.Kind`, created in the payslip tab, a Paperless
+search such as `type:Lohnabrechnung`) finds payslip documents the way the receipt import finds receipts:
+
+- The preset run (`PaperlessAutoImportWorker` on its interval, or `POST /api/purchases/receipt-imports/paperless/presets/{id}/run`)
+  only files each new document as a *find* (`CompensationDocumentImports`, status `pending`). Unlike receipt presets it does
+  not start from "now": the payslips that already exist are found too.
+- `DocumentImportWorker` downloads the PDF and reads it with the same chain as the browser upload
+  (`PayslipExtractionService`: local OCR, Codex, regex fallback), stores the PDF encrypted
+  (`Documents/EncryptedBlobStore`, HKDF label `fullworth-payslip-blob`, under `CompensationStorage:RootPath`,
+  default `/data/pension/compensation` so no extra volume is needed) and sets the find to `needs_review`.
+  Three failed attempts make it `failed`.
+- **Nothing is saved as a payslip automatically.** The user opens a find ("Prüfen" fills the review form) and
+  confirms with `POST /payslips?importId=...`, which creates the payslip and links the PDF and the Paperless
+  document (`document` on the payslip view) in one statement. A find can also be dismissed.
+- Dedup: Paperless document id per instance, and Paperless checksum. A confirmed or dismissed find stays as a
+  row, so the next run does not bring it back. Deleting the payslip deletes its PDF (the row stays as dismissed).
+- Visibility: finds and PDFs belong to the user who imported them (`UserId`), not to the space. Every
+  lookup names the user; another member of the same space neither sees nor opens them. Deleting an account
+  deletes the user's finds and PDF files in every space (`AccountPurgeService`, `DocumentImportStore.DeleteAllForUserAsync`).
 
 ### 10. Effective-dated compensation history
 
@@ -202,6 +248,9 @@ Payslips:
 - `GET /payslips/latest-delta?fullWorthSpaceId=...`
 - `POST /payslips?fullWorthSpaceId=...`
 - `DELETE /payslips/{id}?fullWorthSpaceId=...`
+- `GET /document-imports?fullWorthSpaceId=...` (finds waiting for review)
+- `GET /document-imports/{id}/document?fullWorthSpaceId=...` (the stored PDF, owner only)
+- `POST /document-imports/{id}/dismiss`
 
 Every data API requires the trusted authenticated backend user context.
 
@@ -229,6 +278,11 @@ Compensation data is intentionally private to the user even inside a shared fina
 - period
 - JSONB confirmed structured values
 - timestamps
+
+### `CompensationDocumentImports` and `EmploymentContractStates`
+Created by migration `CompensationDocumentImports` (not runtime DDL). One import row per payslip or contract found in Paperless: owner
+(`UserId`), Paperless source/document id/checksum/URL, status, the extracted values (JSONB), the encrypted PDF's
+storage path, and the confirmed payslip's id.
 
 ### `compensation_history`
 - UUID primary key

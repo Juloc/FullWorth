@@ -53,11 +53,13 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         // Stelle statt in einer HTML-Datei.
         Assert.Contains("import './extended.js'", baseJs);
         Assert.Contains("import './history.js'", baseJs);
+        Assert.Contains("import './contracts.js'", baseJs);
         Assert.Contains("import './other-income.js'", baseJs);
         Assert.Contains("import './benchmarks.js'", baseJs);
         Assert.Contains("api/compensation/calculate", baseJs);
         Assert.Contains("api/compensation/insights", extendedJs);
         Assert.Contains("api/compensation/payslips/extract", extendedJs);
+        Assert.Contains("api/compensation/contracts", await PageFileAsync("contracts.js"));
         Assert.Contains("api/compensation/history", historyJs);
         Assert.Contains("api/compensation/timeline", historyJs);
         Assert.Contains("history-chart", css);

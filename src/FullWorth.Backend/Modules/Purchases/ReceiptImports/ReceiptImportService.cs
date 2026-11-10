@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using FullWorth.Backend.Security;
+using FullWorth.Backend.Modules.Paperless;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
@@ -9,10 +9,11 @@ namespace FullWorth.Backend.Modules.Purchases.ReceiptImports;
 public sealed class ReceiptImportService(
     ReceiptImportStore store,
     ReceiptScanQueueService queue,
-    PaperlessReceiptClient paperless,
-    FieldCipher cipher,
+    PaperlessClient paperless,
+    PaperlessService paperlessService,
+    PaperlessStore paperlessStore,
     IOptions<ReceiptImportOptions> options,
-    IOptions<PurchaseStorageOptions> purchaseStorage)
+    IOptions<PurchaseStorageOptions> purchaseStorage) : IPaperlessPresetImporter
 {
     private readonly ReceiptImportOptions settings = options.Value;
     private readonly PurchaseStorageOptions receiptStorage = purchaseStorage.Value;
@@ -77,138 +78,21 @@ public sealed class ReceiptImportService(
             ?? throw new ReceiptImportException("receipt import batch could not be reloaded.");
     }
 
-    public async Task<PaperlessConnectionView?> GetPaperlessConnectionAsync(Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        var stored = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
-        return stored is null ? null : ToView(stored);
-    }
-
-    public async Task<(PaperlessConnectionView? Connection, string? ServerVersion, string? Error)> SavePaperlessConnectionAsync(
-        Guid userId,
-        Guid fullWorthSpaceId,
-        PaperlessConnectionWrite request,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(request.ApiToken)) return (null, null, "Paperless API token is required.");
-        Uri baseUri;
-        try { baseUri = PaperlessReceiptClient.NormalizeBaseUri(request.BaseUrl); }
-        catch (UriFormatException ex) { return (null, null, ex.Message); }
-
-        var previous = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
-        var test = await paperless.TestAsync(baseUri.ToString(), request.ApiToken, ct);
-        if (!test.Success) return (null, test.ServerVersion, test.Error);
-
-        if (previous is not null &&
-            !string.Equals(PaperlessReceiptClient.NormalizeBaseUri(previous.BaseUrl).ToString(), baseUri.ToString(), StringComparison.OrdinalIgnoreCase))
-            await store.DisablePaperlessAutoImportAsync(fullWorthSpaceId, ct);
-
-        var protectedToken = cipher.Protect(request.ApiToken.Trim())
-            ?? throw new InvalidOperationException("Paperless token could not be protected.");
-        await store.UpsertPaperlessConnectionAsync(fullWorthSpaceId, userId, baseUri.ToString(), protectedToken, request.DefaultQuery, request.IsEnabled, ct);
-        var stored = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
-        return (stored is null ? null : ToView(stored), test.ServerVersion, null);
-    }
-
-    public async Task DeletePaperlessConnectionAsync(Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        await store.DisablePaperlessAutoImportAsync(fullWorthSpaceId, ct);
-        await store.DeletePaperlessConnectionAsync(fullWorthSpaceId, ct);
-    }
-
-    public async Task<(bool Success, string? ServerVersion, string? Error)> TestPaperlessAsync(Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
-        return await paperless.TestAsync(connection.BaseUrl, connection.Token, ct);
-    }
-
-    public async Task<PaperlessFilterOptionsView> GetPaperlessFilterOptionsAsync(Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
-        return await paperless.GetFilterOptionsAsync(connection.BaseUrl, connection.Token, ct);
-    }
-
     public async Task<PaperlessPreviewResult> PreviewPaperlessAsync(Guid fullWorthSpaceId, PaperlessPreviewRequest request, CancellationToken ct)
     {
-        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
-        var effective = ApplyDefaultQuery(request, connection.DefaultQuery);
+        var connection = await paperlessService.RequireAsync(fullWorthSpaceId, ct);
+        var effective = PaperlessService.ApplyDefaultQuery(request, connection.DefaultQuery);
         var preview = await paperless.PreviewAsync(connection.BaseUrl, connection.Token, effective, ct);
         return await MarkImportedAsync(fullWorthSpaceId, connection.BaseUrl, preview, ct);
     }
 
-    public Task<IReadOnlyList<PaperlessImportPresetView>> ListPaperlessPresetsAsync(
-        Guid userId,
-        Guid fullWorthSpaceId,
-        CancellationToken ct) =>
-        store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct);
+    public IReadOnlyCollection<string> Kinds => [PaperlessPresetKinds.Receipt];
 
-    public async Task<PaperlessImportPresetView> SavePaperlessPresetAsync(
-        Guid userId,
-        Guid fullWorthSpaceId,
-        Guid? presetId,
-        PaperlessImportPresetWrite request,
-        CancellationToken ct)
-    {
-        var name = request.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(name)) throw new ReceiptImportException("Preset name is required.");
-        if (name.Length > 100) throw new ReceiptImportException("Preset name is too long.");
-
-        var id = presetId is { } value && value != Guid.Empty ? value : Guid.NewGuid();
-        var existing = presetId is { } existingId
-            ? await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, existingId, ct)
-            : null;
-        if (presetId.HasValue && existing is null) throw new ReceiptImportException("Paperless preset was not found.");
-
-        var siblings = await store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct);
-        if (siblings.Any(x => x.Id != id && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
-            throw new ReceiptImportException("A Paperless preset with this name already exists.");
-
-        var query = string.IsNullOrWhiteSpace(request.Query) ? null : request.Query.Trim();
-        if (query?.Length > 4000) throw new ReceiptImportException("Paperless query is too long.");
-        var editorJson = string.IsNullOrWhiteSpace(request.EditorJson) ? null : request.EditorJson;
-        if (editorJson?.Length > 32000) throw new ReceiptImportException("Paperless preset editor data is too large.");
-
-        var currency = NormalizeCurrency(request.Currency);
-        var lastSeen = existing?.LastSeenDocumentId;
-        var baselineRequired = request.AutoImport &&
-            (existing is null || !existing.AutoImport || !string.Equals(existing.Query, query, StringComparison.Ordinal));
-
-        if (baselineRequired)
-        {
-            var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
-            var baselineFilter = ApplyDefaultQuery(
-                new PaperlessPreviewRequest(Query: query, Limit: settings.MaxBatchItems),
-                connection.DefaultQuery);
-            var preview = await paperless.PreviewAsync(
-                connection.BaseUrl,
-                connection.Token,
-                baselineFilter,
-                ct);
-            lastSeen = preview.Documents.Count == 0 ? 0 : preview.Documents.Max(x => x.Id);
-        }
-
-        return await store.SavePaperlessPresetAsync(
-            id,
-            userId,
-            fullWorthSpaceId,
-            name,
-            query,
-            editorJson,
-            request.AutoImport,
-            request.AnalyzeAutomatically,
-            currency,
-            lastSeen,
-            ct);
-    }
-
-    public Task DeletePaperlessPresetAsync(Guid userId, Guid fullWorthSpaceId, Guid presetId, CancellationToken ct) =>
-        store.DeletePaperlessPresetAsync(userId, fullWorthSpaceId, presetId, ct);
-
-    public async Task RunPaperlessAutoImportPresetAsync(PaperlessAutoImportTarget preset, CancellationToken ct)
+    public async Task<PaperlessImportOutcome> ImportAsync(PaperlessImportPresetView preset, PaperlessConnection connection, CancellationToken ct)
     {
         try
         {
-            var connection = await RequirePaperlessAsync(preset.FullWorthSpaceId, ct);
-            var automaticFilter = ApplyDefaultQuery(
+            var automaticFilter = PaperlessService.ApplyDefaultQuery(
                 new PaperlessPreviewRequest(Query: preset.Query, Limit: settings.MaxBatchItems),
                 connection.DefaultQuery);
             var preview = await paperless.PreviewAsync(
@@ -229,18 +113,14 @@ public sealed class ReceiptImportService(
             {
                 var imported = await store.GetImportedPaperlessDocumentIdsAsync(
                     preset.FullWorthSpaceId,
-                    PaperlessSourcePrefix(connection.BaseUrl),
+                    PaperlessService.SourcePrefix(connection.BaseUrl),
                     newDocuments.Select(x => x.Id).ToArray(),
                     ct);
                 imported.UnionWith(await OwnDocumentIdsAsync(preset.FullWorthSpaceId, newDocuments, ct));
                 newDocuments = newDocuments.Where(x => !imported.Contains(x.Id)).ToList();
             }
 
-            if (newDocuments.Count == 0)
-            {
-                await store.UpdatePaperlessPresetCheckAsync(preset.Id, maxSeen, false, null, ct);
-                return;
-            }
+            if (newDocuments.Count == 0) return new(maxSeen, false, null);
 
             var batch = await ImportPaperlessAsync(
                 preset.UserId,
@@ -252,16 +132,14 @@ public sealed class ReceiptImportService(
                     preset.AnalyzeAutomatically),
                 ct);
 
-            await store.UpdatePaperlessPresetCheckAsync(
-                preset.Id,
+            return new(
                 batch.Failed == 0 ? maxSeen : null,
                 batch.Completed > 0 || batch.Queued > 0 || batch.Processing > 0 || batch.NeedsReview > 0,
-                batch.Failed > 0 ? $"{batch.Failed} receipt(s) failed during automatic import." : null,
-                ct);
+                batch.Failed > 0 ? $"{batch.Failed} receipt(s) failed during automatic import." : null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            await store.UpdatePaperlessPresetCheckAsync(preset.Id, null, false, SafeError(ex), ct);
+            return new(null, false, SafeError(ex));
         }
     }
 
@@ -274,7 +152,7 @@ public sealed class ReceiptImportService(
         if (preview.Documents.Count == 0) return preview;
         var imported = await store.GetImportedPaperlessDocumentIdsAsync(
             fullWorthSpaceId,
-            PaperlessSourcePrefix(baseUrl),
+            PaperlessService.SourcePrefix(baseUrl),
             preview.Documents.Select(x => x.Id).ToArray(),
             ct);
         imported.UnionWith(await OwnDocumentIdsAsync(fullWorthSpaceId, preview.Documents, ct));
@@ -305,8 +183,8 @@ public sealed class ReceiptImportService(
         PaperlessImportRequest request,
         CancellationToken ct)
     {
-        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
-        var filter = ApplyDefaultQuery(request.Filter, connection.DefaultQuery);
+        var connection = await paperlessService.RequireAsync(fullWorthSpaceId, ct);
+        var filter = PaperlessService.ApplyDefaultQuery(request.Filter, connection.DefaultQuery);
         IReadOnlyList<PaperlessDocumentSummary> documents;
         if (request.DocumentIds is { Count: > 0 })
         {
@@ -324,7 +202,7 @@ public sealed class ReceiptImportService(
         var autoStart = request.AutoStart ?? settings.AutoStart;
         var currency = NormalizeCurrency(request.Currency);
         var batch = await store.CreateBatchAsync(userId, fullWorthSpaceId, ReceiptImportSourceTypes.Paperless, "Paperless-ngx", currency, autoStart, null, ct);
-        var sourcePrefix = PaperlessSourcePrefix(connection.BaseUrl);
+        var sourcePrefix = PaperlessService.SourcePrefix(connection.BaseUrl);
 
         var ownDocuments = await OwnDocumentIdsAsync(fullWorthSpaceId, documents, ct);
         foreach (var document in documents)
@@ -372,7 +250,7 @@ public sealed class ReceiptImportService(
             // was schon geholt wurde, wird nie ein zweites Mal angefragt.
         }
 
-        await store.TouchPaperlessSyncAsync(fullWorthSpaceId, ct);
+        await paperlessStore.TouchPaperlessSyncAsync(fullWorthSpaceId, ct);
         return await store.GetBatchAsync(userId, fullWorthSpaceId, batch.Id, ct)
             ?? throw new ReceiptImportException("Paperless import batch could not be reloaded.");
     }
@@ -393,7 +271,7 @@ public sealed class ReceiptImportService(
         var fetched = 0;
         // Eine Verbindung je Bereich, nicht je Beleg - die Einstellungen aendern sich waehrend eines
         // Imports nicht, und jedes Mal neu zu laden waere eine Datenbankabfrage pro Dokument.
-        var connections = new Dictionary<Guid, PaperlessRuntimeConnection?>();
+        var connections = new Dictionary<Guid, PaperlessConnection?>();
 
         foreach (var item in pending)
         {
@@ -402,8 +280,8 @@ public sealed class ReceiptImportService(
             {
                 // Eine abgeschaltete oder geloeschte Verbindung ist kein Fehler des Belegs - aber ohne sie
                 // laesst er sich nicht holen, und das gehoert an die Zeile geschrieben.
-                try { connection = await RequirePaperlessAsync(item.FullWorthSpaceId, ct); }
-                catch (ReceiptImportException) { connection = null; }
+                try { connection = await paperlessService.RequireAsync(item.FullWorthSpaceId, ct); }
+                catch (PaperlessException) { connection = null; }
                 connections[item.FullWorthSpaceId] = connection;
             }
 
@@ -656,14 +534,14 @@ public sealed class ReceiptImportService(
     {
         var documentId = ParsePaperlessDocumentId(item)
             ?? throw new ReceiptImportException("Paperless document identity is missing from the failed import item.");
-        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
+        var connection = await paperlessService.RequireAsync(fullWorthSpaceId, ct);
         await using var download = await paperless.DownloadAsync(connection.BaseUrl, connection.Token, documentId, ct);
         var fingerprint = await HashAsync(download.Content, ct);
         await store.UpdateFingerprintAsync(item.Id, fingerprint, ct);
         download.Content.Position = 0;
         var file = CreateFormFile(download.Content, download.FileName, download.ContentType);
         await QueueFileAsync(userId, fullWorthSpaceId, item, file, batch.Currency, batch.AutoStart && !batch.IsPaused, ct);
-        await store.TouchPaperlessSyncAsync(fullWorthSpaceId, ct);
+        await paperlessStore.TouchPaperlessSyncAsync(fullWorthSpaceId, ct);
     }
 
     private async Task RetryFolderItemAsync(
@@ -737,7 +615,7 @@ public sealed class ReceiptImportService(
     /// <summary>Ob sich der Beleg eines Kaufs nach Paperless ablegen laesst - und wenn nicht, warum nicht, in einem Satz fuer den Benutzer.</summary>
     public async Task<PaperlessUploadStatus> GetPaperlessUploadStatusAsync(Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct)
     {
-        var connection = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
+        var connection = await paperlessStore.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
         if (connection is not { IsEnabled: true }) return new(false, false, "Paperless ist nicht verbunden.", null);
         var existing = await store.GetPaperlessUploadAsync(fullWorthSpaceId, purchaseId, ct);
         if (existing is not null) return new(true, false, "Dieser Beleg liegt schon in Paperless.", existing.UploadedAt);
@@ -755,7 +633,7 @@ public sealed class ReceiptImportService(
     /// </summary>
     public async Task<PaperlessUploadStatus> UploadToPaperlessAsync(Guid userId, Guid fullWorthSpaceId, PurchaseView purchase, CancellationToken ct)
     {
-        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
+        var connection = await paperlessService.RequireAsync(fullWorthSpaceId, ct);
         if (await store.GetPaperlessUploadAsync(fullWorthSpaceId, purchase.Id, ct) is not null)
             throw new ReceiptImportException("Dieser Beleg liegt schon in Paperless.");
         var files = await store.ListPurchaseSourceFilesAsync(fullWorthSpaceId, purchase.Id, ct);
@@ -810,16 +688,6 @@ public sealed class ReceiptImportService(
     private static bool IsPdf(PurchaseSourceFile file) => string.Equals(file.MimeType, "application/pdf", StringComparison.OrdinalIgnoreCase);
 
     private const long MaxPaperlessUploadBytes = 100L * 1024 * 1024;
-
-    private async Task<PaperlessRuntimeConnection> RequirePaperlessAsync(Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        var stored = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct)
-            ?? throw new ReceiptImportException("Paperless is not configured for this FullWorth Space.");
-        if (!stored.IsEnabled) throw new ReceiptImportException("Paperless connection is disabled.");
-        var token = cipher.Unprotect(stored.ApiTokenProtected);
-        if (string.IsNullOrWhiteSpace(token)) throw new ReceiptImportException("Paperless token could not be loaded.");
-        return new(stored.BaseUrl, token, stored.DefaultQuery);
-    }
 
     private async Task<List<FolderReceiptFile>> DiscoverFolderForImportAsync(string root, Guid fullWorthSpaceId, CancellationToken ct)
     {
@@ -947,17 +815,6 @@ public sealed class ReceiptImportService(
         return root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
-    private static string PaperlessSourcePrefix(string baseUrl) =>
-        PaperlessReceiptClient.NormalizeBaseUri(baseUrl).GetLeftPart(UriPartial.Authority).ToLowerInvariant();
-
-    private static PaperlessPreviewRequest ApplyDefaultQuery(PaperlessPreviewRequest request, string? defaultQuery) =>
-        string.IsNullOrWhiteSpace(request.Query) && !string.IsNullOrWhiteSpace(defaultQuery)
-            ? request with { Query = defaultQuery }
-            : request;
-
-    private static PaperlessConnectionView ToView(PaperlessStoredConnection stored) =>
-        new(stored.FullWorthSpaceId, stored.BaseUrl, true, stored.DefaultQuery, stored.IsEnabled, stored.LastSyncAt, stored.UpdatedAt);
-
     private static IFormFile CreateFormFile(Stream stream, string fileName, string contentType) =>
         new FormFile(stream, 0, stream.Length, "receipt", SafeName(fileName))
         {
@@ -1010,7 +867,6 @@ public sealed class ReceiptImportService(
         ? (ex.Message.Length <= 1000 ? ex.Message : ex.Message[..1000])
         : "Receipt import failed.";
 
-    private sealed record PaperlessRuntimeConnection(string BaseUrl, string Token, string? DefaultQuery);
 }
 
 public sealed class ReceiptImportException(string message) : Exception(message);

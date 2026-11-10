@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using FullWorth.Backend.Modules.FullWorthSpaces;
+using FullWorth.Backend.Modules.Paperless;
 using FullWorth.Backend.Modules.Purchases.ReceiptImports;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
@@ -30,7 +31,7 @@ public sealed class PaperlessReceiptImportIntegrationTests
 
         using (var scope = factory.Services.CreateScope())
         {
-            var store = scope.ServiceProvider.GetRequiredService<ReceiptImportStore>();
+            var store = scope.ServiceProvider.GetRequiredService<PaperlessStore>();
             var stored = await store.GetPaperlessConnectionAsync(spaceId, CancellationToken.None);
             Assert.NotNull(stored);
             Assert.StartsWith("v1:", stored!.ApiTokenProtected);

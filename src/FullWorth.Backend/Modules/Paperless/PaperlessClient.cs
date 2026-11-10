@@ -3,13 +3,13 @@ using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 
-namespace FullWorth.Backend.Modules.Purchases.ReceiptImports;
+namespace FullWorth.Backend.Modules.Paperless;
 
-public sealed class PaperlessReceiptClient(
+public sealed class PaperlessClient(
     IHttpClientFactory httpClientFactory,
-    IOptions<ReceiptImportOptions> options)
+    IOptions<PaperlessOptions> options)
 {
-    private readonly ReceiptImportOptions settings = options.Value;
+    private readonly PaperlessOptions settings = options.Value;
 
     public async Task<(bool Success, string? ServerVersion, string? Error)> TestAsync(
         string baseUrl,
@@ -147,7 +147,7 @@ public sealed class PaperlessReceiptClient(
 
         using var request = CreateRequest(HttpMethod.Post, baseUrl, token, "api/documents/post_document/");
         request.Content = form;
-        var client = httpClientFactory.CreateClient("PaperlessReceipts");
+        var client = httpClientFactory.CreateClient("Paperless");
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.PaperlessTimeoutSeconds, 5, 300));
         var gate = GateFor(request.RequestUri!);
         await gate.WaitAsync(ct);
@@ -194,7 +194,7 @@ public sealed class PaperlessReceiptClient(
     /// </summary>
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completion, CancellationToken ct)
     {
-        var client = httpClientFactory.CreateClient("PaperlessReceipts");
+        var client = httpClientFactory.CreateClient("Paperless");
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.PaperlessTimeoutSeconds, 5, 300));
         var gate = GateFor(request.RequestUri!);
         var attempts = Math.Clamp(settings.PaperlessMaxRetries, 1, 6);

@@ -35,6 +35,7 @@ using FullWorth.Backend.Modules.Loans;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Modules.Pension;
 using FullWorth.Backend.Modules.Portfolio;
+using FullWorth.Backend.Modules.Paperless;
 using FullWorth.Backend.Modules.Preferences;
 using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Modules.Purchases.Amazon;
@@ -138,6 +139,7 @@ public static class BackendApplication
         builder.Services.AddScoped<FullWorthSeeder>();
         builder.Services.Configure<PurchaseStorageOptions>(builder.Configuration.GetSection(PurchaseStorageOptions.SectionName));
         builder.Services.Configure<ReceiptImportOptions>(builder.Configuration.GetSection(ReceiptImportOptions.SectionName));
+        builder.Services.Configure<PaperlessOptions>(builder.Configuration.GetSection(PaperlessOptions.SectionName));
         builder.Services.Configure<PriceChangeDetectionOptions>(builder.Configuration.GetSection(PriceChangeDetectionOptions.SectionName));
         builder.Services.AddScoped<UserStore>(services => new UserStore(services.GetRequiredService<FullWorthDbContext>()));
         builder.Services.AddScoped<AccountPurgeService>();
@@ -342,7 +344,21 @@ public static class BackendApplication
         builder.Services.AddScoped<ReceiptScanQueueService>();
         builder.Services.AddScoped<CodexReceiptBridgeClient>();
         builder.Services.AddScoped<CodexModelResolver>();
+        builder.Services.AddScoped<CodexStructurer>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Compensation.PayslipCodexExtractor>();
+        builder.Services.AddScoped<ContractCodexExtractor>();
+        builder.Services.AddScoped<ContractExtractionService>();
+        builder.Services.AddScoped<IDocumentReader>(services => services.GetRequiredService<ContractExtractionService>());
+        builder.Services.AddScoped<IDocumentReader>(services => services.GetRequiredService<PayslipExtractionService>());
+        builder.Services.AddScoped<EmploymentContractStore>();
+        builder.Services.AddScoped<EmploymentContractService>();
+        builder.Services.AddSingleton<IDocumentOcr, LocalDocumentOcr>();
+        builder.Services.AddScoped<PayslipExtractionService>();
+        builder.Services.Configure<CompensationStorageOptions>(builder.Configuration.GetSection(CompensationStorageOptions.SectionName));
+        builder.Services.AddScoped<DocumentImportStore>();
+        builder.Services.AddScoped<DocumentImportService>();
+        builder.Services.AddScoped<IPaperlessPresetImporter>(services => services.GetRequiredService<DocumentImportService>());
+        builder.Services.AddHostedService<DocumentImportWorker>();
         builder.Services.AddScoped<PurchaseWorkspaceService>();
         builder.Services.AddScoped<PurchaseDocumentService>();
         builder.Services.AddScoped<PurchaseLifecycleService>();
@@ -357,9 +373,12 @@ public static class BackendApplication
         builder.Services.AddScoped<PurchaseReceiptSourceService>();
         builder.Services.AddScoped<ReceiptImportStore>();
         builder.Services.AddScoped<ReceiptImportService>();
-        builder.Services.AddScoped<PaperlessReceiptClient>();
-        builder.Services.AddHttpClient("PaperlessReceipts");
+        builder.Services.AddScoped<PaperlessStore>();
+        builder.Services.AddScoped<PaperlessService>();
+        builder.Services.AddScoped<PaperlessClient>();
+        builder.Services.AddHttpClient("Paperless");
         builder.Services.AddHostedService<PaperlessAutoImportWorker>();
+        builder.Services.AddScoped<IPaperlessPresetImporter>(services => services.GetRequiredService<ReceiptImportService>());
         builder.Services.AddHostedService<PaperlessDocumentFetchWorker>();
         
         builder.Services.Configure<AmazonIntegrationOptions>(builder.Configuration.GetSection(AmazonIntegrationOptions.SectionName));
@@ -582,6 +601,7 @@ public static class BackendApplication
         endpoints.MapProductEndpoints();
         endpoints.MapPurchaseReceiptSourceEndpoints();
         endpoints.MapReceiptImportEndpoints();
+        endpoints.MapPaperlessEndpoints();
         endpoints.MapAmazonIntegrationEndpoints();
         
         endpoints.MapAnalyticsEndpoints();

@@ -54,6 +54,7 @@
         <button data-tab="scenarios" type="button">Szenarien</button>
         <button data-extended-tab="optimizer" type="button">Optimierer</button>
         <button data-extended-tab="payslips" type="button">Lohnabrechnungen</button>
+        <button data-extended-tab="contracts" type="button">Arbeitsverträge</button>
         <button data-history-tab="history" type="button">Verlauf</button>
         <button data-jobrad-tab="jobrad" type="button">Dienstrad</button>
       </nav>
@@ -237,6 +238,51 @@
             </div>
             <article class="panel comp-breakdown"><h2>Einordnung</h2><div id="neg-explanation" class="neg-explanation">Noch keine Analyse.</div></article>
             <article class="panel comp-assumptions"><h2>Inflationsdaten</h2><p id="inflation-source">—</p></article>
+          </aside>
+        </div>
+      </section>
+
+      @* Arbeitsverträge: Diagramm und Änderungsprotokoll nebeneinander (auf dem Handy das Diagramm oben), darunter
+         Paperless-Funde und das Formular zum Prüfen und Bestätigen. Gezeichnet wird alles in contracts.js. *@
+      <section id="tab-contracts" class="comp-tab">
+        <div id="contract-hints" class="po-hints"></div>
+        <div class="contract-overview">
+          <article class="panel comp-card co-chart">
+            <div class="panel-head"><div><h2>Brutto laut Vertrag</h2><p>Die Stufen der bestätigten Vertragsstände, dazu das laufende Brutto der Abrechnungen. Die Achse beginnt nicht bei null, damit die Sprünge lesbar bleiben.</p></div></div>
+            <div class="po-legend"><span><i class="cc-key-line"></i>Vertrag</span><span><i class="cc-key-dot is-ok"></i>Abrechnung entspricht</span><span><i class="cc-key-dot is-off"></i>Abrechnung weicht ab</span></div>
+            <div class="cc-wrap"><div id="contract-chart"></div><div class="cc-tip" hidden></div></div>
+          </article>
+          <article class="panel comp-card co-log">
+            <div class="panel-head"><div><h2>Änderungsprotokoll</h2><p>Jede bestätigte Änderung mit allen Details, neueste zuerst. Gezeigt wird, was sich gegenüber dem vorherigen Stand geändert hat.</p></div></div>
+            <div id="contract-log"></div>
+          </article>
+        </div>
+        <div class="payslip-layout">
+          <div class="payslip-stack">
+            <article class="panel comp-card">
+              <div class="panel-head"><div><h2>Aus Paperless</h2><p>Gefundene Arbeitsverträge und Nachträge warten hier auf deine Prüfung. Gespeichert wird erst, wenn du die Werte bestätigst.</p></div></div>
+              <div id="contract-finds" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
+            </article>
+          </div>
+          <aside class="payslip-stack">
+            <article class="panel comp-card">
+              <div class="panel-head"><div><h2>Vertragsstand prüfen</h2><p id="ct-review-hint">Alle Felder können vor dem Speichern korrigiert werden - oder du erfasst einen Stand von Hand.</p></div></div>
+              <div class="form-grid payslip-fields">
+                <label>Gültig ab<input id="ct-from" type="date"></label>
+                <label>Art<select id="ct-kind"><option value="contract">Arbeitsvertrag</option><option value="addendum">Nachtrag</option></select></label>
+                <label>Bruttogehalt / Monat<input id="ct-gross" type="number" min="0" step="0.01"></label>
+                <label>Wochenstunden<input id="ct-hours" type="number" min="0" max="80" step="0.5"></label>
+                <label>Urlaubstage<input id="ct-vacation" type="number" min="0" max="100" step="0.5"></label>
+                <label>bAV Arbeitgeberanteil / Monat<input id="ct-bav" type="number" min="0" step="0.01"></label>
+                <label>Arbeitgeber<input id="ct-employer" maxlength="200"></label>
+                <label>Position<input id="ct-position" maxlength="200"></label>
+                <label>Kündigungsfrist<input id="ct-notice" maxlength="200"></label>
+                <label class="check-row"><input id="ct-car" type="checkbox">Dienstwagen zur privaten Nutzung</label>
+              </div>
+              <div id="ct-extras" class="ct-extras"></div>
+              <div class="ct-extra-actions"><button id="ct-add-extra" class="btn btn-secondary" type="button">Weiteres Feld</button></div>
+              <button id="ct-save" class="btn btn-primary comp-calculate" type="button">Bestätigte Werte speichern</button>
+            </article>
           </aside>
         </div>
       </section>

@@ -1,3 +1,5 @@
+using FullWorth.Backend.Documents;
+
 namespace FullWorth.Backend.Modules.Pension;
 
 /// <summary>
@@ -202,10 +204,8 @@ public sealed record BavStoredBlob(string StoragePath, string EncryptionScheme);
 
 public static class BavDocumentEncryptionSchemes
 {
-    public const string AesGcmV1 = "aesgcm-v1";
-
-    /// <summary>Dev/test without a configured key, mirroring <c>FieldCipher.Null</c>. Never in Production.</summary>
-    public const string None = "none";
+    public const string AesGcmV1 = BlobEncryptionSchemes.AesGcmV1;
+    public const string None = BlobEncryptionSchemes.None;
 }
 
 /// <summary>A document as the API returns it. No draft, no file name guessing, no policy number.</summary>

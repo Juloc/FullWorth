@@ -80,6 +80,8 @@
 <symbol id="ui-cart" viewBox="0 0 24 24"><path d="M4 5h2l2 10h9l2-7H7"/><circle cx="10" cy="19" r="1.2"/><circle cx="17" cy="19" r="1.2"/></symbol>
 <symbol id="ui-scan" viewBox="0 0 24 24"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M8 12h8"/></symbol>
 <symbol id="ui-camera" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4Z"/><circle cx="12" cy="13" r="3.2"/></symbol>
+<symbol id="ui-alert" viewBox="0 0 24 24"><path d="M12 4 3 19h18Z"/><path d="M12 10v4.5M12 17.2v.1"/></symbol>
+<symbol id="ui-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.1"/></symbol>
 <symbol id="ui-upload" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4"/><path d="M5 15v4h14v-4"/></symbol>
 <symbol id="ui-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
 <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>

@@ -471,7 +471,11 @@ starts analysis. Multi-page PDFs stay one purchase and are expanded by the exist
   `autoStart`, optional `clientBatchId`.
 - **Paperless-ngx** — `GET|POST|DELETE /paperless/connection`, `POST /paperless/test`,
   `GET /paperless/options`, `GET|POST|DELETE /paperless/presets`, `POST /paperless/preview`,
-  `POST /paperless/import`. `PaperlessAutoImportWorker` re-runs auto-import presets on an interval.
+  `POST /paperless/import`, `POST /paperless/presets/{id}/run`. The connection, client and presets live in
+  `Modules/Paperless` (shared with the payslip import, see COMPENSATION_ANALYZER.md); a preset has a `kind`
+  (`receipt` by default, `payslip`), and `PaperlessAutoImportWorker` re-runs auto-import presets on an
+  interval, handing each to the `IPaperlessPresetImporter` of its kind. `GET /paperless/presets` lists the
+  receipt presets unless `?kind=` says otherwise.
 - **Watched folder** — `GET /folder/status`, `POST /folder/preview`, `POST /folder/import`.
 
 Batches and items are read back via `GET /batches` and `GET /batches/{id}`, and repaired with
@@ -746,7 +750,7 @@ the promotion migration, and that running it twice changes nothing).
 `tests/FullWorth.Backend.Tests/Purchases/`: `AmazonIntegrationTests`, `AmazonDiscountParserTests`,
 `PurchaseDiscountImportIdempotencyTests`, and `ReceiptImports/` with `ReceiptImportIntegrationTests`,
 `FolderReceiptImportIntegrationTests`, `PaperlessReceiptImportIntegrationTests`,
-`PaperlessReceiptClientTests` and `ReceiptScanCompatibilityIntegrationTests`.
+`PaperlessClientTests` and `ReceiptScanCompatibilityIntegrationTests`.
 
 `tests/FullWorth.Web.Tests/`: `ImportCenterUiBaselineTests`, `ReceiptImportUiBaselineTests`,
 `AmazonPurchasesUiBaselineTests`, `StatementImportUiBaselineTests`, `AccountsUxBaselineTests` and

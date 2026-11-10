@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
-using FullWorth.Backend.Modules.Purchases.ReceiptImports;
+using FullWorth.Backend.Modules.Paperless;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace FullWorth.Backend.Tests.Purchases;
+namespace FullWorth.Backend.Tests.Paperless;
 
 /// <summary>
 /// Der Paperless-Import darf die Instanz nicht umbringen (#127).
@@ -70,15 +70,15 @@ public sealed class PaperlessRequestPolitenessTests
 
     // ---- Helfer ----
 
-    private static PaperlessReceiptClient ClientFor(HttpMessageHandler handler, int retries = 3, int concurrency = 2)
+    private static PaperlessClient ClientFor(HttpMessageHandler handler, int retries = 3, int concurrency = 2)
     {
-        var options = Options.Create(new ReceiptImportOptions
+        var options = Options.Create(new PaperlessOptions
         {
             PaperlessMaxRetries = retries,
             PaperlessMaxConcurrentRequests = concurrency,
             PaperlessTimeoutSeconds = 30
         });
-        return new PaperlessReceiptClient(new SingleClientFactory(handler), options);
+        return new PaperlessClient(new SingleClientFactory(handler), options);
     }
 
     private static HttpResponseMessage Ok(string body) =>

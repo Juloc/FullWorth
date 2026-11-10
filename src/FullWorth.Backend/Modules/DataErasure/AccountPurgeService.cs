@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Compensation;
 using FullWorth.Backend.Modules.Users;
 using System.Data.Common;
 using FullWorth.Backend.Data;
@@ -25,6 +26,8 @@ public sealed class AccountPurgeService(
     FullWorthDbContext db,
     IntelligenceDbContext intelligenceDb,
     UserStore users,
+    DocumentImportStore documentImports,
+    EmploymentContractStore contractStates,
     IOptions<PurchaseStorageOptions> purchaseStorage,
     ILogger<AccountPurgeService> logger)
 {
@@ -71,6 +74,12 @@ public sealed class AccountPurgeService(
             if (memberCount <= 1) personalSpaces.Add(spaceId);
             else sharedSpaces.Add(spaceId);
         }
+
+        // Zuerst, solange die Zeilen noch da sind: das Loeschen eines persoenlichen Spaces nimmt sie per
+        // Fremdschluessel mit, und mit ihnen die Pfade der Dateien, die so liegen blieben. Gehoert dem
+        // Benutzer, nicht dem Space - also auch in einem geteilten.
+        await documentImports.DeleteAllForUserAsync(userId, ct);
+        await contractStates.DeleteAllForUserAsync(userId, ct);
 
         foreach (var spaceId in sharedSpaces)
             await PrepareSharedSpaceAsync(userId, spaceId, ct);
