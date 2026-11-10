@@ -38,9 +38,10 @@ const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${s
 
 /**
  * Der Zustand der Ansicht. "payslips" sind die Einträge der API (Id, payslip, document), "finds" die
- * offenen Funde aus Paperless, "actions" die Dinge, die die Ansicht auslösen darf.
+ * offenen Funde aus Paperless, "contract" die Vertragsstände und Hinweise aus dem Abgleich (Marker "Nachtrag" im
+ * Diagramm, Hinweise darunter), "actions" die Dinge, die die Ansicht auslösen darf.
  */
-const state = { payslips: [], finds: [], searching: false, year: null, month: null, actions: null, model: null };
+const state = { payslips: [], finds: [], contract: { states: [], hints: [] }, searching: false, year: null, month: null, actions: null, model: null };
 let chartObserver = null;
 
 export function renderOverview(input) {
@@ -153,7 +154,12 @@ function hints(model) {
     else if (Math.abs(change) <= 0.01 && num(p.netPay) - num(prev.netPay) <= -10)
       result.push({ tone: 'warn', icon: 'ui-alert', text: `Netto im ${name} ${signedEuro(num(p.netPay) - num(prev.netPay))} bei gleichem Brutto${cause(p, prev)}` });
   }
-  return result.slice(0, 4);
+  // Hinweise aus dem Abgleich mit den Vertragsständen: das Backend rechnet sie, hier werden sie nur gezeigt.
+  state.contract.hints.forEach((hint, index) => result.push({
+    tone: hint.kind === 'change_detected' ? 'info' : 'warn', icon: hint.kind === 'change_detected' ? 'ui-info' : 'ui-alert', text: hint.message,
+    ...(hint.kind === 'change_detected' ? { action: 'contract', id: String(index), label: 'Stand anlegen' } : {})
+  }));
+  return result.slice(0, 5);
 }
 
 // Die Ursache steht nur da, wenn sie in den erfassten Abzugsfeldern zu finden ist.
@@ -218,6 +224,9 @@ function drawChart(model) {
     const selected = m === state.month;
     bars += `<g class="po-col${selected ? ' is-selected' : ''}" data-po-month="${m}">`
       + `<rect class="po-col-hit" x="${(cx - slotW / 2).toFixed(1)}" y="${top}" width="${slotW.toFixed(1)}" height="${plotH}"/>`;
+    // Ein Vertragsstand ab diesem Monat (nicht der erste): gestrichelte Linie hinter der Säule und ein Wort darüber.
+    if (state.contract.states.some((c, i) => i > 0 && Number(c.state.validFrom.slice(0, 4)) === model.year && Number(c.state.validFrom.slice(5, 7)) === m))
+      bars += `<line class="po-marker" x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${top - 6}" y2="${top + plotH}"/><text class="po-marker-label" x="${cx.toFixed(1)}" y="${top - 10}" text-anchor="middle">Nachtrag</text>`;
     if (entry && !entry.item) {
       const h = typical * 0.55 / yMax * plotH;
       bars += `<rect class="po-gap" x="${(cx - barW / 2).toFixed(1)}" y="${(top + plotH - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="4"/>`
@@ -340,6 +349,7 @@ function bindOnce(root) {
       if (button.dataset.deletePayslip) state.actions.deletePayslip(button.dataset.deletePayslip);
       if (button.dataset.poHint === 'upload') state.actions.upload();
       if (button.dataset.poHint === 'review') state.actions.review(button.dataset.poFind);
+      if (button.dataset.poHint === 'contract') state.actions.suggestContract(Number(button.dataset.poFind));
       return;
     }
     if (event.target.closest('a')) return;

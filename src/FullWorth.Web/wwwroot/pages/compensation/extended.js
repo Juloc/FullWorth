@@ -1,5 +1,7 @@
 import { confirmMessage } from '../../components/confirm.js';
 import { renderOverview } from './payslip-overview.js';
+import { createFindsCard, openImportPdf as openPdf } from './paperless-finds.js';
+import { suggestState } from './contracts.js';
 import {
   $, $$, euro2 as euro, euro as euro0, esc, attr, val as value, num as number, setVal as set,
   spaceId, monthLabel as month, signedEuro, api, json, bffUrl, notify as showMessage,
@@ -23,7 +25,6 @@ function init(){
   $('#payslip-extract').addEventListener('click',()=>extractPayslip().catch(showError));
   $('#payslip-extract-batch').addEventListener('click',()=>extractBatch().catch(showError));
   $('#payslip-save').addEventListener('click',()=>savePayslip().catch(showError));
-  $('#paperless-body').addEventListener('click',event=>paperlessAction(event).catch(showError));
   $('#space-select').addEventListener('change',()=>Promise.all([loadPayslips(),loadPaperless()]).catch(showError));
 }
 
@@ -211,9 +212,11 @@ async function savePayslip(){
 }
 
 let payslipList=[];
+let contract={states:[],hints:[]};
 async function loadPayslips(){
   const space=spaceId();if(!space)return;
-  payslipList=await api(`api/compensation/payslips?fullWorthSpaceId=${space}`)||[];
+  [payslipList,contract]=await Promise.all([api(`api/compensation/payslips?fullWorthSpaceId=${space}`),api(`api/compensation/contracts?fullWorthSpaceId=${space}`)]);
+  payslipList=payslipList||[];
   refreshOverview();
   renderDelta(await api(`api/compensation/payslips/latest-delta?fullWorthSpaceId=${space}`,{},true));
 }
@@ -222,9 +225,9 @@ async function loadPayslips(){
 // aus Paperless -, also zeichnet sie neu, sobald eine von beiden da ist.
 function refreshOverview(){
   renderOverview({
-    payslips:payslipList,finds:paperless.items,
-    searching:paperless.connected&&!!paperless.preset?.lastCheckedAt&&!paperless.preset.lastError,
-    actions:{openPdf,deletePayslip:id=>deletePayslip(id).catch(showError),upload:()=>{const input=$('#payslip-file');input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true})},review:reviewFind}
+    payslips:payslipList,finds:finds.state.items,contract:contract||{states:[],hints:[]},
+    searching:finds.state.connected&&!!finds.state.preset?.lastCheckedAt&&!finds.state.preset.lastError,
+    actions:{openPdf,deletePayslip:id=>deletePayslip(id).catch(showError),upload:()=>{const input=$('#payslip-file');input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true})},review:reviewFind,suggestContract:index=>suggestState(contract.hints[index])}
   });
 }
 
@@ -239,73 +242,21 @@ async function deletePayslip(id){
   await api(`api/compensation/payslips/${id}?fullWorthSpaceId=${spaceId()}`,{method:'DELETE'});await loadPayslips();
 }
 
-const PAPERLESS='api/purchases/receipt-imports/paperless';
-let paperless={connected:false,preset:null,items:[]};
-let paperlessTimer=null;
-
-async function loadPaperless(){
-  const space=spaceId();if(!space)return;
-  clearTimeout(paperlessTimer);
-  const [connection,presets,items]=await Promise.all([
-    api(`${PAPERLESS}/connection?fullWorthSpaceId=${space}`),
-    api(`${PAPERLESS}/presets?fullWorthSpaceId=${space}&kind=payslip`),
-    api(`api/compensation/document-imports?fullWorthSpaceId=${space}`)]);
-  paperless={connected:connection?.configured!==false&&!!connection?.isEnabled,preset:(presets||[])[0]||null,items:items||[]};
-  renderPaperless();
-  refreshOverview();
-  // Gefundene Abrechnungen werden im Hintergrund gelesen: solange welche warten, sieht die Liste nach.
-  if(paperless.items.some(item=>item.status==='pending'))
-    paperlessTimer=setTimeout(()=>{if($('#tab-payslips')?.classList.contains('active'))loadPaperless().catch(showError)},5000);
-}
-
-function renderPaperless(){
-  const {connected,preset,items}=paperless;
-  const root=$('#paperless-body');if(!root)return;
-  if(!connected){root.innerHTML='<p class="extended-note">Paperless ist noch nicht verbunden. Die Verbindung richtest du unter <a href="/receipts">Belege</a> → Importieren → Paperless-ngx ein.</p>';return}
-  if(!preset){root.innerHTML=`<div class="form-grid paperless-setup"><label>Suche in Paperless<input id="paperless-query" value="type:Lohnabrechnung" maxlength="4000"></label><p class="extended-note">Paperless-Suchsyntax, zum Beispiel <code>type:Lohnabrechnung</code> oder <code>tag:Gehalt</code>. Neue Treffer werden regelmäßig geholt und hier zur Prüfung abgelegt.</p><button class="btn btn-primary" type="button" data-paperless-create>Lohnabrechnungen suchen</button></div>`;return}
-  const status=preset.lastError?`Letzte Suche: ${esc(preset.lastError)}`:preset.lastCheckedAt?`Zuletzt gesucht: ${new Date(preset.lastCheckedAt).toLocaleString('de-DE')}`:'Noch nicht gesucht.';
-  root.innerHTML=`<div class="payslip-row"><div><small>${status}</small></div><div><button type="button" class="btn btn-secondary" data-paperless-run>Jetzt suchen</button></div></div>`+(items.length?items.map(importRow).join(''):'<p class="extended-note">Keine Abrechnungen zur Prüfung.</p>');
-}
-
-function importRow(item){
-  const x=item.extraction;
-  const detail=item.status==='pending'?'Wird gelesen …':item.status==='failed'?esc(item.error||'Konnte nicht gelesen werden.')
-    :`${x.grossPay==null?'—':euro.format(x.grossPay)} brutto · ${x.netPay==null?'—':euro.format(x.netPay)} netto`;
-  const review=item.status==='needs_review'
-    ?`<button type="button" class="btn btn-secondary" data-paperless-review="${attr(item.id)}">Prüfen</button><button type="button" class="btn btn-secondary" data-open-pdf="${attr(item.id)}">PDF</button>`:'';
-  return `<div class="payslip-row"><div><strong>${esc(x?.period?month(x.period):item.title)}</strong><small>${detail}</small></div><div>${review}<button type="button" class="btn btn-danger" title="Verwerfen" data-paperless-dismiss="${attr(item.id)}">×</button></div></div>`;
-}
-
-async function paperlessAction(event){
-  const button=event.target.closest('button');if(!button)return;
-  const space=spaceId();
-  if(button.dataset.openPdf)return openPdf(button.dataset.openPdf);
-  if('paperlessRun' in button.dataset)return runPaperless();
-  if('paperlessCreate' in button.dataset){
-    const query=value('paperless-query').trim();if(!query)throw new Error('Bitte eine Suche für Paperless angeben.');
-    const preset=await api(`${PAPERLESS}/presets?fullWorthSpaceId=${space}`,json('POST',{name:'Lohnabrechnungen',query,autoImport:true,kind:'payslip'}));
-    return runPaperless(preset.id);
-  }
-  if(button.dataset.paperlessReview)reviewFind(button.dataset.paperlessReview);
-  if(button.dataset.paperlessDismiss){
-    await api(`api/compensation/document-imports/${button.dataset.paperlessDismiss}/dismiss?fullWorthSpaceId=${space}`,{method:'POST'});
-    if(reviewedImport===button.dataset.paperlessDismiss)fillExtraction({},null);
-    await loadPaperless();
-  }
-}
-
-// Das Original liegt verschluesselt in FullWorth; der Browser holt es selbst, in einem neuen Tab.
-function openPdf(importId){window.open(bffUrl(`api/compensation/document-imports/${importId}/document?fullWorthSpaceId=${spaceId()}`),'_blank','noopener')}
+const finds=createFindsCard({
+  kind:'payslip',root:'#paperless-body',isActive:()=>$('#tab-payslips')?.classList.contains('active'),onError:showError,
+  texts:{query:'type:Lohnabrechnung',preset:'Lohnabrechnungen',search:'Lohnabrechnungen suchen',empty:'Keine Abrechnungen zur Prüfung.'},
+  summarize:item=>{const x=item.extraction;return{title:x.period?month(x.period):item.title,detail:`${x.grossPay==null?'—':euro.format(x.grossPay)} brutto · ${x.netPay==null?'—':euro.format(x.netPay)} netto`}},
+  onReview:item=>reviewFind(item.id),
+  // Wird der Fund verworfen, den die Form gerade zeigt, wird sie geleert.
+  onDismiss:id=>{if(reviewedImport===id)fillExtraction({},null)},
+  onChange:()=>refreshOverview()
+});
+const loadPaperless=()=>finds.load();
 
 function reviewFind(id){
-  const item=paperless.items.find(x=>x.id===id);if(!item)return;
+  const item=finds.find(id);if(!item)return;
   fillExtraction(item.extraction,item.id,item.title);
   $('#ps-review-hint').scrollIntoView({block:'center',behavior:'smooth'});
-}
-
-async function runPaperless(presetId=paperless.preset?.id){
-  await api(`${PAPERLESS}/presets/${presetId}/run?fullWorthSpaceId=${spaceId()}`,{method:'POST'});
-  await loadPaperless();
 }
 
 function showError(error){console.error(error);showMessage(error?.message||'Unbekannter Fehler.')}

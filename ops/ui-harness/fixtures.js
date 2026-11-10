@@ -1830,7 +1830,7 @@
         document: month === 6 ? null : { importId: `doc-${id}`, paperlessUrl: `https://paperless.example.local/documents/${1000 + year % 100 * 12 + month}/details`, fileName: 'abrechnung.pdf', readConfidencePercent: 88 } };
     };
     const rows = [make(2025, 11, 5000), make(2025, 12, 5000)];
-    [[1, 5000], [2, 5000], [3, 6500, { bonus: 1500 }], [5, 5000], [6, 5000, { source: 'confirmed-ocr' }], [7, 5400], [8, 5400, { healthInsurance: 480 }], [9, 5400], [10, 5400]]
+    [[1, 5000], [2, 5000], [3, 6500, { bonus: 1500 }], [5, 5000], [6, 5000, { source: 'confirmed-ocr' }], [7, 5400], [8, 5400, { healthInsurance: 480 }], [9, 5400], [10, 5700]]
       .forEach(([month, gross, extra]) => rows.push(make(2026, month, gross, extra)));
     PAYSLIPS.push(...rows.reverse());
   })();
@@ -1842,10 +1842,83 @@
     confidencePercent: gross == null ? 40 : 85, detectedLabels: [], warnings: ['OCR-Werte vor dem Speichern mit der Originalabrechnung abgleichen.']
   });
 
+  // Arbeitsvertraege: drei Staende (Start 2025, Gehaltserhoehung per Nachtrag 2026 mit unveraenderten Feldern, ein
+  // Nachtrag nur mit Dienstwagen und bAV), dazu der Hinweis "Aenderung erkannt" aus dem Abgleich mit den
+  // Abrechnungen. Funde fuer die Pruefliste liegen in CONTRACT_IMPORTS; "Verwerfen" nimmt sie heraus.
+  const CONTRACT_STATES = [];
+  const CONTRACT_IMPORTS = [];
+  const CONTRACT_PRESETS = [];
+  let contractRunDone = false;
+  const doc = (n, id) => ({ importId: `cdoc-${id}`, paperlessUrl: `https://paperless.example.local/documents/${n}/details`, paperlessDocumentId: n, fileName: 'vertrag.pdf', readConfidencePercent: 86 });
+  CONTRACT_STATES.push(
+    { id: 'cs1', fullWorthSpaceId: SPACE, confirmedAt: '2025-01-05T09:00:00Z', document: doc(1901, 'cs1'),
+      state: { validFrom: '2025-01-01', kind: 'contract', grossMonthly: 5000, employer: 'Beispiel Software GmbH', weeklyHours: 40, vacationDays: 28, companyCar: false, bavEmployerShare: null, noticePeriod: '3 Monate zum Monatsende', position: 'Senior Softwareentwicklerin', extras: [{ label: 'Probezeit', value: '6 Monate' }] } },
+    { id: 'cs2', fullWorthSpaceId: SPACE, confirmedAt: '2026-01-12T09:00:00Z', document: doc(2044, 'cs2'),
+      state: { validFrom: '2026-01-01', kind: 'addendum', grossMonthly: 5000, employer: 'Beispiel Software GmbH', weeklyHours: 40, vacationDays: 30, companyCar: true, bavEmployerShare: 80, noticePeriod: '3 Monate zum Monatsende', position: 'Senior Softwareentwicklerin', extras: [{ label: 'Probezeit', value: '6 Monate' }] } },
+    { id: 'cs3', fullWorthSpaceId: SPACE, confirmedAt: '2026-06-20T09:00:00Z', document: null,
+      state: { validFrom: '2026-07-01', kind: 'addendum', grossMonthly: 5400, employer: 'Beispiel Software GmbH', weeklyHours: 40, vacationDays: 30, companyCar: true, bavEmployerShare: 80, noticePeriod: '3 Monate zum Monatsende', position: 'Senior Softwareentwicklerin', extras: [] } });
+  const eur = value => value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  function contractEvents() {
+    const fields = state => [['gross', 'Bruttogehalt / Monat', eur(state.grossMonthly)], ['hours', 'Wochenstunden', `${state.weeklyHours} h`], ['vacation', 'Urlaubstage', `${state.vacationDays} Tage`],
+      ['car', 'Dienstwagen', state.companyCar ? 'ja' : 'nein'], ['bav', 'bAV Arbeitgeberanteil', state.bavEmployerShare == null ? null : eur(state.bavEmployerShare)],
+      ['notice', 'Kündigungsfrist', state.noticePeriod], ['employer', 'Arbeitgeber', state.employer], ['position', 'Position', state.position],
+      ...(state.extras || []).map(e => ['extra:' + e.label, e.label, e.value])];
+    return CONTRACT_STATES.slice().sort((a, b) => a.state.validFrom.localeCompare(b.state.validFrom)).map((item, index, all) => {
+      const before = index ? Object.fromEntries(fields(all[index - 1].state).map(f => [f[0], f[2]])) : null;
+      const changed = [], unchanged = [];
+      for (const [key, label, value] of fields(item.state)) {
+        if (before && before[key] === value) { if (value) unchanged.push({ key, label, value }); }
+        else if (value || (before && before[key])) changed.push({ key, label, old: before ? before[key] ?? null : null, new: value, percent: key === 'gross' && before ? Math.round((item.state.grossMonthly / all[index - 1].state.grossMonthly - 1) * 1000) / 10 : null });
+      }
+      const raise = index && item.state.grossMonthly > all[index - 1].state.grossMonthly;
+      return { id: item.id, validFrom: item.state.validFrom, kind: item.state.kind, badge: !index ? 'Start' : raise ? 'Gehaltserhöhung' : changed.some(c => c.key === 'car' || c.key === 'bav') ? 'Benefits' : 'Nachtrag',
+        title: !index ? 'Arbeitsvertrag Beispiel Software GmbH' : 'Nachtrag zum Arbeitsvertrag', changed, unchanged, confirmedAt: item.confirmedAt, document: item.document };
+    }).reverse();
+  }
+
   function payslipImportAnswer(method, url, init) {
     const path = url.pathname;
     if (method === 'GET' && path.endsWith('/paperless/presets') && url.searchParams.get('kind') === 'payslip')
       return { status: 200, body: PAYSLIP_PRESETS };
+    if (method === 'GET' && path.endsWith('/paperless/presets') && url.searchParams.get('kind') === 'contract')
+      return { status: 200, body: CONTRACT_PRESETS };
+    if (method === 'POST' && path.endsWith('/paperless/presets') && typeof init?.body === 'string' && JSON.parse(init.body).kind === 'contract') {
+      const preset = { id: 'pcon1', fullWorthSpaceId: SPACE, userId: 'u1', name: 'Arbeitsverträge', query: JSON.parse(init.body).query, editorJson: null, autoImport: true,
+        analyzeAutomatically: true, currency: 'EUR', lastSeenDocumentId: null, lastCheckedAt: null, lastImportedAt: null, lastError: null, kind: 'contract' };
+      CONTRACT_PRESETS.push(preset);
+      return { status: 200, body: preset };
+    }
+    if (method === 'POST' && /\/paperless\/presets\/pcon1\/run$/.test(path)) {
+      CONTRACT_PRESETS[0].lastCheckedAt = new Date().toISOString();
+      if (!contractRunDone) {
+        contractRunDone = true;
+        CONTRACT_IMPORTS.push({ id: 'ci1', title: 'Nachtrag Arbeitsvertrag 2026-10', status: 'needs_review', error: null, paperlessUrl: 'https://paperless.example.local/documents/2301/details', createdAt: new Date().toISOString(),
+          extraction: { validFrom: '2026-10-01', kind: 'addendum', employer: 'Beispiel Software GmbH', grossMonthly: 5700, weeklyHours: 38, vacationDays: 30, companyCar: true, bavEmployerShare: 80, noticePeriod: '3 Monate zum Monatsende', position: null,
+            extras: [{ label: 'Homeoffice', value: '2 Tage pro Woche' }], confidencePercent: 82, detectedLabels: [], warnings: [] } });
+      }
+      return { status: 200, body: CONTRACT_PRESETS[0] };
+    }
+    if (method === 'GET' && path.endsWith('/compensation/document-imports') && url.searchParams.get('kind') === 'contract')
+      return { status: 200, body: CONTRACT_IMPORTS };
+    if (method === 'GET' && path.endsWith('/compensation/contracts')) {
+      const hints = [{ kind: 'change_detected', message: 'Änderung erkannt: seit Oktober 2026 5.700,00 € Brutto statt 5.400,00 € laut Vertrag - es gibt keinen Nachtrag dazu.', suggestedValidFrom: '2026-10-01', suggestedGross: 5700 }];
+      return { status: 200, body: { states: CONTRACT_STATES.map(({ id, fullWorthSpaceId, state, confirmedAt, document }) => ({ id, fullWorthSpaceId, state, confirmedAt, document })), events: contractEvents(), hints: CONTRACT_STATES.length ? hints : [] } };
+    }
+    if (method === 'POST' && path.endsWith('/compensation/contracts')) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+      const importId = url.searchParams.get('importId');
+      const found = CONTRACT_IMPORTS.findIndex(item => item.id === importId);
+      CONTRACT_STATES.push({ id: 'cs' + (CONTRACT_STATES.length + 1), fullWorthSpaceId: SPACE, confirmedAt: new Date().toISOString(), state: body,
+        document: found < 0 ? null : { importId, paperlessUrl: CONTRACT_IMPORTS[found].paperlessUrl, paperlessDocumentId: 2301, fileName: 'vertrag.pdf', readConfidencePercent: 82 } });
+      if (found >= 0) CONTRACT_IMPORTS.splice(found, 1);
+      return { status: 201, body: { id: 'new' } };
+    }
+    if (method === 'DELETE' && /\/compensation\/contracts\/[^/]+$/.test(path)) {
+      const index = CONTRACT_STATES.findIndex(item => path.endsWith('/' + item.id));
+      if (index >= 0) CONTRACT_STATES.splice(index, 1);
+      return { status: 204, body: null };
+    }
     if (method === 'POST' && path.endsWith('/paperless/presets')) {
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
@@ -1877,8 +1950,10 @@
       return { status: 200, body: PAYSLIP_IMPORTS };
     }
     if (method === 'POST' && /\/document-imports\/[^/]+\/dismiss$/.test(path)) {
-      const index = PAYSLIP_IMPORTS.findIndex(item => path.includes('/' + item.id + '/'));
-      if (index >= 0) PAYSLIP_IMPORTS.splice(index, 1);
+      for (const list of [PAYSLIP_IMPORTS, CONTRACT_IMPORTS]) {
+        const index = list.findIndex(item => path.includes('/' + item.id + '/'));
+        if (index >= 0) list.splice(index, 1);
+      }
       return { status: 204, body: null };
     }
     if (method === 'GET' && path.endsWith('/compensation/payslips')) return { status: 200, body: PAYSLIPS };

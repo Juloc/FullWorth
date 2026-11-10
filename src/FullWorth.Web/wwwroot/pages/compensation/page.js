@@ -11,6 +11,7 @@ import {
 // mit. Statisch importiert, damit beim ersten Besuch nichts nachgeladen wird, und hier statt in
 // app.js, weil nur diese Seite weiß, dass sie dazugehören.
 import './extended.js';
+import './contracts.js';
 import './history.js';
 import './other-income.js';
 import './benchmarks.js';

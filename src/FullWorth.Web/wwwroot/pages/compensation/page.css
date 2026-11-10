@@ -447,6 +447,8 @@
 .po-gap{fill:none;stroke:var(--k4);stroke-dasharray:3 3}
 .po-gap-mark{fill:var(--muted);font-size:13px;font-weight:700}
 .po-bonus{fill:var(--muted);font-size:10px;font-weight:700}
+.po-marker{stroke:var(--cat-1);stroke-width:1.5;stroke-dasharray:4 3;opacity:.7;pointer-events:none}
+.po-marker-label{fill:var(--cat-1);font-size:10px;font-weight:700;pointer-events:none}
 .po-tip{position:absolute;min-width:178px;padding:var(--space-3) var(--space-3);border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-float);font-size:var(--text-caption-size);pointer-events:none;z-index:5}
 .po-tip-row{display:flex;justify-content:space-between;gap:var(--space-3);margin-top:var(--space-1);font-variant-numeric:tabular-nums}
 .po-tip-foot{padding-top:var(--space-2);border-top:1px solid var(--line);font-weight:700}
@@ -512,4 +514,83 @@
   .po-detail-actions{margin-left:0;width:100%}
   .po-detail-actions .btn{flex:1;min-height:44px}
   .po-detail-actions .btn-danger{flex:none;width:44px}
+}
+
+/* Arbeitsverträge (contracts.js, contract-chart.js): Diagramm und Änderungsprotokoll. Farben nur über Tokens -
+   die Stufenlinie ist --cat-1, die Abrechnungspunkte --cat-3 (entspricht) und --cat-4 (weicht ab). */
+.contract-overview{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"log chart";gap:var(--space-4);align-items:start;margin-bottom:var(--space-4)}
+.co-chart{grid-area:chart;position:sticky;top:82px}
+.co-log{grid-area:log}
+.cc-wrap{position:relative}
+#contract-chart{min-height:270px;overflow:hidden}
+.cc-chart{display:block;max-width:100%;touch-action:pan-y}
+.cc-grid{stroke:var(--line);stroke-width:1;opacity:.7}
+.cc-tick{stroke:var(--line)}
+.cc-axis{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.cc-fill-top{stop-color:var(--cat-1);stop-opacity:.28}
+.cc-fill-bottom{stop-color:var(--cat-1);stop-opacity:.02}
+.cc-area{fill:url(#cc-fill)}
+.cc-line{fill:none;stroke:var(--cat-1);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+.cc-marker{fill:var(--surface);stroke:var(--cat-1);stroke-width:2.6}
+.cc-marker.is-quiet{stroke-width:2}
+.cc-dot{stroke:var(--surface);stroke-width:1.5}
+.cc-dot.is-ok,.cc-key-dot.is-ok{fill:var(--cat-3);background:var(--cat-3)}
+.cc-dot.is-off,.cc-key-dot.is-off{fill:var(--cat-4);background:var(--cat-4)}
+.cc-amount{fill:var(--text);font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.cc-date{fill:var(--muted);font-size:10.5px}
+.cc-up{fill:var(--positive)}
+.cc-down{fill:var(--negative)}
+.cc-guide{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
+.cc-hit{fill:transparent;cursor:crosshair}
+.cc-tip{position:absolute;min-width:190px;padding:var(--space-3);border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-float);font-size:var(--text-caption-size);pointer-events:none;z-index:5}
+.cc-tip-row{display:flex;justify-content:space-between;gap:var(--space-4);margin-top:var(--space-1);font-variant-numeric:tabular-nums}
+.cc-tip-foot{padding-top:var(--space-2);border-top:1px solid var(--line);font-weight:700}
+.cc-key-line{display:inline-block;width:14px;height:3px;border-radius:var(--space-1);margin-right:var(--space-2);vertical-align:middle;background:var(--cat-1)}
+.cc-key-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:var(--space-2)}
+.co-timeline{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-4)}
+.co-event{display:grid;grid-template-columns:64px minmax(0,1fr);gap:var(--space-3);padding-top:var(--space-4);border-top:1px solid var(--line)}
+.co-event:first-child{padding-top:0;border-top:0}
+.co-date{display:grid;align-content:start;gap:var(--space-1);font-variant-numeric:tabular-nums}
+.co-date small{color:var(--muted)}
+.co-head{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
+.co-head h3{margin:0;font-size:1rem}
+.co-badge{background:var(--surface-3);color:var(--text)}
+.co-badge-start{background:color-mix(in srgb,var(--cat-1) 16%,var(--surface));color:var(--cat-1)}
+.co-badge-raise{background:var(--success-soft);color:var(--success-solid)}
+.co-badge-change{background:var(--warning-soft);color:var(--warning-hover)}
+.co-badge-info{background:var(--info-soft);color:var(--info-solid)}
+.co-changes{margin:var(--space-3) 0 0;display:grid;gap:var(--space-1)}
+.co-change{display:grid;grid-template-columns:minmax(0,9.5rem) minmax(0,1fr);gap:var(--space-2);align-items:baseline;font-size:.92rem}
+.co-change dt{color:var(--muted)}
+.co-change dd{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2);font-variant-numeric:tabular-nums}
+.co-old{color:var(--muted)}
+.co-arrow{color:var(--muted)}
+.co-new,.co-gone{color:var(--muted);font-size:var(--text-caption-size)}
+.co-pct{padding:0 var(--space-2);border-radius:var(--radius-pill);font-size:var(--text-caption-size);font-weight:700}
+.co-pct.is-up{background:var(--success-soft);color:var(--success-solid)}
+.co-pct.is-down{background:var(--danger-soft);color:var(--danger-solid)}
+.co-unchanged{margin-top:var(--space-2)}
+.co-unchanged summary{display:inline-flex;align-items:center;min-height:36px;cursor:pointer;color:var(--muted);font-size:var(--text-caption-size)}
+.co-unchanged dl{margin:var(--space-1) 0 0;display:grid;gap:var(--space-1)}
+.co-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-3)}
+.co-foot .po-foot{margin:0}
+.co-actions{display:flex;gap:var(--space-2)}
+.co-actions .btn-danger{width:36px;padding:0}
+.ct-extras{display:grid;gap:var(--space-2);margin-top:var(--space-3)}
+.ct-extra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:var(--space-2)}
+.ct-extra input{min-width:0}
+.ct-extra-actions{margin:var(--space-3) 0 var(--space-4)}
+@media(max-width:900px){
+  .contract-overview{grid-template-columns:minmax(0,1fr);grid-template-areas:"chart" "log"}
+  .co-chart{position:static}
+}
+@media(max-width:560px){
+  .co-event{grid-template-columns:minmax(0,1fr)}
+  .co-date{display:flex;align-items:baseline;gap:var(--space-2)}
+  .co-change{grid-template-columns:minmax(0,1fr)}
+  .co-change dt{font-size:var(--text-caption-size)}
+  .co-actions{width:100%}
+  .co-actions .btn{flex:1;min-height:44px}
+  .co-actions .btn-danger{flex:none;width:44px}
+  .co-unchanged summary{min-height:44px}
 }
