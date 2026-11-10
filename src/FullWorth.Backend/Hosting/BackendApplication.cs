@@ -382,10 +382,12 @@ public static class BackendApplication
         
         builder.Services.Configure<PushOptions>(builder.Configuration.GetSection(PushOptions.SectionName));
         builder.Services.AddScoped<PushSubscriptionStore>();
+        builder.Services.AddScoped<PushKeyStore>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Preferences.PreferenceStore>();
         builder.Services.AddScoped<IPushSender, VapidPushSender>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Notifications.NotificationDispatcher>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Notifications.BudgetNotificationService>();
+        builder.Services.AddScoped<FullWorth.Backend.Modules.Notifications.NewBookingNotificationService>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Notifications.ContractDueNotificationService>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Notifications.PurchaseNotificationService>();
         builder.Services.AddScoped<AnalyticsService>();

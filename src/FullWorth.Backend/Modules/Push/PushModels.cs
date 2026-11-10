@@ -18,6 +18,21 @@ public sealed class PushDevice
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Das erzeugte VAPID-Schluesselpaar der Installation (siehe <see cref="PushKeyStore"/>). Genau eine Zeile,
+/// per eindeutigem Index erzwungen. Gehoert zur Instanz, nicht zu einer Person.
+/// </summary>
+public sealed class PushInstanceKey
+{
+    public const string InstanceScopeKey = "instance";
+
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ScopeKey { get; set; } = InstanceScopeKey;
+    public string PublicKey { get; set; } = string.Empty;
+    public string PrivateKeyProtected { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class PushOptions
 {
     public const string SectionName = "Push";

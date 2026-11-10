@@ -3188,6 +3188,37 @@ namespace FullWorth.Backend.Migrations
                     b.ToTable("PurchaseTagLinks");
                 });
 
+            modelBuilder.Entity("FullWorth.Backend.Modules.Push.PushInstanceKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PrivateKeyProtected")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("PushInstanceKeys");
+                });
+
             modelBuilder.Entity("FullWorth.Backend.Modules.Push.PushDevice", b =>
                 {
                     b.Property<Guid>("Id")

@@ -1024,7 +1024,13 @@
     "pushUnsupported": "This browser does not support push notifications.",
     "pushDenied": "Notifications are blocked in the browser.",
     "pushNotConfigured": "Push is not configured on the server yet.",
-    "typesHeading": "Notification types"
+    "typesHeading": "Notification types",
+    "type_transactions_new": "New transactions",
+    "showAmounts": "Show amounts in notifications",
+    "showAmountsHint": "Off: only the merchant appears. Anyone can read a lock screen.",
+    "test": "Send a test notification",
+    "testSent": "Sent - it should arrive in a moment.",
+    "testNoDevice": "No device is registered for push on this account yet."
   },
   "settings": {
     "appearance": "Appearance & language",

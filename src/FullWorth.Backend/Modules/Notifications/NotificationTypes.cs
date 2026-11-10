@@ -12,6 +12,7 @@ public static class NotificationTypes
     public const string BudgetNear = "budget_near";
     public const string BudgetOver = "budget_over";
     public const string BackupFailed = "backup_failed";
+    public const string TransactionsNew = "transactions_new";
 
     public const string PurchaseReview = "purchase_review";
     public const string PurchaseScanFailed = "purchase_scan_failed";

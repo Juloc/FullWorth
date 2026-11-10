@@ -73,6 +73,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<DismissedSecuritiesBooking> DismissedSecuritiesBookings => Set<DismissedSecuritiesBooking>();
     public DbSet<SupersededPendingTransaction> SupersededPendingTransactions => Set<SupersededPendingTransaction>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
+    public DbSet<PushInstanceKey> PushInstanceKeys => Set<PushInstanceKey>();
     public DbSet<NotificationDedup> NotificationDedups => Set<NotificationDedup>();
     public DbSet<TaxSettings> TaxSettings => Set<TaxSettings>();
     public DbSet<TaxProfile> TaxProfiles => Set<TaxProfile>();
@@ -397,6 +398,13 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.Property(x => x.ExternalKey).HasMaxLength(256);
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<FinanceAccount>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PushInstanceKey>(e =>
+        {
+            e.HasIndex(x => x.ScopeKey).IsUnique();
+            e.Property(x => x.ScopeKey).HasMaxLength(40);
+            e.Property(x => x.PublicKey).HasMaxLength(200);
         });
 
         b.Entity<PushDevice>(e =>

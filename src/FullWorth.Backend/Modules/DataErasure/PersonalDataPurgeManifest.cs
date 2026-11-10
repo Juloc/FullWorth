@@ -89,6 +89,10 @@ public static class PersonalDataPurgeManifest
         // How this installation identifies itself to a bank. The FinTS product id is issued per
         // registered product, so it survives every account deletion - there is no person in it.
         typeof(BankingInstanceSettings),
+        // Das Schluesselpaar, mit dem diese Installation Push-Mitteilungen signiert. Es gehoert zur
+        // Installation und kennt keine Person: die Abos der Geraete haengen daran, und ein geloeschtes
+        // Konto darf sie anderen nicht ungueltig machen.
+        typeof(FullWorth.Backend.Modules.Push.PushInstanceKey),
         // Zwei Zwischenspeicher, die ein Hintergrunddienst fuellt: ob ein Anbieter gerade erreichbar
         // ist, und welche Institute er kennt. Beides beschreibt die Aussenwelt, nicht einen Nutzer -
         // sie stehen schon da, bevor sich jemand anmeldet, und ein geloeschtes Konto aendert an der

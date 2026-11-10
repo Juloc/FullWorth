@@ -32,4 +32,6 @@
 
 .notif-type-title{white-space:normal;overflow:visible;font-weight:400;line-height:1.35}
 
+.notif-push [data-push-test]{grid-column:1/-1;justify-self:start}
+
 .notif-foot{border-top:1px solid var(--line);margin-top:var(--s4);padding-top:var(--s3)}

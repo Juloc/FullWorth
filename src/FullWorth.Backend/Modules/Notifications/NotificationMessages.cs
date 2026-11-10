@@ -5,8 +5,11 @@ namespace FullWorth.Backend.Modules.Notifications;
 /// <summary>
 /// Builds push payloads. Copy is German because the backend currently has no per-recipient locale;
 /// the web notification settings remain bilingual. Purchase messages intentionally avoid exposing
-/// amounts in the lock-screen notification body.
+/// amounts in the lock-screen notification body; booking messages show them only when the user allowed it.
 /// </summary>
+/// <summary>A booking as a notification line. The name is what the bank calls the other side.</summary>
+public sealed record NewBookingLine(string Name, decimal Amount, string Currency);
+
 public static class NotificationMessages
 {
     public static PushMessage BankReauth(string institution) =>
@@ -38,6 +41,28 @@ public static class NotificationMessages
 
     public static PushMessage PurchaseWarrantyDeadline(string itemName, DateOnly deadline) =>
         new("Garantie endet bald", $"{SafeName(itemName)}: Garantie bis {deadline:dd.MM.yyyy}.", "/purchases");
+
+    /// <summary>One notification for everything a fetch brought in: the booking itself, or a short list.</summary>
+    public static PushMessage NewBookings(IReadOnlyList<NewBookingLine> bookings, bool showAmounts)
+    {
+        string Line(NewBookingLine booking) =>
+            showAmounts ? $"{SafeName(booking.Name)} {FormatAmount(booking.Amount, booking.Currency)}" : SafeName(booking.Name);
+
+        if (bookings.Count == 1) return new("Neue Buchung", Line(bookings[0]), "/transactions");
+
+        const int Shown = 3;
+        var lines = bookings.Take(Shown).Select(Line).ToList();
+        if (bookings.Count > Shown) lines.Add($"+ {bookings.Count - Shown} weitere");
+        return new($"{bookings.Count} neue Buchungen", string.Join('\n', lines), "/transactions");
+    }
+
+    private static string FormatAmount(decimal amount, string currency)
+    {
+        var german = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+        var sign = amount < 0 ? "\u2212" : "+";
+        var symbol = string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase) ? "\u20AC" : currency;
+        return $"{sign}{Math.Abs(amount).ToString("N2", german)} {symbol}";
+    }
 
     private static string SafeName(string? value)
     {

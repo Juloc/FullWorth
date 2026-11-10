@@ -520,6 +520,7 @@ POST             /api/purchases/{purchaseId:guid}/discounts/
 POST             /api/purchases/{purchaseId:guid}/documents/
 POST             /api/purchases/{purchaseId:guid}/documents/{documentId:guid}/extract
 POST             /api/push/subscriptions
+POST             /api/push/test
 POST             /api/reconciliation/securities-bookings/apply
 POST             /api/reconciliation/securities-bookings/dismiss
 POST             /api/saved-analyses/

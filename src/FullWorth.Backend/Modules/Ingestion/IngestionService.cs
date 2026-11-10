@@ -52,6 +52,7 @@ public sealed class IngestionService(
     AuditService? auditService = null,
     FullWorth.Backend.Security.FieldCipher? fieldCipher = null,
     FullWorth.Backend.Modules.Notifications.BudgetNotificationService? budgetNotifications = null,
+    FullWorth.Backend.Modules.Notifications.NewBookingNotificationService? newBookingNotifications = null,
     FinanzguruAccountReconciliationService? finanzguruReconciliation = null,
     IntelligenceDbContext? intelligenceDb = null,
     TransferDetectionService? transferDetection = null)
@@ -64,7 +65,7 @@ public sealed class IngestionService(
         var connection = await UpsertConnectionAsync(batch.Connection, ct);
         var accountMap = await UpsertAccountsAsync(connection, batch.Connection.Provider, batch.Accounts, ct);
         var balanceCount = await InsertBalancesAsync(accountMap, batch.Balances, ct);
-        var (inserted, updated) = await UpsertTransactionsAsync(
+        var (inserted, updated, announceable) = await UpsertTransactionsAsync(
             connection.FullWorthSpaceId,
             batch.Connection.Country,
             accountMap,
@@ -73,7 +74,8 @@ public sealed class IngestionService(
 
         var resolvedPending = await ResolveDisappearedPendingAsync(
             connection.FullWorthSpaceId, accountMap, batch.PendingReconciliations, ct);
-        await SupersedePendingWithBookingsAsync(connection.FullWorthSpaceId, accountMap, batch.Transactions, ct);
+        var alreadyAnnounced = await SupersedePendingWithBookingsAsync(
+            connection.FullWorthSpaceId, accountMap, batch.Transactions, announceable, ct);
 
         if (finanzguruReconciliation is not null)
             await finanzguruReconciliation.ReconcileAsync(connection.FullWorthSpaceId, accountMap.Values, ct);
@@ -96,6 +98,12 @@ public sealed class IngestionService(
             await transferDetection.DetectForSpaceAsync(connection.FullWorthSpaceId, apply: true, ct);
 
         await transaction.CommitAsync(ct);
+
+        // After the commit and after transfer detection, so a move between the user's own accounts is known to be
+        // one by now. Only what is new in THIS fetch, and never a booking whose pending entry was announced before.
+        if (newBookingNotifications is not null && announceable.Count > 0)
+            await newBookingNotifications.NotifyAsync(
+                connection.FullWorthSpaceId, announceable.Where(id => !alreadyAnnounced.Contains(id)).ToList(), ct);
 
         if (budgetNotifications is not null && (inserted > 0 || updated > 0))
             await budgetNotifications.EvaluateAndDispatchAsync(connection.FullWorthSpaceId, DateOnly.FromDateTime(DateTime.UtcNow), ct);
@@ -429,13 +437,17 @@ public sealed class IngestionService(
     /// Only rows nobody has touched (see <see cref="UntouchedPending"/>): a pending row that carries a
     /// note or a receipt stays, as a visible duplicate, rather than being merged behind the user's back.
     /// </summary>
-    private async Task SupersedePendingWithBookingsAsync(
+    private async Task<HashSet<Guid>> SupersedePendingWithBookingsAsync(
         Guid fullWorthSpaceId,
         Dictionary<string, FinanceAccount> accounts,
         IReadOnlyList<TransactionBatchItem> items,
+        IReadOnlyCollection<Guid> createdThisFetch,
         CancellationToken ct)
     {
         var removed = 0;
+        // Bookings that replace a pending row the user was told about in an EARLIER fetch: announcing the booking
+        // too would be the same payment twice.
+        var alreadyAnnounced = new HashSet<Guid>();
         foreach (var hash in items.Select(x => x.IdentificationHash).Distinct())
         {
             if (!accounts.TryGetValue(hash, out var account)) continue;
@@ -455,8 +467,9 @@ public sealed class IngestionService(
                 pending.Select(x => new PendingCandidate(x.Id, x.Amount, x.Currency, x.BookingDate!.Value, x.NormalizedCounterparty, x.FirstSeenAt)).ToList(),
                 booked);
 
-            foreach (var (pendingId, _) in pairs)
+            foreach (var (pendingId, bookedId) in pairs)
             {
+                if (!createdThisFetch.Contains(pendingId)) alreadyAnnounced.Add(bookedId);
                 var row = pending.Single(x => x.Id == pendingId);
                 db.Transactions.Remove(row);
                 db.SupersededPendingTransactions.Add(new SupersededPendingTransaction
@@ -470,7 +483,7 @@ public sealed class IngestionService(
             }
         }
 
-        if (removed == 0) return;
+        if (removed == 0) return alreadyAnnounced;
         // The list of remembered keys only has to outlive the time the bank keeps repeating a pending
         // entry; a key from months ago is not coming back.
         var cutoff = DateTimeOffset.UtcNow.AddDays(-90);
@@ -478,6 +491,7 @@ public sealed class IngestionService(
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.SupersededAt < cutoff)
             .ExecuteDeleteAsync(ct);
         await db.SaveChangesAsync(ct);
+        return alreadyAnnounced;
     }
 
     private async Task<int> InsertBalancesAsync(Dictionary<string, FinanceAccount> accounts, IReadOnlyList<BalanceBatchItem> items, CancellationToken ct)
@@ -492,7 +506,7 @@ public sealed class IngestionService(
         await db.SaveChangesAsync(ct); return inserted;
     }
 
-    private async Task<(int Inserted, int Updated)> UpsertTransactionsAsync(
+    private async Task<(int Inserted, int Updated, List<Guid> Announceable)> UpsertTransactionsAsync(
         Guid fullWorthSpaceId,
         string? country,
         Dictionary<string, FinanceAccount> accounts,
@@ -500,6 +514,9 @@ public sealed class IngestionService(
         CancellationToken ct)
     {
         var inserted = 0; var updated = 0;
+        // The rows this fetch created on accounts that already had history: the first fetch of an account is an
+        // import of the past, not news.
+        var announceable = new List<Guid>();
         // Every row this batch creates gets the same first-seen time. A pending payment and its booking
         // that arrive together (a first sync) then tie instead of ordering by loop position, which
         // PendingSupersession relies on to tell "booked before it appeared" from "booked together".
@@ -552,6 +569,7 @@ public sealed class IngestionService(
         {
             if (!accounts.TryGetValue(accountGroup.Key, out var account)) continue;
             var sourceItems = accountGroup.ToList();
+            var hadHistory = await db.Transactions.AnyAsync(x => x.AccountId == account.Id, ct);
             var keys = sourceItems.Select(x => x.ExternalKey).Distinct().ToArray();
             var existing = await db.Transactions
                 .Where(x => x.AccountId == account.Id && keys.Contains(x.ExternalKey))
@@ -620,6 +638,7 @@ public sealed class IngestionService(
                     db.Transactions.Add(entity);
                     existing[item.ExternalKey] = entity;
                     inserted++;
+                    if (hadHistory) announceable.Add(entity.Id);
                 }
 
                 var previousStatus = entity.Status;
@@ -662,7 +681,7 @@ public sealed class IngestionService(
             }
         }
         await db.SaveChangesAsync(ct);
-        return (inserted, updated);
+        return (inserted, updated, announceable);
     }
 
     private static void ApplyCategorization(

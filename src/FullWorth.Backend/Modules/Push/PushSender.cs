@@ -8,28 +8,23 @@ namespace FullWorth.Backend.Modules.Push;
 
 /// <summary>A registered Web Push endpoint for one of a user's devices.</summary>
 
-/// <summary>Sends notifications to a user's registered devices. No-op (logged) until VAPID is configured.</summary>
+/// <summary>Sends notifications to a user's registered devices.</summary>
 public interface IPushSender
 {
     Task SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct);
 }
 
-public sealed class VapidPushSender(FullWorthDbContext db, IOptions<PushOptions> options, ILogger<VapidPushSender> logger) : IPushSender
+public sealed class VapidPushSender(FullWorthDbContext db, IOptions<PushOptions> options, PushKeyStore keys, ILogger<VapidPushSender> logger) : IPushSender
 {
     public async Task SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct)
     {
-        var opts = options.Value;
-        if (!opts.IsConfigured)
-        {
-            logger.LogDebug("Web Push not configured (no VAPID keys); skipping notification to {UserId}", userId);
-            return;
-        }
-
         var devices = await db.PushDevices.AsNoTracking().Where(d => d.FinanceUserId == userId).ToListAsync(ct);
         if (devices.Count == 0) return;
 
+        var key = await keys.GetAsync(ct);
+
         var payload = JsonSerializer.Serialize(new { title = message.Title, body = message.Body, url = message.Url });
-        var vapid = new VapidDetails(opts.VapidSubject, opts.VapidPublicKey, opts.VapidPrivateKey);
+        var vapid = new VapidDetails(options.Value.VapidSubject, key.PublicKey, key.PrivateKey);
         var client = new WebPushClient();
 
         foreach (var device in devices)

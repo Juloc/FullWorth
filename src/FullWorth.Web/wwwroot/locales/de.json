@@ -1024,7 +1024,13 @@
     "pushUnsupported": "Dieser Browser unterstützt keine Push-Benachrichtigungen.",
     "pushDenied": "Benachrichtigungen sind im Browser blockiert.",
     "pushNotConfigured": "Push ist auf dem Server noch nicht konfiguriert.",
-    "typesHeading": "Benachrichtigungstypen"
+    "typesHeading": "Benachrichtigungstypen",
+    "type_transactions_new": "Neue Buchungen",
+    "showAmounts": "Beträge in Mitteilungen anzeigen",
+    "showAmountsHint": "Aus: nur der Händler steht in der Mitteilung. Ein Sperrbildschirm liest jeder mit.",
+    "test": "Testbenachrichtigung senden",
+    "testSent": "Gesendet - sie sollte gleich ankommen.",
+    "testNoDevice": "Auf diesem Konto ist noch kein Gerät für Push angemeldet."
   },
   "settings": {
     "appearance": "Darstellung & Sprache",

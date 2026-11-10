@@ -30,6 +30,7 @@ public sealed class PreferenceStore(FullWorthDbContext db)
         "dashboard.layout.mobile",
         "navigation.mobile",
         "notifications.types",
+        "notifications.display",
         "wealth.emergencyFund",
         "wealth.projection",
     };

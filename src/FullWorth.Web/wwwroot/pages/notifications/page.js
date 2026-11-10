@@ -9,6 +9,7 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 const TYPES = [
+  'transactions_new',
   'bank_reauth',
   'bank_sync_error',
   'contract_due',
@@ -60,6 +61,8 @@ export async function renderNotifications(context) {
   let prefs = {};
   try { const p = await ctx.api('api/preferences/notifications.types'); prefs = (p && p.value && p.value.types) || {}; } catch { prefs = {}; }
   const on = t => prefs[t] !== false;
+  let showAmounts = false;
+  try { const d = await ctx.api('api/preferences/notifications.display'); showAmounts = !!(d && d.value && d.value.showAmounts); } catch { showAmounts = false; }
 
   body.innerHTML = `
     <p class="row-sub notif-intro">${ctx.esc(ctx.get('notifications.intro'))}</p>
@@ -69,7 +72,12 @@ export async function renderNotifications(context) {
         <div class="row-sub notif-push-status"><span class="notif-dot" aria-hidden="true"></span><span data-push-status>${ctx.esc(ctx.get('notifications.pushOff'))}</span></div>
       </div>
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-toggle>${ctx.esc(ctx.get('notifications.pushEnable'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-test disabled>${ctx.esc(ctx.get('notifications.test'))}</button>
     </div>
+    <div class="rows notif-types">
+      <label class="row notif-type-row"><div class="row-main"><div class="row-title notif-type-title">${ctx.esc(ctx.get('notifications.showAmounts'))}</div></div><span class="fw-toggle"><input type="checkbox" data-show-amounts ${showAmounts ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
+    </div>
+    <p class="row-sub">${ctx.esc(ctx.get('notifications.showAmountsHint'))}</p>
     <h3 class="notif-h">${ctx.esc(ctx.get('notifications.typesHeading'))}</h3>
     <div class="rows notif-types">
       ${TYPES.map(t => `<label class="row notif-type-row"><div class="row-main"><div class="row-title notif-type-title">${ctx.esc(typeLabel(t))}</div></div><span class="fw-toggle"><input type="checkbox" data-type="${t}" ${on(t) ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>`).join('')}
@@ -79,7 +87,8 @@ export async function renderNotifications(context) {
   const pushRow = body.querySelector('.notif-push');
   const statusEl = body.querySelector('[data-push-status]');
   const toggleBtn = body.querySelector('[data-push-toggle]');
-  const setStatus = (text, state) => { statusEl.textContent = text; if (state) pushRow.dataset.pushState = state; };
+  const testBtn = body.querySelector('[data-push-test]');
+  const setStatus = (text, state) => { statusEl.textContent = text; if (state) { pushRow.dataset.pushState = state; testBtn.disabled = state !== 'on'; } };
   const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
   if (!supported) {
     setStatus(ctx.get('notifications.pushUnsupported'), 'blocked');
@@ -88,6 +97,23 @@ export async function renderNotifications(context) {
     setStatus(ctx.get('notifications.pushOn'), 'on');
     toggleBtn.textContent = ctx.get('notifications.pushDisable');
   }
+
+  testBtn.addEventListener('click', async () => {
+    testBtn.disabled = true;
+    try {
+      await ctx.api('api/push/test', { method: 'POST' });
+      ctx.toast(ctx.get('notifications.testSent'));
+    } catch (err) { ctx.toast(/no_devices/.test(err.message || '') ? ctx.get('notifications.testNoDevice') : (err.message || ctx.get('common.error'))); }
+    finally { testBtn.disabled = false; }
+  });
+
+  body.querySelector('[data-show-amounts]').addEventListener('change', async event => {
+    const box = event.target;
+    try {
+      await ctx.api('api/preferences/notifications.display', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ showAmounts: box.checked }) });
+      ctx.toast(ctx.get('common.saved'));
+    } catch (err) { box.checked = !box.checked; ctx.toast(err.message || ctx.get('common.error')); }
+  });
 
   toggleBtn.addEventListener('click', async () => {
     toggleBtn.disabled = true;
