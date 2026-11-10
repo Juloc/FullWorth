@@ -249,7 +249,7 @@ async function loadPaperless(){
   const [connection,presets,items]=await Promise.all([
     api(`${PAPERLESS}/connection?fullWorthSpaceId=${space}`),
     api(`${PAPERLESS}/presets?fullWorthSpaceId=${space}&kind=payslip`),
-    api(`api/compensation/payslip-imports?fullWorthSpaceId=${space}`)]);
+    api(`api/compensation/document-imports?fullWorthSpaceId=${space}`)]);
   paperless={connected:connection?.configured!==false&&!!connection?.isEnabled,preset:(presets||[])[0]||null,items:items||[]};
   renderPaperless();
   refreshOverview();
@@ -288,14 +288,14 @@ async function paperlessAction(event){
   }
   if(button.dataset.paperlessReview)reviewFind(button.dataset.paperlessReview);
   if(button.dataset.paperlessDismiss){
-    await api(`api/compensation/payslip-imports/${button.dataset.paperlessDismiss}/dismiss?fullWorthSpaceId=${space}`,{method:'POST'});
+    await api(`api/compensation/document-imports/${button.dataset.paperlessDismiss}/dismiss?fullWorthSpaceId=${space}`,{method:'POST'});
     if(reviewedImport===button.dataset.paperlessDismiss)fillExtraction({},null);
     await loadPaperless();
   }
 }
 
 // Das Original liegt verschluesselt in FullWorth; der Browser holt es selbst, in einem neuen Tab.
-function openPdf(importId){window.open(bffUrl(`api/compensation/payslip-imports/${importId}/document?fullWorthSpaceId=${spaceId()}`),'_blank','noopener')}
+function openPdf(importId){window.open(bffUrl(`api/compensation/document-imports/${importId}/document?fullWorthSpaceId=${spaceId()}`),'_blank','noopener')}
 
 function reviewFind(id){
   const item=paperless.items.find(x=>x.id===id);if(!item)return;

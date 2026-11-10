@@ -123,9 +123,9 @@ search such as `type:Lohnabrechnung`) finds payslip documents the way the receip
 - The preset run (`PaperlessAutoImportWorker` on its interval, or `POST /api/purchases/receipt-imports/paperless/presets/{id}/run`)
   only files each new document as a *find* (`PayslipImports`, status `pending`). Unlike receipt presets it does
   not start from "now": the payslips that already exist are found too.
-- `PayslipImportWorker` downloads the PDF and reads it with the same chain as the browser upload
+- `DocumentImportWorker` downloads the PDF and reads it with the same chain as the browser upload
   (`PayslipExtractionService`: local OCR, Codex, regex fallback), stores the PDF encrypted
-  (`Documents/EncryptedBlobStore`, HKDF label `fullworth-payslip-blob`, under `PayslipStorage:RootPath`,
+  (`Documents/EncryptedBlobStore`, HKDF label `fullworth-payslip-blob`, under `CompensationStorage:RootPath`,
   default `/data/pension/payslips` so no extra volume is needed) and sets the find to `needs_review`.
   Three failed attempts make it `failed`.
 - **Nothing is saved as a payslip automatically.** The user opens a find ("Prüfen" fills the review form) and
@@ -135,7 +135,7 @@ search such as `type:Lohnabrechnung`) finds payslip documents the way the receip
   row, so the next run does not bring it back. Deleting the payslip deletes its PDF (the row stays as dismissed).
 - Visibility: finds and PDFs belong to the user who imported them (`UserId`), not to the space. Every
   lookup names the user; another member of the same space neither sees nor opens them. Deleting an account
-  deletes the user's finds and PDF files in every space (`AccountPurgeService`, `PayslipImportStore.DeleteAllForUserAsync`).
+  deletes the user's finds and PDF files in every space (`AccountPurgeService`, `DocumentImportStore.DeleteAllForUserAsync`).
 
 ### 10. Effective-dated compensation history
 
@@ -224,9 +224,9 @@ Payslips:
 - `GET /payslips/latest-delta?fullWorthSpaceId=...`
 - `POST /payslips?fullWorthSpaceId=...`
 - `DELETE /payslips/{id}?fullWorthSpaceId=...`
-- `GET /payslip-imports?fullWorthSpaceId=...` (finds waiting for review)
-- `GET /payslip-imports/{id}/document?fullWorthSpaceId=...` (the stored PDF, owner only)
-- `POST /payslip-imports/{id}/dismiss`
+- `GET /document-imports?fullWorthSpaceId=...` (finds waiting for review)
+- `GET /document-imports/{id}/document?fullWorthSpaceId=...` (the stored PDF, owner only)
+- `POST /document-imports/{id}/dismiss`
 
 Every data API requires the trusted authenticated backend user context.
 

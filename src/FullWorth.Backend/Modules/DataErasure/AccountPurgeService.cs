@@ -26,7 +26,8 @@ public sealed class AccountPurgeService(
     FullWorthDbContext db,
     IntelligenceDbContext intelligenceDb,
     UserStore users,
-    PayslipImportStore payslipImports,
+    DocumentImportStore documentImports,
+    EmploymentContractStore contractStates,
     IOptions<PurchaseStorageOptions> purchaseStorage,
     ILogger<AccountPurgeService> logger)
 {
@@ -77,7 +78,8 @@ public sealed class AccountPurgeService(
         // Zuerst, solange die Zeilen noch da sind: das Loeschen eines persoenlichen Spaces nimmt sie per
         // Fremdschluessel mit, und mit ihnen die Pfade der Dateien, die so liegen blieben. Gehoert dem
         // Benutzer, nicht dem Space - also auch in einem geteilten.
-        await payslipImports.DeleteAllForUserAsync(userId, ct);
+        await documentImports.DeleteAllForUserAsync(userId, ct);
+        await contractStates.DeleteAllForUserAsync(userId, ct);
 
         foreach (var spaceId in sharedSpaces)
             await PrepareSharedSpaceAsync(userId, spaceId, ct);

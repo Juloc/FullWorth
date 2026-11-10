@@ -19,9 +19,9 @@ public sealed class PayslipStore(FullWorthDbContext db)
             var result = new List<PayslipRecordView>();
             await using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT p.id, p.payload::text, p.created_at, p.updated_at, i."Id", i."PaperlessUrl", i."FileName", (i."Extraction"->>'confidencePercent')::numeric
+                SELECT p.id, p.payload::text, p.created_at, p.updated_at, i."Id", i."PaperlessUrl", i."PaperlessDocumentId", i."FileName", (i."Extraction"->>'confidencePercent')::numeric
                 FROM compensation_payslips p
-                LEFT JOIN "PayslipImports" i ON i."PayslipId" = p.id AND i."UserId" = p.user_id
+                LEFT JOIN "CompensationDocumentImports" i ON i."ConfirmedId" = p.id AND i."UserId" = p.user_id
                 WHERE p.fullworth_space_id=@space AND p.user_id=@user
                 ORDER BY p.period DESC, p.updated_at DESC;
                 """;
@@ -33,7 +33,7 @@ public sealed class PayslipStore(FullWorthDbContext db)
                 if (payslip is null) continue;
                 result.Add(new PayslipRecordView(reader.GetGuid(0), fullWorthSpaceId, payslip,
                     Timestamp(reader.GetValue(2)), Timestamp(reader.GetValue(3)),
-                    reader.IsDBNull(4) ? null : new PayslipDocumentRef(reader.GetGuid(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetDecimal(7))));
+                    reader.IsDBNull(4) ? null : new DocumentRef(reader.GetGuid(4), reader.GetString(5), reader.GetInt32(6), reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetDecimal(8))));
             }
             return result;
         }, ct);
@@ -62,11 +62,11 @@ public sealed class PayslipStore(FullWorthDbContext db)
                     """
                 : """
                     WITH found AS (
-                        SELECT "Id" FROM "PayslipImports"
-                        WHERE "Id"=@import AND "UserId"=@user AND "FullWorthSpaceId"=@space AND "Status"='needs_review'
+                        SELECT "Id" FROM "CompensationDocumentImports"
+                        WHERE "Id"=@import AND "UserId"=@user AND "FullWorthSpaceId"=@space AND "Kind"='payslip' AND "Status"='needs_review'
                         FOR UPDATE),
                     linked AS (
-                        UPDATE "PayslipImports" SET "Status"='confirmed', "PayslipId"=@id, "UpdatedAt"=now()
+                        UPDATE "CompensationDocumentImports" SET "Status"='confirmed', "ConfirmedId"=@id, "UpdatedAt"=now()
                         WHERE "Id" IN (SELECT "Id" FROM found)
                         RETURNING 1)
                     INSERT INTO compensation_payslips(id, fullworth_space_id, user_id, period, payload)

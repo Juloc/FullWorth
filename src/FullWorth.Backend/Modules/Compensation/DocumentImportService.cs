@@ -4,22 +4,22 @@ using Microsoft.Extensions.Options;
 namespace FullWorth.Backend.Modules.Compensation;
 
 /// <summary>
-/// Lohnabrechnungen aus Paperless. Zwei Schritte, wie bei den Belegen (#127): ein Preset-Lauf legt nur
-/// die Funde an (eine Anfrage an Paperless, ein paar Zeilen), und der <see cref="PayslipImportWorker"/>
+/// Lohnabrechnungen und Arbeitsvertraege aus Paperless. Zwei Schritte, wie bei den Belegen (#127): ein Preset-Lauf legt nur
+/// die Funde an (eine Anfrage an Paperless, ein paar Zeilen), und der <see cref="DocumentImportWorker"/>
 /// holt und liest sie portionsweise - das Auslesen dauert (OCR, dann Codex) und gehoert in keinen
 /// HTTP-Request. Nichts wird hier bestaetigt: ein ausgelesener Fund wartet, bis der Benutzer die Werte
 /// geprueft und gespeichert hat.
 /// </summary>
-public sealed class PayslipImportService(
-    PayslipImportStore imports,
+public sealed class DocumentImportService(
+    DocumentImportStore imports,
     PayslipStore payslips,
-    PayslipExtractionService extraction,
+    IEnumerable<IDocumentReader> readers,
     PaperlessClient paperless,
     PaperlessService connections,
     IOptions<PaperlessOptions> options,
-    ILogger<PayslipImportService> logger) : IPaperlessPresetImporter
+    ILogger<DocumentImportService> logger) : IPaperlessPresetImporter
 {
-    public string Kind => PaperlessPresetKinds.Payslip;
+    public IReadOnlyCollection<string> Kinds => [DocumentKinds.Payslip, DocumentKinds.Contract];
 
     public async Task<PaperlessImportOutcome> ImportAsync(PaperlessImportPresetView preset, PaperlessConnection connection, CancellationToken ct)
     {
@@ -38,7 +38,7 @@ public sealed class PayslipImportService(
             {
                 if (knownIds.Contains(document.Id) || (document.Checksum is not null && knownChecksums.Contains(document.Checksum))) continue;
                 var url = new Uri(PaperlessClient.NormalizeBaseUri(connection.BaseUrl), $"documents/{document.Id}/details").ToString();
-                if (await imports.AddPendingAsync(preset.UserId, preset.FullWorthSpaceId, source, document, url, ct)) found++;
+                if (await imports.AddPendingAsync(preset.UserId, preset.FullWorthSpaceId, preset.Kind, source, document, url, ct)) found++;
             }
             return new(null, found > 0, null);
         }
@@ -72,12 +72,12 @@ public sealed class PayslipImportService(
                     throw new InvalidOperationException("Die Paperless-Verbindung dieses Fundes besteht nicht mehr.");
 
                 await using var download = await paperless.DownloadAsync(connection.BaseUrl, connection.Token, item.PaperlessDocumentId, ct);
-                var result = await extraction.ExtractAsync(item.UserId, download.Content, download.FileName, ct);
+                var result = await readers.Single(reader => reader.Kind == item.Kind).ReadAsync(item.UserId, download.Content, download.FileName, ct);
                 await imports.StoreReadAsync(item.Id, download.Content.ToArray(), download.FileName, download.ContentType, result, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogWarning(ex, "Reading payslip import {ImportId} failed.", item.Id);
+                logger.LogWarning(ex, "Reading {Kind} import {ImportId} failed.", item.Kind, item.Id);
                 await imports.RecordFailureAsync(
                     item.Id,
                     ex is ArgumentException or InvalidOperationException ? ex.Message : "Die Abrechnung konnte nicht gelesen werden.",
@@ -91,7 +91,7 @@ public sealed class PayslipImportService(
     public async Task<bool?> DeletePayslipAsync(Guid userId, Guid fullWorthSpaceId, Guid payslipId, CancellationToken ct)
     {
         var deleted = await payslips.DeleteAsync(userId, fullWorthSpaceId, payslipId, ct);
-        if (deleted == true) await imports.ReleasePayslipAsync(userId, payslipId, ct);
+        if (deleted == true) await imports.ReleaseConfirmedAsync(userId, payslipId, ct);
         return deleted;
     }
 }

@@ -86,7 +86,7 @@ public sealed class ReceiptImportService(
         return await MarkImportedAsync(fullWorthSpaceId, connection.BaseUrl, preview, ct);
     }
 
-    public string Kind => PaperlessPresetKinds.Receipt;
+    public IReadOnlyCollection<string> Kinds => [PaperlessPresetKinds.Receipt];
 
     public async Task<PaperlessImportOutcome> ImportAsync(PaperlessImportPresetView preset, PaperlessConnection connection, CancellationToken ct)
     {

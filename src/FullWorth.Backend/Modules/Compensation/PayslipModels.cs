@@ -52,7 +52,7 @@ public sealed record PayslipRecordView(
     PayslipRecordWrite Payslip,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    PayslipDocumentRef? Document = null);
+    DocumentRef? Document = null);
 
 public sealed record PayslipDelta(
     PayslipRecordView Previous,

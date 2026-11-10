@@ -150,7 +150,7 @@ public static class PaperlessEndpoints
             try
             {
                 var connection = await service.RequireAsync(fullWorthSpaceId, ct);
-                var outcome = await importers.Single(x => x.Kind == preset.Kind).ImportAsync(preset, connection, ct);
+                var outcome = await importers.Single(x => x.Kinds.Contains(preset.Kind)).ImportAsync(preset, connection, ct);
                 await store.UpdatePaperlessPresetCheckAsync(preset.Id, outcome.MaxSeenDocumentId, outcome.Imported, outcome.Error, ct);
                 return Results.Ok(await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, presetId, ct));
             }

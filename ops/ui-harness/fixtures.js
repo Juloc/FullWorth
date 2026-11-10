@@ -1870,13 +1870,13 @@
       }
       return { status: 200, body: preset };
     }
-    if (method === 'GET' && path.endsWith('/compensation/payslip-imports')) {
+    if (method === 'GET' && path.endsWith('/compensation/document-imports')) {
       if (++payslipImportReads > 1)
         for (const item of PAYSLIP_IMPORTS)
           if (item.status === 'pending') { item.status = 'needs_review'; item.extraction = extraction('2026-09-30', 5000, 3112.34); }
       return { status: 200, body: PAYSLIP_IMPORTS };
     }
-    if (method === 'POST' && /\/payslip-imports\/[^/]+\/dismiss$/.test(path)) {
+    if (method === 'POST' && /\/document-imports\/[^/]+\/dismiss$/.test(path)) {
       const index = PAYSLIP_IMPORTS.findIndex(item => path.includes('/' + item.id + '/'));
       if (index >= 0) PAYSLIP_IMPORTS.splice(index, 1);
       return { status: 204, body: null };

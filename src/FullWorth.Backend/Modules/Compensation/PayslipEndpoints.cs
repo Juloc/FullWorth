@@ -76,7 +76,7 @@ public static class PayslipEndpoints
             }
         });
 
-        group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, PayslipImportService imports, CancellationToken ct) =>
+        group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, DocumentImportService imports, CancellationToken ct) =>
         {
             var deleted = await imports.DeletePayslipAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return deleted switch

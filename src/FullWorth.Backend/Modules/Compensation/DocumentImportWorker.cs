@@ -5,7 +5,7 @@ namespace FullWorth.Backend.Modules.Compensation;
 /// er in kurzem Takt, sonst wartet er still. Jeder Fund behaelt seinen Status, also ist die Portion
 /// zugleich der Wiederaufnahmepunkt nach einem Neustart.
 /// </summary>
-public sealed class PayslipImportWorker(IServiceScopeFactory scopeFactory, ILogger<PayslipImportWorker> logger) : BackgroundService
+public sealed class DocumentImportWorker(IServiceScopeFactory scopeFactory, ILogger<DocumentImportWorker> logger) : BackgroundService
 {
     // Klein, weil ein Fund Sekunden bis Minuten dauert (OCR, dann Codex) und sich nichts stauen soll.
     private const int BatchSize = 2;
@@ -18,7 +18,7 @@ public sealed class PayslipImportWorker(IServiceScopeFactory scopeFactory, ILogg
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                processed = await scope.ServiceProvider.GetRequiredService<PayslipImportService>().ProcessPendingAsync(BatchSize, stoppingToken);
+                processed = await scope.ServiceProvider.GetRequiredService<DocumentImportService>().ProcessPendingAsync(BatchSize, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

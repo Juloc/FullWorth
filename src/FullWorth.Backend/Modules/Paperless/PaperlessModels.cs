@@ -34,8 +34,9 @@ public static class PaperlessPresetKinds
 {
     public const string Receipt = "receipt";
     public const string Payslip = "payslip";
+    public const string Contract = "contract";
 
-    public static bool IsKnown(string kind) => kind is Receipt or Payslip;
+    public static bool IsKnown(string kind) => kind is Receipt or Payslip or Contract;
 
     /// <summary>
     /// Ob ein neues automatisches Preset nur holt, was nach dem Speichern erscheint. Belege ja: wer ein
@@ -58,7 +59,8 @@ public sealed record PaperlessImportOutcome(int? MaxSeenDocumentId, bool Importe
 /// </summary>
 public interface IPaperlessPresetImporter
 {
-    string Kind { get; }
+    /// <summary>Die Arten, die dieser Importer holt; das Preset nennt, welche gerade dran ist.</summary>
+    IReadOnlyCollection<string> Kinds { get; }
 
     Task<PaperlessImportOutcome> ImportAsync(PaperlessImportPresetView preset, PaperlessConnection connection, CancellationToken ct);
 }

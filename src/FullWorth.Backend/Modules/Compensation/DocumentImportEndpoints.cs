@@ -3,27 +3,29 @@ using FullWorth.Backend.Security;
 namespace FullWorth.Backend.Modules.Compensation;
 
 /// <summary>Die Funde aus Paperless, die auf Pruefung warten. Alles hier sieht nur der Benutzer, dem der Fund gehoert.</summary>
-public static class PayslipImportEndpoints
+public static class DocumentImportEndpoints
 {
-    public static IEndpointRouteBuilder MapCompensationPayslipImportEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapCompensationDocumentImportEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/compensation/payslip-imports").WithTags("Compensation");
+        var group = app.MapGroup("/api/compensation/document-imports").WithTags("Compensation");
 
-        group.MapGet("/", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess access, PayslipImportStore store, CancellationToken ct) =>
+        group.MapGet("/", async (Guid fullWorthSpaceId, string? kind, CurrentUserContext currentUser, SpaceAccess access, DocumentImportStore store, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
+            kind ??= DocumentKinds.Payslip;
+            if (kind is not (DocumentKinds.Payslip or DocumentKinds.Contract)) return Results.BadRequest(new { error = "Unknown document kind." });
             return await access.IsMemberAsync(userId, fullWorthSpaceId, ct)
-                ? Results.Ok(await store.ListOpenAsync(userId, fullWorthSpaceId, ct))
+                ? Results.Ok(await store.ListOpenAsync(userId, fullWorthSpaceId, kind, ct))
                 : Results.NotFound();
         });
 
         group.MapGet("/{id:guid}/document", async (
-            Guid id, Guid fullWorthSpaceId, HttpContext http, CurrentUserContext currentUser, PayslipImportStore store, CancellationToken ct) =>
+            Guid id, Guid fullWorthSpaceId, HttpContext http, CurrentUserContext currentUser, DocumentImportStore store, CancellationToken ct) =>
         {
             var document = await store.GetDocumentAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             if (document is null) return Results.NotFound();
 
-            // Eine Lohnabrechnung nennt Person, Arbeitgeber und Gehalt: sie darf in keinem geteilten oder
+            // Lohnabrechnung und Arbeitsvertrag nennen Person, Arbeitgeber und Gehalt: sie darf in keinem geteilten oder
             // Festplatten-Cache bleiben, und sie wird nur als PDF inline gezeigt - was Paperless sonst als
             // Typ meldet, wird heruntergeladen, nicht ausgefuehrt.
             http.Response.Headers.CacheControl = "no-store";
@@ -33,7 +35,7 @@ public static class PayslipImportEndpoints
                 : Results.File(document.Content, "application/octet-stream", fileDownloadName: document.FileName);
         });
 
-        group.MapPost("/{id:guid}/dismiss", async (Guid id, CurrentUserContext currentUser, PayslipImportStore store, CancellationToken ct) =>
+        group.MapPost("/{id:guid}/dismiss", async (Guid id, CurrentUserContext currentUser, DocumentImportStore store, CancellationToken ct) =>
             await store.DismissAsync(currentUser.RequireUserId(), id, ct) ? Results.NoContent() : Results.NotFound());
 
         return app;

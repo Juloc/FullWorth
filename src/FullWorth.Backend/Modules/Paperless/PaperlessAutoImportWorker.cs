@@ -49,7 +49,8 @@ public sealed class PaperlessAutoImportWorker(
             var store = scope.ServiceProvider.GetRequiredService<PaperlessStore>();
             var paperless = scope.ServiceProvider.GetRequiredService<PaperlessService>();
             var client = scope.ServiceProvider.GetRequiredService<PaperlessClient>();
-            var importers = scope.ServiceProvider.GetServices<IPaperlessPresetImporter>().ToDictionary(x => x.Kind);
+            var importers = scope.ServiceProvider.GetServices<IPaperlessPresetImporter>()
+                .SelectMany(importer => importer.Kinds.Select(kind => (kind, importer))).ToDictionary(x => x.kind, x => x.importer);
             var presets = await store.ListAutoImportPresetsAsync(ct);
             if (presets.Count == 0) return;
 

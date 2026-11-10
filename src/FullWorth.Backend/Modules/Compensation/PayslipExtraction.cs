@@ -6,10 +6,11 @@ using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Compensation;
 
-/// <summary>Der Text einer Lohnabrechnung. Eine Schnittstelle nur, weil das Werkzeug dahinter (Tesseract) nicht ueberall liegt, wo getestet wird.</summary>
-public interface IPayslipOcr
+/// <summary>Der Text eines Dokuments aus dem Bereich Gehalt. Eine Schnittstelle nur, weil das Werkzeug dahinter (Tesseract) nicht ueberall liegt, wo getestet wird.</summary>
+public interface IDocumentOcr
 {
-    Task<string> ReadTextAsync(Stream content, string fileName, CancellationToken ct);
+    /// <summary>Der Text der ersten <paramref name="maxPages"/> Seiten.</summary>
+    Task<string> ReadTextAsync(Stream content, string fileName, int maxPages, CancellationToken ct);
 }
 
 /// <summary>
@@ -18,11 +19,16 @@ public interface IPayslipOcr
 /// nichts Brauchbares, springt der deterministische Regex-Parser ein. So wird eine Abrechnung nie
 /// halb gedeutet und als vollstaendig ausgegeben.
 /// </summary>
-public sealed class PayslipExtractionService(IPayslipOcr ocr, PayslipCodexExtractor codex)
+public sealed class PayslipExtractionService(IDocumentOcr ocr, PayslipCodexExtractor codex) : IDocumentReader
 {
+    public string Kind => DocumentKinds.Payslip;
+
+    async Task<object> IDocumentReader.ReadAsync(Guid userId, Stream content, string fileName, CancellationToken ct) =>
+        await ExtractAsync(userId, content, fileName, ct);
+
     public async Task<PayslipExtractionResult> ExtractAsync(Guid userId, Stream content, string fileName, CancellationToken ct)
     {
-        var text = await ocr.ReadTextAsync(content, fileName, ct);
+        var text = await ocr.ReadTextAsync(content, fileName, 1, ct);
         if (string.IsNullOrWhiteSpace(text))
             return PayslipTextParser.Empty("OCR konnte keinen Text erkennen.");
         return await codex.TryStructureAsync(userId, text, ct) ?? PayslipTextParser.Parse(text);
@@ -30,41 +36,52 @@ public sealed class PayslipExtractionService(IPayslipOcr ocr, PayslipCodexExtrac
 }
 
 /// <summary>
-/// Runs the local OCR pipeline (PDF first page → PNG via pdftoppm, then Tesseract deu+eng) and returns the
-/// raw recognized text. The original file is never persisted here.
+/// Liest ein PDF oder Bild lokal. Eine Seite (die Lohnabrechnung): die Seite wird gerendert und mit
+/// Tesseract (deu+eng) gelesen. Mehrere (der Arbeitsvertrag): ein digitales PDF hat eine Textebene, die
+/// genauer ist als jede Erkennung, also wird zuerst sie gelesen - nur ohne brauchbaren Text werden die
+/// Seiten gerendert und erkannt. Die Datei wird hier nie abgelegt.
 /// </summary>
-public sealed class LocalPayslipOcr : IPayslipOcr
+public sealed class LocalDocumentOcr : IDocumentOcr
 {
-    private const long MaxBytes = 12 * 1024 * 1024;
+    private const long MaxBytes = 25L * 1024 * 1024;
+    // Weniger als das ist keine Textebene, sondern ein Scan mit ein paar Fusszeilen.
+    private const int MinTextLayerCharacters = 200;
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp" };
 
-    public async Task<string> ReadTextAsync(Stream content, string fileName, CancellationToken ct)
+    public async Task<string> ReadTextAsync(Stream content, string fileName, int maxPages, CancellationToken ct)
     {
         if (content.Length <= 0) throw new ArgumentException("Die Datei ist leer.");
-        if (content.Length > MaxBytes) throw new ArgumentException("Die Datei darf höchstens 12 MB groß sein.");
+        if (content.Length > MaxBytes) throw new ArgumentException("Die Datei darf höchstens 25 MB groß sein.");
 
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         if (extension != ".pdf" && !ImageExtensions.Contains(extension))
             throw new ArgumentException("Unterstützt werden PDF, JPG, PNG, WEBP, TIFF und BMP.");
 
-        var workDir = Path.Combine(Path.GetTempPath(), $"fullworth-payslip-{Guid.NewGuid():N}");
+        var workDir = Path.Combine(Path.GetTempPath(), $"fullworth-document-{Guid.NewGuid():N}");
         Directory.CreateDirectory(workDir);
         try
         {
             var source = Path.Combine(workDir, $"source{extension}");
             await using (var stream = File.Create(source)) await content.CopyToAsync(stream, ct);
 
-            var image = source;
-            if (extension == ".pdf")
+            if (extension != ".pdf") return await RunProcessAsync("tesseract", [source, "stdout", "-l", "deu+eng", "--psm", "6"], ct);
+
+            if (maxPages > 1)
             {
-                var prefix = Path.Combine(workDir, "page");
-                await RunProcessAsync("pdftoppm", new[] { "-f", "1", "-singlefile", "-png", "-r", "220", source, prefix }, ct);
-                image = prefix + ".png";
-                if (!File.Exists(image)) throw new InvalidOperationException("Die erste PDF-Seite konnte nicht gerendert werden.");
+                var layer = await RunProcessAsync("pdftotext", ["-l", maxPages.ToString(), "-layout", source, "-"], ct);
+                if (layer.Count(char.IsLetterOrDigit) >= MinTextLayerCharacters) return layer;
             }
 
-            return await RunProcessAsync("tesseract", new[] { image, "stdout", "-l", "deu+eng", "--psm", "6" }, ct);
+            var prefix = Path.Combine(workDir, "page");
+            await RunProcessAsync("pdftoppm", ["-f", "1", "-l", maxPages.ToString(), "-png", "-r", "220", source, prefix], ct);
+            var pages = Directory.GetFiles(workDir, "page*.png").Order(StringComparer.Ordinal).ToList();
+            if (pages.Count == 0) throw new InvalidOperationException("Die erste PDF-Seite konnte nicht gerendert werden.");
+
+            var text = new StringBuilder();
+            foreach (var page in pages)
+                text.AppendLine(await RunProcessAsync("tesseract", [page, "stdout", "-l", "deu+eng", "--psm", "6"], ct));
+            return text.ToString();
         }
         finally
         {
@@ -79,7 +96,7 @@ public sealed class LocalPayslipOcr : IPayslipOcr
         {
             throw new InvalidOperationException(exception.Kind == LocalToolFailure.Missing
                 ? $"Lokales Extraktionswerkzeug '{fileName}' ist nicht verfügbar."
-                : $"{fileName} konnte die Lohnabrechnung nicht verarbeiten.", exception);
+                : $"{fileName} konnte das Dokument nicht verarbeiten.", exception);
         }
     }
 }

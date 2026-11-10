@@ -1,85 +1,30 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace FullWorth.Backend.Modules.Compensation;
 
 /// <summary>
 /// Optional Codex-assisted structuring of a payslip. The local OCR (Tesseract) produces the text; Codex then
-/// turns that untrusted text into the structured payslip fields via the bridge's general <c>/execute</c>
-/// endpoint with a strict JSON output schema. It never sees the network beyond the bridge and is treated as a
-/// best-effort enhancer: when the bridge is disabled, unauthenticated, times out, or returns anything invalid,
+/// turns that untrusted text into the structured payslip fields (see <see cref="CodexStructurer"/>) with a strict
+/// JSON output schema. It is treated as a best-effort enhancer: when the bridge is disabled, unauthenticated, times out, or returns anything invalid,
 /// the caller falls back to the deterministic regex parser so a payslip is never partially interpreted.
 /// </summary>
-public sealed class PayslipCodexExtractor(
-    IConfiguration configuration,
-    IHttpClientFactory clients,
-    FullWorth.Backend.Modules.Intelligence.CodexModelResolver models,
-    ILogger<PayslipCodexExtractor> logger)
+public sealed class PayslipCodexExtractor(CodexStructurer codex)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public bool IsEnabled =>
-        Intelligence.CodexBridgeConfiguration.IsEnabled(configuration) &&
-        !string.IsNullOrWhiteSpace(Intelligence.CodexBridgeConfiguration.Key(configuration));
-
-    public async Task<PayslipExtractionResult?> TryStructureAsync(
-        Guid userId, string ocrText, CancellationToken ct)
+    public async Task<PayslipExtractionResult?> TryStructureAsync(Guid userId, string ocrText, CancellationToken ct)
     {
-        if (!IsEnabled) return null;
         if (string.IsNullOrWhiteSpace(ocrText)) return null;
-
-        var key = Intelligence.CodexBridgeConfiguration.Key(configuration);
-        var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
-        if (string.IsNullOrWhiteSpace(key) || baseUri is null) return null;
 
         // Cap the OCR text: a payslip is one page; anything larger is almost certainly noise.
         var text = ocrText.Length <= 24_000 ? ocrText : ocrText[..24_000];
-
-        // Honor the model the user picked in the AI-access settings; null means "automatic".
-        var body = JsonSerializer.Serialize(new
-        {
-            systemInstruction = SystemInstruction,
-            inputJson = JsonSerializer.Serialize(new { payslipText = text }, Json),
-            jsonSchema = SchemaJson,
-            model = await models.ResolveAsync(userId, ct)
-        }, Json);
-
-        try
-        {
-            using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/execute"));
-            message.Headers.Add("X-FullWorth-Internal-Key", key);
-            message.Headers.Add("X-FullWorth-Codex-Scope", BridgeScope(userId));
-            message.Content = new StringContent(body, Encoding.UTF8, "application/json");
-
-            var client = clients.CreateClient(Intelligence.CodexBridgeSupervisor.PassiveClient);
-            client.Timeout = TimeSpan.FromMinutes(4);
-            using var response = await client.SendAsync(message, HttpCompletionOption.ResponseContentRead, ct);
-            var raw = await response.Content.ReadAsStringAsync(ct);
-            if (string.IsNullOrWhiteSpace(raw)) return null;
-
-            var envelope = JsonSerializer.Deserialize<ExecuteEnvelope>(raw, Json);
-            if (envelope?.Success != true || string.IsNullOrWhiteSpace(envelope.OutputJson))
-            {
-                logger.LogInformation("Codex payslip structuring unavailable: {Error}", envelope?.Error ?? response.StatusCode.ToString());
-                return null;
-            }
-
-            var parsed = JsonSerializer.Deserialize<CodexPayslip>(envelope.OutputJson, Json);
-            return parsed is null ? null : Map(parsed);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Codex payslip structuring failed; falling back to local parsing.");
-            return null;
-        }
+        var output = await codex.TryExecuteAsync(userId, SystemInstruction, JsonSerializer.Serialize(new { payslipText = text }, Json), SchemaJson, ct);
+        if (output is null) return null;
+        try { return Map(JsonSerializer.Deserialize<CodexPayslip>(output, Json)!); }
+        catch (JsonException) { return null; }
     }
 
     private static PayslipExtractionResult Map(CodexPayslip p)
@@ -120,12 +65,6 @@ public sealed class PayslipCodexExtractor(
             Math.Clamp(Math.Round(p.Confidence * 100m, 0), 0m, 100m),
             detected.Distinct().ToArray(),
             warnings);
-    }
-
-    private static string BridgeScope(Guid userId)
-    {
-        var input = Encoding.UTF8.GetBytes($"fullworth-ai:{userId:N}");
-        return Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
     }
 
     private const string SystemInstruction =
@@ -173,8 +112,6 @@ public sealed class PayslipCodexExtractor(
     });
 
     private static object Number() => new { type = new[] { "number", "null" }, minimum = 0 };
-
-    private sealed record ExecuteEnvelope(bool Success, string? RequestId, string? OutputJson, string? Error);
 
     private sealed record CodexPayslip(
         string? Period,

@@ -20,7 +20,7 @@ namespace FullWorth.Backend.Tests.Compensation;
 /// durch eine Liste im Speicher, das andere durch festen Text, weil Tesseract nicht ueberall liegt, wo
 /// getestet wird.
 /// </summary>
-public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
+public sealed class DocumentImportIntegrationTests : IDisposable
 {
     private const string Ocr = """
         Abrechnungsmonat 08/2026
@@ -28,6 +28,14 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         Nettoverdienst 3.112,34 EUR
         Auszahlungsbetrag 3.012,34 EUR
         Lohnsteuer 735,10 EUR
+        """;
+
+    private const string ContractOcr = """
+        Änderungsvereinbarung zum Arbeitsvertrag
+        zwischen der Beispiel Software GmbH und Herrn Mustermann
+        Mit Wirkung zum 01.07.2026 beträgt das monatliche Bruttogehalt 5.400,00 €.
+        Die regelmäßige wöchentliche Arbeitszeit beträgt 40 Stunden Wochenstunden.
+        Der Urlaubsanspruch beträgt 30 Arbeitstage pro Kalenderjahr.
         """;
 
     private static readonly byte[] Pdf = Encoding.ASCII.GetBytes("%PDF-1.4 Lohnabrechnung Geheim-Marker 4711");
@@ -72,7 +80,7 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
 
         // Ein verworfener Fund kommt nicht wieder.
         var dismissed = open[0].GetProperty("id").GetGuid();
-        using (var dismiss = Request(HttpMethod.Post, $"/api/compensation/payslip-imports/{dismissed:D}/dismiss", owner))
+        using (var dismiss = Request(HttpMethod.Post, $"/api/compensation/document-imports/{dismissed:D}/dismiss", owner))
         using (var response = await client.SendAsync(dismiss))
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         await RunPresetAsync(client, owner, preset.GetProperty("id").GetGuid());
@@ -98,8 +106,8 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         // Ein anderes Mitglied desselben Spaces sieht den Fund nicht, kann das PDF nicht holen, den Fund
         // nicht verwerfen und ihn nicht als eigene Abrechnung bestaetigen.
         Assert.Empty(await ListOpenAsync(client, colleague));
-        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Get, $"/api/compensation/payslip-imports/{importId:D}/document?fullWorthSpaceId={owner.SpaceId:D}", colleague));
-        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/payslip-imports/{importId:D}/dismiss", colleague));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Get, $"/api/compensation/document-imports/{importId:D}/document?fullWorthSpaceId={owner.SpaceId:D}", colleague));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/document-imports/{importId:D}/dismiss", colleague));
         Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/payslips?fullWorthSpaceId={owner.SpaceId:D}&importId={importId:D}", colleague, Confirmation()));
         Assert.Empty(await ListPayslipsAsync(client, colleague));
 
@@ -120,7 +128,7 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         Assert.Equal(importId, document.GetProperty("importId").GetGuid());
         Assert.StartsWith("http://paperless.test/documents/101", document.GetProperty("paperlessUrl").GetString());
 
-        using (var open = Request(HttpMethod.Get, $"/api/compensation/payslip-imports/{importId:D}/document?fullWorthSpaceId={owner.SpaceId:D}", owner))
+        using (var open = Request(HttpMethod.Get, $"/api/compensation/document-imports/{importId:D}/document?fullWorthSpaceId={owner.SpaceId:D}", owner))
         using (var response = await client.SendAsync(open))
         {
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -138,7 +146,7 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         using (var response = await client.SendAsync(delete))
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Empty(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
-        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Get, $"/api/compensation/payslip-imports/{importId:D}/document?fullWorthSpaceId={owner.SpaceId:D}", owner));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Get, $"/api/compensation/document-imports/{importId:D}/document?fullWorthSpaceId={owner.SpaceId:D}", owner));
         await RunPresetAsync(client, owner, preset.GetProperty("id").GetGuid());
         await ProcessAsync(factory);
         Assert.Empty(await ListOpenAsync(client, owner));
@@ -175,9 +183,92 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
             Assert.Single(JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.EnumerateArray());
 
         using var unknown = Request(HttpMethod.Post, $"/api/purchases/receipt-imports/paperless/presets?fullWorthSpaceId={owner.SpaceId:D}", owner,
-            JsonContent.Create(new { name = "Verträge", query = "x", kind = "contract" }));
+            JsonContent.Create(new { name = "Verträge", query = "x", kind = "unicorn" }));
         using var refused = await client.SendAsync(unknown);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+    }
+
+    [Fact]
+    public async Task AContractIsReadForReview_ConfirmedIntoTheChangeLog_AndKeptFromColleagues()
+    {
+        using var factory = CreateFactory(new FakePaperless(("301", "ccc")));
+        using var client = factory.CreateClient();
+        var spaceId = Guid.NewGuid();
+        var owner = await SeedMemberAsync(factory, Guid.NewGuid(), spaceId);
+        var colleague = await SeedMemberAsync(factory, Guid.NewGuid(), spaceId, createSpace: false);
+        await ConnectAsync(client, owner);
+        var preset = await CreatePresetAsync(client, owner, "contract");
+        Assert.Equal(JsonValueKind.Null, preset.GetProperty("lastSeenDocumentId").ValueKind);
+        await RunPresetAsync(client, owner, preset.GetProperty("id").GetGuid());
+        await ProcessAsync(factory);
+
+        // Der Fund ist ein Vertrag: ausgelesen (mehrere Seiten verlangt), zur Pruefung, nichts bestaetigt - und er
+        // taucht nicht in der Liste der Abrechnungen auf.
+        Assert.Empty(await ListOpenAsync(client, owner));
+        var found = Assert.Single(await ListOpenAsync(client, owner, "contract"));
+        Assert.Equal("needs_review", found.GetProperty("status").GetString());
+        var read = found.GetProperty("extraction");
+        Assert.Equal("2026-07-01", read.GetProperty("validFrom").GetString());
+        Assert.Equal("addendum", read.GetProperty("kind").GetString());
+        Assert.Equal(5400m, read.GetProperty("grossMonthly").GetDecimal());
+        Assert.Equal(30m, read.GetProperty("vacationDays").GetDecimal());
+        var importId = found.GetProperty("id").GetGuid();
+        Assert.Empty((await OverviewAsync(client, owner)).GetProperty("states").EnumerateArray());
+
+        // Fremde Mitglieder: nichts sehen, nichts oeffnen, nichts bestaetigen.
+        Assert.Empty(await ListOpenAsync(client, colleague, "contract"));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Get, $"/api/compensation/document-imports/{importId:D}/document?fullWorthSpaceId={spaceId:D}", colleague));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={spaceId:D}&importId={importId:D}", colleague, ContractBody("2026-07-01", "addendum", 5400)));
+        Assert.Empty((await OverviewAsync(client, colleague)).GetProperty("states").EnumerateArray());
+
+        // Ein Fund der falschen Art laesst sich nicht als Abrechnung bestaetigen.
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/payslips?fullWorthSpaceId={spaceId:D}&importId={importId:D}", owner, Confirmation()));
+
+        // Der erste Stand von Hand, der zweite aus dem Fund.
+        Assert.Equal(HttpStatusCode.Created, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={spaceId:D}", owner, ContractBody("2025-01-01", "contract", 5000, hours: 40, vacation: 28)));
+        Assert.Equal(HttpStatusCode.Created, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={spaceId:D}&importId={importId:D}", owner, ContractBody("2026-07-01", "addendum", 5400, hours: 40, vacation: 30)));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={spaceId:D}&importId={importId:D}", owner, ContractBody("2026-07-01", "addendum", 5400)));
+        Assert.Empty(await ListOpenAsync(client, owner, "contract"));
+
+        var overview = await OverviewAsync(client, owner);
+        Assert.Equal(2, overview.GetProperty("states").GetArrayLength());
+        var latest = overview.GetProperty("events")[0];
+        Assert.Equal("Gehaltserhöhung", latest.GetProperty("badge").GetString());
+        var gross = latest.GetProperty("changed").EnumerateArray().Single(x => x.GetProperty("key").GetString() == "gross");
+        Assert.Equal("5.000,00 €", gross.GetProperty("old").GetString());
+        Assert.Equal("5.400,00 €", gross.GetProperty("new").GetString());
+        Assert.Equal(8m, gross.GetProperty("percent").GetDecimal());
+        Assert.Contains(latest.GetProperty("unchanged").EnumerateArray(), x => x.GetProperty("key").GetString() == "hours");
+        Assert.Equal(importId, latest.GetProperty("document").GetProperty("importId").GetGuid());
+        Assert.Equal(301, latest.GetProperty("document").GetProperty("paperlessDocumentId").GetInt32());
+
+        using (var open = Request(HttpMethod.Get, $"/api/compensation/document-imports/{importId:D}/document?fullWorthSpaceId={spaceId:D}", owner))
+        using (var response = await client.SendAsync(open))
+            Assert.Equal(Pdf, await response.Content.ReadAsByteArrayAsync());
+
+        // Loescht der Besitzer den Stand, verschwindet das Original, und der Fund kommt nicht zurueck.
+        using (var delete = Request(HttpMethod.Delete, $"/api/compensation/contracts/{latest.GetProperty("id").GetGuid():D}?fullWorthSpaceId={spaceId:D}", owner))
+        using (var response = await client.SendAsync(delete))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
+        await RunPresetAsync(client, owner, preset.GetProperty("id").GetGuid());
+        await ProcessAsync(factory);
+        Assert.Empty(await ListOpenAsync(client, owner, "contract"));
+    }
+
+    [Fact]
+    public async Task AccountDeletionRemovesContractStatesToo()
+    {
+        using var factory = CreateFactory(new FakePaperless());
+        using var client = factory.CreateClient();
+        var member = await SeedMemberAsync(factory, Guid.NewGuid(), Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Created, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={member.SpaceId:D}", member, ContractBody("2025-01-01", "contract", 5000)));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+            Assert.True((await scope.ServiceProvider.GetRequiredService<AccountPurgeService>().PurgeAsync(member.UserId, CancellationToken.None)).Succeeded);
+
+        await factory.SeedAsync(async db =>
+            Assert.Equal(0, await db.Database.SqlQuery<int>($"""SELECT count(*)::int AS "Value" FROM "EmploymentContractStates" WHERE "UserId" = {member.UserId}""").SingleAsync()));
     }
 
     [Fact]
@@ -203,8 +294,8 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         Assert.Single(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
         await factory.SeedAsync(async db =>
         {
-            Assert.Equal(0, await db.Database.SqlQuery<int>($"""SELECT count(*)::int AS "Value" FROM "PayslipImports" WHERE "UserId" = {leaving.UserId}""").SingleAsync());
-            Assert.Equal(1, await db.Database.SqlQuery<int>($"""SELECT count(*)::int AS "Value" FROM "PayslipImports" WHERE "UserId" = {staying.UserId}""").SingleAsync());
+            Assert.Equal(0, await db.Database.SqlQuery<int>($"""SELECT count(*)::int AS "Value" FROM "CompensationDocumentImports" WHERE "UserId" = {leaving.UserId}""").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQuery<int>($"""SELECT count(*)::int AS "Value" FROM "CompensationDocumentImports" WHERE "UserId" = {staying.UserId}""").SingleAsync());
         });
         Assert.Single(await ListOpenAsync(client, staying));
     }
@@ -231,14 +322,14 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         new Dictionary<string, string?>
         {
             ["Security:DataEncryptionKey"] = Convert.ToBase64String(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray()),
-            ["PayslipStorage:RootPath"] = root
+            ["CompensationStorage:RootPath"] = root
         },
         services =>
         {
             services.RemoveAll<IHttpClientFactory>();
             services.AddSingleton<IHttpClientFactory>(paperless);
-            services.RemoveAll<IPayslipOcr>();
-            services.AddSingleton<IPayslipOcr>(new FixedOcr());
+            services.RemoveAll<IDocumentOcr>();
+            services.AddSingleton<IDocumentOcr>(new FixedOcr());
         });
 
     /// <summary>
@@ -248,7 +339,7 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
     private static async Task ProcessAsync(BackendWebApplicationFactory factory)
     {
         using var scope = factory.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<PayslipImportService>().ProcessPendingAsync(50, CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<DocumentImportService>().ProcessPendingAsync(50, CancellationToken.None);
     }
 
     private static async Task ConnectAsync(HttpClient client, Member member)
@@ -259,10 +350,10 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    private static async Task<JsonElement> CreatePresetAsync(HttpClient client, Member member)
+    private static async Task<JsonElement> CreatePresetAsync(HttpClient client, Member member, string kind = "payslip")
     {
         using var create = Request(HttpMethod.Post, $"/api/purchases/receipt-imports/paperless/presets?fullWorthSpaceId={member.SpaceId:D}", member,
-            JsonContent.Create(new { name = "Lohnabrechnungen", query = "type:Lohnabrechnung", autoImport = true, kind = "payslip" }));
+            JsonContent.Create(new { name = kind == "payslip" ? "Lohnabrechnungen" : "Verträge", query = "type:Lohnabrechnung", autoImport = true, kind }));
         using var response = await client.SendAsync(create);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
@@ -275,8 +366,8 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    private static Task<List<JsonElement>> ListOpenAsync(HttpClient client, Member member) =>
-        ListAsync(client, $"/api/compensation/payslip-imports?fullWorthSpaceId={member.SpaceId:D}", member);
+    private static Task<List<JsonElement>> ListOpenAsync(HttpClient client, Member member, string kind = "payslip") =>
+        ListAsync(client, $"/api/compensation/document-imports?fullWorthSpaceId={member.SpaceId:D}&kind={kind}", member);
 
     private static Task<List<JsonElement>> ListPayslipsAsync(HttpClient client, Member member) =>
         ListAsync(client, $"/api/compensation/payslips?fullWorthSpaceId={member.SpaceId:D}", member);
@@ -295,6 +386,17 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
         using var request = Request(method, path, member, content);
         using var response = await client.SendAsync(request);
         return response.StatusCode;
+    }
+
+    private static HttpContent ContractBody(string validFrom, string kind, decimal gross, decimal? hours = null, decimal? vacation = null) =>
+        JsonContent.Create(new { validFrom, kind, grossMonthly = gross, weeklyHours = hours, vacationDays = vacation, companyCar = false });
+
+    private static async Task<JsonElement> OverviewAsync(HttpClient client, Member member)
+    {
+        using var request = Request(HttpMethod.Get, $"/api/compensation/contracts?fullWorthSpaceId={member.SpaceId:D}", member);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
     }
 
     private static HttpContent Confirmation() => JsonContent.Create(new { period = "2026-08-31", grossPay = 5000, netPay = 3112.34, payout = 3012.34 });
@@ -323,9 +425,11 @@ public sealed class PayslipPaperlessImportIntegrationTests : IDisposable
 
     private sealed record Member(Guid UserId, Guid SpaceId);
 
-    private sealed class FixedOcr : IPayslipOcr
+    // Mehr als eine Seite verlangt nur der Vertrag.
+    private sealed class FixedOcr : IDocumentOcr
     {
-        public Task<string> ReadTextAsync(Stream content, string fileName, CancellationToken ct) => Task.FromResult(Ocr);
+        public Task<string> ReadTextAsync(Stream content, string fileName, int maxPages, CancellationToken ct) =>
+            Task.FromResult(maxPages > 1 ? ContractOcr : Ocr);
     }
 
     private sealed class FakePaperless : IHttpClientFactory
