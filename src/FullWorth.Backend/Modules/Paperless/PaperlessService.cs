@@ -89,13 +89,15 @@ public sealed class PaperlessService(
         if (string.IsNullOrWhiteSpace(name)) throw new PaperlessException("Preset name is required.");
         if (name.Length > 100) throw new PaperlessException("Preset name is too long.");
 
+        if (!PaperlessPresetKinds.IsKnown(request.Kind)) throw new PaperlessException("Unknown Paperless preset kind.");
+
         var id = presetId is { } value && value != Guid.Empty ? value : Guid.NewGuid();
         var existing = presetId is { } existingId
             ? await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, existingId, ct)
             : null;
         if (presetId.HasValue && existing is null) throw new PaperlessException("Paperless preset was not found.");
 
-        var siblings = await store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct);
+        var siblings = await store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, null, ct);
         if (siblings.Any(x => x.Id != id && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
             throw new PaperlessException("A Paperless preset with this name already exists.");
 
@@ -106,7 +108,7 @@ public sealed class PaperlessService(
 
         var currency = request.Currency?.Trim() is { Length: 3 } code && code.All(char.IsLetter) ? code.ToUpperInvariant() : "EUR";
         var lastSeen = existing?.LastSeenDocumentId;
-        var baselineRequired = request.AutoImport &&
+        var baselineRequired = request.AutoImport && PaperlessPresetKinds.StartsFromNow(request.Kind) &&
             (existing is null || !existing.AutoImport || !string.Equals(existing.Query, query, StringComparison.Ordinal));
 
         if (baselineRequired)
@@ -130,6 +132,7 @@ public sealed class PaperlessService(
             request.AnalyzeAutomatically,
             currency,
             lastSeen,
+            request.Kind,
             ct);
     }
 

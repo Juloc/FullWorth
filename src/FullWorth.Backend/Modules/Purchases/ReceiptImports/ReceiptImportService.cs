@@ -13,7 +13,7 @@ public sealed class ReceiptImportService(
     PaperlessService paperlessService,
     PaperlessStore paperlessStore,
     IOptions<ReceiptImportOptions> options,
-    IOptions<PurchaseStorageOptions> purchaseStorage)
+    IOptions<PurchaseStorageOptions> purchaseStorage) : IPaperlessPresetImporter
 {
     private readonly ReceiptImportOptions settings = options.Value;
     private readonly PurchaseStorageOptions receiptStorage = purchaseStorage.Value;
@@ -86,11 +86,12 @@ public sealed class ReceiptImportService(
         return await MarkImportedAsync(fullWorthSpaceId, connection.BaseUrl, preview, ct);
     }
 
-    public async Task RunPaperlessAutoImportPresetAsync(PaperlessAutoImportTarget preset, CancellationToken ct)
+    public string Kind => PaperlessPresetKinds.Receipt;
+
+    public async Task<PaperlessImportOutcome> ImportAsync(PaperlessAutoImportTarget preset, PaperlessConnection connection, CancellationToken ct)
     {
         try
         {
-            var connection = await paperlessService.RequireAsync(preset.FullWorthSpaceId, ct);
             var automaticFilter = PaperlessService.ApplyDefaultQuery(
                 new PaperlessPreviewRequest(Query: preset.Query, Limit: settings.MaxBatchItems),
                 connection.DefaultQuery);
@@ -119,11 +120,7 @@ public sealed class ReceiptImportService(
                 newDocuments = newDocuments.Where(x => !imported.Contains(x.Id)).ToList();
             }
 
-            if (newDocuments.Count == 0)
-            {
-                await paperlessStore.UpdatePaperlessPresetCheckAsync(preset.Id, maxSeen, false, null, ct);
-                return;
-            }
+            if (newDocuments.Count == 0) return new(maxSeen, false, null);
 
             var batch = await ImportPaperlessAsync(
                 preset.UserId,
@@ -135,16 +132,14 @@ public sealed class ReceiptImportService(
                     preset.AnalyzeAutomatically),
                 ct);
 
-            await paperlessStore.UpdatePaperlessPresetCheckAsync(
-                preset.Id,
+            return new(
                 batch.Failed == 0 ? maxSeen : null,
                 batch.Completed > 0 || batch.Queued > 0 || batch.Processing > 0 || batch.NeedsReview > 0,
-                batch.Failed > 0 ? $"{batch.Failed} receipt(s) failed during automatic import." : null,
-                ct);
+                batch.Failed > 0 ? $"{batch.Failed} receipt(s) failed during automatic import." : null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            await paperlessStore.UpdatePaperlessPresetCheckAsync(preset.Id, null, false, SafeError(ex), ct);
+            return new(null, false, SafeError(ex));
         }
     }
 

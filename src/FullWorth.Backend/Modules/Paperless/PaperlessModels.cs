@@ -25,8 +25,43 @@ public sealed class PaperlessOptions
     public int PaperlessAutoImportIntervalMinutes { get; set; } = 60;
 }
 
+/// <summary>
+/// Wofuer ein Preset Dokumente holt. Die Art bestimmt, wer sie importiert
+/// (<see cref="IPaperlessPresetImporter"/>); eine weitere Art ist eine weitere Konstante und ein
+/// weiterer Importer.
+/// </summary>
+public static class PaperlessPresetKinds
+{
+    public const string Receipt = "receipt";
+    public const string Payslip = "payslip";
+
+    public static bool IsKnown(string kind) => kind is Receipt or Payslip;
+
+    /// <summary>
+    /// Ob ein neues automatisches Preset nur holt, was nach dem Speichern erscheint. Belege ja: wer ein
+    /// Preset anlegt, will nicht seine ganze Ablage als Einkaeufe. Lohnabrechnungen nein: der Sinn ist
+    /// gerade, dass die vorhandenen mitkommen - sie landen ohnehin nur zur Pruefung.
+    /// </summary>
+    public static bool StartsFromNow(string kind) => kind == Receipt;
+}
+
 /// <summary>Verbindung samt entschluesseltem Token - nur im Speicher, nie in einer Antwort.</summary>
 public sealed record PaperlessConnection(string BaseUrl, string Token, string? DefaultQuery);
+
+/// <summary>Was ein Importer aus einem Preset-Lauf meldet; der Hintergrunddienst traegt es am Preset ein.</summary>
+public sealed record PaperlessImportOutcome(int? MaxSeenDocumentId, bool Imported, string? Error);
+
+/// <summary>
+/// Importiert die neuen Dokumente eines automatischen Presets einer Art. Ein erwarteter Fehler
+/// (Paperless antwortet nicht, ein Dokument laesst sich nicht lesen) kommt als <c>Error</c> zurueck und
+/// steht danach am Preset - er wirft nicht, sonst braeche er den Lauf der anderen Presets ab.
+/// </summary>
+public interface IPaperlessPresetImporter
+{
+    string Kind { get; }
+
+    Task<PaperlessImportOutcome> ImportAsync(PaperlessAutoImportTarget preset, PaperlessConnection connection, CancellationToken ct);
+}
 
 public sealed class PaperlessException(string message) : InvalidOperationException(message);
 
@@ -71,7 +106,8 @@ public sealed record PaperlessImportPresetWrite(
     string? EditorJson = null,
     bool AutoImport = false,
     bool AnalyzeAutomatically = true,
-    string? Currency = null);
+    string? Currency = null,
+    string Kind = PaperlessPresetKinds.Receipt);
 
 public sealed record PaperlessImportPresetView(
     Guid Id,
@@ -88,7 +124,8 @@ public sealed record PaperlessImportPresetView(
     DateTimeOffset? LastImportedAt,
     string? LastError,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string Kind);
 
 public sealed record PaperlessAutoImportTarget(
     Guid Id,
@@ -98,7 +135,8 @@ public sealed record PaperlessAutoImportTarget(
     string? Query,
     bool AnalyzeAutomatically,
     string Currency,
-    int? LastSeenDocumentId);
+    int? LastSeenDocumentId,
+    string Kind);
 
 public sealed record PaperlessPreviewRequest(
     string? Query = null,

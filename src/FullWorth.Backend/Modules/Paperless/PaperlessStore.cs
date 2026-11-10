@@ -72,17 +72,20 @@ public sealed class PaperlessStore(FullWorthDbContext db)
             """, ct);
     }
 
+    /// <summary>Die Presets des Benutzers in diesem Space; mit <paramref name="kind"/> nur die dieser Art.</summary>
     public async Task<IReadOnlyList<PaperlessImportPresetView>> ListPaperlessPresetsAsync(
         Guid userId,
         Guid fullWorthSpaceId,
+        string? kind,
         CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
                    "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "LastCheckedAt",
-                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt"
+                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt", "Kind"
             FROM "PaperlessImportPresets"
             WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
+              AND ({kind}::text IS NULL OR "Kind" = {kind})
             ORDER BY lower("Name"), "CreatedAt"
             """).ToListAsync(ct);
         return rows.Select(ToPresetView).ToList();
@@ -97,7 +100,7 @@ public sealed class PaperlessStore(FullWorthDbContext db)
         var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
                    "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "LastCheckedAt",
-                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt"
+                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt", "Kind"
             FROM "PaperlessImportPresets"
             WHERE "Id" = {presetId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
             LIMIT 1
@@ -116,16 +119,17 @@ public sealed class PaperlessStore(FullWorthDbContext db)
         bool analyzeAutomatically,
         string currency,
         int? lastSeenDocumentId,
+        string kind,
         CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "PaperlessImportPresets"
                 ("Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
-                 "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "CreatedAt", "UpdatedAt")
+                 "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "CreatedAt", "UpdatedAt", "Kind")
             VALUES
                 ({id}, {fullWorthSpaceId}, {userId}, {Cap(name.Trim(), 100)}, {CapNullable(query, 4000)},
-                 {editorJson}, {autoImport}, {analyzeAutomatically}, {currency}, {lastSeenDocumentId}, {now}, {now})
+                 {editorJson}, {autoImport}, {analyzeAutomatically}, {currency}, {lastSeenDocumentId}, {now}, {now}, {kind})
             ON CONFLICT ("Id") DO UPDATE SET
                 "Name" = EXCLUDED."Name",
                 "Query" = EXCLUDED."Query",
@@ -134,6 +138,7 @@ public sealed class PaperlessStore(FullWorthDbContext db)
                 "AnalyzeAutomatically" = EXCLUDED."AnalyzeAutomatically",
                 "Currency" = EXCLUDED."Currency",
                 "LastSeenDocumentId" = EXCLUDED."LastSeenDocumentId",
+                "Kind" = EXCLUDED."Kind",
                 "LastError" = NULL,
                 "UpdatedAt" = EXCLUDED."UpdatedAt"
             """, ct);
@@ -159,13 +164,13 @@ public sealed class PaperlessStore(FullWorthDbContext db)
         var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
                    "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "LastCheckedAt",
-                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt"
+                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt", "Kind"
             FROM "PaperlessImportPresets"
             WHERE "AutoImport" = true
             ORDER BY "FullWorthSpaceId", "CreatedAt"
             """).ToListAsync(ct);
         return rows.Select(x => new PaperlessAutoImportTarget(
-            x.Id, x.FullWorthSpaceId, x.UserId, x.Name, x.Query, x.AnalyzeAutomatically, x.Currency, x.LastSeenDocumentId)).ToList();
+            x.Id, x.FullWorthSpaceId, x.UserId, x.Name, x.Query, x.AnalyzeAutomatically, x.Currency, x.LastSeenDocumentId, x.Kind)).ToList();
     }
 
     public async Task UpdatePaperlessPresetCheckAsync(
@@ -190,7 +195,7 @@ public sealed class PaperlessStore(FullWorthDbContext db)
     private static PaperlessImportPresetView ToPresetView(PaperlessPresetProjection x) =>
         new(x.Id, x.FullWorthSpaceId, x.UserId, x.Name, x.Query, x.EditorJson, x.AutoImport,
             x.AnalyzeAutomatically, x.Currency, x.LastSeenDocumentId, x.LastCheckedAt, x.LastImportedAt,
-            x.LastError, x.CreatedAt, x.UpdatedAt);
+            x.LastError, x.CreatedAt, x.UpdatedAt, x.Kind);
 
     private static string Cap(string value, int max) => value.Length <= max ? value : value[..max];
     private static string? CapNullable(string? value, int max) => string.IsNullOrWhiteSpace(value) ? null : Cap(value.Trim(), max);
@@ -212,6 +217,7 @@ public sealed class PaperlessStore(FullWorthDbContext db)
         public string? LastError { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
+        public string Kind { get; set; } = PaperlessPresetKinds.Receipt;
     }
 
     private sealed class PaperlessConnectionProjection

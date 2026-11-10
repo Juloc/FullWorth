@@ -364,6 +364,7 @@ public static class BackendApplication
         builder.Services.AddScoped<PaperlessClient>();
         builder.Services.AddHttpClient("Paperless");
         builder.Services.AddHostedService<PaperlessAutoImportWorker>();
+        builder.Services.AddScoped<IPaperlessPresetImporter>(services => services.GetRequiredService<ReceiptImportService>());
         builder.Services.AddHostedService<PaperlessDocumentFetchWorker>();
         
         builder.Services.Configure<AmazonIntegrationOptions>(builder.Configuration.GetSection(AmazonIntegrationOptions.SectionName));

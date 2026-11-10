@@ -1,8 +1,11 @@
-using FullWorth.Backend.Modules.Paperless;
 using Microsoft.Extensions.Options;
 
-namespace FullWorth.Backend.Modules.Purchases.ReceiptImports;
+namespace FullWorth.Backend.Modules.Paperless;
 
+/// <summary>
+/// Laeuft in festem Abstand ueber alle automatischen Presets und uebergibt jedes dem Importer seiner
+/// Art. Was ein Dokument wird - ein Beleg, eine Lohnabrechnung - weiss dieser Dienst nicht.
+/// </summary>
 public sealed class PaperlessAutoImportWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<PaperlessOptions> options,
@@ -45,7 +48,8 @@ public sealed class PaperlessAutoImportWorker(
             using var scope = scopeFactory.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<PaperlessStore>();
             var paperless = scope.ServiceProvider.GetRequiredService<PaperlessService>();
-            var service = scope.ServiceProvider.GetRequiredService<ReceiptImportService>();
+            var client = scope.ServiceProvider.GetRequiredService<PaperlessClient>();
+            var importers = scope.ServiceProvider.GetServices<IPaperlessPresetImporter>().ToDictionary(x => x.Kind);
             var presets = await store.ListAutoImportPresetsAsync(ct);
             if (presets.Count == 0) return;
 
@@ -53,10 +57,14 @@ public sealed class PaperlessAutoImportWorker(
             {
                 ct.ThrowIfCancellationRequested();
 
+                // One reachability check per Paperless connection per interval.
+                // Only after it succeeds do we evaluate automatic presets.
+                PaperlessConnection? connection = null;
                 (bool Success, string? ServerVersion, string? Error) health;
                 try
                 {
-                    health = await paperless.TestAsync(group.Key, ct);
+                    connection = await paperless.RequireAsync(group.Key, ct);
+                    health = await client.TestAsync(connection.BaseUrl, connection.Token, ct);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -71,12 +79,12 @@ public sealed class PaperlessAutoImportWorker(
                     continue;
                 }
 
-                // One reachability check per Paperless connection per interval.
-                // Only after it succeeds do we evaluate automatic presets.
                 foreach (var preset in group)
                 {
                     ct.ThrowIfCancellationRequested();
-                    await service.RunPaperlessAutoImportPresetAsync(preset, ct);
+                    var outcome = await importers[preset.Kind].ImportAsync(preset, connection!, ct);
+                    await store.UpdatePaperlessPresetCheckAsync(
+                        preset.Id, outcome.MaxSeenDocumentId, outcome.Imported, outcome.Error, ct);
                 }
             }
         }
@@ -85,7 +93,7 @@ public sealed class PaperlessAutoImportWorker(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Paperless automatic receipt import cycle failed.");
+            logger.LogWarning(ex, "Paperless automatic import cycle failed.");
         }
     }
 }

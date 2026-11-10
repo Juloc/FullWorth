@@ -88,6 +88,7 @@ public static class PaperlessEndpoints
 
         group.MapGet("/presets", async (
             Guid fullWorthSpaceId,
+            string? kind,
             CurrentUserContext user,
             SpaceAccess access,
             PaperlessStore store,
@@ -95,7 +96,7 @@ public static class PaperlessEndpoints
         {
             var userId = user.RequireUserId();
             if (!await access.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
-            return Results.Ok(await store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct));
+            return Results.Ok(await store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, kind ?? PaperlessPresetKinds.Receipt, ct));
         });
 
         group.MapPost("/presets", async (
