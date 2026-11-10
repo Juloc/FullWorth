@@ -746,7 +746,7 @@ the promotion migration, and that running it twice changes nothing).
 `tests/FullWorth.Backend.Tests/Purchases/`: `AmazonIntegrationTests`, `AmazonDiscountParserTests`,
 `PurchaseDiscountImportIdempotencyTests`, and `ReceiptImports/` with `ReceiptImportIntegrationTests`,
 `FolderReceiptImportIntegrationTests`, `PaperlessReceiptImportIntegrationTests`,
-`PaperlessReceiptClientTests` and `ReceiptScanCompatibilityIntegrationTests`.
+`PaperlessClientTests` and `ReceiptScanCompatibilityIntegrationTests`.
 
 `tests/FullWorth.Web.Tests/`: `ImportCenterUiBaselineTests`, `ReceiptImportUiBaselineTests`,
 `AmazonPurchasesUiBaselineTests`, `StatementImportUiBaselineTests`, `AccountsUxBaselineTests` and

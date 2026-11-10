@@ -1,10 +1,11 @@
+using FullWorth.Backend.Modules.Paperless;
 using Microsoft.Extensions.Options;
 
 namespace FullWorth.Backend.Modules.Purchases.ReceiptImports;
 
 public sealed class PaperlessAutoImportWorker(
     IServiceScopeFactory scopeFactory,
-    IOptions<ReceiptImportOptions> options,
+    IOptions<PaperlessOptions> options,
     ILogger<PaperlessAutoImportWorker> logger) : BackgroundService
 {
     private readonly TimeSpan interval = TimeSpan.FromMinutes(
@@ -42,7 +43,8 @@ public sealed class PaperlessAutoImportWorker(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var store = scope.ServiceProvider.GetRequiredService<ReceiptImportStore>();
+            var store = scope.ServiceProvider.GetRequiredService<PaperlessStore>();
+            var paperless = scope.ServiceProvider.GetRequiredService<PaperlessService>();
             var service = scope.ServiceProvider.GetRequiredService<ReceiptImportService>();
             var presets = await store.ListAutoImportPresetsAsync(ct);
             if (presets.Count == 0) return;
@@ -54,7 +56,7 @@ public sealed class PaperlessAutoImportWorker(
                 (bool Success, string? ServerVersion, string? Error) health;
                 try
                 {
-                    health = await service.TestPaperlessAsync(group.Key, ct);
+                    health = await paperless.TestAsync(group.Key, ct);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

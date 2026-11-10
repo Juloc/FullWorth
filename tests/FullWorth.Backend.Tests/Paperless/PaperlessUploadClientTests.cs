@@ -1,9 +1,9 @@
 using System.Net;
 using System.Text;
-using FullWorth.Backend.Modules.Purchases.ReceiptImports;
+using FullWorth.Backend.Modules.Paperless;
 using Microsoft.Extensions.Options;
 
-namespace FullWorth.Backend.Tests.Purchases.ReceiptImports;
+namespace FullWorth.Backend.Tests.Paperless;
 
 public sealed class PaperlessUploadClientTests
 {
@@ -86,9 +86,9 @@ public sealed class PaperlessUploadClientTests
 
     private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
-    private static PaperlessReceiptClient Client(HttpMessageHandler handler) => new(
+    private static PaperlessClient Client(HttpMessageHandler handler) => new(
         new Factory(handler),
-        Options.Create(new ReceiptImportOptions { MaxBatchItems = 500, PaperlessPageSize = 100, PaperlessTimeoutSeconds = 10 }));
+        Options.Create(new PaperlessOptions { MaxBatchItems = 500, PaperlessPageSize = 100, PaperlessTimeoutSeconds = 10 }));
 
     private sealed class Factory(HttpMessageHandler handler) : IHttpClientFactory
     {
