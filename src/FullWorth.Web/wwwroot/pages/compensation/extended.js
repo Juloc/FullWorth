@@ -1,7 +1,7 @@
 import { confirmMessage } from '../../components/confirm.js';
 import {
   $, $$, euro2 as euro, euro as euro0, esc, attr, val as value, num as number, setVal as set,
-  spaceId, monthLabel as month, signedEuro, api, json, notify as showMessage,
+  spaceId, monthLabel as month, signedEuro, api, json, bffUrl, notify as showMessage,
   readProfile, fillProfile
 } from './shared.js';
 
@@ -22,14 +22,15 @@ function init(){
   $('#payslip-extract').addEventListener('click',()=>extractPayslip().catch(showError));
   $('#payslip-extract-batch').addEventListener('click',()=>extractBatch().catch(showError));
   $('#payslip-save').addEventListener('click',()=>savePayslip().catch(showError));
-  $('#space-select').addEventListener('change',()=>loadPayslips().catch(showError));
+  $('#paperless-body').addEventListener('click',event=>paperlessAction(event).catch(showError));
+  $('#space-select').addEventListener('change',()=>Promise.all([loadPayslips(),loadPaperless()]).catch(showError));
 }
 
 async function openExtendedTab(name){
   $$('.comp-tabs button').forEach(button=>button.classList.toggle('active',button.dataset.extendedTab===name));
   $$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id===`tab-${name}`));
   if(name==='optimizer')await loadOptimizer().catch(showError);
-  if(name==='payslips')await loadPayslips().catch(showError);
+  if(name==='payslips')await Promise.all([loadPayslips(),loadPaperless()]).catch(showError);
 }
 
 function optimizerMarkup(){return `
@@ -49,6 +50,10 @@ function payslipMarkup(){return `
   <div class="payslip-layout">
     <div class="payslip-stack">
       <article class="panel comp-card">
+        <div class="panel-head"><div><h2>Aus Paperless</h2><p>Gefundene Lohnabrechnungen warten hier auf deine Prüfung. Gespeichert wird erst, wenn du die Werte bestätigst.</p></div></div>
+        <div id="paperless-body" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
+      </article>
+      <article class="panel comp-card">
         <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2><p>PDF oder Bild wird lokal im Backend verarbeitet. Die Originaldatei wird nicht gespeichert.</p></div></div>
         <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button><button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button></div>
         <div id="payslip-extraction-status" class="extended-note">Eine Datei füllt das Formular unten. Mehrere Dateien werden als Liste zur Prüfung angezeigt. Werte werden erst nach deiner Bestätigung gespeichert.</div>
@@ -58,7 +63,7 @@ function payslipMarkup(){return `
            (Scheibe 11). -->
       <div id="payslip-batch" class="payslip-batch" hidden></div>
       <article class="panel comp-card">
-        <div class="panel-head"><div><h2>Erkannte Werte prüfen</h2><p>Alle Felder können vor dem Speichern korrigiert werden.</p></div></div>
+        <div class="panel-head"><div><h2>Erkannte Werte prüfen</h2><p id="ps-review-hint">Alle Felder können vor dem Speichern korrigiert werden.</p></div></div>
         <div class="form-grid payslip-fields">
           <label>Abrechnungsdatum<input id="ps-period" type="date"></label>
           <label>Brutto<input id="ps-gross" type="number" min="0" step="0.01"></label>
@@ -124,11 +129,16 @@ async function extractPayslip(){
   const data=new FormData();data.append('file',file);
   $('#payslip-extraction-status').textContent='Analyse läuft …';
   const result=await api('api/compensation/payslips/extract',{method:'POST',body:data});
-  fillExtraction(result);
+  fillExtraction(result,null);
   $('#payslip-extraction-status').textContent=`Erkennungssicherheit ${Number(result.confidencePercent||0).toLocaleString('de-DE')} %. ${(result.warnings||[]).join(' ')}`;
 }
 
-function fillExtraction(x){set('ps-period',x.period||'');set('ps-gross',x.grossPay);set('ps-net',x.netPay);set('ps-payout',x.payout);set('ps-tax',x.wageTax);set('ps-soli',x.solidaritySurcharge);set('ps-church',x.churchTax);set('ps-rv',x.pensionInsurance);set('ps-av',x.unemploymentInsurance);set('ps-kv',x.healthInsurance);set('ps-pv',x.careInsurance);set('ps-car',x.companyCarTaxableBenefit);set('ps-bav',x.bavEmployee);set('ps-bav-ag',x.bavEmployer);set('ps-bonus',x.bonus)}
+// Mit importId prueft der Benutzer einen Fund aus Paperless; das Speichern bestaetigt dann genau diesen.
+let reviewedImport=null;
+function fillExtraction(x,importId,title){
+  reviewedImport=importId;
+  $('#ps-review-hint').textContent=importId?`Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.`:'Alle Felder können vor dem Speichern korrigiert werden.';
+  set('ps-period',x.period||'');set('ps-gross',x.grossPay);set('ps-net',x.netPay);set('ps-payout',x.payout);set('ps-tax',x.wageTax);set('ps-soli',x.solidaritySurcharge);set('ps-church',x.churchTax);set('ps-rv',x.pensionInsurance);set('ps-av',x.unemploymentInsurance);set('ps-kv',x.healthInsurance);set('ps-pv',x.careInsurance);set('ps-car',x.companyCarTaxableBenefit);set('ps-bav',x.bavEmployee);set('ps-bav-ag',x.bavEmployer);set('ps-bonus',x.bonus)}
 
 let batchItems=[];
 async function extractBatch(){
@@ -194,16 +204,18 @@ async function saveAllBatch(){
 async function savePayslip(){
   const space=spaceId();if(!space)throw new Error('Kein Finanzbereich ausgewählt.');if(!value('ps-period'))throw new Error('Abrechnungsdatum fehlt.');
   const payload={period:value('ps-period'),grossPay:number('ps-gross'),netPay:number('ps-net'),payout:number('ps-payout'),wageTax:number('ps-tax'),solidaritySurcharge:number('ps-soli'),churchTax:number('ps-church'),pensionInsurance:number('ps-rv'),unemploymentInsurance:number('ps-av'),healthInsurance:number('ps-kv'),careInsurance:number('ps-pv'),companyCarTaxableBenefit:number('ps-car'),bavEmployee:number('ps-bav'),bavEmployer:number('ps-bav-ag'),bonus:number('ps-bonus'),note:value('ps-note')||null,source:'confirmed-ocr'};
-  await api(`api/compensation/payslips?fullWorthSpaceId=${space}`,json('POST',payload));
-  showMessage('Lohnabrechnung gespeichert.');await loadPayslips();
+  await api(`api/compensation/payslips?fullWorthSpaceId=${space}${reviewedImport?`&importId=${reviewedImport}`:''}`,json('POST',payload));
+  if(reviewedImport)fillExtraction({},null);
+  showMessage('Lohnabrechnung gespeichert.');await Promise.all([loadPayslips(),loadPaperless()]);
 }
 
 async function loadPayslips(){
   const space=spaceId();if(!space)return;
   const list=await api(`api/compensation/payslips?fullWorthSpaceId=${space}`);
   const root=$('#payslip-list');if(!root)return;
-  root.innerHTML=(list||[]).length?(list||[]).map(item=>`<div class="payslip-row"><div><strong>${month(item.payslip.period)}</strong><small>${euro.format(item.payslip.grossPay)} brutto · ${euro.format(item.payslip.netPay)} netto</small></div><div><strong>${euro.format(item.payslip.payout)}</strong><button type="button" class="btn btn-danger" data-delete-payslip="${item.id}">×</button></div></div>`).join(''):'<p class="extended-note">Noch keine Lohnabrechnungen gespeichert.</p>';
+  root.innerHTML=(list||[]).length?(list||[]).map(item=>`<div class="payslip-row"><div><strong>${month(item.payslip.period)}</strong><small>${euro.format(item.payslip.grossPay)} brutto · ${euro.format(item.payslip.netPay)} netto${item.document?` · <a href="${attr(item.document.paperlessUrl)}" target="_blank" rel="noopener noreferrer">in Paperless</a>`:''}</small></div><div><strong>${euro.format(item.payslip.payout)}</strong>${item.document?`<button type="button" class="btn btn-secondary" data-open-pdf="${attr(item.document.importId)}">PDF</button>`:''}<button type="button" class="btn btn-danger" data-delete-payslip="${item.id}">×</button></div></div>`).join(''):'<p class="extended-note">Noch keine Lohnabrechnungen gespeichert.</p>';
   root.querySelectorAll('[data-delete-payslip]').forEach(button=>button.addEventListener('click',()=>deletePayslip(button.dataset.deletePayslip).catch(showError)));
+  root.querySelectorAll('[data-open-pdf]').forEach(button=>button.addEventListener('click',()=>openPdf(button.dataset.openPdf)));
   const delta=await api(`api/compensation/payslips/latest-delta?fullWorthSpaceId=${space}`,{},true);
   renderDelta(delta);
 }
@@ -217,6 +229,72 @@ function renderDelta(delta){
 async function deletePayslip(id){
   if(!await confirmMessage({message:'Gespeicherte Lohnabrechnung löschen?',title:'Lohnabrechnung löschen',confirmLabel:'Löschen',cancelLabel:'Abbrechen',destructive:true}))return;
   await api(`api/compensation/payslips/${id}?fullWorthSpaceId=${spaceId()}`,{method:'DELETE'});await loadPayslips();
+}
+
+const PAPERLESS='api/purchases/receipt-imports/paperless';
+let paperless={connected:false,preset:null,items:[]};
+let paperlessTimer=null;
+
+async function loadPaperless(){
+  const space=spaceId();if(!space)return;
+  clearTimeout(paperlessTimer);
+  const [connection,presets,items]=await Promise.all([
+    api(`${PAPERLESS}/connection?fullWorthSpaceId=${space}`),
+    api(`${PAPERLESS}/presets?fullWorthSpaceId=${space}&kind=payslip`),
+    api(`api/compensation/payslip-imports?fullWorthSpaceId=${space}`)]);
+  paperless={connected:connection?.configured!==false&&!!connection?.isEnabled,preset:(presets||[])[0]||null,items:items||[]};
+  renderPaperless();
+  // Gefundene Abrechnungen werden im Hintergrund gelesen: solange welche warten, sieht die Liste nach.
+  if(paperless.items.some(item=>item.status==='pending'))
+    paperlessTimer=setTimeout(()=>{if($('#tab-payslips')?.classList.contains('active'))loadPaperless().catch(showError)},5000);
+}
+
+function renderPaperless(){
+  const {connected,preset,items}=paperless;
+  const root=$('#paperless-body');if(!root)return;
+  if(!connected){root.innerHTML='<p class="extended-note">Paperless ist noch nicht verbunden. Die Verbindung richtest du unter <a href="/receipts">Belege</a> → Importieren → Paperless-ngx ein.</p>';return}
+  if(!preset){root.innerHTML=`<div class="form-grid paperless-setup"><label>Suche in Paperless<input id="paperless-query" value="type:Lohnabrechnung" maxlength="4000"></label><p class="extended-note">Paperless-Suchsyntax, zum Beispiel <code>type:Lohnabrechnung</code> oder <code>tag:Gehalt</code>. Neue Treffer werden regelmäßig geholt und hier zur Prüfung abgelegt.</p><button class="btn btn-primary" type="button" data-paperless-create>Lohnabrechnungen suchen</button></div>`;return}
+  const status=preset.lastError?`Letzte Suche: ${esc(preset.lastError)}`:preset.lastCheckedAt?`Zuletzt gesucht: ${new Date(preset.lastCheckedAt).toLocaleString('de-DE')}`:'Noch nicht gesucht.';
+  root.innerHTML=`<div class="payslip-row"><div><small>${status}</small></div><div><button type="button" class="btn btn-secondary" data-paperless-run>Jetzt suchen</button></div></div>`+(items.length?items.map(importRow).join(''):'<p class="extended-note">Keine Abrechnungen zur Prüfung.</p>');
+}
+
+function importRow(item){
+  const x=item.extraction;
+  const detail=item.status==='pending'?'Wird gelesen …':item.status==='failed'?esc(item.error||'Konnte nicht gelesen werden.')
+    :`${x.grossPay==null?'—':euro.format(x.grossPay)} brutto · ${x.netPay==null?'—':euro.format(x.netPay)} netto`;
+  const review=item.status==='needs_review'
+    ?`<button type="button" class="btn btn-secondary" data-paperless-review="${attr(item.id)}">Prüfen</button><button type="button" class="btn btn-secondary" data-open-pdf="${attr(item.id)}">PDF</button>`:'';
+  return `<div class="payslip-row"><div><strong>${esc(x?.period?month(x.period):item.title)}</strong><small>${detail}</small></div><div>${review}<button type="button" class="btn btn-danger" title="Verwerfen" data-paperless-dismiss="${attr(item.id)}">×</button></div></div>`;
+}
+
+async function paperlessAction(event){
+  const button=event.target.closest('button');if(!button)return;
+  const space=spaceId();
+  if(button.dataset.openPdf)return openPdf(button.dataset.openPdf);
+  if('paperlessRun' in button.dataset)return runPaperless();
+  if('paperlessCreate' in button.dataset){
+    const query=value('paperless-query').trim();if(!query)throw new Error('Bitte eine Suche für Paperless angeben.');
+    const preset=await api(`${PAPERLESS}/presets?fullWorthSpaceId=${space}`,json('POST',{name:'Lohnabrechnungen',query,autoImport:true,kind:'payslip'}));
+    return runPaperless(preset.id);
+  }
+  if(button.dataset.paperlessReview){
+    const item=paperless.items.find(x=>x.id===button.dataset.paperlessReview);
+    fillExtraction(item.extraction,item.id,item.title);
+    $('#ps-review-hint').scrollIntoView({block:'center',behavior:'smooth'});
+  }
+  if(button.dataset.paperlessDismiss){
+    await api(`api/compensation/payslip-imports/${button.dataset.paperlessDismiss}/dismiss?fullWorthSpaceId=${space}`,{method:'POST'});
+    if(reviewedImport===button.dataset.paperlessDismiss)fillExtraction({},null);
+    await loadPaperless();
+  }
+}
+
+// Das Original liegt verschluesselt in FullWorth; der Browser holt es selbst, in einem neuen Tab.
+function openPdf(importId){window.open(bffUrl(`api/compensation/payslip-imports/${importId}/document?fullWorthSpaceId=${spaceId()}`),'_blank','noopener')}
+
+async function runPaperless(presetId=paperless.preset?.id){
+  await api(`${PAPERLESS}/presets/${presetId}/run?fullWorthSpaceId=${spaceId()}`,{method:'POST'});
+  await loadPaperless();
 }
 
 function showError(error){console.error(error);showMessage(error?.message||'Unbekannter Fehler.')}

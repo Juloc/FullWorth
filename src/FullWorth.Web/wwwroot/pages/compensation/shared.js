@@ -1,7 +1,7 @@
 // Shared compensation module. Single source of truth for everything the calculator, history and extended
 // (optimizer/payslips) views had triplicated: DOM/format helpers, the profile <-> form mapping, company-car
 // factor derivation, benefit rows and the API/toast wrappers. Feature files import from here — no copies.
-import { api as backendApi, jsonBody as sharedJsonBody } from '../../core/services.js';
+import { api as backendApi, apiClient, jsonBody as sharedJsonBody } from '../../core/services.js';
 
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];
@@ -32,6 +32,8 @@ export const fmtDate = v => v ? new Intl.DateTimeFormat('de-DE').format(new Date
 export const localIsoDate = (d = new Date()) => { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
 export const json = (method, body) => sharedJsonBody(body, method);
+// Fuer Links, die der Browser selbst oeffnet (ein PDF), statt dass ein fetch sie holt.
+export const bffUrl = path => apiClient.backendUrl(path);
 export async function api(path, options = {}, allow404 = false) {
   try { return await backendApi(path, options); }
   catch (error) { if (allow404 && error?.status === 404) return null; throw error; }

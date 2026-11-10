@@ -1806,6 +1806,76 @@
     return rows;
   })();
 
+  // Lohnabrechnungen aus Paperless, als kleiner Ablauf im Speicher: Suche einrichten -> Funde -> Pruefen ->
+  // Bestaetigen (oder Verwerfen). Der Server liest die Funde im Hintergrund; hier wird aus "pending" beim
+  // zweiten Abruf "needs_review", damit die Liste beim Nachsehen etwas aendert. Bewusst ein Fund, der nicht
+  // gelesen werden konnte, und einer mit Luecken (kein Brutto): ein Layout bricht nur an den unbequemen Faellen.
+  const PAYSLIP_PRESETS = [];
+  const PAYSLIP_IMPORTS = [];
+  const PAYSLIPS = [];
+  let payslipImportReads = 0;
+  const extraction = (period, gross, net) => ({
+    period, grossPay: gross, netPay: net, payout: net, wageTax: gross == null ? null : Math.round(gross * 0.15), solidaritySurcharge: 0,
+    churchTax: 0, pensionInsurance: null, unemploymentInsurance: null, healthInsurance: null, careInsurance: null,
+    companyCarTaxableBenefit: null, bavEmployee: null, bavEmployer: null, bonus: null,
+    confidencePercent: gross == null ? 40 : 85, detectedLabels: [], warnings: ['OCR-Werte vor dem Speichern mit der Originalabrechnung abgleichen.']
+  });
+
+  function payslipImportAnswer(method, url, init) {
+    const path = url.pathname;
+    if (method === 'GET' && path.endsWith('/paperless/presets') && url.searchParams.get('kind') === 'payslip')
+      return { status: 200, body: PAYSLIP_PRESETS };
+    if (method === 'POST' && path.endsWith('/paperless/presets')) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+      if (body?.kind !== 'payslip') return undefined;
+      const preset = { id: 'ppay1', fullWorthSpaceId: SPACE, userId: 'u1', name: body.name, query: body.query, editorJson: null,
+        autoImport: true, analyzeAutomatically: true, currency: 'EUR', lastSeenDocumentId: null, lastCheckedAt: null,
+        lastImportedAt: null, lastError: null, kind: 'payslip' };
+      PAYSLIP_PRESETS.push(preset);
+      return { status: 200, body: preset };
+    }
+    if (method === 'POST' && /\/paperless\/presets\/ppay1\/run$/.test(path)) {
+      const preset = PAYSLIP_PRESETS[0];
+      preset.lastCheckedAt = new Date().toISOString();
+      if (PAYSLIP_IMPORTS.length === 0 && PAYSLIPS.length === 0) {
+        payslipImportReads = 0;
+        PAYSLIP_IMPORTS.push(
+          { id: 'pi1', title: 'Gehaltsabrechnung 09/2026', status: 'pending', error: null, paperlessUrl: 'https://paperless.example.local/documents/2101/details', extraction: null, createdAt: preset.lastCheckedAt },
+          { id: 'pi2', title: 'Lohn_08_2026_final_mit_sehr_langem_Dateinamen_der_umbrechen_muss.pdf', status: 'needs_review', error: null, paperlessUrl: 'https://paperless.example.local/documents/2088/details', extraction: extraction('2026-08-31', 5000, 3112.34), createdAt: preset.lastCheckedAt },
+          { id: 'pi3', title: 'Abrechnung Juli', status: 'needs_review', error: null, paperlessUrl: 'https://paperless.example.local/documents/2051/details', extraction: extraction('2026-07-31', null, 3098.1), createdAt: preset.lastCheckedAt },
+          { id: 'pi4', title: 'Scan 0042', status: 'failed', error: 'Die Datei darf höchstens 12 MB groß sein.', paperlessUrl: 'https://paperless.example.local/documents/2012/details', extraction: null, createdAt: preset.lastCheckedAt });
+      }
+      return { status: 200, body: preset };
+    }
+    if (method === 'GET' && path.endsWith('/compensation/payslip-imports')) {
+      if (++payslipImportReads > 1)
+        for (const item of PAYSLIP_IMPORTS)
+          if (item.status === 'pending') { item.status = 'needs_review'; item.extraction = extraction('2026-09-30', 5000, 3112.34); }
+      return { status: 200, body: PAYSLIP_IMPORTS };
+    }
+    if (method === 'POST' && /\/payslip-imports\/[^/]+\/dismiss$/.test(path)) {
+      const index = PAYSLIP_IMPORTS.findIndex(item => path.includes('/' + item.id + '/'));
+      if (index >= 0) PAYSLIP_IMPORTS.splice(index, 1);
+      return { status: 204, body: null };
+    }
+    if (method === 'GET' && path.endsWith('/compensation/payslips')) return { status: 200, body: PAYSLIPS };
+    if (method === 'GET' && path.endsWith('/compensation/payslips/latest-delta')) return { status: 404, body: null };
+    if (method === 'POST' && path.endsWith('/compensation/payslips')) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+      const importId = url.searchParams.get('importId');
+      const found = PAYSLIP_IMPORTS.findIndex(item => item.id === importId);
+      const record = { id: 'ps' + (PAYSLIPS.length + 1), fullWorthSpaceId: SPACE, payslip: { ...body, source: importId ? 'paperless' : body.source },
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        document: found < 0 ? null : { importId, paperlessUrl: PAYSLIP_IMPORTS[found].paperlessUrl, fileName: 'abrechnung.pdf' } };
+      if (found >= 0) PAYSLIP_IMPORTS.splice(found, 1);
+      PAYSLIPS.unshift(record);
+      return { status: 201, body: record };
+    }
+    return undefined;
+  }
+
   const realFetch = window.fetch.bind(window);
 
   window.fetch = async (input, init) => {
@@ -1815,10 +1885,11 @@
     if (!isBff) return realFetch(input, init);
 
     const method = (init?.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
+    const payslip = payslipImportAnswer(method, url, init);
     // Writes succeed with an echo so confirm/save paths can be walked without a backend.
-    const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
+    const write = payslip ?? (method === 'GET' ? null : writeAnswer(method, url.pathname, init));
     const status = write?.status ?? 200;
-    let body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
+    let body = payslip ? payslip.body : method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
     // Kaeufe: die Tabelle blaettert (limit/offset) und filtert (scope). 57 Einkaeufe, damit das Nachladen und die
     // Zaehler an den Auswahlpunkten sichtbar werden; jeder dritte ist unbestaetigt, jeder fuenfte ohne Buchung.
     if (method === 'GET' && url.pathname.endsWith('/api/purchases/counts'))
@@ -1928,6 +1999,7 @@
     // serverseitig Results.Text(..., "text/plain") - als JSON verpackt kaeme im Dialog ein in
     // Anfuehrungszeichen gesetzter Text mit \n-Literalen an. Eine String-Fixture bedeutet hier also
     // genau das, was sie beim echten Server bedeutet: roher Text.
+    if (status === 204) return new Response(null, { status });
     if (typeof body === 'string')
       return new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
