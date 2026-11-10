@@ -49,9 +49,9 @@ public static partial class ContractTextParser
             : Regex.IsMatch(flat, @"(?i)arbeitsvertrag|anstellungsvertrag|dienstvertrag") ? ContractKinds.Contract : null;
         var validFrom = Found("Gültig ab", ValidFrom(flat));
         var gross = Found("Bruttogehalt", GrossMonthly(flat, warnings));
-        var hours = Found("Wochenstunden", Decimal(flat, @"(?i)(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:wochenstunden|stunden\s*(?:pro|je|in der|/)\s*woche|std\.?\s*/\s*woche|stunden wöchentlich)"));
-        var vacation = Found("Urlaubstage", Decimal(flat, @"(?i)urlaub[^.\n]{0,80}?(\d{2}(?:,\d)?)\s*(?:arbeitstage|werktage|urlaubstage|tage)")
-            ?? Decimal(flat, @"(?i)(\d{2}(?:,\d)?)\s*(?:arbeitstage|werktage|urlaubstage)\s*(?:pro|je|im)\s*(?:kalender)?jahr"));
+        var hours = Found("Wochenstunden", Decimal(flat, @"(?i)(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:wochenstunden|stunden\s*(?:pro|je|in der|/)\s*woche|std\.?\s*/\s*woche|stunden wöchentlich)", ImportNumber.ThreeDigitTail.Decimal));
+        var vacation = Found("Urlaubstage", Decimal(flat, @"(?i)urlaub[^.\n]{0,80}?(\d{2}(?:,\d)?)\s*(?:arbeitstage|werktage|urlaubstage|tage)", ImportNumber.ThreeDigitTail.Decimal)
+            ?? Decimal(flat, @"(?i)(\d{2}(?:,\d)?)\s*(?:arbeitstage|werktage|urlaubstage)\s*(?:pro|je|im)\s*(?:kalender)?jahr", ImportNumber.ThreeDigitTail.Decimal));
         var car = Regex.IsMatch(flat, @"(?i)dienstwagen|firmenwagen|dienstfahrzeug") ? (bool?)true : null;
         if (car is not null) detected.Add("Dienstwagen");
         var bav = Found("bAV Arbeitgeberanteil", Decimal(flat, @"(?i)(?:arbeitgeber(?:zuschuss|anteil)|zuschuss des arbeitgebers)[^.\n]{0,100}?(\d{1,5}(?:[.,]\d{2})?)\s*(?:€|eur)"));
@@ -72,10 +72,14 @@ public static partial class ContractTextParser
         return new(validFrom, kind, employer, gross, hours, vacation, car, bav, notice, null, [], Math.Min(100m, score), detected.Distinct().ToArray(), warnings);
     }
 
-    private static decimal? Decimal(string text, string pattern)
+    // Eine Zahl aus einem Dokument liest ImportNumber, nie eine Kultur: "5.400" sind bei einem Betrag
+    // fuenftausendvierhundert, "37.5" bei Stunden siebenunddreissigeinhalb - das entscheidet die Art des Feldes.
+    private static decimal? Decimal(string text, string pattern, ImportNumber.ThreeDigitTail tail = ImportNumber.ThreeDigitTail.Grouping)
     {
         var match = Regex.Match(text, pattern);
-        return match.Success && decimal.TryParse(match.Groups[1].Value.Replace(".", "").Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value) ? value : null;
+        if (!match.Success) return null;
+        try { return ImportNumber.TryParse(match.Groups[1].Value, tail); }
+        catch (FormatException) { return null; }
     }
 
     private static DateOnly? ValidFrom(string text)
