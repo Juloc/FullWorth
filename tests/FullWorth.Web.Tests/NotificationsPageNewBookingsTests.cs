@@ -29,7 +29,7 @@ public sealed class NotificationsPageNewBookingsTests : IClassFixture<FullWorthW
         var js = PageJs();
 
         Assert.Contains("api/push/test", js);
-        Assert.Contains("testBtn.disabled = state !== 'on'", js);
+        Assert.Contains("testBtn.disabled = current !== 'on'", js);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class NotificationsPageNewBookingsTests : IClassFixture<FullWorthW
         foreach (var language in new[] { "de", "en" })
         {
             var json = File.ReadAllText(Path.Combine(environment.WebRootPath, "locales", language + ".json"));
-            foreach (var key in new[] { "type_transactions_new", "showAmounts", "showAmountsHint", "test\"", "testSent", "testNoDevice" })
+            foreach (var key in new[] { "type_transactions_new", "showAmounts", "showAmountsHint", "test\"", "testSent", "testNoDevice", "testFailed" })
                 Assert.Contains("\"" + key.TrimEnd('"') + "\"", json);
         }
     }

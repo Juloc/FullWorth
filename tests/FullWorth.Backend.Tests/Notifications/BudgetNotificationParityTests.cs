@@ -19,10 +19,10 @@ public sealed class BudgetNotificationParityTests
     private sealed class FakePushSender : IPushSender
     {
         public List<(Guid UserId, PushMessage Message)> Sent { get; } = [];
-        public Task SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct)
+        public Task<int> SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct)
         {
             Sent.Add((userId, message));
-            return Task.CompletedTask;
+            return Task.FromResult(1);
         }
     }
 

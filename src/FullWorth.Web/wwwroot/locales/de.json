@@ -1030,7 +1030,17 @@
     "showAmountsHint": "Aus: nur der Händler steht in der Mitteilung. Ein Sperrbildschirm liest jeder mit.",
     "test": "Testbenachrichtigung senden",
     "testSent": "Gesendet - sie sollte gleich ankommen.",
-    "testNoDevice": "Auf diesem Konto ist noch kein Gerät für Push angemeldet."
+    "testNoDevice": "Auf diesem Konto ist noch kein Gerät für Push angemeldet.",
+    "pushChecking": "Zustand wird geprüft …",
+    "pushReenable": "Push erneut aktivieren",
+    "pushStale": "Anmeldung veraltet, es kommt nichts an. Bitte erneut aktivieren.",
+    "pushUnverified": "Server nicht erreichbar, der Zustand lässt sich nicht prüfen.",
+    "pushNoWorker": "Der Push-Dienst des Browsers läuft nicht. Seite neu laden.",
+    "pushSubscribeFailed": "Der Browser konnte Push nicht einrichten. Versuche es erneut.",
+    "pushSaveFailed": "Das Gerät konnte nicht auf dem Server gespeichert werden. Versuche es erneut.",
+    "pushDisableFailed": "Der Browser hat die Abmeldung abgelehnt. Versuche es erneut.",
+    "pushDisableServer": "Auf diesem Gerät abgemeldet. Der Server war nicht erreichbar, der alte Eintrag wird bei der nächsten Zustellung bereinigt.",
+    "testFailed": "Die Testbenachrichtigung konnte nicht zugestellt werden. Aktiviere Push auf diesem Gerät erneut."
   },
   "settings": {
     "appearance": "Darstellung & Sprache",

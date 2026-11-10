@@ -1030,7 +1030,17 @@
     "showAmountsHint": "Off: only the merchant appears. Anyone can read a lock screen.",
     "test": "Send a test notification",
     "testSent": "Sent - it should arrive in a moment.",
-    "testNoDevice": "No device is registered for push on this account yet."
+    "testNoDevice": "No device is registered for push on this account yet.",
+    "pushChecking": "Checking the state …",
+    "pushReenable": "Re-enable push",
+    "pushStale": "Registration out of date, nothing arrives. Please re-enable.",
+    "pushUnverified": "Server not reachable, the state cannot be checked.",
+    "pushNoWorker": "The browser's push service is not running. Reload the page.",
+    "pushSubscribeFailed": "The browser could not set up push. Try again.",
+    "pushSaveFailed": "This device could not be saved on the server. Try again.",
+    "pushDisableFailed": "The browser refused to unsubscribe. Try again.",
+    "pushDisableServer": "Unsubscribed on this device. The server could not be reached; the old entry is cleaned up at the next delivery.",
+    "testFailed": "The test notification could not be delivered. Re-enable push on this device."
   },
   "settings": {
     "appearance": "Appearance & language",

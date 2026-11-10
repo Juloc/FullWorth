@@ -18,13 +18,13 @@
 
 .notif-push .row-title{margin-bottom:2px}
 
-.notif-push-status{display:flex;align-items:center;gap:var(--s2)}
+.notif-push-status{display:flex;align-items:center;gap:var(--s2);min-height:2lh}  /* zwei Zeilen reserviert: der Text wechselt nach der Prüfung, die Karte darf dabei nicht wachsen */
 
 .notif-dot{flex:0 0 auto;width:8px;height:8px;border-radius:var(--radius-pill);background:var(--k4)}
 
 .notif-push[data-push-state="on"] .notif-dot{background:var(--positive)}
 
-.notif-push[data-push-state="blocked"] .notif-dot{background:var(--warning)}
+.notif-push:is([data-push-state="stale"],[data-push-state="unverified"],[data-push-state="denied"],[data-push-state="no-worker"],[data-push-state="unsupported"]) .notif-dot{background:var(--warning)}
 
 .notif-types{margin-top:var(--s1)}
 
@@ -32,6 +32,9 @@
 
 .notif-type-title{white-space:normal;overflow:visible;font-weight:400;line-height:1.35}
 
-.notif-push [data-push-test]{grid-column:1/-1;justify-self:start}
+.notif-push-more{grid-column:1/-1;display:flex;gap:var(--s2)}
+
+/* Platz bleibt reserviert: "Deaktivieren" ist nur bei veralteter Anmeldung nötig, erscheint aber nie nachträglich. */
+.notif-push:not([data-push-state="stale"]) [data-push-off]{visibility:hidden}
 
 .notif-foot{border-top:1px solid var(--line);margin-top:var(--s4);padding-top:var(--s3)}

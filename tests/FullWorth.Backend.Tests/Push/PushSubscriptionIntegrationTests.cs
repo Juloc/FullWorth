@@ -48,6 +48,32 @@ public sealed class PushSubscriptionIntegrationTests
     }
 
     [Fact]
+    public async Task The_test_message_reports_a_missing_device_and_a_failed_delivery_instead_of_sent()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var user = Guid.NewGuid();
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser { Id = user, EmailNormalized = $"{user:N}@EXAMPLE.COM", DisplayName = "Push", IsActive = true });
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var none = await client.SendAsync(Request(HttpMethod.Post, "/api/push/test", user));
+        Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
+        Assert.Contains("no_devices", await none.Content.ReadAsStringAsync());
+
+        // A subscription the push service cannot deliver to (here: keys that are no keys) must not be reported as sent.
+        using var sub = await client.SendAsync(Request(HttpMethod.Post, "/api/push/subscriptions", user,
+            new { endpoint = "https://127.0.0.1:1/push", p256dh = "not-a-key", auth = "not-an-auth" }));
+        Assert.Equal(HttpStatusCode.OK, sub.StatusCode);
+
+        using var failed = await client.SendAsync(Request(HttpMethod.Post, "/api/push/test", user));
+        Assert.Equal(HttpStatusCode.Conflict, failed.StatusCode);
+        Assert.Contains("delivery_failed", await failed.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Subscribe_RejectsIncompletePayload()
     {
         using var factory = new BackendWebApplicationFactory();

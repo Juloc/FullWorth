@@ -11,27 +11,30 @@ namespace FullWorth.Backend.Modules.Push;
 /// <summary>Sends notifications to a user's registered devices.</summary>
 public interface IPushSender
 {
-    Task SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct);
+    /// <summary>Returns how many of the user's devices the push service accepted the message for.</summary>
+    Task<int> SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct);
 }
 
 public sealed class VapidPushSender(FullWorthDbContext db, IOptions<PushOptions> options, PushKeyStore keys, ILogger<VapidPushSender> logger) : IPushSender
 {
-    public async Task SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct)
+    public async Task<int> SendToUserAsync(Guid userId, PushMessage message, CancellationToken ct)
     {
         var devices = await db.PushDevices.AsNoTracking().Where(d => d.FinanceUserId == userId).ToListAsync(ct);
-        if (devices.Count == 0) return;
+        if (devices.Count == 0) return 0;
 
         var key = await keys.GetAsync(ct);
 
         var payload = JsonSerializer.Serialize(new { title = message.Title, body = message.Body, url = message.Url });
         var vapid = new VapidDetails(options.Value.VapidSubject, key.PublicKey, key.PrivateKey);
         var client = new WebPushClient();
+        var delivered = 0;
 
         foreach (var device in devices)
         {
             try
             {
                 await client.SendNotificationAsync(new WebPush.PushSubscription(device.Endpoint, device.P256dh, device.Auth), payload, vapid);
+                delivered++;
             }
             catch (WebPushException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Gone or System.Net.HttpStatusCode.NotFound)
             {
@@ -43,5 +46,7 @@ public sealed class VapidPushSender(FullWorthDbContext db, IOptions<PushOptions>
                 logger.LogWarning(ex, "Web Push delivery failed for device {DeviceId}", device.Id);
             }
         }
+
+        return delivered;
     }
 }
