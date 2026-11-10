@@ -23,14 +23,15 @@ public static class PushEndpoints
         });
 
         // A message to the caller's own devices, so the notification page can show that the whole chain works.
-        // Not an alert type: it ignores the per-type toggles and goes only to the person who asked.
+        // Not an alert type: it ignores the per-type toggles and goes only to the person who asked. "Sent" is only
+        // claimed when a push service accepted it - a dead or mismatched subscription answers 409 delivery_failed.
         group.MapPost("/test", async (CurrentUserContext currentUser, PushSubscriptionStore store, IPushSender sender, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             var devices = await store.ListAsync(userId, ct);
             if (devices.Count == 0) return Results.Conflict(new { error = "no_devices" });
-            await sender.SendToUserAsync(userId, new PushMessage("FullWorth", "Benachrichtigungen funktionieren auf diesem Gerät.", "/notifications"), ct);
-            return Results.Ok(new { devices = devices.Count });
+            var delivered = await sender.SendToUserAsync(userId, new PushMessage("FullWorth", "Benachrichtigungen funktionieren auf diesem Gerät.", "/notifications"), ct);
+            return delivered == 0 ? Results.Conflict(new { error = "delivery_failed" }) : Results.Ok(new { devices = delivered });
         });
 
         group.MapDelete("/subscriptions/{id:guid}", async (Guid id, CurrentUserContext currentUser, PushSubscriptionStore store, CancellationToken ct) =>

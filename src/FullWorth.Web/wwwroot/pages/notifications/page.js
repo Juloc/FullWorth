@@ -1,10 +1,10 @@
 // Notification preferences (UI_UX_SPEC §20). MVP supports Push only. A real master control
 // enables/disables the device push subscription; below it, one functional toggle per supported
 // notification type persists to the per-user+space preference store (notifications.types). No fake
-// disabled controls: when push is unsupported/denied/not configured, the status says so plainly
-// instead of showing an always-on checkbox that implies the feature works.
+// disabled controls: the status is what pushStatus() measured on this device (permission AND a
+// subscription for the current server key AND a server row), never the permission alone.
 
-import { enablePush, disablePush } from '../../push/push.js';
+import { pushStatus, enablePush, disablePush } from '../../push/push.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
@@ -66,13 +66,16 @@ export async function renderNotifications(context) {
 
   body.innerHTML = `
     <p class="row-sub notif-intro">${ctx.esc(ctx.get('notifications.intro'))}</p>
-    <div class="notif-push" data-push-state="off">
+    <div class="notif-push" data-push-state="checking">
       <div class="row-main">
         <div class="row-title">${ctx.esc(ctx.get('notifications.push'))}</div>
-        <div class="row-sub notif-push-status"><span class="notif-dot" aria-hidden="true"></span><span data-push-status>${ctx.esc(ctx.get('notifications.pushOff'))}</span></div>
+        <div class="row-sub notif-push-status"><span class="notif-dot" aria-hidden="true"></span><span data-push-status>${ctx.esc(ctx.get('notifications.pushChecking'))}</span></div>
       </div>
-      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-toggle>${ctx.esc(ctx.get('notifications.pushEnable'))}</button>
-      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-test disabled>${ctx.esc(ctx.get('notifications.test'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-toggle disabled>${ctx.esc(ctx.get('notifications.pushEnable'))}</button>
+      <div class="notif-push-more">
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-test disabled>${ctx.esc(ctx.get('notifications.test'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-push-off>${ctx.esc(ctx.get('notifications.pushDisable'))}</button>
+      </div>
     </div>
     <div class="rows notif-types">
       <label class="row notif-type-row"><div class="row-main"><div class="row-title notif-type-title">${ctx.esc(ctx.get('notifications.showAmounts'))}</div></div><span class="fw-toggle"><input type="checkbox" data-show-amounts ${showAmounts ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
@@ -88,23 +91,70 @@ export async function renderNotifications(context) {
   const statusEl = body.querySelector('[data-push-status]');
   const toggleBtn = body.querySelector('[data-push-toggle]');
   const testBtn = body.querySelector('[data-push-test]');
-  const setStatus = (text, state) => { statusEl.textContent = text; if (state) { pushRow.dataset.pushState = state; testBtn.disabled = state !== 'on'; } };
-  const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
-  if (!supported) {
-    setStatus(ctx.get('notifications.pushUnsupported'), 'blocked');
+  const offBtn = body.querySelector('[data-push-off]');
+
+  // What each measured state says and what the main button does. 'locked' states have nothing the
+  // button could change from here (the browser or the browser's settings decide).
+  const STATES = {
+    on: { text: 'pushOn', button: 'pushDisable', turnsOff: true },
+    off: { text: 'pushOff', button: 'pushEnable' },
+    stale: { text: 'pushStale', button: 'pushReenable' },
+    unverified: { text: 'pushUnverified', button: 'pushDisable', turnsOff: true },
+    denied: { text: 'pushDenied', button: 'pushEnable', locked: true },
+    'no-worker': { text: 'pushNoWorker', button: 'pushEnable', locked: true },
+    unsupported: { text: 'pushUnsupported', button: 'pushEnable', locked: true }
+  };
+  const FAILURE_TEXT = {
+    unsupported: 'pushUnsupported', denied: 'pushDenied', 'not-configured': 'pushNotConfigured', 'no-key': 'pushUnverified',
+    'no-worker': 'pushNoWorker', subscribe: 'pushSubscribeFailed', save: 'pushSaveFailed'
+  };
+  let current = 'checking';
+
+  const refresh = async () => {
+    current = await pushStatus();
+    const state = STATES[current];
+    pushRow.dataset.pushState = current;
+    statusEl.textContent = ctx.get('notifications.' + state.text);
+    toggleBtn.textContent = ctx.get('notifications.' + state.button);
+    toggleBtn.disabled = !!state.locked;
+    testBtn.disabled = current !== 'on';
+  };
+
+  const turnOff = async () => {
+    const result = await disablePush();
+    if (!result.ok) ctx.toast(ctx.get('notifications.pushDisableFailed'));
+    else if (!result.serverRemoved) ctx.toast(ctx.get('notifications.pushDisableServer'));
+  };
+  const turnOn = async () => {
+    const result = await enablePush();
+    if (!result.ok) ctx.toast(ctx.get('notifications.' + FAILURE_TEXT[result.reason]));
+  };
+  // Whatever happened, the status is measured again afterwards instead of assumed.
+  const change = async action => {
     toggleBtn.disabled = true;
-  } else if (Notification.permission === 'granted') {
-    setStatus(ctx.get('notifications.pushOn'), 'on');
-    toggleBtn.textContent = ctx.get('notifications.pushDisable');
-  }
+    testBtn.disabled = true;
+    offBtn.disabled = true;
+    try {
+      await action();
+      await refresh();
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('common.error'));
+    } finally { offBtn.disabled = false; }
+  };
+  toggleBtn.addEventListener('click', () => change(STATES[current].turnsOff ? turnOff : turnOn));
+  offBtn.addEventListener('click', () => change(turnOff));
 
   testBtn.addEventListener('click', async () => {
     testBtn.disabled = true;
     try {
       await ctx.api('api/push/test', { method: 'POST' });
       ctx.toast(ctx.get('notifications.testSent'));
-    } catch (err) { ctx.toast(/no_devices/.test(err.message || '') ? ctx.get('notifications.testNoDevice') : (err.message || ctx.get('common.error'))); }
-    finally { testBtn.disabled = false; }
+    } catch (err) {
+      const message = err.message || '';
+      ctx.toast(/no_devices/.test(message) ? ctx.get('notifications.testNoDevice')
+        : /delivery_failed/.test(message) ? ctx.get('notifications.testFailed')
+        : message || ctx.get('common.error'));
+    } finally { testBtn.disabled = current !== 'on'; }
   });
 
   body.querySelector('[data-show-amounts]').addEventListener('change', async event => {
@@ -115,30 +165,6 @@ export async function renderNotifications(context) {
     } catch (err) { box.checked = !box.checked; ctx.toast(err.message || ctx.get('common.error')); }
   });
 
-  toggleBtn.addEventListener('click', async () => {
-    toggleBtn.disabled = true;
-    try {
-      if (Notification.permission === 'granted') {
-        await disablePush();
-        setStatus(ctx.get('notifications.pushOff'), 'off');
-        toggleBtn.textContent = ctx.get('notifications.pushEnable');
-      } else {
-        const res = await enablePush();
-        if (res && res.ok) {
-          setStatus(ctx.get('notifications.pushOn'), 'on');
-          toggleBtn.textContent = ctx.get('notifications.pushDisable');
-        } else {
-          const key = res && res.reason === 'denied' ? 'pushDenied'
-            : res && (res.reason === 'not-configured' || res.reason === 'no-key') ? 'pushNotConfigured'
-            : 'pushUnsupported';
-          setStatus(ctx.get('notifications.' + key), 'blocked');
-          ctx.toast(ctx.get('notifications.' + key));
-        }
-      }
-    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
-    finally { toggleBtn.disabled = false; }
-  });
-
   body.querySelectorAll('input[data-type]').forEach(cb => cb.addEventListener('change', async () => {
     const map = {};
     body.querySelectorAll('input[data-type]').forEach(x => { map[x.dataset.type] = x.checked; });
@@ -147,4 +173,6 @@ export async function renderNotifications(context) {
       ctx.toast(ctx.get('common.saved'));
     } catch (err) { cb.checked = !cb.checked; ctx.toast(err.message || ctx.get('common.error')); }
   }));
+
+  refresh().catch(err => ctx.toast(err.message || ctx.get('common.error')));
 }

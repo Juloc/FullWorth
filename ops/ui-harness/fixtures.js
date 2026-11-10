@@ -1815,6 +1815,24 @@
     if (!isBff) return realFetch(input, init);
 
     const method = (init?.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
+    // Web Push: ein kleiner Server mit Zustand, damit sich jeder Zustand der Benachrichtigungsseite
+    // durchgehen laesst. window.__push = { publicKey, devices, failTest, offline } darf die Seite vorher setzen.
+    if (url.pathname.startsWith('/bff/backend/api/push/')) {
+      const push = window.__push = window.__push || { publicKey: 'BAEBAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDRA', devices: [] };
+      if (push.offline) return new Response('{}', { status: 502, headers: { 'content-type': 'application/json' } });
+      const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
+      const route = url.pathname.replace('/bff/backend/api/push/', '');
+      if (method === 'GET' && route === 'vapid-public-key') return json({ publicKey: push.publicKey });
+      if (method === 'GET' && route === 'subscriptions') return json(push.devices);
+      if (method === 'POST' && route === 'subscriptions') {
+        const row = { id: `d${push.devices.length + 1}`, ...JSON.parse(init.body) };
+        push.devices = [...push.devices.filter(d => d.endpoint !== row.endpoint), row];
+        return json(row);
+      }
+      if (method === 'DELETE') { push.devices = push.devices.filter(d => d.id !== route.replace('subscriptions/', '')); return new Response(null, { status: 204 }); }
+      if (method === 'POST' && route === 'test')
+        return push.devices.length === 0 ? json({ error: 'no_devices' }, 409) : push.failTest ? json({ error: 'delivery_failed' }, 409) : json({ devices: push.devices.length });
+    }
     // Writes succeed with an echo so confirm/save paths can be walked without a backend.
     const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
     const status = write?.status ?? 200;

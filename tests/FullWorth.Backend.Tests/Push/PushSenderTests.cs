@@ -18,9 +18,29 @@ public sealed class PushSenderTests
         var keys = new PushKeyStore(db, Options.Create(new PushOptions()), FieldCipher.Null);
         var sender = new VapidPushSender(db, Options.Create(new PushOptions()), keys, NullLogger<VapidPushSender>.Instance);
 
-        await sender.SendToUserAsync(Guid.NewGuid(), new PushMessage("Title", "Body"), CancellationToken.None);
+        var delivered = await sender.SendToUserAsync(Guid.NewGuid(), new PushMessage("Title", "Body"), CancellationToken.None);
 
+        Assert.Equal(0, delivered);
         Assert.Equal(0, await db.PushInstanceKeys.CountAsync());
+    }
+
+    // The test message used to answer "sent" whatever happened to it, so a device whose subscription was
+    // dead or bound to another key looked fine. Only a push service that accepted the message counts.
+    [Fact]
+    public async Task A_device_the_push_service_does_not_accept_is_not_counted_as_delivered()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var user = Guid.NewGuid();
+        db.Users.Add(new FullWorth.Backend.Modules.Users.FullWorthUser { Id = user, EmailNormalized = $"{user:N}@EXAMPLE.COM", DisplayName = "Push", IsActive = true });
+        db.PushDevices.Add(new PushDevice { FinanceUserId = user, Endpoint = "https://127.0.0.1:1/push", P256dh = "not-a-key", Auth = "not-an-auth" });
+        await db.SaveChangesAsync();
+        var keys = new PushKeyStore(db, Options.Create(new PushOptions()), FieldCipher.Null);
+        var sender = new VapidPushSender(db, Options.Create(new PushOptions()), keys, NullLogger<VapidPushSender>.Instance);
+
+        var delivered = await sender.SendToUserAsync(user, new PushMessage("Title", "Body"), CancellationToken.None);
+
+        Assert.Equal(0, delivered);
     }
 
     // Nobody has to generate or place a key: the installation makes one on first need and keeps it, because
