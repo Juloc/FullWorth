@@ -33,8 +33,8 @@ public sealed record PayslipImportView(
     PayslipExtractionResult? Extraction,
     DateTimeOffset CreatedAt);
 
-/// <summary>Das abgelegte Original einer bestaetigten Abrechnung und der Verweis auf das Paperless-Dokument.</summary>
-public sealed record PayslipDocumentRef(Guid ImportId, string PaperlessUrl, string? FileName);
+/// <summary>Das abgelegte Original einer bestaetigten Abrechnung, der Verweis auf das Paperless-Dokument und wie sicher das Auslesen war, bevor der Benutzer korrigiert hat.</summary>
+public sealed record PayslipDocumentRef(Guid ImportId, string PaperlessUrl, string? FileName, decimal? ReadConfidencePercent);
 
 public sealed record PayslipDocumentContent(byte[] Content, string ContentType, string FileName);
 

@@ -1,4 +1,5 @@
 import { confirmMessage } from '../../components/confirm.js';
+import { renderOverview } from './payslip-overview.js';
 import {
   $, $$, euro2 as euro, euro as euro0, esc, attr, val as value, num as number, setVal as set,
   spaceId, monthLabel as month, signedEuro, api, json, bffUrl, notify as showMessage,
@@ -47,6 +48,7 @@ function optimizerMarkup(){return `
 
 function payslipMarkup(){return `
 <section id="tab-payslips" class="comp-tab">
+  <div id="payslip-overview" class="payslip-overview"></div>
   <div class="payslip-layout">
     <div class="payslip-stack">
       <article class="panel comp-card">
@@ -62,6 +64,8 @@ function payslipMarkup(){return `
            hinein, sobald Ergebnisse da sind - innerhalb des Upload-Artikels waere das Kaesteli-in-Kaesteli
            (Scheibe 11). -->
       <div id="payslip-batch" class="payslip-batch" hidden></div>
+    </div>
+    <aside class="payslip-stack">
       <article class="panel comp-card">
         <div class="panel-head"><div><h2>Erkannte Werte prüfen</h2><p id="ps-review-hint">Alle Felder können vor dem Speichern korrigiert werden.</p></div></div>
         <div class="form-grid payslip-fields">
@@ -84,10 +88,7 @@ function payslipMarkup(){return `
         </div>
         <button id="payslip-save" class="btn btn-primary comp-calculate" type="button">Bestätigte Werte speichern</button>
       </article>
-    </div>
-    <aside class="payslip-stack">
       <article class="panel comp-card"><h2>Warum ist mein Netto anders?</h2><div id="payslip-delta" class="delta-list"><p class="extended-note">Für den Vergleich werden mindestens zwei gespeicherte Monate benötigt.</p></div></article>
-      <article class="panel comp-card"><div class="panel-head"><div><h2>Verlauf</h2><p>Gespeicherte Monatswerte.</p></div></div><div id="payslip-list" class="payslip-list"></div></article>
     </aside>
   </div>
 </section>`}
@@ -209,15 +210,22 @@ async function savePayslip(){
   showMessage('Lohnabrechnung gespeichert.');await Promise.all([loadPayslips(),loadPaperless()]);
 }
 
+let payslipList=[];
 async function loadPayslips(){
   const space=spaceId();if(!space)return;
-  const list=await api(`api/compensation/payslips?fullWorthSpaceId=${space}`);
-  const root=$('#payslip-list');if(!root)return;
-  root.innerHTML=(list||[]).length?(list||[]).map(item=>`<div class="payslip-row"><div><strong>${month(item.payslip.period)}</strong><small>${euro.format(item.payslip.grossPay)} brutto · ${euro.format(item.payslip.netPay)} netto${item.document?` · <a href="${attr(item.document.paperlessUrl)}" target="_blank" rel="noopener noreferrer">in Paperless</a>`:''}</small></div><div><strong>${euro.format(item.payslip.payout)}</strong>${item.document?`<button type="button" class="btn btn-secondary" data-open-pdf="${attr(item.document.importId)}">PDF</button>`:''}<button type="button" class="btn btn-danger" data-delete-payslip="${item.id}">×</button></div></div>`).join(''):'<p class="extended-note">Noch keine Lohnabrechnungen gespeichert.</p>';
-  root.querySelectorAll('[data-delete-payslip]').forEach(button=>button.addEventListener('click',()=>deletePayslip(button.dataset.deletePayslip).catch(showError)));
-  root.querySelectorAll('[data-open-pdf]').forEach(button=>button.addEventListener('click',()=>openPdf(button.dataset.openPdf)));
-  const delta=await api(`api/compensation/payslips/latest-delta?fullWorthSpaceId=${space}`,{},true);
-  renderDelta(delta);
+  payslipList=await api(`api/compensation/payslips?fullWorthSpaceId=${space}`)||[];
+  refreshOverview();
+  renderDelta(await api(`api/compensation/payslips/latest-delta?fullWorthSpaceId=${space}`,{},true));
+}
+
+// Die Monats- und Jahresansicht liest aus zwei Quellen - die bestaetigten Abrechnungen und die offenen Funde
+// aus Paperless -, also zeichnet sie neu, sobald eine von beiden da ist.
+function refreshOverview(){
+  renderOverview({
+    payslips:payslipList,finds:paperless.items,
+    searching:paperless.connected&&!!paperless.preset?.lastCheckedAt&&!paperless.preset.lastError,
+    actions:{openPdf,deletePayslip:id=>deletePayslip(id).catch(showError),upload:()=>{const input=$('#payslip-file');input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true})},review:reviewFind}
+  });
 }
 
 function renderDelta(delta){
@@ -244,6 +252,7 @@ async function loadPaperless(){
     api(`api/compensation/payslip-imports?fullWorthSpaceId=${space}`)]);
   paperless={connected:connection?.configured!==false&&!!connection?.isEnabled,preset:(presets||[])[0]||null,items:items||[]};
   renderPaperless();
+  refreshOverview();
   // Gefundene Abrechnungen werden im Hintergrund gelesen: solange welche warten, sieht die Liste nach.
   if(paperless.items.some(item=>item.status==='pending'))
     paperlessTimer=setTimeout(()=>{if($('#tab-payslips')?.classList.contains('active'))loadPaperless().catch(showError)},5000);
@@ -277,11 +286,7 @@ async function paperlessAction(event){
     const preset=await api(`${PAPERLESS}/presets?fullWorthSpaceId=${space}`,json('POST',{name:'Lohnabrechnungen',query,autoImport:true,kind:'payslip'}));
     return runPaperless(preset.id);
   }
-  if(button.dataset.paperlessReview){
-    const item=paperless.items.find(x=>x.id===button.dataset.paperlessReview);
-    fillExtraction(item.extraction,item.id,item.title);
-    $('#ps-review-hint').scrollIntoView({block:'center',behavior:'smooth'});
-  }
+  if(button.dataset.paperlessReview)reviewFind(button.dataset.paperlessReview);
   if(button.dataset.paperlessDismiss){
     await api(`api/compensation/payslip-imports/${button.dataset.paperlessDismiss}/dismiss?fullWorthSpaceId=${space}`,{method:'POST'});
     if(reviewedImport===button.dataset.paperlessDismiss)fillExtraction({},null);
@@ -291,6 +296,12 @@ async function paperlessAction(event){
 
 // Das Original liegt verschluesselt in FullWorth; der Browser holt es selbst, in einem neuen Tab.
 function openPdf(importId){window.open(bffUrl(`api/compensation/payslip-imports/${importId}/document?fullWorthSpaceId=${spaceId()}`),'_blank','noopener')}
+
+function reviewFind(id){
+  const item=paperless.items.find(x=>x.id===id);if(!item)return;
+  fillExtraction(item.extraction,item.id,item.title);
+  $('#ps-review-hint').scrollIntoView({block:'center',behavior:'smooth'});
+}
 
 async function runPaperless(presetId=paperless.preset?.id){
   await api(`${PAPERLESS}/presets/${presetId}/run?fullWorthSpaceId=${spaceId()}`,{method:'POST'});

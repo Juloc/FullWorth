@@ -1812,7 +1812,28 @@
   // gelesen werden konnte, und einer mit Luecken (kein Brutto): ein Layout bricht nur an den unbequemen Faellen.
   const PAYSLIP_PRESETS = [];
   const PAYSLIP_IMPORTS = [];
+  // Bestaetigte Abrechnungen fuer die Monats-/Jahresansicht: 2026 mit einem fehlenden Monat (April), einem
+  // Bonus (Maerz), einem Brutto-Sprung (Juli, +8 %) und einem sinkenden Netto bei gleichem Brutto (August,
+  // hoehere Krankenversicherung); dazu zwei Monate 2025 fuer den Jahreswechsel und den Jahres-Reiter.
   const PAYSLIPS = [];
+  (() => {
+    const make = (year, month, gross, extra = {}) => {
+      const tax = Math.round(gross * 0.17), pension = Math.round(gross * 0.093), unemployment = Math.round(gross * 0.013),
+        health = Math.round(gross * 0.085), care = Math.round(gross * 0.018);
+      const payslip = { period: `${year}-${String(month).padStart(2, '0')}-28`, grossPay: gross, wageTax: tax, solidaritySurcharge: 0, churchTax: 0,
+        pensionInsurance: pension, unemploymentInsurance: unemployment, healthInsurance: health, careInsurance: care,
+        companyCarTaxableBenefit: 0, bavEmployee: 0, bavEmployer: 0, bonus: 0, source: 'paperless', note: null, ...extra };
+      payslip.netPay = Math.round((gross - payslip.wageTax - payslip.pensionInsurance - payslip.unemploymentInsurance - payslip.healthInsurance - payslip.careInsurance) * 100) / 100;
+      payslip.payout = payslip.netPay;
+      const id = `ps-${year}-${month}`;
+      return { id, fullWorthSpaceId: SPACE, payslip, createdAt: `${year}-${String(month).padStart(2, '0')}-29T09:00:00Z`, updatedAt: `${year}-${String(month).padStart(2, '0')}-29T09:00:00Z`,
+        document: month === 6 ? null : { importId: `doc-${id}`, paperlessUrl: `https://paperless.example.local/documents/${1000 + year % 100 * 12 + month}/details`, fileName: 'abrechnung.pdf', readConfidencePercent: 88 } };
+    };
+    const rows = [make(2025, 11, 5000), make(2025, 12, 5000)];
+    [[1, 5000], [2, 5000], [3, 6500, { bonus: 1500 }], [5, 5000], [6, 5000, { source: 'confirmed-ocr' }], [7, 5400], [8, 5400, { healthInsurance: 480 }], [9, 5400], [10, 5400]]
+      .forEach(([month, gross, extra]) => rows.push(make(2026, month, gross, extra)));
+    PAYSLIPS.push(...rows.reverse());
+  })();
   let payslipImportReads = 0;
   const extraction = (period, gross, net) => ({
     period, grossPay: gross, netPay: net, payout: net, wageTax: gross == null ? null : Math.round(gross * 0.15), solidaritySurcharge: 0,
@@ -1838,7 +1859,8 @@
     if (method === 'POST' && /\/paperless\/presets\/ppay1\/run$/.test(path)) {
       const preset = PAYSLIP_PRESETS[0];
       preset.lastCheckedAt = new Date().toISOString();
-      if (PAYSLIP_IMPORTS.length === 0 && PAYSLIPS.length === 0) {
+      if (PAYSLIP_IMPORTS.length === 0 && !PAYSLIP_IMPORTS.populated) {
+        PAYSLIP_IMPORTS.populated = true;
         payslipImportReads = 0;
         PAYSLIP_IMPORTS.push(
           { id: 'pi1', title: 'Gehaltsabrechnung 09/2026', status: 'pending', error: null, paperlessUrl: 'https://paperless.example.local/documents/2101/details', extraction: null, createdAt: preset.lastCheckedAt },
