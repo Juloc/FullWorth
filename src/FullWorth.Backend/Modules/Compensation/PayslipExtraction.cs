@@ -6,31 +6,45 @@ using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Compensation;
 
-public static partial class PayslipExtractor
+/// <summary>Der Text einer Lohnabrechnung. Eine Schnittstelle nur, weil das Werkzeug dahinter (Tesseract) nicht ueberall liegt, wo getestet wird.</summary>
+public interface IPayslipOcr
+{
+    Task<string> ReadTextAsync(Stream content, string fileName, CancellationToken ct);
+}
+
+/// <summary>
+/// Die eine Kette, die eine Lohnabrechnung liest - fuer den Upload im Browser wie fuer den Import aus
+/// Paperless: OCR einmal, dann strukturiert Codex den Text; ist Codex nicht erreichbar oder liefert
+/// nichts Brauchbares, springt der deterministische Regex-Parser ein. So wird eine Abrechnung nie
+/// halb gedeutet und als vollstaendig ausgegeben.
+/// </summary>
+public sealed class PayslipExtractionService(IPayslipOcr ocr, PayslipCodexExtractor codex)
+{
+    public async Task<PayslipExtractionResult> ExtractAsync(Guid userId, Stream content, string fileName, CancellationToken ct)
+    {
+        var text = await ocr.ReadTextAsync(content, fileName, ct);
+        if (string.IsNullOrWhiteSpace(text))
+            return PayslipTextParser.Empty("OCR konnte keinen Text erkennen.");
+        return await codex.TryStructureAsync(userId, text, ct) ?? PayslipTextParser.Parse(text);
+    }
+}
+
+/// <summary>
+/// Runs the local OCR pipeline (PDF first page → PNG via pdftoppm, then Tesseract deu+eng) and returns the
+/// raw recognized text. The original file is never persisted here.
+/// </summary>
+public sealed class LocalPayslipOcr : IPayslipOcr
 {
     private const long MaxBytes = 12 * 1024 * 1024;
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp" };
 
-    public static async Task<PayslipExtractionResult> ExtractAsync(IFormFile file, CancellationToken ct)
+    public async Task<string> ReadTextAsync(Stream content, string fileName, CancellationToken ct)
     {
-        var text = await OcrAsync(file, ct);
-        return string.IsNullOrWhiteSpace(text)
-            ? PayslipTextParser.Empty("OCR konnte keinen Text erkennen.")
-            : PayslipTextParser.Parse(text);
-    }
+        if (content.Length <= 0) throw new ArgumentException("Die Datei ist leer.");
+        if (content.Length > MaxBytes) throw new ArgumentException("Die Datei darf höchstens 12 MB groß sein.");
 
-    /// <summary>
-    /// Runs the local OCR pipeline (PDF first page → PNG via pdftoppm, then Tesseract deu+eng) and returns the
-    /// raw recognized text. The original file is never persisted. Shared by the deterministic regex parser and
-    /// the optional Codex structuring so a payslip is only OCR'd once per upload.
-    /// </summary>
-    public static async Task<string> OcrAsync(IFormFile file, CancellationToken ct)
-    {
-        if (file.Length <= 0) throw new ArgumentException("Die Datei ist leer.");
-        if (file.Length > MaxBytes) throw new ArgumentException("Die Datei darf höchstens 12 MB groß sein.");
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
         if (extension != ".pdf" && !ImageExtensions.Contains(extension))
             throw new ArgumentException("Unterstützt werden PDF, JPG, PNG, WEBP, TIFF und BMP.");
 
@@ -39,7 +53,7 @@ public static partial class PayslipExtractor
         try
         {
             var source = Path.Combine(workDir, $"source{extension}");
-            await using (var stream = File.Create(source)) await file.CopyToAsync(stream, ct);
+            await using (var stream = File.Create(source)) await content.CopyToAsync(stream, ct);
 
             var image = source;
             if (extension == ".pdf")

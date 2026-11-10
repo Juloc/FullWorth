@@ -159,7 +159,7 @@ public sealed class PaperlessStore(FullWorthDbContext db)
             """, ct);
     }
 
-    public async Task<IReadOnlyList<PaperlessAutoImportTarget>> ListAutoImportPresetsAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<PaperlessImportPresetView>> ListAutoImportPresetsAsync(CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
@@ -169,8 +169,7 @@ public sealed class PaperlessStore(FullWorthDbContext db)
             WHERE "AutoImport" = true
             ORDER BY "FullWorthSpaceId", "CreatedAt"
             """).ToListAsync(ct);
-        return rows.Select(x => new PaperlessAutoImportTarget(
-            x.Id, x.FullWorthSpaceId, x.UserId, x.Name, x.Query, x.AnalyzeAutomatically, x.Currency, x.LastSeenDocumentId, x.Kind)).ToList();
+        return rows.Select(ToPresetView).ToList();
     }
 
     public async Task UpdatePaperlessPresetCheckAsync(

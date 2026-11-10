@@ -112,6 +112,7 @@ public static class CompensationEndpoints
         app.MapCompensationOtherIncomeEndpoints();
         app.MapCompensationBenchmarkEndpoints();
         app.MapCompensationPayslipEndpoints();
+        app.MapCompensationPayslipImportEndpoints();
         return app;
     }
 

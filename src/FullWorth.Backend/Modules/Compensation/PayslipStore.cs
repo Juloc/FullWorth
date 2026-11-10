@@ -19,10 +19,11 @@ public sealed class PayslipStore(FullWorthDbContext db)
             var result = new List<PayslipRecordView>();
             await using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT id, payload::text, created_at, updated_at
-                FROM compensation_payslips
-                WHERE fullworth_space_id=@space AND user_id=@user
-                ORDER BY period DESC, updated_at DESC;
+                SELECT p.id, p.payload::text, p.created_at, p.updated_at, i."Id", i."PaperlessUrl", i."FileName"
+                FROM compensation_payslips p
+                LEFT JOIN "PayslipImports" i ON i."PayslipId" = p.id AND i."UserId" = p.user_id
+                WHERE p.fullworth_space_id=@space AND p.user_id=@user
+                ORDER BY p.period DESC, p.updated_at DESC;
                 """;
             Add(command, "space", fullWorthSpaceId); Add(command, "user", userId);
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -31,30 +32,52 @@ public sealed class PayslipStore(FullWorthDbContext db)
                 var payslip = JsonSerializer.Deserialize<PayslipRecordWrite>(reader.GetString(1), JsonOptions);
                 if (payslip is null) continue;
                 result.Add(new PayslipRecordView(reader.GetGuid(0), fullWorthSpaceId, payslip,
-                    Timestamp(reader.GetValue(2)), Timestamp(reader.GetValue(3))));
+                    Timestamp(reader.GetValue(2)), Timestamp(reader.GetValue(3)),
+                    reader.IsDBNull(4) ? null : new PayslipDocumentRef(reader.GetGuid(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6))));
             }
             return result;
         }, ct);
     }
 
-    public async Task<PayslipRecordView?> SaveAsync(Guid userId, Guid fullWorthSpaceId, PayslipRecordWrite write, CancellationToken ct)
+    /// <summary>
+    /// Speichert die bestaetigte Abrechnung. Mit <paramref name="importId"/> ist sie die Bestaetigung
+    /// eines Fundes aus Paperless: Abrechnung und Verknuepfung entstehen in einer Anweisung, und gibt
+    /// es keinen offenen Fund dieses Benutzers mit dieser Nummer, entsteht gar nichts (null).
+    /// </summary>
+    public async Task<PayslipRecordView?> SaveAsync(Guid userId, Guid fullWorthSpaceId, PayslipRecordWrite write, Guid? importId, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         Validate(write);
         await EnsureSchemaAsync(ct);
         var id = Guid.NewGuid();
-        var json = JsonSerializer.Serialize(write with { Note = CleanNote(write.Note), Source = CleanSource(write.Source) }, JsonOptions);
+        var json = JsonSerializer.Serialize(write with { Note = CleanNote(write.Note), Source = importId is null ? CleanSource(write.Source) : "paperless" }, JsonOptions);
         return await WithConnectionAsync(async connection =>
         {
             await using var command = connection.CreateCommand();
-            command.CommandText = """
-                INSERT INTO compensation_payslips(id, fullworth_space_id, user_id, period, payload)
-                VALUES(@id,@space,@user,@period,CAST(@payload AS jsonb))
-                RETURNING created_at,updated_at;
-                """;
+            command.CommandText = importId is null
+                ? """
+                    INSERT INTO compensation_payslips(id, fullworth_space_id, user_id, period, payload)
+                    VALUES(@id,@space,@user,@period,CAST(@payload AS jsonb))
+                    RETURNING created_at,updated_at;
+                    """
+                : """
+                    WITH found AS (
+                        SELECT "Id" FROM "PayslipImports"
+                        WHERE "Id"=@import AND "UserId"=@user AND "FullWorthSpaceId"=@space AND "Status"='needs_review'
+                        FOR UPDATE),
+                    linked AS (
+                        UPDATE "PayslipImports" SET "Status"='confirmed', "PayslipId"=@id, "UpdatedAt"=now()
+                        WHERE "Id" IN (SELECT "Id" FROM found)
+                        RETURNING 1)
+                    INSERT INTO compensation_payslips(id, fullworth_space_id, user_id, period, payload)
+                    SELECT @id,@space,@user,@period,CAST(@payload AS jsonb) FROM found
+                    RETURNING created_at,updated_at;
+                    """;
             Add(command, "id", id); Add(command, "space", fullWorthSpaceId); Add(command, "user", userId);
             Add(command, "period", write.Period); Add(command, "payload", json);
-            await using var reader = await command.ExecuteReaderAsync(ct); await reader.ReadAsync(ct);
+            if (importId is not null) Add(command, "import", importId.Value);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return null;
             var normalized = JsonSerializer.Deserialize<PayslipRecordWrite>(json, JsonOptions)!;
             return new PayslipRecordView(id, fullWorthSpaceId, normalized,
                 Timestamp(reader.GetValue(0)), Timestamp(reader.GetValue(1)));

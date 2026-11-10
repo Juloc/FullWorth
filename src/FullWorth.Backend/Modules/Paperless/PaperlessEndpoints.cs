@@ -130,6 +130,34 @@ public static class PaperlessEndpoints
             { return Results.BadRequest(new { error = ex.Message }); }
         });
 
+        // Ein Lauf von Hand, ohne auf den Takt des Hintergrunddienstes zu warten. Er holt, was der
+        // Importer seiner Art im Request holen darf - bei Lohnabrechnungen nur die Funde, das Auslesen
+        // laeuft danach im Hintergrund.
+        group.MapPost("/presets/{presetId:guid}/run", async (
+            Guid presetId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            SpaceAccess access,
+            PaperlessStore store,
+            PaperlessService service,
+            IEnumerable<IPaperlessPresetImporter> importers,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await access.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            var preset = await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, presetId, ct);
+            if (preset is null) return Results.NotFound();
+            try
+            {
+                var connection = await service.RequireAsync(fullWorthSpaceId, ct);
+                var outcome = await importers.Single(x => x.Kind == preset.Kind).ImportAsync(preset, connection, ct);
+                await store.UpdatePaperlessPresetCheckAsync(preset.Id, outcome.MaxSeenDocumentId, outcome.Imported, outcome.Error, ct);
+                return Results.Ok(await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, presetId, ct));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
+            { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
         group.MapDelete("/presets/{presetId:guid}", async (
             Guid presetId,
             Guid fullWorthSpaceId,

@@ -60,7 +60,7 @@ public interface IPaperlessPresetImporter
 {
     string Kind { get; }
 
-    Task<PaperlessImportOutcome> ImportAsync(PaperlessAutoImportTarget preset, PaperlessConnection connection, CancellationToken ct);
+    Task<PaperlessImportOutcome> ImportAsync(PaperlessImportPresetView preset, PaperlessConnection connection, CancellationToken ct);
 }
 
 public sealed class PaperlessException(string message) : InvalidOperationException(message);
@@ -125,17 +125,6 @@ public sealed record PaperlessImportPresetView(
     string? LastError,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    string Kind);
-
-public sealed record PaperlessAutoImportTarget(
-    Guid Id,
-    Guid FullWorthSpaceId,
-    Guid UserId,
-    string Name,
-    string? Query,
-    bool AnalyzeAutomatically,
-    string Currency,
-    int? LastSeenDocumentId,
     string Kind);
 
 public sealed record PaperlessPreviewRequest(

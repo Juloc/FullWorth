@@ -144,6 +144,8 @@ GET              /api/compensation/history
 GET              /api/compensation/inflation
 GET              /api/compensation/other-income
 GET              /api/compensation/other-income/types
+GET              /api/compensation/payslip-imports/
+GET              /api/compensation/payslip-imports/{id:guid}/document
 GET              /api/compensation/payslips/
 GET              /api/compensation/payslips/latest-delta
 GET              /api/compensation/profile
@@ -388,6 +390,7 @@ POST             /api/compensation/insights
 POST             /api/compensation/jobrad/compare
 POST             /api/compensation/negotiation
 POST             /api/compensation/other-income
+POST             /api/compensation/payslip-imports/{id:guid}/dismiss
 POST             /api/compensation/payslips/
 POST             /api/compensation/payslips/extract
 POST             /api/compensation/payslips/extract-batch
@@ -491,6 +494,7 @@ POST             /api/purchases/receipt-imports/folder/import
 POST             /api/purchases/receipt-imports/folder/preview
 POST             /api/purchases/receipt-imports/paperless/import
 POST             /api/purchases/receipt-imports/paperless/presets
+POST             /api/purchases/receipt-imports/paperless/presets/{presetId:guid}/run
 POST             /api/purchases/receipt-imports/paperless/preview
 POST             /api/purchases/receipt-imports/paperless/test
 POST             /api/purchases/receipt-imports/paperless/uploads/{purchaseId:guid}

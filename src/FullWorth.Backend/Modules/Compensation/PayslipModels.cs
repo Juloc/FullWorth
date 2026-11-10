@@ -51,7 +51,8 @@ public sealed record PayslipRecordView(
     Guid FullWorthSpaceId,
     PayslipRecordWrite Payslip,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    PayslipDocumentRef? Document = null);
 
 public sealed record PayslipDelta(
     PayslipRecordView Previous,

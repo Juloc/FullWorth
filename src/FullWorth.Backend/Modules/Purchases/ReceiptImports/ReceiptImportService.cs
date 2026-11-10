@@ -88,7 +88,7 @@ public sealed class ReceiptImportService(
 
     public string Kind => PaperlessPresetKinds.Receipt;
 
-    public async Task<PaperlessImportOutcome> ImportAsync(PaperlessAutoImportTarget preset, PaperlessConnection connection, CancellationToken ct)
+    public async Task<PaperlessImportOutcome> ImportAsync(PaperlessImportPresetView preset, PaperlessConnection connection, CancellationToken ct)
     {
         try
         {

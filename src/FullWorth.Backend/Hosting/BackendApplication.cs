@@ -345,6 +345,13 @@ public static class BackendApplication
         builder.Services.AddScoped<CodexReceiptBridgeClient>();
         builder.Services.AddScoped<CodexModelResolver>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Compensation.PayslipCodexExtractor>();
+        builder.Services.AddSingleton<IPayslipOcr, LocalPayslipOcr>();
+        builder.Services.AddScoped<PayslipExtractionService>();
+        builder.Services.Configure<PayslipStorageOptions>(builder.Configuration.GetSection(PayslipStorageOptions.SectionName));
+        builder.Services.AddScoped<PayslipImportStore>();
+        builder.Services.AddScoped<PayslipImportService>();
+        builder.Services.AddScoped<IPaperlessPresetImporter>(services => services.GetRequiredService<PayslipImportService>());
+        builder.Services.AddHostedService<PayslipImportWorker>();
         builder.Services.AddScoped<PurchaseWorkspaceService>();
         builder.Services.AddScoped<PurchaseDocumentService>();
         builder.Services.AddScoped<PurchaseLifecycleService>();
