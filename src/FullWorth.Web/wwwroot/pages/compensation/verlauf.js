@@ -55,19 +55,20 @@ function yearRows() {
     return {
       year, count: list.length,
       gross: list.reduce((sum, p) => sum + num(p.grossPay), 0), holiday: list.reduce((sum, p) => sum + splitSpecialPay(p).holiday, 0), bonus: list.reduce((sum, p) => sum + splitSpecialPay(p).bonus, 0),
-      paid: average(regular.length ? regular : list, p => num(p.payout)), cpi: cpiOf(year, months)
+      monthlyGross: average(regular.length ? regular : list, p => num(p.grossPay)), monthlyNet: average(regular.length ? regular : list, p => num(p.netPay)), cpi: cpiOf(year, months)
     };
   });
   rows.forEach((row, i) => {
     const before = rows[i - 1];
-    row.change = before?.paid ? (row.paid / before.paid - 1) * 100 : null;
+    row.change = before?.monthlyGross ? (row.monthlyGross / before.monthlyGross - 1) * 100 : null;
+    row.netChange = before?.monthlyNet ? (row.monthlyNet / before.monthlyNet - 1) * 100 : null;
     row.inflation = before?.cpi && row.cpi ? (row.cpi / before.cpi - 1) * 100 : null;
     row.real = row.change !== null && row.inflation !== null ? ((1 + row.change / 100) / (1 + row.inflation / 100) - 1) * 100 : null;
   });
   return rows;
 }
 
-const cell = (label, value, tone = '') => `<span class="vl-cell"><small>${label}</small><b${tone ? ` class="${tone}"` : ''}>${value}</b></span>`;
+const cell = (label, value, tone = '', sub = '') => `<span class="vl-cell"><small>${label}</small><b>${value}</b>${sub ? `<small class="${tone}">${sub}</small>` : ''}</span>`;
 const tone = value => value === null ? '' : value >= 0 ? 'positive' : 'negative';
 
 function eventHtml(event) {
@@ -94,11 +95,11 @@ function draw(host) {
     const eventList = events.filter(e => e.validFrom.startsWith(String(year))).sort((a, b) => b.validFrom.localeCompare(a.validFrom));
     const head = row
       ? `<summary class="vl-summary"><span class="vl-y">${year}</span>`
-        + cell('Brutto', euro.format(row.gross)) + cell('13. Gehalt', row.holiday ? euro.format(row.holiday) : '—') + cell('Bonus', row.bonus ? euro.format(row.bonus) : '—')
-        + cell('Ausgezahlt / Monat', euro.format(row.paid))
-        + cell('zum Vorjahr', row.change === null ? '—' : pct(row.change), tone(row.change))
+        + cell('Jahresbrutto', euro.format(row.gross)) + cell('13. Gehalt', row.holiday ? euro.format(row.holiday) : '—') + cell('Bonus', row.bonus ? euro.format(row.bonus) : '—')
+        + cell('Brutto / Monat', euro.format(row.monthlyGross), tone(row.change), row.change === null ? '' : `${pct(row.change)} zum Vorjahr`)
+        + cell('Netto / Monat', euro.format(row.monthlyNet), tone(row.netChange), row.netChange === null ? '' : `${pct(row.netChange)} zum Vorjahr`)
         + cell('Teuerung', row.inflation === null ? '—' : pct(row.inflation))
-        + cell('real', row.real === null ? '—' : pct(row.real), tone(row.real)) + '</summary>'
+        + cell('Brutto real', row.real === null ? '—' : pct(row.real), tone(row.real)) + '</summary>'
       : '';
     return `<section class="vl-year">${row
       ? `<details data-vl-year="${year}"${year === openYear ? ' open' : ''}>${head}<div class="vl-body"></div></details>`

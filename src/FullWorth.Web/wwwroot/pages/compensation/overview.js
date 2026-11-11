@@ -70,7 +70,7 @@ export async function renderMeinGehalt() {
         <div><span>${year.length} Monate Brutto</span><strong>${euro.format(sum('grossPay'))}</strong></div>
         ${holidaySum ? `<div><span>davon 13. Gehalt</span><strong>${euro.format(holidaySum)}</strong></div>` : ''}
         ${bonusSum ? `<div><span>davon Bonus</span><strong>${euro.format(bonusSum)}</strong></div>` : ''}
-        <div><span>Firmenwagen-Vorteil</span><strong>${euro.format(sum('companyCarTaxableBenefit'))}</strong></div>
+        <div><span>${year.length} Monate Netto</span><strong>${euro.format(sum('netPay'))}</strong></div>
         <div><span>bAV Arbeitgeber</span><strong>${euro.format(sum('bavEmployer'))}</strong></div>
         <div><span>Ausgezahlt</span><strong>${euro.format(sum('payout'))}</strong></div>
       </div>
