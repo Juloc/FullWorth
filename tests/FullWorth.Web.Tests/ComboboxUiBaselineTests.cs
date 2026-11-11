@@ -99,7 +99,7 @@ public sealed class ComboboxUiBaselineTests
 
         // Hand-built dialogs (no components/form-dialog.js involved) wire attachCombobox directly on
         // their own category <select> with `anchored: true` in the options object.
-        foreach (var file in new[] { Path.Combine("pages", "categories", "page.js"), Path.Combine("pages", "purchases", "page.js") })
+        foreach (var file in new[] { Path.Combine("pages", "categories", "page.js"), Path.Combine("pages", "purchases", "review.js") })
         {
             var source = ReadSource(file);
             Assert.Contains("attachCombobox", source, StringComparison.Ordinal);
@@ -122,7 +122,7 @@ public sealed class ComboboxUiBaselineTests
         {
             Path.Combine("pages", "rules", "page.js"), Path.Combine("pages", "budgets", "page.js"),
             Path.Combine("pages", "transactions", "page.js"), Path.Combine("pages", "categories", "page.js"),
-            Path.Combine("pages", "purchases", "page.js"), Path.Combine("pages", "purchases", "articles-advanced-actions.js"),
+            Path.Combine("pages", "purchases", "review.js"), Path.Combine("pages", "purchases", "articles-advanced-actions.js"),
             Path.Combine("pages", "purchases", "articles-workspace.js")
         })
         {

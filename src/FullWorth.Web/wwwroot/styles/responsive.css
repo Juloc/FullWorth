@@ -95,7 +95,7 @@
   .span-2{grid-column:auto}
   .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
   .metric strong{font-size:20px}
-  select,input,textarea{min-height:40px;font-size:16px;padding-block:7px}
+  select,input,textarea{min-height:40px;font-size:16px;padding-block:var(--space-2)}
   input[type=search]{border-radius:var(--radius-input)}
   /* .btn-icon steht neben .icon-button, weil buttonClass()/applyButtonRole() dieselbe 36x36-Box
      versprechen wie .icon-button (components.css) - ohne diese Zeile bekäme .btn-icon hier nur den
@@ -140,7 +140,7 @@
 @media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
 @media(max-width:767px){
   #view-transactions .tx-summary{padding:var(--s3)}
-  #view-transactions .tx-row,#view-transactions .tx-skeleton{gap:10px;padding:8px 4px}
+  #view-transactions .tx-row,#view-transactions .tx-skeleton{gap:var(--space-3);padding:var(--space-2) var(--space-1)}
   #view-transactions .tx-date-head{margin:6px 0 0}
   /* Die uebrige Karten-Aufteilung fuer .tx-skeleton steckt schon im @media(max-width:1023px)-Block
      oben, gemeinsam mit .tx-row - eine zweite Kopie hier war Drift, seit beide dieselbe Zeile teilen
@@ -215,6 +215,6 @@
 }
 /* Phone: die gemeinsamen Zeilen (.row, .fw-row) sind zwei Textzeilen hoch, nicht zwei plus 22px Luft. */
 @media(max-width:767px){
-  .row,.fw-row{padding-block:8px}
+  .row,.fw-row{padding-block:var(--space-2)}
   .row-sub{margin-top:1px}
 }

@@ -56,7 +56,7 @@ public sealed class SpacingRatchetTests
         ["styles/components.css"] = 25,
         ["styles/design-depth.css"] = 8,
         ["styles/dialogs.css"] = 30,
-        ["styles/responsive.css"] = 36,
+        ["styles/responsive.css"] = 35,
         ["styles/shell.css"] = 20
     };
 

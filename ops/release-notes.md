@@ -1,23 +1,25 @@
-# 0.84.0
+# 0.85.0
 
-Gehalt wird aus deinen Dokumenten gespeist: Lohnabrechnungen und Arbeitsverträge kommen aus Paperless, mit dem Original-PDF dabei. Dazu kommt die Korrektur der Push-Anzeige.
+Gehalt gegen Preise, eine Paperless-Suche, die zu deiner Ablage passt, ein Beleg-Prüfen, das wie ein Beleg aussieht, Produkte umbenennen und eine kompaktere Handy-Ansicht.
 
 ## Neu
 
-- **Lohnabrechnungen aus Paperless.** Wie bei den Kassenbons: ein Preset mit Art „Lohnabrechnung“ holt neue Dokumente regelmäßig ab und legt sie in der Prüfliste ab. Erkannte Werte (Brutto, Netto, Steuern, Sozialabgaben, Bonus …) prüfst und bestätigst du, erst dann wird gespeichert. Das Original-PDF wird verschlüsselt in FullWorth abgelegt und bleibt aus der Abrechnung heraus öffenbar.
-- **Monats- und Jahresansicht.** Reiter „Lohnabrechnungen“ mit Jahreswahl, Kennzahlen (Brutto, Netto, Nettoquote, Abrechnungen), einem Diagramm „Wohin das Brutto geht“ und der Monatsliste mit Änderung zum Vormonat und dem Detail je Monat. Fehlende Monate sind sichtbar. Hinweise sagen, was auffällt: ein Brutto-Sprung, ein Netto, das trotz gleichem Brutto sinkt (mit der Abzugsposition als Ursache).
-- **Arbeitsverträge und Änderungsprotokoll.** Preset-Art „Arbeitsvertrag“ für Verträge und Nachträge, gleiche Prüfung und Bestätigung. Das Protokoll zeigt jede Änderung mit Datum, PDF und nur den geänderten Feldern (alt durchgestrichen, neu daneben, beim Gehalt mit Prozent); der Rest ist eingeklappt.
-- **Abgleich Vertrag und Abrechnung.** Das Diagramm „Brutto laut Vertrag“ legt die Abrechnungen als Punkte auf die Vertragsstufen. Weicht das Brutto ab, steht ein Hinweis da; hält sich die Abweichung, kommt „Änderung erkannt“ mit einem vorausgefüllten Formular.
+- **Gehalt gegen Preise.** Im Reiter „Lohnabrechnungen“ liegen Netto oder Brutto, die allgemeine Teuerung, Lebensmittel, Miete, Energie und Benzin (Destatis, eine Quelle, bis September 2026) und die Preise deiner eigenen Einkäufe übereinander, alle am selben Monat bei 100. Dazu steht in Klartext, was dein Gehalt real gewachsen ist und was das im Monat in Euro bedeutet. Ein Bonus fällt durch eine Glättung (Median aus drei Monaten) nicht als Gehaltssprung auf.
+- **Preisindex aus deinen eigenen Belegen.** Belege aus Paperless haben keine Produktzuordnung, die bisherige persönliche Teuerung kam deshalb nie zu einer Zahl. Der neue Index vergleicht gleiche Artikel im selben Geschäft von Quartal zu Quartal, getrennt für Lebensmittel, Kraftstoff, Haushalt/Drogerie und Gesundheit. Er zählt nur bestätigte Belege und nur, wo genug Artikel vergleichbar sind.
+- **Paperless-Suche aus deiner echten Ablage.** Statt ein Textfeld zu füllen, wählst du Dokumenttyp und Absender aus dem, was in Paperless liegt, und siehst die Treffer mit ihren Tags, bevor etwas gespeichert wird. So landen keine Bank-Entgeltaufstellungen oder Abrechnungen anderer Personen unter deinen Lohnabrechnungen. Dieselbe Abrechnung, die mehrfach in Paperless liegt, ist ein Eintrag; „Neu lesen“ liest offene Funde noch einmal aus dem Original.
+- **Beleg prüfen als Beleg.** Die Prüfansicht zeigt den Bon wie einen Kassenbon, daneben (am Handy per Umschalter „Bon | Original | Geteilt“) das Original mit Zoom. Du gehst die ganze Liste durch: „Bestätigen & weiter“, zurück, überspringen, Pfeiltasten, Wischen. Positionen bearbeitest du direkt, am Handy in einem Blatt mit großen Feldern. Die Summenprüfung steht dauernd sichtbar. PDF-Belege werden dafür seitenweise als Bild geliefert.
+- **Produkte umbenennen.** „Brokolo 1kg“ lässt sich zu „Brokkoli“ korrigieren, direkt an der Zeile oder am Produkt. Der alte Text wird als Alias gemerkt, ein späterer Import von „Brokolo 1kg“ landet dann gleich bei „Brokkoli“; auf Wunsch werden gleiche Zeilen mit umbenannt.
+- **Kompaktere Handy-Ansicht.** Engere Abstände und Schriften, flache Karten, kleinere Zeilen; Seiten sind bis zu ein Viertel kürzer. Auf dem Desktop ändert sich nichts.
 
 ## Behoben
 
-- **Push zeigte „aktiv“, obwohl nichts ankam, und ließ sich nicht abschalten.** Die Seite las „aktiv“ allein aus der Browser-Berechtigung, die auch nach einer fehlgeschlagenen Anmeldung bestehen bleibt. Jetzt gilt Push nur als aktiv, wenn Berechtigung, eine zum Server passende Anmeldung und der Servereintrag da sind. Eine veraltete Anmeldung wird erkannt und beim erneuten Aktivieren ersetzt. Abschalten geht in jedem Zustand, auch ohne Verbindung zum Server, und zeigt, was nicht geklappt hat.
-- **Die Testbenachrichtigung meldete „gesendet“, egal was passierte.** Sie meldet jetzt einen Fehler, wenn kein Push-Dienst die Nachricht angenommen hat.
-- Der Name eines Paperless-Presets ist je Benutzer eindeutig statt je Bereich: zwei Mitglieder mit gleich benannten Presets bekamen beim Speichern einen Fehler.
+- **Lohnabrechnungen lasen die Jahressumme statt des Monats.** Auf vielen Abrechnungen steht hinter jedem Etikett „Monat  Jahr“; gelesen wurde die letzte Zahl, also aus 3.567 € Brutto im Februar wurden 11.134 €. Jetzt gilt der Monat. Arbeitgeber-Pauschalen und die Tabelle der Beitragsgrundlagen werden ignoriert, „Zahlbetrag“ und die Kürzel der Lohnarten werden erkannt. Ein digitales PDF wird über seine Textebene gelesen, nicht über Texterkennung.
+- **Vertrags-Nachträge lieferten weder Gehalt noch Datum.** „Grundgehaltserhöhung auf brutto 3.240.- Euro“ (auch „3.100,-“ und mit Zeilenumbruch) wird jetzt gelesen.
+- „Nach Produkt“ fasst nicht zugeordnete Zeilen unter ihrem eigenen Namen zusammen statt unter „Unmatched product“.
 
 ## Wichtig
 
-- Gehaltsdaten, Abrechnungs- und Vertrags-PDFs sieht nur, wer sie importiert hat, nicht jedes Mitglied des Bereichs. Die Kontolöschung entfernt sie mit.
-- Zwei Datenbank-Änderungen (neue Tabellen für Funde und Vertragsstände, eine neue Spalte „Art“ bei den Presets), sonst keine Konfiguration. Die PDFs liegen unter `/data/pension/compensation`, kein neues Volume nötig.
-- Noch nicht mit echtem Paperless, echten Abrechnungen und echten Verträgen erprobt: die Auslesung liefert Vorschläge, die du bestätigst.
-- Presets für Gehalt und Verträge lassen sich in der Oberfläche noch nicht löschen.
+- **Nach dem Update in „Lohnabrechnungen“ und „Arbeitsverträge“ auf „Neu lesen“ tippen:** bereits gelesene, noch unbestätigte Funde haben die alten, falschen Werte.
+- Aufgenommen werden nur Abrechnungen, die du bestätigst. PDFs mit mehreren Monaten (zum Beispiel „Mai bis Juli“) werden mit einem Monat gelesen; prüfe die Monate.
+- Eine Datenbank-Änderung gibt es nicht; ein neuer Endpunkt liefert PDF-Seiten als Bild.
+- Nicht mit echten Belegen und echten Abrechnungen erprobt, nur mit Beispieldaten und gegen die echten Paperless-Texte gelesen.

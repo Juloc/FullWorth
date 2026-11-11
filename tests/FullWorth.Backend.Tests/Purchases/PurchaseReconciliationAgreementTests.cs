@@ -80,7 +80,7 @@ public sealed class PurchaseReconciliationAgreementTests
 
         var missing = read.Where(name => !fields.Contains(name)).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assert.True(missing.Length == 0,
-            "pages/purchases/page.js liest Felder, die GET /api/purchases/{id}/reconciliation nicht " +
+            "Die Kaufseite (page.js, review.js, review-tools.js) liest Felder, die GET /api/purchases/{id}/reconciliation nicht " +
             "liefert:" + Environment.NewLine + "  " + string.Join(Environment.NewLine + "  ", missing));
     }
 
@@ -89,8 +89,9 @@ public sealed class PurchaseReconciliationAgreementTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(
-            dir!.FullName, "src", "FullWorth.Web", "wwwroot", "pages", "purchases", "page.js"));
+        // Die Pruefansicht (review.js, review-tools.js) liest die Abstimmung seit dem Umbau; page.js liest sie noch fuer die Liste.
+        return string.Concat(new[] { "page.js", "review.js", "review-tools.js" }.Select(file => File.ReadAllText(Path.Combine(
+            dir!.FullName, "src", "FullWorth.Web", "wwwroot", "pages", "purchases", file))));
     }
 
     [Fact]
