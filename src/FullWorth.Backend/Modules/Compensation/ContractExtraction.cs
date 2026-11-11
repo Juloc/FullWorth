@@ -84,7 +84,7 @@ public static partial class ContractTextParser
 
     private static DateOnly? ValidFrom(string text)
     {
-        var match = Regex.Match(text, @"(?i)(?:ab dem|ab dem|beginnt am|beginn des arbeitsverhältnisses|gültig ab|mit wirkung (?:zum|ab dem|vom)|rückwirkend zum|wirksam ab)[^\d\n]{0,20}(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4})");
+        var match = Regex.Match(text, @"(?i)(?:\bab(?: dem)?|beginnt am|beginn des arbeitsverhältnisses|gültig ab|mit wirkung (?:zum|ab dem|vom)|rückwirkend zum|wirksam ab)[^\d\n]{0,20}(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4})");
         if (!match.Success) return null;
         return int.TryParse(match.Groups[3].Value, out var y) && int.TryParse(match.Groups[2].Value, out var m) && int.TryParse(match.Groups[1].Value, out var d)
                && y is >= 1980 and <= 2100 && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m)
@@ -96,6 +96,11 @@ public static partial class ContractTextParser
     // Jahresbetrag wird durch zwoelf geteilt und als solcher gekennzeichnet.
     private static decimal? GrossMonthly(string text, List<string> warnings)
     {
+        // Ein Nachtrag nennt das neue Gehalt im Satz, nicht an einem Etikett: "erhaelt ab 01.01.2026 eine
+        // Grundgehaltserhoehung auf brutto 3.240.- Euro". Dabei sind "3.240.-", "3.100,-" und ein Umbruch zwischen
+        // Zahl und "Euro" gewoehnlich - die Zahl endet vor dem Strich.
+        var raised = Decimal(text, @"(?i)auf\s+brutto\s+(\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?[.,]?-?\s*(?:€|eur)");
+        if (raised is not null) return raised;
         var monthly = Decimal(text, @"(?i)(?<!jahres)(?:brutto\s*monats\s*gehalt|bruttomonatsgehalt|monatliche(?:s|n)?\s*(?:brutto)?\s*(?:gehalt|vergütung)|bruttogehalt|bruttovergütung|brutto(?:-)?entgelt)[^\d\n]{0,60}(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:,\d{1,2})?)\s*(?:€|eur)");
         if (monthly is not null) return monthly;
         var yearly = Decimal(text, @"(?i)(?:jahresbrutto(?:gehalt)?|jahresgehalt|bruttojahresgehalt|jahresvergütung)[^\d\n]{0,60}(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s*(?:€|eur)");

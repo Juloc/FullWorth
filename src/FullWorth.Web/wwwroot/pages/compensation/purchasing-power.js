@@ -140,18 +140,22 @@ function draw() {
 
   const chips = LINES.filter(l => model.lines.some(x => x.key === l.key)).map(l => {
     const line = model.lines.find(x => x.key === l.key);
-    return `<label class="pp-chip" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><span><i></i>${esc(l.label)}<b>${signed(last(line.points)[1] - 100)}</b></span></label>`;
+    return `<label class="pp-line" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><i></i><span>${esc(l.label)}</span><b>${signed(last(line.points)[1] - 100)}</b></label>`;
   }).join('');
 
   host.innerHTML = `
-    <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2><p>Seit ${monthName(model.start)}: alles beginnt bei 100. Liegt dein ${label} über den Preislinien, bleibt dir real mehr.</p></div>
-      <div class="pp-controls">
-        <div class="po-years" role="tablist" aria-label="Gehalt"><button type="button" role="tab" class="po-year" data-pp-basis="net" aria-selected="${view.basis === 'net'}">Netto</button><button type="button" role="tab" class="po-year" data-pp-basis="gross" aria-selected="${view.basis === 'gross'}">Brutto</button></div>
-        ${model.startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${model.startOptions.map(m => `<option value="${m}"${m === model.start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
-      </div></div>
-    ${real === null ? '' : `<div class="pp-verdict ${real >= 0 ? 'is-up' : 'is-down'}"><strong>Real ${signed(real)}</strong><span>Dein ${label} ${signed(salaryChange)}, die Preise ${signed(priceChange)}.${power === null ? '' : ` Das sind rund ${euro.format(Math.abs(power))} im Monat ${power >= 0 ? 'mehr' : 'weniger'} Kaufkraft als am Anfang.`}</span></div>`}
+    <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2><p>Alles beginnt im ${monthName(model.start)} bei 100. Liegt dein ${label} über den Preislinien, bleibt dir real mehr.</p></div></div>
+    <div class="pp-controls">
+      <div class="po-years" role="tablist" aria-label="Gehalt"><button type="button" role="tab" class="po-year" data-pp-basis="net" aria-selected="${view.basis === 'net'}">Netto</button><button type="button" role="tab" class="po-year" data-pp-basis="gross" aria-selected="${view.basis === 'gross'}">Brutto</button></div>
+      ${model.startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${model.startOptions.map(m => `<option value="${m}"${m === model.start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
+    </div>
+    <div class="po-kpis pp-kpis">
+      <div><span>${label} seit ${monthName(model.start)}</span><strong>${signed(salaryChange)}</strong></div>
+      ${priceChange === null ? '' : `<div><span>Preise allgemein</span><strong>${signed(priceChange)}</strong></div><div><span>Real</span><strong class="${real >= 0 ? 'positive' : 'negative'}">${signed(real)}</strong></div>`}
+    </div>
+    ${power === null ? '' : `<p class="extended-note pp-sentence">Das sind rund ${euro.format(Math.abs(power))} im Monat ${power >= 0 ? 'mehr' : 'weniger'} Kaufkraft als am Anfang.</p>`}
     <div class="pp-wrap"><div id="pp-chart"></div><div class="po-tip" hidden></div></div>
-    <div class="pp-chips">${chips}</div>
+    <div class="pp-lines">${chips}</div>
     <p class="pp-foot">Preise: Destatis Verbraucherpreisindex Deutschland (${esc(data.inflation.base)}), Stand ${monthName(monthIndex(`${data.inflation.lastMonth}-01`))}.${data.own && model.ownAvailable ? ' „Meine Einkäufe“: Preisentwicklung derselben Artikel im selben Geschäft aus deinen bestätigten Belegen, je Quartal, ab dem ersten Quartal an die allgemeine Linie angelegt.' : ''}${data.own && !model.ownAvailable ? ' Deine eigenen Einkaufspreise erscheinen hier, sobald genug bestätigte Belege mit denselben Artikeln da sind.' : ''} Das Gehalt ist je Monat geglättet (Median aus drei Monaten), damit ein Bonus keinen Sprung vortäuscht.</p>`;
 
   drawChart(model);

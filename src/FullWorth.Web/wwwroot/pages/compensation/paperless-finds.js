@@ -97,7 +97,7 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
     const setup = state.setup, { options } = setup;
     const typeIds = [...new Set([...setup.types, ...options.documentTypes.filter(t => new RegExp(texts.typePattern, 'i').test(t.name)).map(t => t.id)])];
     const typeName = new Map(options.documentTypes.map(t => [t.id, t.name]));
-    const chips = typeIds.map(id => `<label class="pf-chip"><input type="checkbox" data-pf-type="${id}"${setup.types.has(id) ? ' checked' : ''}><span>${esc(typeName.get(id))}</span></label>`).join('');
+    const chips = typeIds.map(id => `<label class="pf-row"><input type="checkbox" data-pf-type="${id}"${setup.types.has(id) ? ' checked' : ''}><span class="pf-row-main"><strong>${esc(typeName.get(id))}</strong></span></label>`).join('');
     const more = options.documentTypes.filter(t => !typeIds.includes(t.id)).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
     const groups = setup.correspondents ? correspondentGroups(setup) : [];
     const picked = groups.filter(g => setup.correspondents.has(g.id));
@@ -108,8 +108,8 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
       const years = [...new Set(g.docs.map(d => year(d.created)).filter(Boolean))].sort();
       const range = years.length ? (years.length > 1 ? `${years[0]}–${years[years.length - 1]}` : years[0]) : '';
       const tags = [...g.tags].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([name]) => `<i>${esc(name)}</i>`).join('');
-      return `<label class="pf-group${setup.correspondents.has(g.id) ? ' is-picked' : ''}"><input type="checkbox" data-pf-corr="${g.id}"${setup.correspondents.has(g.id) ? ' checked' : ''}>`
-        + `<span class="pf-group-main"><strong>${esc(g.name)}</strong><small>${g.docs.length} Dokument${g.docs.length === 1 ? '' : 'e'}${range ? ` · ${range}` : ''}</small>`
+      return `<label class="pf-row"><input type="checkbox" data-pf-corr="${g.id}"${setup.correspondents.has(g.id) ? ' checked' : ''}>`
+        + `<span class="pf-row-main"><strong>${esc(g.name)}</strong><small>${g.docs.length} Dokument${g.docs.length === 1 ? '' : 'e'}${range ? ` · ${range}` : ''}</small>`
         + `<small class="pf-example">${esc(g.docs[0].title)}</small>${tags ? `<span class="pf-tags">${tags}</span>` : ''}</span></label>`;
     }).join('');
 
@@ -119,9 +119,9 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
     return `<div class="pf-setup">
       <h3>Welche Dokumente in Paperless sind deine ${esc(texts.noun)}?</h3>
       <p class="extended-note">FullWorth zeigt, was in deiner Paperless-Ablage liegt. Wähle den Dokumenttyp und danach, von wem die Dokumente sind – so landen nur deine ${esc(texts.noun)} hier, keine Bank-Entgelte oder Unterlagen anderer.</p>
-      <div class="pf-step"><span class="pf-step-title">1 · Dokumenttyp</span><div class="pf-chips">${chips}<select data-pf-more aria-label="Weiteren Dokumenttyp hinzufügen"><option value="">Weiterer Typ …</option>${more}</select></div></div>
+      <div class="pf-step"><span class="pf-step-title">1 · Dokumenttyp</span><div class="pf-rows">${chips}</div><select data-pf-more aria-label="Weiteren Dokumenttyp hinzufügen"><option value="">Weiterer Typ …</option>${more}</select></div>
       ${setup.error ? `<p class="pf-error">${esc(setup.error)}</p>` : ''}
-      ${groups.length ? `<div class="pf-step"><span class="pf-step-title">2 · Von wem?</span><div class="pf-groups">${groupHtml}</div>${setup.truncated ? `<p class="extended-note">Es gibt mehr als ${PREVIEW_LIMIT} Treffer, gezeigt werden die neuesten.</p>` : ''}</div>`
+      ${groups.length ? `<div class="pf-step"><span class="pf-step-title">2 · Von wem?</span><div class="pf-rows">${groupHtml}</div>${setup.truncated ? `<p class="extended-note">Es gibt mehr als ${PREVIEW_LIMIT} Treffer, gezeigt werden die neuesten.</p>` : ''}</div>`
         : `<p class="extended-note">${setup.loading ? 'Paperless wird durchsucht …' : setup.types.size ? 'Zu diesen Typen gibt es in Paperless keine Dokumente.' : 'Wähle mindestens einen Dokumenttyp.'}</p>`}
       ${picked.length ? `<details class="pf-docs"><summary>${count} Treffer ansehen</summary><ul>${list}</ul>${docs.length > 80 ? `<p class="extended-note">… und ${docs.length - 80} weitere.</p>` : ''}</details>` : ''}
       <div class="pf-actions"><button class="btn btn-primary" type="button" data-pf-save ${picked.length ? '' : 'disabled'}>${count ? `${count} ${esc(texts.noun)} holen` : 'Suche speichern'}</button>${state.preset ? '<button class="btn btn-secondary" type="button" data-pf-cancel>Abbrechen</button>' : ''}</div>

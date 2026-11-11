@@ -129,4 +129,20 @@ public sealed class EmploymentContractLogicTests
         Assert.Contains(result.Warnings, x => x.Contains("Jahresgehalt"));
         Assert.Equal(new DateOnly(2024, 3, 1), result.ValidFrom);
     }
+
+    // Wie ein echter Nachtrag formuliert: das Gehalt steht im Satz, mal als "3.240.-", mal als "3.100,-",
+    // und zwischen Zahl und "Euro" kann ein Zeilenumbruch stehen. Alle Zahlen sind erfunden.
+    [Theory]
+    [InlineData("Herr Muster erhält ab 01.01.2026 eine Grundgehaltserhöhung auf brutto 3.240.- Euro.", 3240, 2026, 1, 1)]
+    [InlineData("Herr Muster erhält ab 01.01.2025 eine Grundgehaltserhöhung auf brutto 3.100,- Euro.", 3100, 2025, 1, 1)]
+    [InlineData("Herr Muster erhält ab 01.08.2023 eine Grundgehaltserhöhung auf brutto 2.750.-\nEuro. Das entspricht", 2750, 2023, 8, 1)]
+    [InlineData("Herr Muster erhält ab 01.01.2024 eine Grundgehaltserhöhung auf brutto 2.900.\nEuro.", 2900, 2024, 1, 1)]
+    public void Parser_ReadsTheNewSalaryFromARaiseSentence(string text, int gross, int year, int month, int day)
+    {
+        var result = ContractTextParser.Parse("Nachtrag zum Anstellungsvertrag\n§ 3a: Vergütung:\n" + text);
+
+        Assert.Equal(gross, result.GrossMonthly);
+        Assert.Equal(new DateOnly(year, month, day), result.ValidFrom);
+        Assert.Equal(ContractKinds.Addendum, result.Kind);
+    }
 }
