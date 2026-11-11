@@ -15,6 +15,7 @@ public sealed class PurchaseCaptureService(
     PurchaseAuthorizationStore authorization,
     PurchaseDiscountService discountService,
     ReceiptExtractionService extraction,
+    ProductService products,
     IOptions<PurchaseStorageOptions> storageOptions)
 {
     private readonly PurchaseStorageOptions _storage = storageOptions.Value;
@@ -276,7 +277,7 @@ public sealed class PurchaseCaptureService(
         await db.SaveChangesAsync(ct);
         db.ChangeTracker.Clear();
 
-        var normalizedItems = NormalizeExtractionItems(request.Items, request.AmountsAreCanonical, currency);
+        var normalizedItems = await products.ApplyKnownNamesAsync(fullWorthSpaceId, NormalizeExtractionItems(request.Items, request.AmountsAreCanonical, currency), ct);
         var itemsOutcome = await authorization.ReplaceItemsForUserAsync(userId, fullWorthSpaceId, purchaseId, normalizedItems, ct);
         if (itemsOutcome.Result != PurchaseMutationResult.Success)
         {
@@ -333,10 +334,10 @@ public sealed class PurchaseCaptureService(
         var purchaseId = purchase.Id;
         db.ChangeTracker.Clear();
 
-        var items = request.Items.Select((x, index) => new PurchaseItemWrite(
+        var items = (await products.ApplyKnownNamesAsync(fullWorthSpaceId, request.Items.Select((x, index) => new PurchaseItemWrite(
             x.CategoryId, x.Name, x.Brand, x.Sku, x.Asin, x.Quantity, x.UnitPrice, x.TotalPrice, currency, null,
             RawName: x.Name, DepositAmount: x.DepositAmount, LineType: "product", SortOrder: index,
-            OriginalUnitPrice: x.OriginalUnitPrice, DiscountAmount: x.DiscountAmount, DiscountLabel: x.DiscountLabel)).ToList();
+            OriginalUnitPrice: x.OriginalUnitPrice, DiscountAmount: x.DiscountAmount, DiscountLabel: x.DiscountLabel)).ToList(), ct)).ToList();
         var itemsOutcome = await authorization.ReplaceItemsForUserAsync(userId, fullWorthSpaceId, purchaseId, items, ct);
         if (itemsOutcome.Result != PurchaseMutationResult.Success)
         {

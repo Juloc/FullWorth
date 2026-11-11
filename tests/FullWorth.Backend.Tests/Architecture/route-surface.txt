@@ -513,6 +513,7 @@ POST             /api/purchases/{id:guid}/auto-link
 POST             /api/purchases/{id:guid}/confirm
 POST             /api/purchases/{id:guid}/extraction
 POST             /api/purchases/{id:guid}/items
+POST             /api/purchases/{id:guid}/items/{itemId:guid}/correct-name
 POST             /api/purchases/{id:guid}/items/{itemId:guid}/match-product
 POST             /api/purchases/{id:guid}/items/{itemId:guid}/returns
 POST             /api/purchases/{id:guid}/items/{itemId:guid}/unlink-product
