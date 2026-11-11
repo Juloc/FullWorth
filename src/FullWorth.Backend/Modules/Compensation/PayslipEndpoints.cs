@@ -76,6 +76,19 @@ public static class PayslipEndpoints
             }
         });
 
+        group.MapPut("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, PayslipRecordWrite request, CurrentUserContext currentUser, PayslipStore store, CancellationToken ct) =>
+        {
+            try
+            {
+                var updated = await store.UpdateAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct);
+                return updated is null ? Results.NotFound() : Results.Ok(updated);
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
         group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, DocumentImportService imports, CancellationToken ct) =>
         {
             var deleted = await imports.DeletePayslipAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);

@@ -84,6 +84,31 @@ public sealed class PayslipStore(FullWorthDbContext db)
         }, ct);
     }
 
+    /// <summary>
+    /// Korrigiert die Werte einer gespeicherten Abrechnung an Ort und Stelle: Id, Verknuepfung zum Original und
+    /// Anlegedatum bleiben. Loeschen und neu anlegen waere der falsche Weg - mit der Abrechnung verschwaende ihr PDF.
+    /// Null, wenn es sie fuer diesen Benutzer nicht gibt.
+    /// </summary>
+    public async Task<PayslipRecordView?> UpdateAsync(Guid userId, Guid fullWorthSpaceId, Guid id, PayslipRecordWrite write, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
+        Validate(write);
+        await EnsureSchemaAsync(ct);
+        var normalized = write with { Note = CleanNote(write.Note), Source = CleanSource(write.Source) };
+        var updated = await WithConnectionAsync(async connection =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE compensation_payslips SET period=@period, payload=CAST(@payload AS jsonb), updated_at=now()
+                WHERE id=@id AND fullworth_space_id=@space AND user_id=@user;
+                """;
+            Add(command, "id", id); Add(command, "space", fullWorthSpaceId); Add(command, "user", userId);
+            Add(command, "period", normalized.Period); Add(command, "payload", JsonSerializer.Serialize(normalized, JsonOptions));
+            return await command.ExecuteNonQueryAsync(ct) > 0;
+        }, ct);
+        return updated ? (await ListAsync(userId, fullWorthSpaceId, ct))?.FirstOrDefault(x => x.Id == id) : null;
+    }
+
     public async Task<bool?> DeleteAsync(Guid userId, Guid fullWorthSpaceId, Guid id, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;

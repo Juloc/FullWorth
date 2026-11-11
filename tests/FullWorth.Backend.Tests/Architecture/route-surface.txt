@@ -597,6 +597,7 @@ PUT              /api/category-order
 PUT              /api/collections/{id:guid}
 PUT              /api/compensation/history/{id:guid}
 PUT              /api/compensation/other-income/{id:guid}
+PUT              /api/compensation/payslips/{id:guid}
 PUT              /api/compensation/profile
 PUT              /api/compensation/scenarios/{id:guid}
 PUT              /api/contracts/{contractId:guid}/cancellation

@@ -45,9 +45,10 @@ async function load() {
 
 // ---- Modell ----------------------------------------------------------------------------------
 
-// Je Monat die zuletzt gespeicherte Abrechnung, dann der Mittelwert-Glaetter: ein Bonus oder eine Nachzahlung
-// in einem Monat soll nicht wie eine Gehaltserhoehung aussehen. Der Median aus Vor-, eigenem und Folgemonat
-// laesst einen einzelnen Ausreisser aus.
+// Je Monat die zuletzt gespeicherte Abrechnung, dann ein Glaetter: ein Bonus oder eine Nachzahlung in einem Monat
+// soll nicht wie eine Gehaltserhoehung aussehen. Der Median der Monate im Umkreis von zwei Monaten laesst einen
+// Ausreisser aus; fehlen Monate (nicht jede Abrechnung liegt vor), gilt bei nur zwei Werten der kleinere - ein
+// einzelner hoher Wert ist eher eine Einmalzahlung als ein neues Gehalt.
 function salaryByMonth(basis) {
   const byMonth = new Map();
   for (const item of payslips) {
@@ -56,8 +57,8 @@ function salaryByMonth(basis) {
   }
   const smooth = new Map();
   for (const [m, value] of byMonth) {
-    const around = [byMonth.get(m - 1), value, byMonth.get(m + 1)].filter(v => v > 0).sort((a, b) => a - b);
-    smooth.set(m, around.length === 3 ? around[1] : around.length === 2 ? (around[0] + around[1]) / 2 : value);
+    const around = [-2, -1, 0, 1, 2].map(d => byMonth.get(m + d)).filter(v => v > 0).sort((a, b) => a - b);
+    smooth.set(m, around.length >= 3 ? around[Math.floor(around.length / 2)] : around.length === 2 ? around[0] : value);
   }
   return smooth;
 }
@@ -156,7 +157,7 @@ function draw() {
     ${power === null ? '' : `<p class="extended-note pp-sentence">Das sind rund ${euro.format(Math.abs(power))} im Monat ${power >= 0 ? 'mehr' : 'weniger'} Kaufkraft als am Anfang.</p>`}
     <div class="pp-wrap"><div id="pp-chart"></div><div class="po-tip" hidden></div></div>
     <div class="pp-lines">${chips}</div>
-    <p class="pp-foot">Preise: Destatis Verbraucherpreisindex Deutschland (${esc(data.inflation.base)}), Stand ${monthName(monthIndex(`${data.inflation.lastMonth}-01`))}.${data.own && model.ownAvailable ? ' „Meine Einkäufe“: Preisentwicklung derselben Artikel im selben Geschäft aus deinen bestätigten Belegen, je Quartal, ab dem ersten Quartal an die allgemeine Linie angelegt.' : ''}${data.own && !model.ownAvailable ? ' Deine eigenen Einkaufspreise erscheinen hier, sobald genug bestätigte Belege mit denselben Artikeln da sind.' : ''} Das Gehalt ist je Monat geglättet (Median aus drei Monaten), damit ein Bonus keinen Sprung vortäuscht.</p>`;
+    <p class="pp-foot">Preise: Destatis Verbraucherpreisindex Deutschland (${esc(data.inflation.base)}), Stand ${monthName(monthIndex(`${data.inflation.lastMonth}-01`))}.${data.own && model.ownAvailable ? ' „Meine Einkäufe“: Preisentwicklung derselben Artikel im selben Geschäft aus deinen bestätigten Belegen, je Quartal, ab dem ersten Quartal an die allgemeine Linie angelegt.' : ''}${data.own && !model.ownAvailable ? ' Deine eigenen Einkaufspreise erscheinen hier, sobald genug bestätigte Belege mit denselben Artikeln da sind.' : ''} Das Gehalt ist je Monat geglättet (Median aus den Monaten ringsum), damit ein Bonus keinen Sprung vortäuscht.</p>`;
 
   drawChart(model);
   bind(model);

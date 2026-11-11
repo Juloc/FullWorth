@@ -115,9 +115,9 @@ public static partial class PayslipTextParser
     private static readonly string[] UnemploymentLabels = { "av-beitrag", "av beitrag", "av an", "av-an", "arbeitslosenversicherung" };
     private static readonly string[] HealthLabels = { "kv-beitrag", "kv beitrag", "kv an", "kv-an", "krankenversicherung" };
     private static readonly string[] CareLabels = { "pv-beitrag", "pv beitrag", "pv an", "pv-an", "pflegeversicherung" };
-    private static readonly string[] CompanyCarLabels = { "geldwerter vorteil", "firmenwagen", "pkw private nutzung", "pkw-nutzung", "pkw nutzung", "kfz-nutzung", "kfz nutzung" };
-    private static readonly string[] BavLabels = { "entgeltumw", "betriebliche altersvorsorge", "direktversicherung", "bav" };
-    private static readonly string[] BavEmployerLabels = { "ag-zuschuss bav", "ag zuschuss bav", "arbeitgeber bav", "ag direktversicherung", "ag-direktversich" };
+    private static readonly string[] CompanyCarLabels = { "fahrzeug nutzung", "geldwerter vorteil", "firmenwagen", "pkw private nutzung", "pkw-nutzung", "pkw nutzung", "kfz-nutzung", "kfz nutzung" };
+    private static readonly string[] BavLabels = { "an-direktvers. beitrag", "entgeltumw", "betriebliche altersvorsorge", "direktversicherung", "bav" };
+    private static readonly string[] BavEmployerLabels = { "ag-zuschuss bav", "ag zuschuss bav", "arbeitgeber bav", "ag direktversicherung", "ag-direktvers. beitrag", "ag-direktversich" };
     private static readonly string[] BonusLabels = { "bonus", "prämie", "praemie", "sonderzahlung", "tantieme" };
 
     public static PayslipExtractionResult Parse(string text)
@@ -182,6 +182,8 @@ public static partial class PayslipTextParser
     /// Dass hier einmal die letzte genommen wurde, machte aus 3.567 € Brutto im Februar die 11.134 € der
     /// Jahressumme - und jeder Monat sah aus wie ein Gehaltssprung.
     ///
+    /// Hat eine Zeile drei Spalten (laufender Bezug, Monat gesamt, Jahr), gilt die mittlere.
+    ///
     /// Zeilen mit "pauschal" sind Abgaben des Arbeitgebers, keine Abzuege des Arbeitnehmers; und eine Zeile mit
     /// vier oder mehr Betraegen ist die Tabelle der Beitragsgrundlagen unter der Abrechnung (Grundlage Monat und
     /// Jahr, Beitrag Monat und Jahr), in der die erste Zahl die Grundlage ist und nicht der Beitrag.
@@ -195,10 +197,10 @@ public static partial class PayslipTextParser
                 if (!line.Contains(label, StringComparison.OrdinalIgnoreCase) || line.Contains("pauschal", StringComparison.OrdinalIgnoreCase)) continue;
                 var matches = MoneyRegex().Matches(line);
                 if (matches.Count >= 4) continue;
-                foreach (Match match in matches)
-                {
-                    if (TryParseAmount(match.Value, out var amount)) return Math.Abs(amount);
-                }
+                // Mit einem Bonus im Monat stehen drei Spalten: der laufende Bezug, der Monat insgesamt und das Jahr.
+                // Der Monat insgesamt ist die mittlere - er ist es, den "Summe gesetzlicher Abzuege" aufaddiert.
+                var column = matches.Count == 3 ? 1 : 0;
+                if (TryParseAmount(matches[column].Value, out var amount)) return Math.Abs(amount);
             }
         }
         return null;

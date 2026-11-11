@@ -137,6 +137,17 @@ public sealed class DocumentImportIntegrationTests : IDisposable
             Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
         }
 
+        // Eine Korrektur aendert die Werte an Ort und Stelle: das Original bleibt verknuepft, ein anderes Mitglied
+        // kommt nicht heran.
+        var payslipId = payslip.GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Put, $"/api/compensation/payslips/{payslipId:D}?fullWorthSpaceId={owner.SpaceId:D}", colleague,
+            JsonContent.Create(new { period = "2026-08-31", grossPay = 5000, netPay = 3112.34, payout = 3012.34 })));
+        Assert.Equal(HttpStatusCode.OK, await StatusAsync(client, HttpMethod.Put, $"/api/compensation/payslips/{payslipId:D}?fullWorthSpaceId={owner.SpaceId:D}", owner,
+            JsonContent.Create(new { period = "2026-08-31", grossPay = 5000, netPay = 3112.34, payout = 3012.34, companyCarTaxableBenefit = 327.23, bonus = 0 })));
+        var afterCorrection = Assert.Single(await ListPayslipsAsync(client, owner));
+        Assert.Equal(327.23m, afterCorrection.GetProperty("payslip").GetProperty("companyCarTaxableBenefit").GetDecimal());
+        Assert.Equal(importId, afterCorrection.GetProperty("document").GetProperty("importId").GetGuid());
+
         // Ein zweites Bestaetigen desselben Fundes legt keine zweite Abrechnung an.
         Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/payslips?fullWorthSpaceId={owner.SpaceId:D}&importId={importId:D}", owner, Confirmation()));
         Assert.Single(await ListPayslipsAsync(client, owner));

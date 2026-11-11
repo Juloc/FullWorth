@@ -124,4 +124,39 @@ public sealed class PayslipParserTests
         Assert.Equal(3_300m, result.NetPay);
         Assert.Equal(3_000m, result.Payout);
     }
+
+    // Mit einem Bonus hat jede Abzugszeile drei Spalten: laufender Bezug, Monat gesamt, Jahr. Der Monat gesamt ist die
+    // mittlere Zahl; die Summe der Abzuege der Abrechnung ergibt sich aus ihr. Alle Zahlen sind erfunden.
+    [Fact]
+    public void Parse_TakesTheMonthTotalWhenARowHasThreeColumns()
+    {
+        const string text = """
+            Lohn- und Gehaltsabrechnung 11.2025
+            GESAMTBRUTTO: 5.000,00 40.000,00
+            Lohnsteuer 280,00 350,00 1.700,00
+            KV-Beitrag AN² 130,00 400,00 3.400,00
+            RV-Beitrag AN 144,00 440,00 3.700,00
+            AV-Beitrag AN 20,00 60,00 520,00
+            PV-Beitrag AN¹ 37,00 110,00 970,00
+            Summe gesetzlicher Abzüge -1.360,00
+            NETTOVERDIENST: 3.640,00 33.000,00
+            AG-Direktvers. Beitrag 81,56
+            AN-Direktvers. Beitrag 210,43
+            V8011 Fahrzeug Nutzung -330,00
+            ZAHLBETRAG: 3.071,00
+            """;
+
+        var result = PayslipTextParser.Parse(text);
+
+        Assert.Equal(350m, result.WageTax);
+        Assert.Equal(400m, result.HealthInsurance);
+        Assert.Equal(440m, result.PensionInsurance);
+        Assert.Equal(60m, result.UnemploymentInsurance);
+        Assert.Equal(110m, result.CareInsurance);
+        Assert.Equal(5_000m - 350m - 400m - 440m - 60m - 110m, result.NetPay!.Value + 0m);
+        Assert.Equal(210.43m, result.BavEmployee);
+        Assert.Equal(81.56m, result.BavEmployer);
+        // Die Zeile "Fahrzeug Nutzung" ist der ganze Sachbezug des Dienstwagens - brutto minus er ist das Vertragsgehalt.
+        Assert.Equal(330m, result.CompanyCarTaxableBenefit);
+    }
 }
