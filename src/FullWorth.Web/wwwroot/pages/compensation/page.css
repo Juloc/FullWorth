@@ -676,3 +676,6 @@ details[open]>.vl-summary::after{transform:rotate(-135deg)}
 .pf-type input{width:20px;height:20px;margin:0;accent-color:var(--cta)}
 .pf-step select{min-height:44px}
 .form-grid label{align-content:start}
+.pp-options{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-4)}
+.pp-option{display:inline-flex;align-items:center;gap:var(--space-2);min-height:44px;cursor:pointer;text-transform:none;letter-spacing:normal;color:var(--text);font-size:.88rem;font-weight:400}
+.pp-option input{width:20px;height:20px;margin:0;accent-color:var(--cta)}

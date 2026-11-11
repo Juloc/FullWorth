@@ -8,13 +8,14 @@ import { monthsOf } from './housing-costs.js';
 const MONTH = new Intl.DateTimeFormat('de-DE', { month: 'short', year: 'numeric' });
 const monthName = index => MONTH.format(new Date(Math.floor(index / 12), index % 12, 1)).replace('.', '');
 const num = value => Number(value) || 0;
-const BASIS = { payout: 'Ausgezahlt', net: 'Netto', gross: 'Brutto-Gehalt' };
-// "Brutto-Gehalt" ist das Brutto der Abrechnung ohne Bonus und ohne den Firmenwagen-Vorteil: der ist kein Geld, und als
-// das neue Auto 2025 weniger Vorteil brachte, sah es aus, als sinke das Gehalt.
+const BASIS = { gross: 'Brutto', net: 'Netto', payout: 'Ausgezahlt' };
+// Ausgangspunkt ist das Brutto der Abrechnung - mit Bonus, denn der gehoert zum Verdienst. Der Firmenwagen-Vorteil ist kein
+// Geld und schwankt mit dem Auto (als das neue Auto 2025 weniger Vorteil brachte, sah es aus, als sinke das Gehalt); er ist
+// deshalb standardmaessig draussen und laesst sich zuschalten. Netto und Ausgezahlt enthalten, was gezahlt wurde.
 const BASIS_VALUE = {
   payout: p => num(p.payout),
   net: p => num(p.netPay),
-  gross: p => num(p.grossPay) - num(p.bonus) - num(p.companyCarTaxableBenefit)
+  gross: p => num(p.grossPay) - (view.bonus ? 0 : num(p.bonus)) - (view.car ? 0 : num(p.companyCarTaxableBenefit))
 };
 const monthIndex = iso => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
 const signed = value => `${value >= 0 ? '+' : '−'}${Math.abs(value).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
@@ -38,7 +39,7 @@ const LINES = [
   { key: 'home:ancillary', label: 'Meine Nebenkosten', color: 'var(--cat-5)', own: true, group: 'home', stat: 'gesamt' }
 ];
 
-const view = { basis: 'payout', since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: new Set() };
+const view = { basis: 'gross', bonus: true, car: false, window: 12, since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: new Set() };
 let data = null, loading = null, host = null, payslips = [], housing = [];
 
 /** Die erfassten Wohnkosten (housing-costs.js); zeichnet neu, sobald sich etwas aendert. */
@@ -67,25 +68,33 @@ async function load() {
 
 // ---- Modell ----------------------------------------------------------------------------------
 
-// Je Monat die zuletzt gespeicherte Abrechnung, dann ein Glaetter: Boni, Nachzahlungen und Korrekturlaeufe sollen nicht
-// wie Gehaltserhoehungen aussehen. Der Median der Monate im Umkreis von drei Monaten laesst Ausreisser aus, und Monate
-// mit erfasster Einmalzahlung zaehlen dabei gar nicht erst mit (ihr eigener Wert wird durch die Monate ringsum ersetzt).
-// Fehlen Monate, gilt bei nur zwei Werten der kleinere - ein einzelner hoher Wert ist eher eine Einmalzahlung als ein neues Gehalt.
+// Je Monat die zuletzt gespeicherte Abrechnung. "Monat" zeigt jeden Monat, wie er war - mit Bonus ein Zacken im Juni und
+// November. "Ø 12 Monate" ist der Durchschnitt der letzten zwoelf Monate: der Bonus verteilt sich, wie er verdient wurde,
+// und Gehaltserhoehungen kommen dafuer erst nach und nach an. Fehlen Monate (nicht jede Abrechnung liegt vor), gilt dort der
+// letzte Monat ohne Einmalzahlung; der erste Durchschnitt steht erst, wenn zwoelf Monate ab der ersten Abrechnung voll sind.
 function salaryByMonth(basis) {
-  const byMonth = new Map(), withBonus = new Set();
+  const byMonth = new Map();
   for (const item of payslips) {
     const m = monthIndex(item.payslip.period);
-    if (byMonth.has(m)) continue;
-    byMonth.set(m, BASIS_VALUE[basis](item.payslip));
-    if (num(item.payslip.bonus) > 0) withBonus.add(m);
+    if (!byMonth.has(m)) byMonth.set(m, { value: BASIS_VALUE[basis](item.payslip), bonus: num(item.payslip.bonus) > 0 });
   }
-  const lowerMedian = list => list[Math.floor((list.length - 1) / 2)];
-  const smooth = new Map();
-  for (const [m, value] of byMonth) {
-    const around = [-3, -2, -1, 0, 1, 2, 3].map(d => m + d).filter(k => byMonth.has(k) && !withBonus.has(k)).map(k => byMonth.get(k)).filter(v => v > 0).sort((a, b) => a - b);
-    smooth.set(m, around.length >= 3 ? lowerMedian(around) : around.length === 2 ? around[0] : around.length === 1 ? around[0] : value);
+  if (view.window === 1) return new Map([...byMonth].map(([m, entry]) => [m, entry.value]));
+  const months = [...byMonth.keys()].sort((a, b) => a - b);
+  const filled = new Map();
+  let regular = null;
+  for (let m = months[0]; m <= months[months.length - 1]; m++) {
+    const entry = byMonth.get(m);
+    if (entry) { filled.set(m, entry.value); if (!entry.bonus) regular = entry.value; }
+    else if (regular !== null) filled.set(m, regular);
   }
-  return smooth;
+  const average = new Map();
+  for (const m of filled.keys()) {
+    if (m - 11 < months[0]) continue;
+    let sum = 0;
+    for (let k = m - 11; k <= m; k++) sum += filled.get(k) ?? 0;
+    average.set(m, sum / 12);
+  }
+  return average;
 }
 
 function buildModel() {
@@ -165,25 +174,38 @@ const last = points => points[points.length - 1];
 
 // ---- Zeichnen --------------------------------------------------------------------------------
 
+// Die Bedienelemente: Basis, Zeitraum, bei Brutto die Zuschaltungen - und, wenn es mehrere Startpunkte gibt, "seit".
+function controlsHtml(startOptions = [], start = null) {
+  const tabs = (label, attr, entries, selected) => `<div class="po-years" role="tablist" aria-label="${label}">${entries.map(([key, name]) => `<button type="button" role="tab" class="po-year" ${attr}="${key}" aria-selected="${String(selected) === String(key)}">${name}</button>`).join('')}</div>`;
+  const option = (key, name) => `<label class="pp-option"><input type="checkbox" data-pp-opt="${key}"${view[key] ? ' checked' : ''}>${name}</label>`;
+  return `<div class="pp-controls">
+      ${tabs('Verdienst', 'data-pp-basis', Object.entries(BASIS), view.basis)}
+      ${tabs('Zeitraum', 'data-pp-window', [[12, 'Ø 12 Monate'], [1, 'Monat']], view.window)}
+      ${startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${startOptions.map(m => `<option value="${m}"${m === start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
+    </div>
+    ${view.basis === 'gross' ? `<div class="pp-options">${option('bonus', 'Bonus einrechnen')}${option('car', 'Firmenwagen-Vorteil einrechnen')}</div>` : ''}`;
+}
+
 function draw() {
   if (!host) return;
   if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Verdienst gegen Preise</h2></div></div>'; return; }
+  if (salaryByMonth(view.basis).size < 2) {
+    host.innerHTML = `<div class="panel-head pp-head"><div><h2>Verdienst gegen Preise</h2></div></div>${controlsHtml()}<p class="extended-note">${view.window === 12 ? 'Für den Durchschnitt über zwölf Monate braucht es Abrechnungen aus zwölf Monaten ab der ersten. Wähle „Monat“, um jeden Monat einzeln zu sehen.' : 'Dafür braucht es Abrechnungen aus mindestens zwei Monaten.'}</p>`;
+    bind({ geometry: null });
+    return;
+  }
   const model = buildModel();
   // Wo es zu einem Thema beides gibt - die Statistik und die eigenen Preise -, werden beide gezeigt, sonst
   // sieht man nur eine Seite des Vergleichs. Einmal je Thema, sobald es die eigene Linie gibt; danach entscheidet der Benutzer.
   for (const [stat, own] of [['nahrung', 'own:food'], ['superbenzin', 'own:fuel'], ['haushaltsenergie', 'home:heating'], ['strom', 'home:electricity']])
     if (!view.paired.has(own) && model.lines.some(l => l.key === own)) { view.paired.add(own); view.lines.add(stat); view.lines.add(own); }
   const salary = model.lines[0], general = model.lines.find(l => l.key === 'gesamt');
-  if (!salary.points.length || salary.points.length < 2) {
-    host.innerHTML = '<div class="panel-head"><div><h2>Verdienst gegen Preise</h2></div></div>';
-    return;
-  }
-
   const salaryChange = last(salary.points)[1] - 100;
   const priceChange = general ? last(general.points)[1] - 100 : null;
   const real = priceChange === null ? null : ((1 + salaryChange / 100) / (1 + priceChange / 100) - 1) * 100;
   const power = priceChange === null ? null : model.salaryNow - model.salaryStart * (1 + priceChange / 100);
   const label = BASIS[view.basis];
+  const descr = [label, view.basis === 'gross' ? (view.bonus ? 'mit Bonus' : 'ohne Bonus') : '', view.basis === 'gross' && view.car ? 'mit Firmenwagen-Vorteil' : '', view.window === 12 ? 'Ø 12 Monate' : 'je Monat'].filter(Boolean).join(', ');
 
   const legendRow = l => {
     const line = model.lines.find(x => x.key === l.key);
@@ -197,19 +219,16 @@ function draw() {
 
   host.innerHTML = `
     <div class="panel-head pp-head"><div><h2>Verdienst gegen Preise</h2></div></div>
-    <p class="extended-note pp-hint">Alle Linien starten im ${monthName(model.start)} bei 100. Steigt deine schwarze Linie schneller als die Preise, kaufst du heute mehr als damals.</p>
-    <div class="pp-controls">
-      <div class="po-years" role="tablist" aria-label="Gehalt">${Object.entries(BASIS).map(([key, name]) => `<button type="button" role="tab" class="po-year" data-pp-basis="${key}" aria-selected="${view.basis === key}">${name}</button>`).join('')}</div>
-      ${model.startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${model.startOptions.map(m => `<option value="${m}"${m === model.start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
-    </div>
+    <p class="extended-note pp-hint">Verdienst: ${descr}. Alle Linien starten im ${monthName(model.start)} bei 100. Steigt deine schwarze Linie schneller als die Preise, kaufst du heute mehr als damals.</p>
+    ${controlsHtml(model.startOptions, model.start)}
     <div class="po-kpis pp-kpis">
-      <div><span>Dein Verdienst (${label})</span><strong>${signed(salaryChange)}</strong></div>
+      <div><span>Dein Verdienst</span><strong>${signed(salaryChange)}</strong></div>
       ${priceChange === null ? '' : `<div><span>Preise insgesamt</span><strong>${signed(priceChange)}</strong></div><div><span>Real für dich</span><strong class="${real >= 0 ? 'positive' : 'negative'}">${signed(real)}</strong></div>`}
     </div>
     ${power === null ? '' : `<p class="extended-note pp-sentence">Von deinem Verdienst kaufst du heute ${Math.abs(real).toLocaleString('de-DE', { maximumFractionDigits: 1 })} % ${real >= 0 ? 'mehr' : 'weniger'} als im ${monthName(model.start)} - das sind rund ${euro.format(Math.abs(power))} im Monat.</p>`}
     <div class="pp-wrap"><div id="pp-chart"></div><div class="po-tip" hidden></div></div>
     <div class="pp-lines">${chips}</div>
-    <p class="pp-foot">Preise: Destatis Verbraucherpreisindex Deutschland (${esc(data.inflation.base)}), Stand ${monthName(monthIndex(`${data.inflation.lastMonth}-01`))}.${data.own && model.ownAvailable ? ' „Meine Einkäufe“: Preisentwicklung derselben Artikel im selben Geschäft aus deinen bestätigten Belegen, je Quartal, ab dem ersten Quartal an die allgemeine Linie angelegt.' : ''}${data.own && !model.ownAvailable ? ' Deine eigenen Einkaufspreise erscheinen hier, sobald genug bestätigte Belege mit denselben Artikeln da sind.' : ''} Das Gehalt ist je Monat geglättet (Median aus den Monaten ringsum, ohne Monate mit Einmalzahlung), damit weder ein Bonus noch eine Nachzahlung einen Sprung vortäuscht.</p>`;
+    <p class="pp-foot">Preise: Destatis Verbraucherpreisindex Deutschland (${esc(data.inflation.base)}), Stand ${monthName(monthIndex(`${data.inflation.lastMonth}-01`))}.${data.own && model.ownAvailable ? ' „Meine Einkäufe“: Preisentwicklung derselben Artikel im selben Geschäft aus deinen bestätigten Belegen, je Quartal, ab dem ersten Quartal an die allgemeine Linie angelegt.' : ''}${data.own && !model.ownAvailable ? ' Deine eigenen Einkaufspreise erscheinen hier, sobald genug bestätigte Belege mit denselben Artikeln da sind.' : ''}${view.window === 12 ? ' Der Durchschnitt über zwölf Monate verteilt den Bonus, wie er verdient wurde; Monate ohne Abrechnung gelten mit dem letzten Monat ohne Einmalzahlung.' : ''}</p>`;
 
   drawChart(model);
   bind(model);
@@ -260,12 +279,17 @@ function bind(model) {
   host.onchange = event => {
     const line = event.target.closest('[data-pp-line]');
     if (line) { line.checked ? view.lines.add(line.dataset.ppLine) : view.lines.delete(line.dataset.ppLine); return draw(); }
+    const opt = event.target.closest('[data-pp-opt]');
+    if (opt) { view[opt.dataset.ppOpt] = opt.checked; view.since = null; return draw(); }
     if (event.target.matches('[data-pp-since]')) { view.since = Number(event.target.value); draw(); }
   };
   host.onclick = event => {
     const basis = event.target.closest('[data-pp-basis]');
-    if (basis) { view.basis = basis.dataset.ppBasis; draw(); }
+    if (basis) { view.basis = basis.dataset.ppBasis; view.since = null; return draw(); }
+    const win = event.target.closest('[data-pp-window]');
+    if (win) { view.window = Number(win.dataset.ppWindow); view.since = null; draw(); }
   };
+  if (!model.geometry) return;
 
   const wrap = host.querySelector('.pp-wrap'), tip = wrap.querySelector('.po-tip'), svg = wrap.querySelector('svg'), guide = svg.querySelector('.pp-guide');
   const { left, top, plotW, x, shown } = model.geometry;
@@ -295,7 +319,7 @@ function bind(model) {
 let seenWidth = 0;
 new ResizeObserver(() => {
   const width = $('#pp-chart')?.clientWidth || 0;
-  if (!width || width === seenWidth || !data || data.failed) return;
+  if (!width || width === seenWidth || !data || data.failed || salaryByMonth(view.basis).size < 2) return;
   seenWidth = width;
   const model = buildModel(); drawChart(model); bind(model);
 }).observe(document.documentElement);
