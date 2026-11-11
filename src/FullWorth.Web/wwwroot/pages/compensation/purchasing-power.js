@@ -89,10 +89,11 @@ function salaryByMonth(basis) {
   }
   const average = new Map();
   for (const m of filled.keys()) {
-    if (m - 11 < months[0]) continue;
-    let sum = 0;
-    for (let k = m - 11; k <= m; k++) sum += filled.get(k) ?? 0;
-    average.set(m, sum / 12);
+    let sum = 0, real = 0;
+    for (let k = m - 11; k <= m; k++) { sum += filled.get(k) ?? 0; if (byMonth.has(k)) real++; }
+    // Ein Durchschnitt aus lauter aufgefuellten Monaten waere erfunden - es fehlte dann auch ein Bonus, der
+    // in einem unbekannten Monat gezahlt wurde. Einer darf fehlen (eine Abrechnung ist schnell verloren).
+    if (real >= 11) average.set(m, sum / 12);
   }
   return average;
 }
