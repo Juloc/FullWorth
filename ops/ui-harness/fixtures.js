@@ -495,6 +495,15 @@
           { id: '8a000000-0000-4000-8000-0000000000a2', name: 'Bananen', quantity: 0.75, totalPrice: 2.79, currency: 'EUR' }
         ] }
     ],
+    // Produkte und ein Kauf mit zwei Zeilen: "Brokolo 1kg" ist der Name, den ein Beleg falsch gelesen hat.
+    'products': { total: 2, items: [
+      { id: 'p1', canonicalName: 'Brokolo 1kg', brand: null, purchaseCount: 3, lastPrice: 1.99, lastCurrency: 'EUR', lastBasePrice: 1.99, defaultQuantityUnit: 'kg' },
+      { id: 'p2', canonicalName: 'Bananen', brand: null, purchaseCount: 5, lastPrice: 1.49, lastCurrency: 'EUR', lastBasePrice: 1.49, defaultQuantityUnit: 'kg' }] },
+    'products/p1': { product: { id: 'p1', canonicalName: 'Brokolo 1kg', brand: null, defaultCategoryId: null, defaultQuantityUnit: 'kg', defaultPackageQuantity: null, defaultPackageUnit: null, imageReference: null, notes: null, aliases: [], barcodes: [], isArchived: false },
+      history: { observations: [{ merchant: 'REWE', purchaseDate: '2026-09-02', name: 'Brokolo 1kg', unitPrice: 1.99, totalPrice: 1.99, currency: 'EUR' }] } },
+    'purchases/w1/workspace': { access: 'write', reconciliation: {}, purchase: { id: 'w1', merchant: 'REWE Markt GmbH', purchaseDate: '2026-09-02', purchaseTime: null, totalAmount: 3.48, currency: 'EUR', source: 'receipt', reviewState: 'needs_review', visibility: 'space', isBookmarked: false, payments: [], documents: [],
+      items: [{ id: 'i1', name: 'Brokolo 1kg', rawName: 'Brokolo 1kg', productId: null, quantity: 1, quantityUnit: 'piece', unitPrice: 1.99, totalPrice: 1.99, currency: 'EUR', lineType: 'product' },
+        { id: 'i2', name: 'Bananen', rawName: 'Bananen', productId: null, quantity: 1, quantityUnit: 'piece', unitPrice: 1.49, totalPrice: 1.49, currency: 'EUR', lineType: 'product' }] } },
     'purchases/receipt-imports/paperless/uploads': { paperlessConfigured: true, canUpload: true, reason: null, uploadedAt: null },
     'purchases/receipt-imports/paperless/connection': {
       fullWorthSpaceId: SPACE, baseUrl: 'https://paperless.example.local/', configured: true,

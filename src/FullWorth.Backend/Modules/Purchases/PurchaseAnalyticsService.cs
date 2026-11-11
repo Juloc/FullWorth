@@ -244,7 +244,7 @@ public sealed class PurchaseAnalyticsService(FullWorthDbContext db, CurrencyConv
         else
         {
             var rows = await VisibleItems(userId, fullWorthSpaceId).Where(x => x.Purchase.ReviewState == "confirmed" && x.Purchase.PurchaseDate >= start && x.Purchase.PurchaseDate <= end)
-                .Select(x => new { x.CategoryId, CategoryName = x.CategoryId.HasValue ? db.Categories.Where(c => c.Id == x.CategoryId.Value).Select(c => c.Name).FirstOrDefault() : null, x.ProductId, ProductName = x.ProductId.HasValue ? x.Product!.CanonicalName : null, x.Brand, x.TotalPrice, x.Currency, Date = x.Purchase.PurchaseDate!.Value }).ToListAsync(ct);
+                .Select(x => new { x.CategoryId, CategoryName = x.CategoryId.HasValue ? db.Categories.Where(c => c.Id == x.CategoryId.Value).Select(c => c.Name).FirstOrDefault() : null, x.ProductId, ProductName = x.ProductId.HasValue ? x.Product!.CanonicalName : null, ItemName = x.Name, x.Brand, x.TotalPrice, x.Currency, Date = x.Purchase.PurchaseDate!.Value }).ToListAsync(ct);
             foreach (var row in rows)
             {
                 // Item TotalPrice is the effective charged merchandise contribution. Canonical basket
@@ -253,7 +253,9 @@ public sealed class PurchaseAnalyticsService(FullWorthDbContext db, CurrencyConv
                 var converted = acc.Convert(row.TotalPrice, row.Currency, row.Date); if (!converted.HasValue) continue;
                 Guid? id; string label; string key;
                 if (mode == "category") { id = row.CategoryId; label = row.CategoryName ?? "Uncategorized"; key = id?.ToString() ?? "uncategorized"; }
-                else if (mode == "product") { id = row.ProductId; label = row.ProductName ?? "Unmatched product"; key = id?.ToString() ?? $"unmatched:{label.ToLowerInvariant()}"; }
+                // Eine Zeile ohne Produkt steht unter ihrem eigenen Namen: alle zusammen als "Unmatched product" zu zaehlen
+                // hiess, dass man in der Auswertung nicht sah, was gekauft wurde - und nichts umbenennen konnte.
+                else if (mode == "product") { id = row.ProductId; label = row.ProductName ?? (string.IsNullOrWhiteSpace(row.ItemName) ? "Unmatched product" : row.ItemName.Trim()); key = id?.ToString() ?? $"unmatched:{label.ToLowerInvariant()}"; }
                 else { id = null; label = string.IsNullOrWhiteSpace(row.Brand) ? "Unknown brand" : row.Brand; key = label.ToLowerInvariant(); }
                 var old = result.GetValueOrDefault(key, (Label: label, Id: id, Amount: 0m, Count: 0)); result[key] = (old.Label, old.Id, old.Amount + converted.Value, old.Count + 1);
             }
