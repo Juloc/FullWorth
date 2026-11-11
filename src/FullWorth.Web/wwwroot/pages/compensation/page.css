@@ -623,3 +623,11 @@
   .comp-groups button{flex:none;padding:0 var(--space-3);font-size:.9rem}
   .gv-kpis > div:last-child:nth-child(odd){grid-column:1/-1}
 }
+/* Dein Verlauf (verlauf-real.js) */
+.vr-list{list-style:none;margin:0;padding:0;display:grid}
+.vr-row{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--line)}
+.vr-main{display:grid;gap:var(--space-1);min-width:0}
+.vr-main small,.vr-amount small{color:var(--muted);font-size:var(--text-caption-size)}
+.vr-amount{display:grid;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+.vr-sub{margin:var(--space-4) 0 0;font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
+.history-plan summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted)}
