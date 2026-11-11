@@ -284,6 +284,7 @@ GET              /api/purchases/{purchaseId:guid}/discounts/
 GET              /api/purchases/{purchaseId:guid}/documents/
 GET              /api/purchases/{purchaseId:guid}/documents/{documentId:guid}/content
 GET              /api/purchases/{purchaseId:guid}/documents/{documentId:guid}/extractions
+GET              /api/purchases/{purchaseId:guid}/documents/{documentId:guid}/pages/{page:int}
 GET              /api/purchases/{purchaseId:guid}/receipt-sources
 GET              /api/push/subscriptions
 GET              /api/push/vapid-public-key

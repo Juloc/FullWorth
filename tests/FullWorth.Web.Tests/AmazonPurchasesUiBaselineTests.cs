@@ -74,6 +74,9 @@ public sealed class AmazonPurchasesUiBaselineTests : IClassFixture<FullWorthWebF
     private string ReadPurchasesJs()
     {
         var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
-        return File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "purchases", "page.js"));
+        // Die Seite besteht aus der Liste (page.js), der Pruefansicht (review.js) und dem, was ein Beleg dort sonst
+        // noch kann (review-tools.js: Amazon-Zahlungen, Bankbuchung, Paperless).
+        return string.Concat(new[] { "page.js", "review.js", "review-tools.js" }
+            .Select(file => File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "purchases", file))));
     }
 }

@@ -110,6 +110,17 @@ public sealed class PurchaseDocumentService(
         return new(absolute, SafeMediaType(doc.MediaType), SafeFileName(doc.OriginalFileName));
     }
 
+    /// <summary>Eine Seite eines PDF-Belegs als PNG; null, wenn es das Dokument, die Seite oder die Datei nicht gibt.</summary>
+    public async Task<byte[]?> RenderPdfPageAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, Guid documentId, int page, CancellationToken ct)
+    {
+        if (page < 1 || page > storage.MaxReceiptSources) return null;
+        var file = await GetContentAsync(userId, fullWorthSpaceId, purchaseId, documentId, ct);
+        if (file is null || file.MediaType != "application/pdf") return null;
+        try { return await ReceiptPdfRasterizer.RenderPageAsync(file.AbsolutePath, page, storage.MaxReceiptSources, ct); }
+        // pdftoppm kennt die Seite nicht (hinter dem Ende) - fuer den Aufrufer ist sie dann schlicht nicht da.
+        catch (InvalidOperationException) { return null; }
+    }
+
     public async Task<PurchaseMutationResult> DeleteAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, Guid documentId, CancellationToken ct)
     {
         var access = await WriteAccessAsync(userId, fullWorthSpaceId, purchaseId, ct);
