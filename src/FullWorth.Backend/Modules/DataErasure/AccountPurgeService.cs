@@ -28,6 +28,7 @@ public sealed class AccountPurgeService(
     UserStore users,
     DocumentImportStore documentImports,
     EmploymentContractStore contractStates,
+    HousingCostStore housingCosts,
     IOptions<PurchaseStorageOptions> purchaseStorage,
     ILogger<AccountPurgeService> logger)
 {
@@ -80,6 +81,7 @@ public sealed class AccountPurgeService(
         // Benutzer, nicht dem Space - also auch in einem geteilten.
         await documentImports.DeleteAllForUserAsync(userId, ct);
         await contractStates.DeleteAllForUserAsync(userId, ct);
+        await housingCosts.DeleteAllForUserAsync(userId, ct);
 
         foreach (var spaceId in sharedSpaces)
             await PrepareSharedSpaceAsync(userId, spaceId, ct);

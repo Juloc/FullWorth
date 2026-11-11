@@ -351,6 +351,7 @@ public static class BackendApplication
         builder.Services.AddScoped<IDocumentReader>(services => services.GetRequiredService<ContractExtractionService>());
         builder.Services.AddScoped<IDocumentReader>(services => services.GetRequiredService<PayslipExtractionService>());
         builder.Services.AddScoped<EmploymentContractStore>();
+        builder.Services.AddScoped<HousingCostStore>();
         builder.Services.AddScoped<EmploymentContractService>();
         builder.Services.AddSingleton<IDocumentOcr, LocalDocumentOcr>();
         builder.Services.AddScoped<PayslipExtractionService>();

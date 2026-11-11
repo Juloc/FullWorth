@@ -120,6 +120,7 @@ public static class CompensationEndpoints
         app.MapCompensationPayslipEndpoints();
         app.MapCompensationDocumentImportEndpoints();
         app.MapCompensationEmploymentContractEndpoints();
+        app.MapCompensationHousingCostEndpoints();
         return app;
     }
 

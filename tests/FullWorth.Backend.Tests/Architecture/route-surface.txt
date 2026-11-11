@@ -22,6 +22,7 @@ DELETE           /api/coach/conversations/{id:guid}
 DELETE           /api/collections/{id:guid}
 DELETE           /api/compensation/contracts/{id:guid}
 DELETE           /api/compensation/history/{id:guid}
+DELETE           /api/compensation/housing-costs/{id:guid}
 DELETE           /api/compensation/other-income/{id:guid}
 DELETE           /api/compensation/payslips/{id:guid}
 DELETE           /api/compensation/scenarios/{id:guid}
@@ -145,6 +146,7 @@ GET              /api/compensation/contracts/
 GET              /api/compensation/document-imports/
 GET              /api/compensation/document-imports/{id:guid}/document
 GET              /api/compensation/history
+GET              /api/compensation/housing-costs/
 GET              /api/compensation/inflation
 GET              /api/compensation/inflation/series
 GET              /api/compensation/other-income
@@ -394,6 +396,7 @@ POST             /api/compensation/contracts/
 POST             /api/compensation/document-imports/{id:guid}/dismiss
 POST             /api/compensation/document-imports/reread
 POST             /api/compensation/history
+POST             /api/compensation/housing-costs/
 POST             /api/compensation/insights
 POST             /api/compensation/jobrad/compare
 POST             /api/compensation/negotiation
@@ -596,6 +599,7 @@ PUT              /api/category-intelligence/category-appearances/{categoryId:gui
 PUT              /api/category-order
 PUT              /api/collections/{id:guid}
 PUT              /api/compensation/history/{id:guid}
+PUT              /api/compensation/housing-costs/{id:guid}
 PUT              /api/compensation/other-income/{id:guid}
 PUT              /api/compensation/payslips/{id:guid}
 PUT              /api/compensation/profile
