@@ -23,7 +23,7 @@ const DETAIL_ROWS = [
   ['companyCarTaxableBenefit', 'Firmenwagen Sachbezug', 'deduction', true],
   ['bonus', 'Bonus / Sonderzahlung', 'income', true],
   ['netPay', 'Netto-Verdienst', 'income'],
-  ['payout', 'Ausgezahlt', 'income']
+  ['payout', 'Netto (Auszahlung)', 'income']
 ];
 
 const num = value => Number(value) || 0;

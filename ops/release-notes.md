@@ -1,8 +1,8 @@
-# 0.87.1
+# 0.87.2
 
-Ein Nachtrag lässt den Dienstwagen nicht mehr verschwinden, und Vertragsstände lassen sich berichtigen.
+„Netto“ heißt überall das, was auf dem Konto ankommt.
 
 ## Geändert
 
-- **Nachträge führen Bestehendes fort.** Was ein Nachtrag nicht nennt (Dienstwagen, Wochenstunden, Urlaubstage, bAV, Kündigungsfrist, Position, Zusatzfelder wie „Dienstwagenregelung“), übernimmt das Formular aus dem letzten Stand davor, mit Hinweis, woher. Bisher stand der Dienstwagen dann auf „nein“, und das Änderungsprotokoll zeigte „entfällt“. Ein neuer Arbeitsvertrag übernimmt nichts.
-- **Vertragsstände bearbeiten.** Jeder bestehende Stand hat „Bearbeiten“ (im Verlauf je Jahr und im Vertragsverlauf). Speichern ersetzt den Stand, die Paperless-Verknüpfung bleibt. Bereits falsch gespeicherte Stände lassen sich so berichtigen.
+- **Netto ist die Auszahlung.** Im Verlauf (Netto je Monat und Veränderung zum Vorjahr), in „Mein Gehalt“ (zwölf Monate Netto) und in „Verdienst gegen Preise“ steht jetzt das, was aufs Konto kam. Das Netto laut Abrechnung heißt „Netto-Verdienst“ und steht nur noch in der Aufschlüsselung; die Zeile „Ausgezahlt“ heißt dort „Netto (Auszahlung)“.
+- Die Definition steht im neuen Dokument `docs/PRODUCT_AREAS.md` (Ziel, Begriffe und Verknüpfungen je Produktteil).

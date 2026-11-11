@@ -63,16 +63,15 @@ export async function renderMeinGehalt() {
         ${bavOwn ? row('− bAV Eigenbeitrag', euro2.format(bavOwn), 'Entgeltumwandlung') : ''}
         ${car ? row('− Firmenwagen verrechnet', euro2.format(car), 'gleicht den Vorteil aus') : ''}
         ${Math.abs(other) >= 0.5 ? row('± Sonstiges', euro2.format(other), 'Zuzahlungen, Korrekturen') : ''}
-        ${row('= Ausgezahlt', euro2.format(paid), '', ' is-total')}
+        ${row('= Netto (Auszahlung)', euro2.format(paid), 'was aufs Konto kam', ' is-total')}
       </dl>
       ${bavEmployer ? `<p class="extended-note gv-extra">Zusätzlich zahlt dein Arbeitgeber <strong>${euro2.format(bavEmployer)}</strong> im Monat in deine Altersvorsorge. Das steht nicht im Brutto.</p>` : ''}
       <div class="po-kpis gv-kpis">
         <div><span>${year.length} Monate Brutto</span><strong>${euro.format(sum('grossPay'))}</strong></div>
         ${holidaySum ? `<div><span>davon 13. Gehalt</span><strong>${euro.format(holidaySum)}</strong></div>` : ''}
         ${bonusSum ? `<div><span>davon Bonus</span><strong>${euro.format(bonusSum)}</strong></div>` : ''}
-        <div><span>${year.length} Monate Netto</span><strong>${euro.format(sum('netPay'))}</strong></div>
+        <div><span>${year.length} Monate Netto</span><strong>${euro.format(sum('payout'))}</strong></div>
         <div><span>bAV Arbeitgeber</span><strong>${euro.format(sum('bavEmployer'))}</strong></div>
-        <div><span>Ausgezahlt</span><strong>${euro.format(sum('payout'))}</strong></div>
       </div>
       <p class="extended-note gv-extra">Quelle: ${esc(source)}.${bonusText ? ` ${esc(bonusText)}` : ''}${year.length < 12 ? ` Es liegen ${year.length} von 12 Monaten vor.` : ''}</p>
     </div>

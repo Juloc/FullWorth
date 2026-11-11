@@ -56,7 +56,7 @@ function yearRows() {
     return {
       year, count: list.length,
       gross: list.reduce((sum, p) => sum + num(p.grossPay), 0), holiday: list.reduce((sum, p) => sum + splitSpecialPay(p).holiday, 0), bonus: list.reduce((sum, p) => sum + splitSpecialPay(p).bonus, 0),
-      monthlyGross: average(regular.length ? regular : list, p => num(p.grossPay)), monthlyNet: average(regular.length ? regular : list, p => num(p.netPay)), cpi: cpiOf(year, months)
+      monthlyGross: average(regular.length ? regular : list, p => num(p.grossPay)), monthlyNet: average(regular.length ? regular : list, p => num(p.payout)), cpi: cpiOf(year, months)
     };
   });
   rows.forEach((row, i) => {

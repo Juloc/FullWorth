@@ -10,9 +10,9 @@ const monthName = index => MONTH.format(new Date(Math.floor(index / 12), index %
 const num = value => Number(value) || 0;
 // Ausgangspunkt ist das Brutto der Abrechnung - mit Bonus, denn der gehoert zum Verdienst. Der Firmenwagen-Vorteil ist kein
 // Geld und schwankt mit dem Auto (als das neue Auto 2025 weniger Vorteil brachte, sah es aus, als sinke das Gehalt); er ist
-// deshalb standardmaessig draussen und laesst sich zuschalten. Netto und Ausgezahlt enthalten, was gezahlt wurde.
+// deshalb standardmaessig draussen und laesst sich zuschalten. Netto ist die Auszahlung (siehe docs/PRODUCT_AREAS.md) und enthält, was gezahlt wurde.
 const BASIS_VALUE = {
-  net: p => num(p.netPay),
+  net: p => num(p.payout),
   gross: p => {
     const { holiday, bonus } = splitSpecialPay(p);
     return num(p.grossPay) - (view.holiday ? 0 : holiday) - (view.bonus ? 0 : bonus) - (view.car ? 0 : num(p.companyCarTaxableBenefit));
@@ -253,7 +253,7 @@ function draw() {
 
   host.innerHTML = `
     <div class="panel-head pp-head"><div><h2>Verdienst gegen Preise</h2></div></div>
-    <p class="extended-note pp-hint">${descr}; Netto, wie es auf der Abrechnung steht. Alle Linien starten im ${monthName(model.start)} bei 100, dem Monat vor ${monthName(model.chosen)} - mit dem Gehalt von damals. Steigt deine schwarze Linie (Brutto) oder die graue (Netto) schneller als die Preise, kaufst du heute mehr als damals.</p>
+    <p class="extended-note pp-hint">${descr}; Netto ist, was aufs Konto kam. Alle Linien starten im ${monthName(model.start)} bei 100, dem Monat vor ${monthName(model.chosen)} - mit dem Gehalt von damals. Steigt deine schwarze Linie (Brutto) oder die graue (Netto) schneller als die Preise, kaufst du heute mehr als damals.</p>
     ${controlsHtml(model.choices, model.chosen, model.raises)}
     <div class="po-kpis pp-kpis">
       <div><span>Brutto</span><strong>${signed(grossChange)}</strong></div>
