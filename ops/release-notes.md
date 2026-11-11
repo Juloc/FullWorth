@@ -1,12 +1,7 @@
-# 0.85.3
+# 0.85.4
 
-Das Gehalt zeigt, was ankommt, und die Grafik sagt, woher ihre Zahlen stammen.
+Das Gehaltsgespräch füllt sich aus deinen Verträgen und Abrechnungen.
 
 ## Neu
 
-- **„Ausgezahlt“ statt Nettoverdienst als Standard.** Eine Abrechnung kennt zwei Nettos: den Nettoverdienst (vor Entgeltumwandlung und Dienstwagen) und den Zahlbetrag, der auf dem Konto landet. Kennzahlen, Monatsliste und „Gehalt gegen Preise“ rechnen jetzt mit dem Zahlbetrag; Netto-Verdienst und Brutto bleiben wählbar, das Detail zeigt beide.
-- **Legende mit Herkunft.** „Statistik Deutschland“ (Destatis, alle Haushalte) und „Deine Einkäufe“ (aus deinen bestätigten Belegen, gestrichelt) stehen getrennt. Gibt es zu einem Thema beides (Lebensmittel, Kraftstoff), werden beide gezeigt.
-
-## Behoben
-
-- Die Gehaltslinie springt nicht mehr, wenn zwei Monate mit Einmalzahlung nebeneinander liegen (Bonus im November, Nachzahlung im Januar): bei gerader Zahl von Werten gilt der untere Median.
+- **Gehaltsgespräch aus Vertrag und Abrechnung füllen.** Ein Knopf trägt Gehalt damals (erster Vertragsstand) samt Datum, das aktuelle Gehalt und das Vergleichsdatum ein und rechnet die Kaufkraft. Das Jahresgehalt ist das Monatsbrutto mal zwölf plus die Einmalzahlungen der letzten zwölf Abrechnungen in halben Monatsgehältern (bei 1,5 Gehältern im Juni und November also 13). Das gewünschte Gehalt trägst du selbst ein.
