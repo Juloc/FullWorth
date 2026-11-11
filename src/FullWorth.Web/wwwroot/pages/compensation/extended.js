@@ -244,7 +244,8 @@ async function deletePayslip(id){
 
 const finds=createFindsCard({
   kind:'payslip',root:'#paperless-body',isActive:()=>$('#tab-payslips')?.classList.contains('active'),onError:showError,
-  texts:{query:'type:Lohnabrechnung',preset:'Lohnabrechnungen',search:'Lohnabrechnungen suchen',empty:'Keine Abrechnungen zur Prüfung.'},
+  texts:{preset:'Lohnabrechnungen',noun:'Lohnabrechnungen',typePattern:'(lohn|gehalt|entgelt|verdienst)s?abrechnung',empty:'Keine Abrechnungen zur Prüfung.'},
+  group:item=>{const x=item.extraction;return x.period?{key:x.period.slice(0,7),signature:`${x.grossPay}|${x.netPay}|${x.payout}`}:null},
   summarize:item=>{const x=item.extraction;return{title:x.period?month(x.period):item.title,detail:`${x.grossPay==null?'—':euro.format(x.grossPay)} brutto · ${x.netPay==null?'—':euro.format(x.netPay)} netto`}},
   onReview:item=>reviewFind(item.id),
   // Wird der Fund verworfen, den die Form gerade zeigt, wird sie geleert.

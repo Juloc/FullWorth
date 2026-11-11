@@ -15,7 +15,7 @@ const BADGE_TONE = { Start: 'start', 'Gehaltserhöhung': 'raise', 'Gehaltsänder
 
 const finds = createFindsCard({
   kind: 'contract', root: '#contract-finds', isActive: () => $('#tab-contracts')?.classList.contains('active'), onError: showError,
-  texts: { query: 'type:Arbeitsvertrag', preset: 'Arbeitsverträge', search: 'Arbeitsverträge suchen', empty: 'Keine Verträge zur Prüfung.' },
+  texts: { preset: 'Arbeitsverträge', noun: 'Verträge und Nachträge', typePattern: 'arbeitsvertrag|anstellungsvertrag|vertragsnachtrag|vertragsänderung', empty: 'Keine Verträge zur Prüfung.' },
   summarize: item => {
     const x = item.extraction;
     const kind = x.kind === 'addendum' ? 'Nachtrag' : x.kind === 'contract' ? 'Vertrag' : item.title;

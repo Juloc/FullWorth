@@ -501,9 +501,13 @@
       defaultQuery: null, isEnabled: true, lastSyncAt: '2026-09-11T08:40:00Z', updatedAt: '2026-09-05T19:22:00Z'
     },
     'purchases/receipt-imports/paperless/options': {
-      tags: [{ id: 3, name: 'Kassenbon' }, { id: 7, name: 'Rechnung' }, { id: 11, name: 'Garantie' }],
-      documentTypes: [{ id: 1, name: 'Beleg' }, { id: 2, name: 'Vertrag' }],
-      correspondents: [{ id: 4, name: 'REWE' }, { id: 5, name: 'Edeka' }, { id: 9, name: 'Amazon' }],
+      tags: [{ id: 3, name: 'Kassenbon' }, { id: 7, name: 'Rechnung' }, { id: 11, name: 'Garantie' },
+        { id: 21, name: 'Gehaltsabrechnung' }, { id: 22, name: 'Gehalt' }, { id: 23, name: 'arbeit' }, { id: 24, name: 'Entgelte' }, { id: 25, name: 'Bankgebühren' },
+        { id: 26, name: 'arbeitsvertrag' }, { id: 27, name: 'Verdienstabrechnung' }],
+      documentTypes: [{ id: 1, name: 'Beleg' }, { id: 2, name: 'Vertrag' }, { id: 592, name: 'Gehaltsabrechnung' }, { id: 646, name: 'Lohnsteuerbescheinigung' },
+        { id: 400, name: 'Arbeitsvertrag' }, { id: 626, name: 'Vertragsänderung' }, { id: 776, name: 'Vertragsnachtrag' }, { id: 5, name: 'Anlage' }],
+      correspondents: [{ id: 4, name: 'REWE' }, { id: 5, name: 'Edeka' }, { id: 9, name: 'Amazon' },
+        { id: 1100, name: 'Beispiel Software GmbH' }, { id: 1101, name: 'Muster Bank GmbH' }, { id: 1102, name: 'Stadtverwaltung Beispielstadt' }],
       storagePaths: [{ id: 1, name: 'Belege/2026' }],
       customFields: [{ id: 2, name: 'Betrag' }]
     },
@@ -1882,6 +1886,30 @@
       return { status: 200, body: PAYSLIP_PRESETS };
     if (method === 'GET' && path.endsWith('/paperless/presets') && url.searchParams.get('kind') === 'contract')
       return { status: 200, body: CONTRACT_PRESETS };
+    // Ein Paperless wie ein echtes: die Typen sind nicht sauber getrennt (eine Bank legt "Entgeltaufstellung" als
+    // Gehaltsabrechnung ab, eine Stadtverwaltung ist ein anderer Arbeitgeber), deshalb fragt die Einrichtung nach "von wem".
+    if (method === 'POST' && path.endsWith('/paperless/preview')) {
+      const query = JSON.parse(init.body).query || '';
+      const doc = (id, title, created, type, correspondent, tags) => ({ id, title, created, documentType: type, correspondent, tags });
+      if (/type:"Gehaltsabrechnung"/.test(query)) {
+        const docs = [
+          ...[...Array(8).keys()].map(i => doc(3000 + i, `Gehaltsabrechnung ${['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August'][i]} 2026`, `2026-0${i + 1}-01`, 592, 1100, [21, 22, 23])),
+          doc(3100, 'Gehaltsabrechnung Mai 2025', '1999-12-10', 592, 1100, [21]),
+          doc(3101, 'Muster Bank Entgeltaufstellung 2025', '2026-05-01', 592, 1101, [21, 24, 25]),
+          doc(3102, 'Muster Bank Entgeltaufstellung 01.05.2026', '2026-05-01', 592, 1101, [21, 24, 25]),
+          doc(3103, 'Entgeltabrechnung Dezember 2025', '2026-01-19', 592, 1102, [21, 27]),
+          doc(3104, 'Entgeltabrechnung November 2025', '2025-12-19', 592, 1102, [21, 27])];
+        return { status: 200, body: { count: docs.length, documents: docs, truncated: false } };
+      }
+      const docs = [doc(4000, 'Arbeitsvertrag Beispiel Software GmbH', '2023-01-23', 400, 1100, [26]), doc(4001, 'Nachtrag zum Anstellungsvertrag', '2026-01-01', 776, 1100, [26])];
+      return { status: 200, body: { count: docs.length, documents: docs, truncated: false } };
+    }
+    if (method === 'PUT' && /\/paperless\/presets\/(ppay1|pcon1)$/.test(path)) {
+      const preset = [...PAYSLIP_PRESETS, ...CONTRACT_PRESETS].find(item => path.endsWith('/' + item.id));
+      preset.query = JSON.parse(init.body).query;
+      return { status: 200, body: preset };
+    }
+    if (method === 'POST' && path.endsWith('/compensation/document-imports/reread')) return { status: 200, body: { requeued: 3 } };
     if (method === 'POST' && path.endsWith('/paperless/presets') && typeof init?.body === 'string' && JSON.parse(init.body).kind === 'contract') {
       const preset = { id: 'pcon1', fullWorthSpaceId: SPACE, userId: 'u1', name: 'Arbeitsverträge', query: JSON.parse(init.body).query, editorJson: null, autoImport: true,
         analyzeAutomatically: true, currency: 'EUR', lastSeenDocumentId: null, lastCheckedAt: null, lastImportedAt: null, lastError: null, kind: 'contract' };
@@ -1939,6 +1967,7 @@
           { id: 'pi1', title: 'Gehaltsabrechnung 09/2026', status: 'pending', error: null, paperlessUrl: 'https://paperless.example.local/documents/2101/details', extraction: null, createdAt: preset.lastCheckedAt },
           { id: 'pi2', title: 'Lohn_08_2026_final_mit_sehr_langem_Dateinamen_der_umbrechen_muss.pdf', status: 'needs_review', error: null, paperlessUrl: 'https://paperless.example.local/documents/2088/details', extraction: extraction('2026-08-31', 5000, 3112.34), createdAt: preset.lastCheckedAt },
           { id: 'pi3', title: 'Abrechnung Juli', status: 'needs_review', error: null, paperlessUrl: 'https://paperless.example.local/documents/2051/details', extraction: extraction('2026-07-31', null, 3098.1), createdAt: preset.lastCheckedAt },
+          { id: 'pi5', title: 'Lohn_08_2026_final_Kopie.pdf', status: 'needs_review', error: null, paperlessUrl: 'https://paperless.example.local/documents/2089/details', extraction: extraction('2026-08-31', 5000, 3112.34), createdAt: preset.lastCheckedAt },
           { id: 'pi4', title: 'Scan 0042', status: 'failed', error: 'Die Datei darf höchstens 12 MB groß sein.', paperlessUrl: 'https://paperless.example.local/documents/2012/details', extraction: null, createdAt: preset.lastCheckedAt });
       }
       return { status: 200, body: preset };
