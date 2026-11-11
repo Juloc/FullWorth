@@ -703,9 +703,9 @@ button:hover,
   }
 
   .account-more {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    font-size: 22px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    font-size: 20px;
   }
 }
