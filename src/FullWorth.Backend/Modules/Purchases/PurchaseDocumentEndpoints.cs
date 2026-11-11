@@ -18,6 +18,16 @@ public static class PurchaseDocumentEndpoints
             var downloadName = file.MediaType == "application/pdf" ? file.FileName : null;
             return Results.File(file.AbsolutePath, file.MediaType, fileDownloadName: downloadName, enableRangeProcessing: true);
         });
+        // Die Pruefansicht zeigt jede PDF-Seite als Bild: die Seiten der Anwendung duerfen kein PDF einbetten
+        // (frame-src und object-src sind 'none'), und die Originaldatei oben kommt nur als Download.
+        group.MapGet("/{documentId:guid}/pages/{page:int}", async (Guid purchaseId, Guid documentId, int page, Guid fullWorthSpaceId, HttpContext http, FullWorth.Backend.Security.CurrentUserContext user, PurchaseDocumentService service, CancellationToken ct) =>
+        {
+            var png = await service.RenderPdfPageAsync(user.RequireUserId(), fullWorthSpaceId, purchaseId, documentId, page, ct);
+            if (png is null) return Results.NotFound();
+            http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            http.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(png, "image/png");
+        });
         group.MapDelete("/{documentId:guid}", async (Guid purchaseId, Guid documentId, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseDocumentService service, CancellationToken ct) => Mutation(await service.DeleteAsync(user.RequireUserId(), fullWorthSpaceId, purchaseId, documentId, ct)));
         group.MapPost("/{documentId:guid}/extract", async (Guid purchaseId, Guid documentId, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseDocumentService service, CancellationToken ct) => Map(await service.ExtractAsync(user.RequireUserId(), fullWorthSpaceId, purchaseId, documentId, ct)));
         group.MapGet("/{documentId:guid}/extractions", async (Guid purchaseId, Guid documentId, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseDocumentService service, CancellationToken ct) =>

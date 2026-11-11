@@ -120,7 +120,6 @@ html[data-theme="light"] .btn-primary:hover{
 .metric,
 .panel,
 .detected-panel,
-.reconcile,
 .rule-preview,
 .lock-card{
   position:relative;
@@ -130,7 +129,6 @@ html[data-theme="light"] .btn-primary:hover{
 html[data-theme="light"] .metric,
 html[data-theme="light"] .panel,
 html[data-theme="light"] .detected-panel,
-html[data-theme="light"] .reconcile,
 html[data-theme="light"] .rule-preview{
   background:linear-gradient(180deg,rgba(255,255,255,.985),rgba(255,255,255,.955));
   border-color:rgba(218,222,227,.92);
@@ -140,7 +138,6 @@ html[data-theme="light"] .rule-preview{
 html[data-theme="dark"] .metric,
 html[data-theme="dark"] .panel,
 html[data-theme="dark"] .detected-panel,
-html[data-theme="dark"] .reconcile,
 html[data-theme="dark"] .rule-preview{
   background:var(--surface);
   border-color:var(--line);

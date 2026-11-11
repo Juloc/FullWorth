@@ -1507,6 +1507,29 @@
       weightPercent: 35, amount: null, currency: 'EUR', ongoingChargesPercent: 0.6, ongoingChargesEstimated: true }
   ];
 
+  // Pruefansicht der Belege: zu jedem Kauf der Liste (p0..p56) gibt es ein Detail, Quellen, Hinweise und eine
+  // Abstimmung - alles erfunden, nichts davon echt. Jeder dritte Kauf ist unbestaetigt; jeder sechste hat eine
+  // Differenz, damit auch der Fall "Summe stimmt nicht" zu sehen ist. p0 hat drei Fotos (langer Bon), p1 ein PDF.
+  const REVIEW_MERCHANTS = ['REWE', 'Penny', 'Kaufland', 'IKEA', 'OBI', 'Amazon Bestellung', 'dm Drogerie', 'Müller', 'Esso Tankstelle Freudental Süd'];
+  const GOODS = [['Alpenmilch Schokolade', 1.29], ['Ananas', 1.99], ['Bio Vollmilch 3,8%', 1.29], ['Bananen', 2.79], ['Kaffee Crema 1kg', 9.99],
+    ['Haferdrink Barista Edition mit sehr langem Namen', 1.45], ['Landbrot 750g', 3.29], ['Pfand Einweg', 0.25], ['Eier 10er', 2.89], ['Gurke', 0.89], ['Joghurt Natur', 0.79]];
+  const CONFIRMED = new Set();
+  const r2 = v => Math.round(v * 100) / 100;
+  const reviewId = i => i % 3 === 0;
+  function purchaseDetail(i) {
+    const lines = Array.from({ length: 3 + (i % 9) }, (_, j) => {
+      const [name, unit] = GOODS[(i + j) % GOODS.length];
+      const quantity = j % 4 === 1 ? 2 : 1;
+      return { id: `p${i}-i${j}`, name, quantity, unitPrice: unit, totalPrice: r2(quantity * unit), currency: 'EUR', categoryId: j % 5 === 3 ? null : 'c1', lineType: 'product', sortOrder: j };
+    });
+    const sum = r2(lines.reduce((total, line) => total + line.totalPrice, 0));
+    return { id: `p${i}`, source: i % 7 === 0 ? 'amazon' : 'receipt', merchant: REVIEW_MERCHANTS[i % REVIEW_MERCHANTS.length], externalOrderId: i % 7 === 0 ? `303-${1000 + i}-77` : null,
+      purchaseDate: `2026-06-${String(28 - (i % 27)).padStart(2, '0')}`, totalAmount: i % 6 === 0 ? r2(sum + 0.87) : sum, currency: 'EUR',
+      status: reviewId(i) ? 'captured' : 'confirmed', transactionId: i % 5 === 0 ? null : 'tx', hasReceipt: true, items: lines, itemSum: sum };
+  }
+  const PURCHASE_DETAILS = Array.from({ length: 57 }, (_, i) => purchaseDetail(i));
+  FIXTURES.purchases.push(...PURCHASE_DETAILS);
+
   const KEYS = Object.keys(FIXTURES);
 
   function match(pathname) {
@@ -1897,6 +1920,45 @@
     }).reverse();
   }
 
+  // Die Pruefansicht liest und schreibt: Positionen speichern, bestaetigen, loeschen. Der Zustand bleibt im
+  // Speicher, sonst sahe jedes Speichern wie zurueckgenommen aus und die Warteschlange wuerde nie kleiner.
+  function purchaseAnswer(method, url, init) {
+    const hit = /\/api\/purchases\/(p\d+)(\/[\w-]+)?$/.exec(url.pathname);
+    if (!hit) return undefined;
+    const i = Number(hit[1].slice(1));
+    const detail = PURCHASE_DETAILS[i];
+    const part = hit[2] || '';
+    if (method === 'GET' && part === '/reconciliation') {
+      const sum = r2(detail.items.reduce((total, line) => total + line.totalPrice, 0));
+      return { status: 200, body: { purchaseTotal: detail.totalAmount, itemTotal: sum, itemDifference: r2(detail.totalAmount - sum), linkedPaymentTotal: detail.transactionId ? detail.totalAmount : 0,
+        paymentDifference: 0, itemsReconciled: Math.abs(detail.totalAmount - sum) < 0.01, paymentsReconciled: true, fullyReconciled: false, tolerance: 0.01 } };
+    }
+    if (method === 'GET' && part === '/receipt-sources') {
+      const pdf = i % 4 === 1;
+      const pages = i % 4 === 0 ? 3 : pdf ? 2 : 1;
+      const sources = Array.from({ length: pages }, (_, n) => ({ id: `p${i}-s${n}`, purchaseDocumentId: `p${i}-d${pdf ? 0 : n}`, sortOrder: n,
+        sourceType: pdf ? 'pdf' : 'image', originalFileName: pdf ? 'beleg.pdf' : `beleg-${n + 1}.jpg`, mimeType: pdf ? 'application/pdf' : 'image/jpeg', pageNumber: pdf ? n + 1 : null, displayNumber: n + 1,
+        contentUrl: `/api/purchases/p${i}/documents/p${i}-d${pdf ? 0 : n}/content?fullWorthSpaceId=${SPACE}` }));
+      return { status: 200, body: { sources, itemSources: [], duplicateWarnings: i % 9 === 3 ? ['Gleicher Händler, Datum und Betrag wie ein bestätigter Kauf.'] : [] } };
+    }
+    if (method === 'GET' && part === '/amazon-details') return { status: 200, body: { payments: [], refunds: [], nonBankPaymentAmount: 0, externalStatus: 'delivered' } };
+    if (method === 'PUT' && part === '/items') {
+      let rows = init?.body;
+      if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch { rows = []; } }
+      rows.forEach((row, n) => Object.assign(detail.items[n], { name: row.name, quantity: row.quantity, totalPrice: row.totalPrice, categoryId: row.categoryId }));
+      return { status: 200, body: detail };
+    }
+    if (method === 'POST' && part === '/confirm') {
+      const sum = r2(detail.items.reduce((total, line) => total + line.totalPrice, 0));
+      if (Math.abs(detail.totalAmount - sum) > 0.01) return { status: 400, body: { error: 'Item total does not match the receipt total.' } };
+      CONFIRMED.add(i);
+      detail.status = 'confirmed';
+      return { status: 200, body: detail };
+    }
+    if (method === 'DELETE' && part === '') { CONFIRMED.add(i); detail.status = 'confirmed'; return { status: 204, body: null }; }
+    return undefined;
+  }
+
   function payslipImportAnswer(method, url, init) {
     const path = url.pathname;
     if (method === 'GET' && path.endsWith('/paperless/presets') && url.searchParams.get('kind') === 'payslip')
@@ -2046,7 +2108,7 @@
       if (method === 'POST' && route === 'test')
         return push.devices.length === 0 ? json({ error: 'no_devices' }, 409) : push.failTest ? json({ error: 'delivery_failed' }, 409) : json({ devices: push.devices.length });
     }
-    const payslip = payslipImportAnswer(method, url, init);
+    const payslip = payslipImportAnswer(method, url, init) ?? purchaseAnswer(method, url, init);
     // Writes succeed with an echo so confirm/save paths can be walked without a backend.
     const write = payslip ?? (method === 'GET' ? null : writeAnswer(method, url.pathname, init));
     const status = write?.status ?? 200;
@@ -2054,13 +2116,13 @@
     // Kaeufe: die Tabelle blaettert (limit/offset) und filtert (scope). 57 Einkaeufe, damit das Nachladen und die
     // Zaehler an den Auswahlpunkten sichtbar werden; jeder dritte ist unbestaetigt, jeder fuenfte ohne Buchung.
     if (method === 'GET' && url.pathname.endsWith('/api/purchases/counts'))
-      body = { all: 57, review: 19, unlinked: 8 };
+      body = { all: 57, review: PURCHASE_DETAILS.filter(row => row.status !== 'confirmed').length, unlinked: 8 };
     if (method === 'GET' && /\/api\/purchases$/.test(url.pathname) && url.searchParams.has('limit')) {
       const names = ['REWE', 'Penny', 'Kaufland', 'IKEA', 'OBI', 'Amazon Bestellung', 'dm Drogerie', 'Müller', 'Esso Tankstelle Freudental Süd'];
       const all = Array.from({ length: 57 }, (_, i) => ({
         id: `p${i}`, source: i % 7 === 0 ? 'amazon' : 'receipt', merchant: names[i % names.length], externalOrderId: i % 7 === 0 ? `303-${1000 + i}-77` : null,
         purchaseDate: `2026-06-${String(28 - (i % 27)).padStart(2, '0')}`, totalAmount: 5 + i * 3.17, currency: 'EUR',
-        status: i % 3 === 0 ? 'review' : 'confirmed', transactionId: i % 5 === 0 ? null : 'tx', items: Array.from({ length: 1 + (i % 12) }, () => ({})) }));
+        status: PURCHASE_DETAILS[i].status, transactionId: i % 5 === 0 ? null : 'tx', items: Array.from({ length: 1 + (i % 12) }, () => ({})) }));
       const scope = url.searchParams.get('scope');
       const source = url.searchParams.get('source');
       const rows = all.filter(r => (!source || r.source === source)
@@ -2077,6 +2139,13 @@
       const now = Date.now(), ago = minutes => new Date(now - minutes * 60000).toISOString();
       const base = { fullWorthSpaceId: SPACE, userId: 'u1', contentType: 'application/pdf', sourceCount: 1, attempts: 1, warningsJson: null, currency: 'EUR', itemCount: 0 };
       const scope = url.searchParams.get('scope');
+      if (scope === 'review' && url.searchParams.get('limit') === '100') {
+        const hints = ['["Die Bezeichnung bei Position 2 ist nur teilweise lesbar („ONPACK ANANASGL.“); der normalisierte Name ist eine Annahme und sollte geprüft werden","Pfandrückgabe, kein Rabatt","Zahlungsbeleg unleserlich"]', '["Der linke Rand des Bons ist abgeschnitten, die Mengen können fehlen."]'];
+        const offset = Number(url.searchParams.get('offset')) || 0;
+        const rows = PURCHASE_DETAILS.filter(row => row.status !== 'confirmed').map((row, n) => ({ ...base, id: `jr${n}`, purchaseId: row.id, fileName: 'beleg.jpg', status: 'done', stage: 'done',
+          engine: n % 3 === 0 ? 'gpt' : 'tesseract', merchant: row.merchant, totalAmount: row.totalAmount, itemCount: row.items.length, warningsJson: n % 3 === 0 ? hints[0] : n % 3 === 1 ? hints[1] : null }));
+        return new Response(JSON.stringify(rows.slice(offset, offset + 100)), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
       body = scope === 'queue' ? [
         { ...base, id: 'q1', purchaseId: 'pq1', fileName: 'Penny 25.06.2026.pdf', status: 'processing', stage: 'analyzing', engine: 'gpt', reason: 'scan', startedAt: ago(1), createdAt: ago(9), totalAmount: 0, merchant: null },
         { ...base, id: 'q2', purchaseId: 'pq2', fileName: 'Kaufland Sehr Langer Dateiname Mit Vielen Woertern Damit Er Umbrechen Muss 2026-06-24.pdf', status: 'queued', stage: 'queued', queuePosition: 1, createdAt: ago(8), totalAmount: 0, merchant: null },

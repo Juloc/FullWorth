@@ -130,11 +130,8 @@
   .toolbar input[type=search]{min-width:100%}
   .panel-head{align-items:flex-start;flex-wrap:wrap}
   .panel-head-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end}
-  .purchase-item{grid-template-columns:1fr 72px 92px}
-  .purchase-item .item-category{grid-column:1/-1}
 }
 @media (max-width:767px){.contract-detail .detail-grid{grid-template-columns:1fr}}
-@media (max-width:767px){.reconcile-grid{grid-template-columns:1fr}}
 @media (max-width:767px){.split-line{grid-template-columns:1fr 1fr;gap:6px}.split-line .split-note{grid-column:1/-1}}
 @media (max-width:767px){.loan-detail .detail-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}

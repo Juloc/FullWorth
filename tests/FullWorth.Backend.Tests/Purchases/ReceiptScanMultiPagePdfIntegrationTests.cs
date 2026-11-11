@@ -72,6 +72,54 @@ public sealed class ReceiptScanMultiPagePdfIntegrationTests
         });
     }
 
+    [Fact]
+    public async Task PdfPageIsServedAsAnImageForTheReviewViewAndNotBeyondTheLastPage()
+    {
+        // The review view cannot embed a PDF (CSP frame-src/object-src are 'none'), so each page is drawn as a PNG.
+        if (!CommandAvailable("pdfinfo") || !CommandAvailable("pdftoppm")) return;
+
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var userId = Guid.NewGuid();
+        var outsider = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        await SeedMemberAsync(factory, userId, spaceId);
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser { Id = outsider, EmailNormalized = $"{outsider:N}@EXAMPLE.COM", DisplayName = "Outsider", IsActive = true });
+            await db.SaveChangesAsync();
+        });
+
+        var multipart = new MultipartFormDataContent();
+        multipart.Add(new StringContent("EUR"), "currency");
+        multipart.Add(new StringContent(jobId.ToString("D")), "clientJobId");
+        multipart.Add(new ByteArrayContent(Convert.FromBase64String(ThreePagePdfBase64)), "receipt", "three-pages.pdf");
+        multipart.Add(new StringContent(Guid.NewGuid().ToString("D")), "sourceId");
+        using var upload = UserRequest(HttpMethod.Post, $"/api/purchases/receipt-scan/jobs?fullWorthSpaceId={spaceId:D}", userId, multipart);
+        using var uploaded = await client.SendAsync(upload);
+        Assert.Equal(HttpStatusCode.Accepted, uploaded.StatusCode);
+        var purchaseId = JsonDocument.Parse(await uploaded.Content.ReadAsStringAsync()).RootElement.GetProperty("purchaseId").GetGuid();
+
+        using var sourceRequest = UserRequest(HttpMethod.Get, $"/api/purchases/receipt-scan/jobs/{jobId:D}/sources?fullWorthSpaceId={spaceId:D}", userId);
+        using var sourceResponse = await client.SendAsync(sourceRequest);
+        var documentId = JsonDocument.Parse(await sourceResponse.Content.ReadAsStringAsync()).RootElement[0].GetProperty("purchaseDocumentId").GetGuid();
+        var path = $"/api/purchases/{purchaseId:D}/documents/{documentId:D}/pages";
+
+        using var second = await client.SendAsync(UserRequest(HttpMethod.Get, $"{path}/2?fullWorthSpaceId={spaceId:D}", userId));
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal("image/png", second.Content.Headers.ContentType?.MediaType);
+        var png = await second.Content.ReadAsByteArrayAsync();
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png[..4]);
+
+        using var beyond = await client.SendAsync(UserRequest(HttpMethod.Get, $"{path}/4?fullWorthSpaceId={spaceId:D}", userId));
+        Assert.Equal(HttpStatusCode.NotFound, beyond.StatusCode);
+        using var zero = await client.SendAsync(UserRequest(HttpMethod.Get, $"{path}/0?fullWorthSpaceId={spaceId:D}", userId));
+        Assert.Equal(HttpStatusCode.NotFound, zero.StatusCode);
+        using var foreign = await client.SendAsync(UserRequest(HttpMethod.Get, $"{path}/1?fullWorthSpaceId={spaceId:D}", outsider));
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+    }
+
     private static async Task SeedMemberAsync(BackendWebApplicationFactory factory, Guid userId, Guid spaceId)
     {
         await factory.SeedAsync(async db =>

@@ -106,6 +106,28 @@ const instanceSettings = [
   { key: 'Logging:LogLevel:Default', section: 'logging', label: 'Protokollstufe', hint: 'Wirkt sofort, ohne Neustart.', kind: 'choice', value: 'Information', stored: false, source: 'default', readOnly: false, choices: ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'None'] }
 ];
 
+// Ein erfundener Kassenbon (nie ein echter): Kopf, Positionen mit rechtsbuendigem Preis, Summe, Fuss. Die
+// Seite einer Aufnahme (page) verschiebt die Zeilen, damit mehrere Fotos eines langen Bons verschieden aussehen.
+function receiptSvg(seed, page) {
+  const goods = ['ALPENMILCH SCHOKO', 'ANANAS', 'BIO VOLLMILCH 3,8%', 'BANANEN', 'KAFFEE CREMA 1KG', 'HAFERDRINK BARISTA', 'LANDBROT 750G', 'PFAND EINWEG', 'EIER 10ER', 'GURKE', 'JOGHURT NATUR'];
+  const rows = [];
+  for (let n = 0; n < 14; n++) rows.push([goods[(seed + page * 3 + n) % goods.length], ((seed + n * 7) % 19 + 3) / 10 + 0.09]);
+  const total = rows.reduce((sum, row) => sum + row[1], 0);
+  const lines = [`<text x="280" y="64" text-anchor="middle" font-size="26" font-weight="700">MARKT ${seed}</text>`,
+    `<text x="280" y="92" text-anchor="middle" font-size="15">Musterstraße 12 · 88045 Friedrichshafen</text>`,
+    `<text x="280" y="114" text-anchor="middle" font-size="15">Seite ${page}</text>`];
+  rows.forEach(([name, price], n) => {
+    const y = 160 + n * 30;
+    lines.push(`<text x="36" y="${y}" font-size="17">${name}</text><text x="524" y="${y}" text-anchor="end" font-size="17">${price.toFixed(2).replace('.', ',')}</text>`);
+  });
+  const end = 160 + rows.length * 30 + 20;
+  lines.push(`<line x1="36" y1="${end}" x2="524" y2="${end}" stroke="#555" stroke-dasharray="4 4"/>`,
+    `<text x="36" y="${end + 36}" font-size="22" font-weight="700">SUMME EUR</text><text x="524" y="${end + 36}" text-anchor="end" font-size="22" font-weight="700">${total.toFixed(2).replace('.', ',')}</text>`,
+    `<text x="280" y="${end + 90}" text-anchor="middle" font-size="14">Vielen Dank für Ihren Einkauf</text>`);
+  const height = end + 130;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="${height}" viewBox="0 0 560 ${height}" font-family="ui-monospace,Menlo,Consolas,monospace"><rect width="560" height="${height}" fill="#fbfaf5"/>${lines.join('')}</svg>`;
+}
+
 createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -199,6 +221,14 @@ createServer(async (req, res) => {
     // /features/accounts.js contains "accounts", /features/categories.js contains "categories" - and
     // answered them with JSON, which the browser rejects as a module script. The import page happened
     // to survive because it loads a single module whose name matches no fixture key.
+    // Die Pruefansicht der Belege laedt das Original als Bild (<img>), nicht per fetch - der Browser-Stub sieht
+    // diese Anfragen nie. Hier antwortet ein erfundener Bon als SVG; die echte Route liefert JPEG, PDF oder
+    // (fuer eine PDF-Seite) PNG, fuer das Layout macht der Unterschied keinen.
+    const original = /\/api\/purchases\/p(\d+)\/(?:documents\/[^/]*?(?:-d(\d+))?\/(?:content|pages\/(\d+))|receipt)$/.exec(path);
+    if (original) {
+      res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' });
+      return res.end(receiptSvg(Number(original[1]), Number(original[3] || (original[2] !== undefined ? Number(original[2]) + 1 : 1))));
+    }
     if (path.startsWith('/bff/') || path.startsWith('/api/')) {
       for (const [key, value] of Object.entries(IMPORT)) {
         if (path.includes(key)) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(value)); }
