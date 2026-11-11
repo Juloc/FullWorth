@@ -1,11 +1,13 @@
-# 0.85.1
+# 0.85.2
 
-Lohnabrechnungen und Verträge aus Paperless werden aus dem Text gelesen, den Paperless selbst erkannt hat.
+Lohnabrechnungen mit Bonus werden richtig gelesen, der Dienstwagen-Sachbezug stimmt mit dem Vertrag überein, und gespeicherte Abrechnungen lassen sich korrigieren.
 
 ## Behoben
 
-- **Verlesene Zahlen bei Scans.** Die Originale in Paperless sind oft Scans. Eine zweite Erkennung derselben Datei verlas Ziffern (3.567,23 € Brutto wurden 3.867,23 €, ein Rentenbeitrag 1.270 € statt rund 308 €) und fand bei manchen Seiten weder Brutto noch Netto. Jetzt gilt der Text von Paperless, sofern er brauchbar ist; nur ohne ihn wird die Datei selbst gelesen.
+- **Bonus-Monate hatten falsche Abzüge.** In Monaten mit Einmalzahlung hat jede Abzugszeile drei Spalten (laufender Bezug, Monat gesamt, Jahr). Gelesen wird jetzt die mittlere, deren Summe die Abrechnung als gesetzliche Abzüge ausweist.
+- **Dienstwagen-Sachbezug.** Gelesen wird die Zeile „Fahrzeug Nutzung“; brutto minus sie ist genau das Vertragsgehalt. Vorher fehlten die Fahrtkosten-Anteile, und jeder Monat sah wie eine Abweichung vom Vertrag aus („Änderung erkannt … kein Nachtrag“). bAV-Beiträge kommen aus den Summenzeilen.
+- **Gehalt-gegen-Preise-Linie zackig.** Ein Bonus-Monat neben einer Lücke ließ die Linie springen. Geglättet wird jetzt über die Monate ringsum, bei nur zwei Werten gilt der kleinere.
 
-## Wichtig
+## Neu
 
-- In „Lohnabrechnungen“ und „Arbeitsverträge“ nach dem Update noch einmal auf „Neu lesen“ tippen. Bereits gelesene, unbestätigte Funde behalten sonst die verlesenen Werte.
+- **Abrechnung korrigieren.** Die Werte einer gespeicherten Abrechnung lassen sich an Ort und Stelle ändern (`PUT /api/compensation/payslips/{id}`); das angehängte PDF bleibt dran.
