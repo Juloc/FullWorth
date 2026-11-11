@@ -376,6 +376,7 @@ POST             /api/budget-suggestions/
 POST             /api/budget-suggestions/preview
 POST             /api/budgets/
 POST             /api/categories/
+POST             /api/categories/grocery-tree
 POST             /api/categories/{id:guid}/restore
 POST             /api/categorization-rules/
 POST             /api/categorization-rules/preview
@@ -492,6 +493,7 @@ POST             /api/purchases/amazon/connect/{challengeId:guid}/complete
 POST             /api/purchases/amazon/sync
 POST             /api/purchases/amazon/sync-runs/{runId:guid}/rollback
 POST             /api/purchases/import/amazon
+POST             /api/purchases/items/refine-grocery-categories
 POST             /api/purchases/manual
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/items/{itemId:guid}/start
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/pause

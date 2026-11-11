@@ -30,6 +30,9 @@ public static class CategoryEndpoints
                 _ => Results.NotFound()
             };
         });
+        // Der Supermarkt-Baum (Obst & Gemuese, Milch, Alkohol ...) unter "Lebensmittel"; Vorhandenes wird eingehaengt.
+        categories.MapPost("/grocery-tree", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, GroceryCategoryStore store, CancellationToken ct) =>
+            Mutation(await store.EnsureForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct)));
         categories.MapPost("/{id:guid}/restore", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, CategoryStore store, CancellationToken ct) =>
             Mutation(await store.UnarchiveForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
 

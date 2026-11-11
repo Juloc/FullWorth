@@ -320,6 +320,7 @@ public static class BackendApplication
         builder.Services.AddScoped<AdvancedBulkStore>();
         builder.Services.AddScoped<CategoryMergeStore>();
         builder.Services.AddScoped<CategoryReferenceStore>();
+        builder.Services.AddScoped<GroceryCategoryStore>();
         builder.Services.AddScoped<CategoryLanguageStore>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Collections.CollectionStore>();
         builder.Services.AddScoped<BudgetScopeStore>();

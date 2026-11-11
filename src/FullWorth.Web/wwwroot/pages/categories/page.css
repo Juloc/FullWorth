@@ -86,3 +86,7 @@
    Liste und nicht in einem Kasten darueber. */
 .cat-merge-preview{margin:var(--space-3) 0}
 .cat-merge-bad{border-inline-start:3px solid var(--danger);padding-inline-start:var(--space-3)}
+
+.cat-offer{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line)}
+.cat-offer p{margin:var(--s1) 0 0;color:var(--muted);font-size:var(--text-caption-size)}
+@media(max-width:560px){.cat-offer{flex-direction:column;align-items:stretch}}

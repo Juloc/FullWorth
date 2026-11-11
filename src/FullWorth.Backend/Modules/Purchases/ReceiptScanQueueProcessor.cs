@@ -375,7 +375,7 @@ public sealed class ReceiptScanQueueProcessor(
                 warnings.Add($"Artikel '{Trim(item.Name) ?? Trim(item.RawName) ?? "?"}' enthielt eine ungültige Quellenreferenz und muss geprüft werden.");
 
             var write = new PurchaseItemWrite(
-                CategoryId: CategoryId(categoryMap, item.CategorySuggestion),
+                CategoryId: ItemCategoryId(categoryMap, item.CategorySuggestion, item.Name ?? item.RawName),
                 Name: (item.Name ?? item.RawName ?? "Artikel").Trim(),
                 Brand: Trim(item.Brand),
                 Sku: null,
@@ -511,7 +511,7 @@ public sealed class ReceiptScanQueueProcessor(
                 var item = source.Result.Items[localIndex];
                 var quantity = item.Quantity is > 0m ? item.Quantity.Value : 1m;
                 var write = new PurchaseItemWrite(
-                    CategoryId: CategoryId(categoryMap, item.CategoryHint),
+                    CategoryId: ItemCategoryId(categoryMap, item.CategoryHint, item.Name),
                     Name: item.Name,
                     Brand: null,
                     Sku: null,
@@ -948,7 +948,19 @@ public sealed class ReceiptScanQueueProcessor(
         foreach (var pair in paths.Where(x => !string.IsNullOrWhiteSpace(x.Value))) map[pair.Value] = pair.Key;
         foreach (var group in categories.GroupBy(x => x.Name.Trim(), StringComparer.OrdinalIgnoreCase).Where(x => x.Count() == 1))
             map.TryAdd(group.Key, group.Single().Id);
+        // Auch der Schluessel findet die Kategorie: die Zuordnung nach dem Namen der Ware (GroceryItemCategorizer) nennt Schluessel.
+        foreach (var category in categories) map.TryAdd(category.Key, category.Id);
         return map;
+    }
+
+    // Nennt der Leser nur das allgemeine "Lebensmittel" oder nichts, entscheidet der Name der Ware: "Hähnchenbrustfilet"
+    // gehoert zu Fleisch & Wurst. Eine genauere Kategorie des Lesers bleibt, wie sie ist.
+    private static Guid? ItemCategoryId(IReadOnlyDictionary<string, Guid> map, string? hint, string? name)
+    {
+        var suggested = CategoryId(map, hint);
+        var generic = map.TryGetValue("food.groceries", out var groceries) ? groceries : (Guid?)null;
+        if (suggested is not null && suggested != generic) return suggested;
+        return GroceryItemCategorizer.KeyFor(name) is { } key && map.TryGetValue(key, out var refined) ? refined : suggested;
     }
 
     private static Guid? CategoryId(IReadOnlyDictionary<string, Guid> map, string? hint) =>

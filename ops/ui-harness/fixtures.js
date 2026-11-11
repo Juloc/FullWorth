@@ -134,7 +134,7 @@
     ],
     'categories/language': { language: 'en', canChange: true, systemCategories: 80, renamedByUser: 0 },
     'categories': [
-      { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, icon: 'groceries' },
+      { id: 'c1', key: 'food.groceries', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, icon: 'groceries' },
       { id: 'c2', name: 'Restaurant', kind: 'expense', parentId: null, isArchived: false, icon: 'restaurants' },
       { id: 'c3', name: 'Gehalt', kind: 'income', parentId: null, isArchived: false, icon: 'salary' },
       { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, icon: 'groceries' }
@@ -2079,6 +2079,8 @@
       }
       return { status: 204, body: null };
     }
+    if (method === 'POST' && path.endsWith('/categories/grocery-tree')) return { status: 200, body: { created: 17, adopted: 2, total: 19 } };
+    if (method === 'POST' && path.includes('/purchases/items/refine-grocery-categories')) return { status: 200, body: { evaluated: 2607, changed: 2120, applied: path.includes('apply=true') || String(init?.url || '').includes('apply=true'), byCategory: {} } };
     if (method === 'GET' && path.endsWith('/compensation/payslips')) return { status: 200, body: PAYSLIPS };
     if (method === 'POST' && path.endsWith('/compensation/payslips')) {
       let body = init?.body;

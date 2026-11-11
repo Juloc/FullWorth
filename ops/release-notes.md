@@ -1,10 +1,15 @@
-# 0.86.2
+# 0.87.0
 
-13. Gehalt und Bonus getrennt, Brutto und Netto überall nebeneinander, und der Vergleich startet, wo du willst.
+Packungsgröße an Belegpositionen und ein Kategorienbaum für den Supermarkt.
+
+## Neu
+
+- **Packung als eigenes Feld.** Eine Position kennt jetzt ihre Packungsgröße („500 g“, „10 Stück“, „2 × 100 g“) getrennt vom Namen. Im Beleg-Editor gibt es dafür „Packung (optional)“ mit Einheit; steht die Größe im Namen („Knoblauch 200 g“, „Eier, 10er“), liest FullWorth sie beim Speichern heraus. Die Zeile zeigt dann den Preis je kg, l oder Stück, und Vergleiche laufen über dieselbe Packung.
+- **Bestand wird nachgezogen.** Beim Start liest eine Migration die Packung aus bestehenden Positionen: aus der Mengenangabe („500 g“) und aus dem Namensende. Der ursprüngliche Name bleibt in „Originaltext“.
+- **Lebensmittel genauer aufteilen.** Auf der Kategorienseite steht, solange „Lebensmittel“ keine Unterkategorien hat, ein Angebot: Obst & Gemüse, Milch, Käse & Eier, Fleisch & Wurst, Fisch, Brot, Nudeln & Konserven, Öl & Gewürze, Frühstück, Tiefkühl, Vegetarisch & Vegan, Snacks, Süßigkeiten (mit Schokolade), Getränke, Kaffee & Tee und Alkohol (mit Bier, Wein, Spirituosen). Was du schon angelegt hast, wird einsortiert statt doppelt angelegt. Neue Spaces bekommen den Baum von Anfang an.
+- **Positionen ordnen sich nach ihrem Namen ein.** Neu gelesene Belege landen mit „Hähnchenbrustfilet“ bei Fleisch & Wurst statt bei „Lebensmittel“, und die Positionen, die bisher nur „Lebensmittel“ waren, lassen sich auf Wunsch nachträglich einordnen. Genauere Einordnungen bleiben unangetastet.
 
 ## Geändert
 
-- **13. Gehalt und Bonus sind getrennt.** Urlaubs- und Weihnachtsgeld (je ein halbes Monatsgehalt im Juni und November) stehen als „13. Gehalt“, ein Bonus nur, soweit er darüber hinausgeht. In „Mein Gehalt“ stehen beide einzeln mit ihrem Monat, im Verlauf je Jahr in zwei Spalten.
-- **Brutto und Netto stehen immer beide da.** Im Verlauf zeigt jedes Jahr Jahresbrutto, Brutto und Netto je Monat (jeweils mit der Veränderung zum Vorjahr) und das Brutto gegen die Teuerung. „Mein Gehalt“ zeigt zwölf Monate Brutto und Netto. „Verdienst gegen Preise“ zeichnet beide Linien, schwarz Brutto, grau Netto, mit je eigener Veränderung und dem realen Ergebnis.
-- **Verdienst gegen Preise: Start frei wählbar.** Jeder Monat lässt sich wählen; Gehaltserhöhungen stehen oben („seit Jan 2026 · Erhöhung +4,5 %“). Gerechnet wird ab dem Monat davor mit dem Gehalt von damals, so zeigt die Seite, was von einer Erhöhung nach den Preisen real übrig ist.
-- 13. Gehalt, Bonus und Firmenwagen-Vorteil lassen sich im Brutto einzeln zu- oder abschalten (13. Gehalt und Bonus standardmäßig an). Die Auswahl „Ausgezahlt“ entfällt; die Auszahlung steht weiter in „Mein Gehalt“.
+- Der Preisindex vergleicht nur Artikel mit derselben Packung und rechnet Unterkategorien zu ihrem Grundbedarf.
+- Mengeneinheiten „stk“ und „stk.“ gelten wie „Stück“.

@@ -78,9 +78,12 @@ public static partial class PriceIndexCalculator
         return matched == 0 ? (1m, 0) : ((decimal)Math.Exp(weighted / weights), matched);
     }
 
-    /// <summary>Schluessel eines Artikels: Geschaeft (erstes Wort) und Name - dasselbe Ding im selben Laden.</summary>
-    public static string ItemKey(string merchant, Guid? productId, string name) =>
-        $"{FirstWord(merchant)}|{(productId?.ToString("N") ?? Normalize(name))}";
+    /// <summary>
+    /// Schluessel eines Artikels: Geschaeft (erstes Wort), Name und Packung - dasselbe Ding im selben Laden. Die Packung
+    /// gehoert dazu, seit sie nicht mehr im Namen steht: "Knoblauch 200 g" und "Knoblauch 500 g" sind verschiedene Preise.
+    /// </summary>
+    public static string ItemKey(string merchant, Guid? productId, string name, decimal? packageQuantity = null, string? packageUnit = null) =>
+        $"{FirstWord(merchant)}|{(productId?.ToString("N") ?? Normalize(name))}" + (packageQuantity is > 0m ? $"|{packageQuantity:0.###}{packageUnit}" : "");
 
     private static string FirstWord(string value) => LetterRun().Match(value ?? string.Empty).Value.ToLowerInvariant();
 

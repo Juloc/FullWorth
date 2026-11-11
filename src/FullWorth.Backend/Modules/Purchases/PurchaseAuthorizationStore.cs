@@ -76,6 +76,11 @@ public sealed record PurchaseView(
     int DocumentCount = 0);
 
 public sealed record PurchaseMutationOutcome(PurchaseMutationResult Result, PurchaseView? Purchase = null, string? Error = null);
+/// <param name="Evaluated">Positionen, die noch bei "Lebensmittel" oder ohne Kategorie stehen.</param>
+/// <param name="Changed">Davon, was der Name einer genaueren Kategorie zuordnet.</param>
+/// <param name="ByCategory">Wohin sie kamen, nach Kategorieschluessel.</param>
+public sealed record GroceryRefinement(int Evaluated, int Changed, bool Applied, IReadOnlyDictionary<string, int> ByCategory);
+
 public sealed record PurchaseCandidateOutcome(PurchaseMutationResult Result, IReadOnlyList<object>? Candidates = null);
 
 /// <summary>
@@ -207,6 +212,41 @@ public sealed class PurchaseAuthorizationStore(FullWorthDbContext db)
         {
             return new(PurchaseMutationResult.Invalid, Error: exception.Message);
         }
+    }
+
+    /// <summary>
+    /// Ordnet Positionen, die nur bei "Lebensmittel" (oder nirgends) stehen, nach ihrem Namen einer Kategorie aus dem
+    /// Supermarkt-Baum zu. Was jemand schon genauer eingeordnet hat, bleibt unberuehrt. Ohne <paramref name="apply"/>
+    /// wird nur gezaehlt.
+    /// </summary>
+    public async Task<(PurchaseMutationResult Result, GroceryRefinement? Value)> RefineGroceryCategoriesForUserAsync(
+        Guid userId, Guid fullWorthSpaceId, bool apply, CancellationToken ct)
+    {
+        if (!await IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return (PurchaseMutationResult.NotFound, null);
+
+        var categories = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId && !category.IsArchived)
+            .Select(category => new { category.Id, category.Key })
+            .ToListAsync(ct);
+        var idByKey = categories.ToDictionary(category => category.Key, category => category.Id, StringComparer.OrdinalIgnoreCase);
+        var generic = idByKey.GetValueOrDefault("food.groceries");
+        var purchaseIds = await WritablePurchases(userId, fullWorthSpaceId).Select(purchase => purchase.Id).ToListAsync(ct);
+        var items = await db.PurchaseItems
+            .Where(item => purchaseIds.Contains(item.PurchaseId) && item.LineType == "product" && (item.CategoryId == generic || item.CategoryId == null))
+            .ToListAsync(ct);
+
+        var moved = new Dictionary<string, int>();
+        foreach (var item in items)
+        {
+            if (GroceryItemCategorizer.KeyFor(item.Name) is not { } key || !idByKey.TryGetValue(key, out var target) || target == item.CategoryId) continue;
+            moved[key] = moved.GetValueOrDefault(key) + 1;
+            if (!apply) continue;
+            item.CategoryId = target;
+            item.CategorizationSource = "rule";
+            item.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        if (apply && moved.Count > 0) await db.SaveChangesAsync(ct);
+        return (PurchaseMutationResult.Success, new GroceryRefinement(items.Count, moved.Values.Sum(), apply, moved));
     }
 
     public async Task<PurchaseMutationOutcome> ReplaceItemsForUserAsync(
@@ -569,42 +609,51 @@ public sealed class PurchaseAuthorizationStore(FullWorthDbContext db)
         entity.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    private static PurchaseItem ToEntity(PurchaseItemWrite item, string purchaseCurrency, int fallbackSort) => new()
+    private static PurchaseItem ToEntity(PurchaseItemWrite item, string purchaseCurrency, int fallbackSort)
     {
-        ProductId = item.ProductId,
-        CategoryId = item.CategoryId,
-        RawName = string.IsNullOrWhiteSpace(item.RawName) ? item.Name.Trim() : item.RawName.Trim(),
-        Name = item.Name.Trim(),
-        Brand = Clean(item.Brand),
-        Sku = Clean(item.Sku),
-        Barcode = Clean(item.Barcode),
-        Asin = Clean(item.Asin),
-        Quantity = item.Quantity,
-        QuantityUnit = PurchaseArticleCalculator.NormalizeUnit(item.QuantityUnit),
-        PackageQuantity = item.PackageQuantity,
-        PackageUnit = Clean(item.PackageUnit)?.ToLowerInvariant(),
-        PackageCount = item.PackageCount,
-        UnitPrice = item.UnitPrice,
-        OriginalUnitPrice = item.OriginalUnitPrice,
-        BaseUnitPrice = item.BaseUnitPrice ?? PurchaseArticleCalculator.BaseUnitPrice(item.UnitPrice, item.Quantity, item.QuantityUnit, item.PackageCount, item.PackageQuantity, item.PackageUnit, item.Currency),
-        TotalPrice = PurchaseArticleCalculator.RoundMoney(item.TotalPrice, string.IsNullOrWhiteSpace(item.Currency) ? purchaseCurrency : item.Currency),
-        DiscountAmount = item.DiscountAmount,
-        DiscountLabel = Clean(item.DiscountLabel),
-        DepositAmount = item.DepositAmount,
-        TaxRate = item.TaxRate,
-        TaxAmount = item.TaxAmount,
-        Currency = string.IsNullOrWhiteSpace(item.Currency) ? purchaseCurrency : item.Currency.Trim().ToUpperInvariant(),
-        LineType = string.IsNullOrWhiteSpace(item.LineType) ? "product" : item.LineType.Trim().ToLowerInvariant(),
-        CategorizationSource = item.CategoryId.HasValue ? "manual" : "none",
-        ExtractionConfidence = item.ExtractionConfidence,
-        IsManuallyCorrected = item.IsManuallyCorrected,
-        TotalPriceOverridden = item.TotalPriceOverridden,
-        Notes = Clean(item.Notes),
-        SortOrder = item.SortOrder ?? fallbackSort,
-        ReturnDeadline = item.ReturnDeadline,
-        WarrantyEnd = item.WarrantyEnd,
-        SerialNumber = Clean(item.SerialNumber)
-    };
+        var pack = PackSize.Resolve(item.Name.Trim(), item.QuantityUnit, item.PackageQuantity, item.PackageUnit, item.PackageCount);
+        var currency = string.IsNullOrWhiteSpace(item.Currency) ? purchaseCurrency : item.Currency;
+        var unitPrice = item.UnitPrice ?? (item.Quantity > 0m ? item.TotalPrice / item.Quantity : null);
+        // Der Preis je kg/l/Stueck ist abgeleitet: aendert sich die Packung, gilt der alte nicht mehr.
+        var baseUnitPrice = PurchaseArticleCalculator.BaseUnitPrice(unitPrice, item.Quantity, pack.QuantityUnit, pack.Count, pack.Quantity, pack.Unit, currency)
+            ?? (pack.Quantity is > 0m ? null : item.BaseUnitPrice);
+        return new()
+        {
+            ProductId = item.ProductId,
+            CategoryId = item.CategoryId,
+            RawName = string.IsNullOrWhiteSpace(item.RawName) ? item.Name.Trim() : item.RawName.Trim(),
+            Name = pack.Name,
+            Brand = Clean(item.Brand),
+            Sku = Clean(item.Sku),
+            Barcode = Clean(item.Barcode),
+            Asin = Clean(item.Asin),
+            Quantity = item.Quantity,
+            QuantityUnit = PurchaseArticleCalculator.NormalizeUnit(pack.QuantityUnit),
+            PackageQuantity = pack.Quantity,
+            PackageUnit = Clean(pack.Unit)?.ToLowerInvariant(),
+            PackageCount = pack.Count,
+            UnitPrice = item.UnitPrice,
+            OriginalUnitPrice = item.OriginalUnitPrice,
+            BaseUnitPrice = baseUnitPrice,
+            TotalPrice = PurchaseArticleCalculator.RoundMoney(item.TotalPrice, string.IsNullOrWhiteSpace(item.Currency) ? purchaseCurrency : item.Currency),
+            DiscountAmount = item.DiscountAmount,
+            DiscountLabel = Clean(item.DiscountLabel),
+            DepositAmount = item.DepositAmount,
+            TaxRate = item.TaxRate,
+            TaxAmount = item.TaxAmount,
+            Currency = string.IsNullOrWhiteSpace(item.Currency) ? purchaseCurrency : item.Currency.Trim().ToUpperInvariant(),
+            LineType = string.IsNullOrWhiteSpace(item.LineType) ? "product" : item.LineType.Trim().ToLowerInvariant(),
+            CategorizationSource = item.CategoryId.HasValue ? "manual" : "none",
+            ExtractionConfidence = item.ExtractionConfidence,
+            IsManuallyCorrected = item.IsManuallyCorrected,
+            TotalPriceOverridden = item.TotalPriceOverridden,
+            Notes = Clean(item.Notes),
+            SortOrder = item.SortOrder ?? fallbackSort,
+            ReturnDeadline = item.ReturnDeadline,
+            WarrantyEnd = item.WarrantyEnd,
+            SerialNumber = Clean(item.SerialNumber)
+        };
+    }
 
     private static bool EquivalentItems(IReadOnlyList<PurchaseItem> current, IReadOnlyList<PurchaseItem> desired)
     {

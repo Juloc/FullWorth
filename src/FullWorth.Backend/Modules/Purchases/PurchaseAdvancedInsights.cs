@@ -144,6 +144,14 @@ public static class PurchaseAdvancedInsightsEndpoints
         ["health.pharmacy"] = "health"
     };
 
+    // Eine Unterkategorie zaehlt zum Grundbedarf ihrer Oberkategorie: "food.groceries.dairy" -> "food.groceries" -> food.
+    private static string? BasicNeedsGroup(string? categoryKey)
+    {
+        for (var key = categoryKey; !string.IsNullOrEmpty(key); key = key.Contains('.') ? key[..key.LastIndexOf('.')] : null)
+            if (BasicNeedsGroups.TryGetValue(key, out var group)) return group;
+        return null;
+    }
+
     private static async Task<object?> PriceIndexAsync(
         PurchaseInsightStore insights,
         Guid userId,
@@ -163,8 +171,8 @@ public static class PurchaseAdvancedInsightsEndpoints
         // Teuerung und Wechselkurs.
         var usable = rows.Where(row => string.Equals(row.Currency, baseCurrency, StringComparison.OrdinalIgnoreCase)).ToList();
         var observations = usable.Select(row => new PriceObservation(
-            PriceIndexCalculator.ItemKey(row.Merchant, row.ProductId, row.Name),
-            row.CategoryKey is not null && BasicNeedsGroups.TryGetValue(row.CategoryKey, out var group) ? group : null,
+            PriceIndexCalculator.ItemKey(row.Merchant, row.ProductId, row.Name, row.PackageQuantity, row.PackageUnit),
+            BasicNeedsGroup(row.CategoryKey),
             row.Date,
             row.OriginalUnitPrice is > 0m ? row.OriginalUnitPrice.Value : row.UnitPrice is > 0m ? row.UnitPrice.Value : row.Quantity > 0m ? row.TotalPrice / row.Quantity : row.TotalPrice,
             row.TotalPrice)).ToList();

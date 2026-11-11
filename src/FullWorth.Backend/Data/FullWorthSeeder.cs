@@ -32,6 +32,27 @@ public sealed class FullWorthSeeder
         ("food.bakery", "Bakery", "food", 32),
         ("food.restaurants", "Restaurants", "food", 33),
         ("food.delivery", "Delivery", "food", 34),
+        // Der Einkauf im Supermarkt, nach dem, was im Korb liegt. Die Positionen eines Belegs landen hier,
+        // der Beleg selbst bleibt bei "Lebensmittel". Budgets koennen "mit Unterkategorien" auf food.groceries zielen.
+        ("food.groceries.produce", "Fruit & vegetables", "food.groceries", 311),
+        ("food.groceries.dairy", "Dairy & eggs", "food.groceries", 312),
+        ("food.groceries.meat", "Meat & sausage", "food.groceries", 313),
+        ("food.groceries.fish", "Fish & seafood", "food.groceries", 314),
+        ("food.groceries.bread", "Bread & baked goods", "food.groceries", 315),
+        ("food.groceries.staples", "Pasta, rice & canned goods", "food.groceries", 316),
+        ("food.groceries.spices", "Oil, spices & sauces", "food.groceries", 317),
+        ("food.groceries.breakfast", "Breakfast & spreads", "food.groceries", 318),
+        ("food.groceries.frozen", "Frozen & ready meals", "food.groceries", 319),
+        ("food.groceries.vegan", "Vegetarian & vegan", "food.groceries", 320),
+        ("food.groceries.snacks", "Snacks & chips", "food.groceries", 321),
+        ("food.groceries.sweets", "Sweets", "food.groceries", 322),
+        ("food.groceries.chocolate", "Chocolate", "food.groceries.sweets", 323),
+        ("food.groceries.drinks", "Drinks (non-alcoholic)", "food.groceries", 324),
+        ("food.groceries.coffee", "Coffee & tea", "food.groceries", 325),
+        ("food.groceries.alcohol", "Alcohol", "food.groceries", 326),
+        ("food.groceries.beer", "Beer", "food.groceries.alcohol", 327),
+        ("food.groceries.wine", "Wine & sparkling", "food.groceries.alcohol", 328),
+        ("food.groceries.spirits", "Spirits", "food.groceries.alcohol", 329),
 
         ("transport", "Transport", null, 40),
         ("transport.public", "Public transport", "transport", 41),
@@ -98,6 +119,12 @@ public sealed class FullWorthSeeder
 
     /// <summary>Number of default categories seeded into a fresh FullWorth Space.</summary>
     public static int DefaultCategoryCount => DefaultCategories.Length;
+
+    /// <summary>Die Standardkategorien unter "Lebensmittel", Eltern vor ihren Kindern.</summary>
+    public static IEnumerable<(string Key, string Name, string ParentKey, int SortOrder)> GroceryTree =>
+        DefaultCategories
+            .Where(entry => entry.Key.StartsWith("food.groceries.", StringComparison.Ordinal))
+            .Select(entry => (entry.Key, entry.Name, entry.ParentKey!, entry.SortOrder));
 
     /// <summary>Die Standardschluessel, damit ein Test sie gegen die Uebersetzungsliste halten kann.</summary>
     public static IEnumerable<string> DefaultCategoryKeys => DefaultCategories.Select(entry => entry.Key);

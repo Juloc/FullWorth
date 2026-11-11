@@ -266,7 +266,7 @@ public static class PurchaseArticleCalculator
         if (string.IsNullOrWhiteSpace(unit)) return "piece";
         return unit.Trim().ToLowerInvariant() switch
         {
-            "stück" or "st" or "pcs" or "pc" or "each" => "piece",
+            "stück" or "st" or "stk" or "stk." or "pcs" or "pc" or "each" => "piece",
             "liter" or "litre" => "l",
             "milliliter" or "millilitre" => "ml",
             "gram" => "g",

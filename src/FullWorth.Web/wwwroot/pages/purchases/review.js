@@ -167,8 +167,13 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
   // Die Summe der Positionen, wie der Server sie rechnet (Rabatt, Pfand, Trinkgeld zaehlen anders als eine blosse Summe),
   // verschoben um das, was hier seit dem Speichern geaendert wurde.
   const itemTotalNow = () => round2((rec ? Number(rec.itemTotal) : savedSum) + sumNow() - savedSum);
+  // Die Packung ("500 g", "10 Stück") ist optional und gehoert zur Position, nicht in den Namen: erst dann lassen sich
+  // "Eier aus Bodenhaltung" ueber verschiedene Packungen vergleichen.
+  const lineOf = (item, index) => ({ index, item, name: item.name || '', quantity: Number(item.quantity), total: Number(item.totalPrice), categoryId: item.categoryId || '',
+    packQuantity: Number(item.packageQuantity) || null, packUnit: item.packageUnit || 'piece' });
+  const packChanged = line => line.packQuantity !== (Number(line.item.packageQuantity) || null) || (line.packQuantity && line.packUnit !== (line.item.packageUnit || 'piece'));
   const isDirty = () => lines.some(line => line.name !== line.item.name || line.quantity !== Number(line.item.quantity)
-    || line.total !== Number(line.item.totalPrice) || line.categoryId !== (line.item.categoryId || ''));
+    || line.total !== Number(line.item.totalPrice) || line.categoryId !== (line.item.categoryId || '') || packChanged(line));
   function difference() {
     const tolerance = Number(rec?.tolerance || 0.01);
     const base = rec ? Number(rec.itemDifference || 0) : round2(Number(purchase.totalAmount) - savedSum);
@@ -187,10 +192,14 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
     return reasons;
   }
 
+  const PACK_UNITS = { piece: 'Stück', g: 'g', kg: 'kg', ml: 'ml', l: 'l' };
+  const packLabel = line => `${line.item.packageCount && !packChanged(line) ? `${line.item.packageCount} × ` : ''}${String(line.packQuantity).replace('.', ',')} ${PACK_UNITS[line.packUnit] || line.packUnit}`;
+
   function lineHtml(line) {
     const reasons = lineReasons(line);
     const unit = Number(line.item.unitPrice);
     const calc = [
+      line.packQuantity ? packLabel(line) : '',
       line.quantity !== 1 ? `${String(line.quantity).replace('.', ',')} × ${num.format(Number.isFinite(unit) && line.item.unitPrice != null ? unit : round2(line.total / (line.quantity || 1)))}` : '',
       line.item.asin ? `ASIN ${line.item.asin}` : ''
     ].filter(Boolean).join(' · ');
@@ -320,7 +329,7 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
       sources = receiptSources;
       amazon = loaded.source === 'amazon' ? await api(`api/purchases/${id}/amazon-details`).catch(() => null) : null;
       rec = amazon ? amazonReconciliation(loaded, reconciliation, amazon) : reconciliation;
-      lines = (purchase.items || []).map((item, i) => ({ index: i, item, name: item.name || '', quantity: Number(item.quantity), total: Number(item.totalPrice), categoryId: item.categoryId || '' }));
+      lines = (purchase.items || []).map(lineOf);
       savedSum = sumNow();
       $('[data-problem]')?.remove();
       paintAll();
@@ -338,8 +347,8 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
       categoryId: line.categoryId || null, name: line.name, brand: original.brand ?? null, sku: original.sku ?? null, asin: original.asin ?? null,
       quantity: line.quantity || 1, unitPrice: original.unitPrice ?? null, totalPrice: line.total, currency: original.currency || purchase.currency,
       notes: original.notes ?? null, productId: original.productId ?? null, rawName: original.rawName ?? original.name ?? null, barcode: original.barcode ?? null,
-      quantityUnit: original.quantityUnit ?? null, packageQuantity: original.packageQuantity ?? null, packageUnit: original.packageUnit ?? null,
-      packageCount: original.packageCount ?? null, baseUnitPrice: original.baseUnitPrice ?? null, discountAmount: original.discountAmount ?? null,
+      quantityUnit: original.quantityUnit ?? null, packageQuantity: line.packQuantity, packageUnit: line.packQuantity ? line.packUnit : null,
+      packageCount: packChanged(line) ? null : original.packageCount ?? null, baseUnitPrice: packChanged(line) ? null : original.baseUnitPrice ?? null, discountAmount: original.discountAmount ?? null,
       depositAmount: original.depositAmount ?? null, taxRate: original.taxRate ?? null, taxAmount: original.taxAmount ?? null, lineType: original.lineType ?? null,
       extractionConfidence: original.extractionConfidence ?? null, isManuallyCorrected: original.isManuallyCorrected ?? false,
       totalPriceOverridden: original.totalPriceOverridden ?? false, sortOrder: original.sortOrder ?? line.index, returnDeadline: original.returnDeadline ?? null,
@@ -354,7 +363,7 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
     changed = true;
     const fresh = await api(`api/purchases/${purchase.id}`);
     purchase = fresh;
-    lines = (fresh.items || []).map((item, i) => ({ index: i, item, name: item.name || '', quantity: Number(item.quantity), total: Number(item.totalPrice), categoryId: item.categoryId || '' }));
+    lines = (fresh.items || []).map(lineOf);
     rec = amazon ? amazonReconciliation(fresh, await api(`api/purchases/${fresh.id}/reconciliation`).catch(() => null), amazon) : await api(`api/purchases/${fresh.id}/reconciliation`).catch(() => null);
     savedSum = sumNow();
     paintLines();
@@ -480,6 +489,10 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
           </div></div>
         <label class="rv-field"><span>${ctx.esc(t('Preis der Position', 'Line price'))}</span><input data-f="total" inputmode="decimal" value="${ctx.esc(Number.isFinite(line.total) ? num.format(line.total) : '')}"></label>
       </div>
+      <div class="rv-field-row">
+        <label class="rv-field"><span>${ctx.esc(t('Packung (optional)', 'Pack size (optional)'))}</span><input data-f="packQuantity" inputmode="decimal" placeholder="${ctx.esc(t('z. B. 500 oder 10', 'e.g. 500 or 10'))}" value="${ctx.esc(line.packQuantity ? String(line.packQuantity).replace('.', ',') : '')}"></label>
+        <label class="rv-field"><span>${ctx.esc(t('Einheit', 'Unit'))}</span><select data-f="packUnit">${Object.entries(PACK_UNITS).map(([key, label]) => `<option value="${key}"${key === line.packUnit ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+      </div>
       <label class="rv-field"><span>${ctx.esc(t('Kategorie', 'Category'))}</span><select data-f="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${categorySelect}</select></label>
       <div class="rv-editor-actions">
         <button type="button" class="${buttonClass(ButtonRole.Quiet)}" data-act="editor-reset">${t('Zurücksetzen', 'Reset')}</button>
@@ -500,7 +513,12 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
     const line = lines[editing];
     if (field.dataset.f === 'name') line.name = field.value;
     else if (field.dataset.f === 'category') line.categoryId = field.value;
-    else {
+    else if (field.dataset.f === 'packUnit') line.packUnit = field.value;
+    else if (field.dataset.f === 'packQuantity') {
+      const value = parseAmount(field.value);
+      field.classList.toggle('is-invalid', !Number.isFinite(value) && field.value.trim() !== '');
+      if (field.value.trim() === '') line.packQuantity = null; else if (Number.isFinite(value) && value > 0) line.packQuantity = value; else return;
+    } else {
       const value = parseAmount(field.value);
       field.classList.toggle('is-invalid', !Number.isFinite(value) && field.value.trim() !== '');
       if (!Number.isFinite(value)) return;
@@ -512,7 +530,7 @@ export async function openReview(ctx, startId, { source = '', onClose = () => {}
 
   function resetEditor() {
     const line = lines[editing];
-    Object.assign(line, { name: line.item.name || '', quantity: Number(line.item.quantity), total: Number(line.item.totalPrice), categoryId: line.item.categoryId || '' });
+    Object.assign(line, lineOf(line.item, line.index));
     const at = editing;
     closeEditor();
     openEditor(at);

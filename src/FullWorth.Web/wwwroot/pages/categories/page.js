@@ -3,6 +3,7 @@ import { emptyRow } from '../../components/empty.js';
 import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
 import { renderCategoryArrange } from './arrange.js';
 import { openCategoryMerge } from './merge.js';
+import { renderGroceryOffer } from './grocery-offer.js';
 // Der "Übergeordnet"-Select trägt hier denselben Baum wie überall sonst (#157) - ohne Suche musste man
 // ihn beim Anlegen/Verschieben einer Unterkategorie in einem tief verschachtelten Baum durchscrollen.
 import { attachCombobox } from '../../components/combobox.js';
@@ -141,6 +142,7 @@ export async function renderCategories(context) {
   let catSeq = 0;
   for (const root of roots) renderNode(root, byParent, frag, 0, all, (catSeq++ % 8) + 1);
   tree.appendChild(frag);
+  renderGroceryOffer(ctx, all, ctx.$('#cat-grocery-offer'), () => renderCategories(ctx));
 }
 
 // Small header/summary strip above the tree. Counts only; labels reuse existing i18n keys.

@@ -76,6 +76,14 @@ public static class PurchaseAuthorizationEndpoints
             return Outcome(outcome);
         });
 
+        // Positionen, die nur bei "Lebensmittel" stehen, nach ihrem Namen in den Supermarkt-Baum einordnen (apply=false zaehlt nur).
+        group.MapPost("/items/refine-grocery-categories", async (
+            Guid fullWorthSpaceId, bool? apply, CurrentUserContext currentUser, PurchaseAuthorizationStore store, CancellationToken ct) =>
+        {
+            var (result, value) = await store.RefineGroceryCategoriesForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, apply ?? false, ct);
+            return result == PurchaseMutationResult.Success ? Results.Ok(value) : Results.NotFound();
+        });
+
         group.MapPut("/{id:guid}/items", async (
             Guid id,
             Guid fullWorthSpaceId,
