@@ -162,10 +162,23 @@
 @media(max-width:980px){.comp-layout,.negotiation-layout{grid-template-columns:1fr}.comp-results{position:static}.scenario-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.comp-hero{align-items:start;flex-direction:column}.comp-hero-note{white-space:normal}.benefit-row{grid-template-columns:repeat(2,minmax(0,1fr))}.benefit-row label:first-child{grid-column:1/-1}}
 @media(max-width:640px){.comp-page-actions{align-items:stretch}.comp-space-label{flex:1}.comp-shell{width:min(100% - 20px,1480px);padding-top:18px}.form-grid,.comp-metrics,.scenario-grid,.comparison-grid{grid-template-columns:1fr}.scenario-toolbar,.scenario-toolbar>div:last-child{align-items:stretch;flex-direction:column}.benefit-row{grid-template-columns:1fr}.benefit-row label:first-child{grid-column:auto}.oneoff-row{grid-template-columns:repeat(2,minmax(0,1fr))}.oneoff-row>button{grid-column:1/-1}.panel-head .oneoff-add{width:100%}.panel-head .oneoff-add label{flex:1;min-width:140px}.comp-tabs{position:static}.comp-card{padding:15px}}
 
-/* Phone touch targets (Pixel 8 Pro PWA and smaller): every control on this page reaches 44 px. */
+/* Phone: Controls mindestens 40 px (Pixel 8 Pro PWA und kleiner), und die Seite ist enger gesetzt - die
+   Desktop-Masse (Karte 20 px, Titel bis 56 px, Reiter in einer Kapsel) sind auf 340 px Breite Leerraum. Der
+   Reiter ist hier eine Unterstreichung statt einer umrandeten Kapsel mit Pillen. */
 @media(max-width:767px){
-  .comp-shell input:not([type=checkbox]),.comp-shell select,.comp-shell button{min-height:44px}
+  .comp-shell input:not([type=checkbox]),.comp-shell select,.comp-shell button{min-height:40px}
   .comp-shell input[type=checkbox]{width:20px;height:20px}
+  .comp-shell{padding-top:8px}
+  .comp-hero{padding:4px 0 10px;gap:8px}
+  .comp-hero h1{margin:2px 0 4px;font-size:1.5rem}
+  .comp-tabs{gap:0;padding:0;margin-bottom:10px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent}
+  .comp-tabs button{padding:8px 12px;border-radius:0;border-bottom:2px solid transparent}
+  .comp-tabs button.active{background:transparent;border-bottom-color:var(--text)}
+  .comp-layout{gap:12px}
+  .comp-form-stack,.comp-results{gap:10px}
+  .comp-card{padding:12px}
+  .comp-result-primary{padding:12px}
+  .comp-result-primary>strong{font-size:1.75rem}
 }
 
 .field-help{display:block;color:var(--muted);font-size:var(--text-caption-size);line-height:1.35}
@@ -178,14 +191,14 @@
 
 /* The mobile bottom nav is fixed, so the page toast must sit above it (responsive.css only lifts #toast). */
 @media(max-width:767px){
-  .comp-toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:none}
+  .comp-toast{left:16px;right:16px;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:none}
 }
 
 /* Must stay LAST: .comp-shell is declared again further up with a `padding` shorthand at the same
    specificity, so an earlier mobile override would be silently reset. The fixed mobile bottom nav needs
    this clearance or the last panel is hidden behind it. */
 @media(max-width:767px){
-  .comp-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .comp-shell{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
 }
 
 /* A partial employment year is stated in the hero, not left to be inferred from smaller numbers. */

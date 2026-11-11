@@ -41,3 +41,11 @@
   .dt-meta { display: block; }
   .dt-name { white-space: normal; }
 }
+
+/* Phone: eine Zeile ist zwei Zeilen Text (Name, Meta), nicht vier - die Beschreibung auf eine Zeile, weniger
+   Luft ober- und unterhalb, und das Etikett ein Rechteck statt einer Pille. */
+@media (max-width: 767px) {
+  .dt-row { padding-block: var(--s2); }
+  .dt-sub { -webkit-line-clamp: 1; }
+  .dt-tag { border-radius: var(--radius-sm); }
+}

@@ -422,3 +422,22 @@ html[data-theme="light"] dialog.drawer .dialog-card{
     stroke-dashoffset:0!important;
   }
 }
+
+/* Phone: flach statt erhoeht. Karten, die auf dem Desktop mit Verlauf, Schatten, Glanzkante und Hebung
+   schweben, sind auf dem Telefon vier Lagen Dekoration auf 340px Breite - sie fressen Platz (Rand und Rundung)
+   und Aufmerksamkeit (Hebung beim Antippen) und tragen nichts. Eine einfarbige Flaeche mit duenner Linie und
+   kleiner Rundung ist dieselbe Karte ohne den Schmuck. Dasselbe Spezifitaetsniveau wie die Regeln oben, hier
+   spaeter - deshalb steht der Block am Ende dieser Datei. */
+@media(max-width:767px){
+  html[data-theme] .metric,
+  html[data-theme] .panel,
+  html[data-theme] .detected-panel,
+  html[data-theme] .reconcile,
+  html[data-theme] .rule-preview{background:var(--surface);border-color:var(--line);box-shadow:none}
+  html[data-theme] .panel:hover,
+  html[data-theme] .metric:hover{transform:none;border-color:var(--line);box-shadow:none}
+  html[data-theme] .panel::after,
+  html[data-theme] .metric::after{content:none}
+  .metric,.panel,.fw-card{border-radius:var(--radius-sm)}
+  .panel-head button{border-radius:var(--radius-sm)}
+}

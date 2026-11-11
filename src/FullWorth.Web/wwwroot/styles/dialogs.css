@@ -56,9 +56,9 @@ dialog.fw-dialog .dialog-actions{min-width:0}
     background:var(--surface);border-bottom:1px solid var(--line)
   }
   dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close{
-    width:48px;height:48px;margin:-6px -8px -6px 0
+    width:40px;height:40px;margin:-4px -6px -4px 0
   }
-  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close svg{width:25px;height:25px;stroke-width:2.1}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close svg{width:22px;height:22px;stroke-width:2.1}
   dialog.fw-dialog:not(.fw-dialog--sheet) .bank-options{max-height:none;overflow:visible}
 
   /* Two cards set their own padding in app.css, which beats the card padding above and took the

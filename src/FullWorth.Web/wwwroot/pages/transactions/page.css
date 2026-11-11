@@ -30,11 +30,11 @@
 
 .tx-ident{display:inline-grid;place-items:center;width:42px;height:42px;min-width:42px;min-height:42px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
 
-/* Groesseres Symbol auf Touchscreens (Scheibe 13: aus styles/mobile-polish.css geloest - dort stand
+/* Kompaktes Symbol am Telefon, gleich gross wie .fw-ident (Scheibe 13: aus styles/mobile-polish.css geloest - dort stand
    dieselbe Regel neben der von .fw-ident, muss aber NACH dieser Basis hier stehen, sonst gewinnt die
    Basis wieder, weil beide Regeln dieselbe Spezifitaet haben und diese Datei nach app.css laedt). */
 @media(max-width:767px){
-  .tx-ident{width:44px;height:44px;min-width:44px;min-height:44px}
+  .tx-ident{width:36px;height:36px;min-width:36px;min-height:36px;font-size:14px}
 }
 
 .tx-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
@@ -134,7 +134,7 @@
 .tx-sk-avatar{display:inline-block;vertical-align:middle;width:42px;height:42px;border-radius:50%;margin-right:11px}
 
 @media(max-width:767px){
-  .tx-sk-avatar{width:44px;height:44px}
+  .tx-sk-avatar{width:36px;height:36px}
 }
 
 .tx-skeleton .tx-cp-main{gap:6px}
