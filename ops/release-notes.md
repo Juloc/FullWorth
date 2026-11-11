@@ -1,30 +1,23 @@
-# 0.83.0
+# 0.84.0
 
-FullWorth kann dich jetzt benachrichtigen, wenn neue Buchungen eingehen.
+Gehalt wird aus deinen Dokumenten gespeist: Lohnabrechnungen und Arbeitsverträge kommen aus Paperless, mit dem Original-PDF dabei. Dazu kommt die Korrektur der Push-Anzeige.
 
 ## Neu
 
-- **Neue Buchungen als Push-Mitteilung.** Nach jedem Bankabruf bekommst du **eine** Mitteilung für alles, was neu ist: eine einzelne Buchung
-  als „Neue Buchung“, mehrere gebündelt als „5 neue Buchungen“ mit den ersten drei und „+ 2 weitere“. Das Antippen öffnet die Buchungen.
-  Die Bank meldet Buchungen nicht von sich aus, FullWorth holt sie ab (alle 15 Minuten, im Hintergrund höchstens alle 6 Stunden): die
-  Mitteilung kommt, wenn FullWorth sie abholt, nicht in der Sekunde der Zahlung.
-- **Beträge in Mitteilungen einstellbar.** Standard: aus, es steht nur der Händler da, denn einen Sperrbildschirm liest jeder mit.
-  Schalter „Beträge in Mitteilungen anzeigen“ auf der Seite Benachrichtigungen.
-- **Testbenachrichtigung.** Auf der Seite Benachrichtigungen schickt ein Knopf eine Probe an deine eigenen Geräte.
-- Neuer Typ „Neue Buchungen“ in der Liste der Benachrichtigungstypen, einzeln abschaltbar.
+- **Lohnabrechnungen aus Paperless.** Wie bei den Kassenbons: ein Preset mit Art „Lohnabrechnung“ holt neue Dokumente regelmäßig ab und legt sie in der Prüfliste ab. Erkannte Werte (Brutto, Netto, Steuern, Sozialabgaben, Bonus …) prüfst und bestätigst du, erst dann wird gespeichert. Das Original-PDF wird verschlüsselt in FullWorth abgelegt und bleibt aus der Abrechnung heraus öffenbar.
+- **Monats- und Jahresansicht.** Reiter „Lohnabrechnungen“ mit Jahreswahl, Kennzahlen (Brutto, Netto, Nettoquote, Abrechnungen), einem Diagramm „Wohin das Brutto geht“ und der Monatsliste mit Änderung zum Vormonat und dem Detail je Monat. Fehlende Monate sind sichtbar. Hinweise sagen, was auffällt: ein Brutto-Sprung, ein Netto, das trotz gleichem Brutto sinkt (mit der Abzugsposition als Ursache).
+- **Arbeitsverträge und Änderungsprotokoll.** Preset-Art „Arbeitsvertrag“ für Verträge und Nachträge, gleiche Prüfung und Bestätigung. Das Protokoll zeigt jede Änderung mit Datum, PDF und nur den geänderten Feldern (alt durchgestrichen, neu daneben, beim Gehalt mit Prozent); der Rest ist eingeklappt.
+- **Abgleich Vertrag und Abrechnung.** Das Diagramm „Brutto laut Vertrag“ legt die Abrechnungen als Punkte auf die Vertragsstufen. Weicht das Brutto ab, steht ein Hinweis da; hält sich die Abweichung, kommt „Änderung erkannt“ mit einem vorausgefüllten Formular.
 
-## Was nicht gemeldet wird
+## Behoben
 
-- Der erste Abruf eines neuen Kontos (das ist ein Import der Vergangenheit) und Buchungen, die älter als eine Woche sind.
-- Umbuchungen zwischen deinen eigenen Konten und Buchungen, die du ausgeblendet hast.
-- Eine Buchung, die eine schon gemeldete Vormerkung ersetzt: dieselbe Zahlung wird nur einmal gemeldet.
-- Nur die Besitzer eines Kontos werden benachrichtigt, nicht jedes Mitglied des Bereichs.
+- **Push zeigte „aktiv“, obwohl nichts ankam, und ließ sich nicht abschalten.** Die Seite las „aktiv“ allein aus der Browser-Berechtigung, die auch nach einer fehlgeschlagenen Anmeldung bestehen bleibt. Jetzt gilt Push nur als aktiv, wenn Berechtigung, eine zum Server passende Anmeldung und der Servereintrag da sind. Eine veraltete Anmeldung wird erkannt und beim erneuten Aktivieren ersetzt. Abschalten geht in jedem Zustand, auch ohne Verbindung zum Server, und zeigt, was nicht geklappt hat.
+- **Die Testbenachrichtigung meldete „gesendet“, egal was passierte.** Sie meldet jetzt einen Fehler, wenn kein Push-Dienst die Nachricht angenommen hat.
+- Der Name eines Paperless-Presets ist je Benutzer eindeutig statt je Bereich: zwei Mitglieder mit gleich benannten Presets bekamen beim Speichern einen Fehler.
 
 ## Wichtig
 
-- **Push läuft ohne Einrichtung.** Die Installation erzeugt das nötige Schlüsselpaar beim ersten Bedarf selbst und legt es verschlüsselt in
-  der Datenbank ab: nichts in einer Compose-Datei, nichts zu kopieren. Wer ein eigenes Paar mitbringen will, setzt wie bisher
-  `Push__VapidPublicKey` und `Push__VapidPrivateKey`; das gilt dann vorrangig.
-- Danach auf der Seite Benachrichtigungen einmal **„Push aktivieren“** tippen (pro Gerät) und die Browser-Abfrage erlauben. Auf dem iPhone
-  geht Push nur, wenn FullWorth zum Home-Bildschirm hinzugefügt ist (iOS 16.4 oder neuer).
-- Eine Datenbank-Änderung (eine neue kleine Tabelle), sonst keine Konfiguration.
+- Gehaltsdaten, Abrechnungs- und Vertrags-PDFs sieht nur, wer sie importiert hat, nicht jedes Mitglied des Bereichs. Die Kontolöschung entfernt sie mit.
+- Zwei Datenbank-Änderungen (neue Tabellen für Funde und Vertragsstände, eine neue Spalte „Art“ bei den Presets), sonst keine Konfiguration. Die PDFs liegen unter `/data/pension/compensation`, kein neues Volume nötig.
+- Noch nicht mit echtem Paperless, echten Abrechnungen und echten Verträgen erprobt: die Auslesung liefert Vorschläge, die du bestätigst.
+- Presets für Gehalt und Verträge lassen sich in der Oberfläche noch nicht löschen.
