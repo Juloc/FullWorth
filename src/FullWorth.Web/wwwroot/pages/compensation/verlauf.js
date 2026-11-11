@@ -3,7 +3,7 @@
 // Veränderung zum Vorjahr, die Teuerung im selben Zeitraum und was real übrig bleibt) und klappt zu seinen Monaten auf;
 // die Gehaltsänderungen aus den Verträgen stehen als Ereignisse im Jahr, mit ihrem PDF. Alles kommt aus den
 // bestätigten Abrechnungen und Vertragsständen - hinzugefügt wird über den Dialog (add-dialog.js).
-import { esc, euro, spaceId, api } from './shared.js';
+import { esc, euro, spaceId, api, splitSpecialPay } from './shared.js';
 import { setOverviewData, renderYear } from './payslip-overview.js';
 import { openImportPdf } from './paperless-finds.js';
 import { openAdd } from './add-dialog.js';
@@ -54,7 +54,7 @@ function yearRows() {
     const list = [...months.values()], regular = list.filter(p => !num(p.bonus));
     return {
       year, count: list.length,
-      gross: list.reduce((sum, p) => sum + num(p.grossPay), 0), bonus: list.reduce((sum, p) => sum + num(p.bonus), 0),
+      gross: list.reduce((sum, p) => sum + num(p.grossPay), 0), holiday: list.reduce((sum, p) => sum + splitSpecialPay(p).holiday, 0), bonus: list.reduce((sum, p) => sum + splitSpecialPay(p).bonus, 0),
       paid: average(regular.length ? regular : list, p => num(p.payout)), cpi: cpiOf(year, months)
     };
   });
@@ -94,7 +94,7 @@ function draw(host) {
     const eventList = events.filter(e => e.validFrom.startsWith(String(year))).sort((a, b) => b.validFrom.localeCompare(a.validFrom));
     const head = row
       ? `<summary class="vl-summary"><span class="vl-y">${year}</span>`
-        + cell('Brutto', euro.format(row.gross)) + cell('Bonus', row.bonus ? euro.format(row.bonus) : '—')
+        + cell('Brutto', euro.format(row.gross)) + cell('13. Gehalt', row.holiday ? euro.format(row.holiday) : '—') + cell('Bonus', row.bonus ? euro.format(row.bonus) : '—')
         + cell('Ausgezahlt / Monat', euro.format(row.paid))
         + cell('zum Vorjahr', row.change === null ? '—' : pct(row.change), tone(row.change))
         + cell('Teuerung', row.inflation === null ? '—' : pct(row.inflation))

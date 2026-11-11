@@ -2,7 +2,7 @@
 // Zeit getan haben - die allgemeine Teuerung, einzelne Ausgaben des Grundbedarfs (Lebensmittel, Miete, Energie,
 // Benzin) und, sobald bestaetigte Belege da sind, die Preise der eigenen Einkaeufe. Alle Linien beginnen am
 // selben Monat bei 100, damit man sie nebeneinander lesen kann.
-import { $, esc, euro, euro2, spaceId, api } from './shared.js';
+import { $, esc, euro, euro2, spaceId, api, splitSpecialPay } from './shared.js';
 import { monthsOf } from './housing-costs.js';
 
 const MONTH = new Intl.DateTimeFormat('de-DE', { month: 'short', year: 'numeric' });
@@ -15,7 +15,10 @@ const BASIS = { gross: 'Brutto', net: 'Netto', payout: 'Ausgezahlt' };
 const BASIS_VALUE = {
   payout: p => num(p.payout),
   net: p => num(p.netPay),
-  gross: p => num(p.grossPay) - (view.bonus ? 0 : num(p.bonus)) - (view.car ? 0 : num(p.companyCarTaxableBenefit))
+  gross: p => {
+    const { holiday, bonus } = splitSpecialPay(p);
+    return num(p.grossPay) - (view.holiday ? 0 : holiday) - (view.bonus ? 0 : bonus) - (view.car ? 0 : num(p.companyCarTaxableBenefit));
+  }
 };
 const monthIndex = iso => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
 const signed = value => `${value >= 0 ? '+' : '−'}${Math.abs(value).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
@@ -39,7 +42,7 @@ const LINES = [
   { key: 'home:ancillary', label: 'Meine Nebenkosten', color: 'var(--cat-5)', own: true, group: 'home', stat: 'gesamt' }
 ];
 
-const view = { basis: 'gross', bonus: true, car: false, window: 12, since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: new Set() };
+const view = { basis: 'gross', holiday: true, bonus: true, car: false, window: 12, since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: new Set() };
 let data = null, loading = null, host = null, payslips = [], housing = [];
 
 /** Die erfassten Wohnkosten (housing-costs.js); zeichnet neu, sobald sich etwas aendert. */
@@ -184,7 +187,7 @@ function controlsHtml(startOptions = [], start = null) {
       ${tabs('Zeitraum', 'data-pp-window', [[12, 'Ø 12 Monate'], [1, 'Monat']], view.window)}
       ${startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${startOptions.map(m => `<option value="${m}"${m === start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
     </div>
-    ${view.basis === 'gross' ? `<div class="pp-options">${option('bonus', 'Bonus einrechnen')}${option('car', 'Firmenwagen-Vorteil einrechnen')}</div>` : ''}`;
+    ${view.basis === 'gross' ? `<div class="pp-options">${option('holiday', '13. Gehalt einrechnen')}${option('bonus', 'Bonus einrechnen')}${option('car', 'Firmenwagen-Vorteil einrechnen')}</div>` : ''}`;
 }
 
 function draw() {
@@ -206,7 +209,7 @@ function draw() {
   const real = priceChange === null ? null : ((1 + salaryChange / 100) / (1 + priceChange / 100) - 1) * 100;
   const power = priceChange === null ? null : model.salaryNow - model.salaryStart * (1 + priceChange / 100);
   const label = BASIS[view.basis];
-  const descr = [label, view.basis === 'gross' ? (view.bonus ? 'mit Bonus' : 'ohne Bonus') : '', view.basis === 'gross' && view.car ? 'mit Firmenwagen-Vorteil' : '', view.window === 12 ? 'Ø 12 Monate' : 'je Monat'].filter(Boolean).join(', ');
+  const descr = [label, view.basis === 'gross' ? [view.holiday ? 'mit 13. Gehalt' : 'ohne 13. Gehalt', view.bonus ? 'mit Bonus' : 'ohne Bonus'].join(', ') : '', view.basis === 'gross' && view.car ? 'mit Firmenwagen-Vorteil' : '', view.window === 12 ? 'Ø 12 Monate' : 'je Monat'].filter(Boolean).join(', ');
 
   const legendRow = l => {
     const line = model.lines.find(x => x.key === l.key);

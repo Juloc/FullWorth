@@ -2,7 +2,7 @@
 // nichts davon ist eine Eingabe. Sie zeigt, woraus das Gehalt besteht (Grundgehalt, Bonus, Firmenwagen, bAV), jedes
 // Stück einzeln und zusammen, und darunter "Gehalt gegen Preise" und die Wohnkosten. Wer noch keine Abrechnung hat,
 // sieht, wie er sie aus Paperless holt.
-import { $, esc, euro, euro2, fmtDate, monthLabel, spaceId, api } from './shared.js';
+import { $, esc, euro, euro2, fmtDate, monthLabel, spaceId, api, splitSpecialPay } from './shared.js';
 import { renderPurchasingPower, setHousingCosts } from './purchasing-power.js';
 import { renderHousingCosts } from './housing-costs.js';
 
@@ -36,15 +36,17 @@ export async function renderMeinGehalt() {
 
   const year = byNewest.slice(0, 12);
   const sum = key => year.reduce((total, x) => total + num(x.payslip[key]), 0);
-  const bonusMonths = year.filter(x => num(x.payslip.bonus) > 0).sort((a, b) => a.payslip.period.localeCompare(b.payslip.period));
-  // Der Bonus steht in keinem Vertragsstand (ein Stand kennt nur das Monatsgehalt), sondern ergibt sich aus den
-  // Abrechnungen: ein halbes Monatsgehalt zusätzlich ist ein dreizehntes Gehalt, alles andere eine Prämie.
-  const salaryAt = period => states.filter(s => s.validFrom <= period).pop()?.grossMonthly || base;
-  const half = bonusMonths.filter(x => Math.abs(num(x.payslip.bonus) / salaryAt(x.payslip.period) - 0.5) < 0.06);
-  const premiums = bonusMonths.filter(x => !half.includes(x));
+  // Das dreizehnte Gehalt (Urlaubs- und Weihnachtsgeld) und der Bonus stehen auf der Abrechnung in einer Zeile, sind aber
+  // zweierlei: das eine ist Teil des Gehalts, das andere kommt dazu. Der Vertrag kennt nur das Monatsgehalt, also ergibt
+  // sich die Trennung aus den Abrechnungen (siehe splitSpecialPay).
+  const split = x => splitSpecialPay(x.payslip);
+  const holidaySum = year.reduce((total, x) => total + split(x).holiday, 0);
+  const bonusSum = year.reduce((total, x) => total + split(x).bonus, 0);
+  const holidayMonths = year.filter(x => split(x).holiday > 0).sort((a, b) => a.payslip.period.localeCompare(b.payslip.period));
+  const bonusMonths = year.filter(x => split(x).bonus > 0).sort((a, b) => a.payslip.period.localeCompare(b.payslip.period));
   const bonusText = [
-    half.length ? `Bonus: ${half.length === 2 ? '13. Gehalt, je ½ Monatsgehalt im' : '½ Monatsgehalt im'} ${half.map(x => monthLabel(x.payslip.period).split(' ')[0]).join(' und ')}.` : '',
-    ...premiums.map(x => `Prämie ${monthLabel(x.payslip.period)} ${euro.format(num(x.payslip.bonus))}.`)].filter(Boolean).join(' ');
+    holidayMonths.length ? `13. Gehalt: ½ Monatsgehalt im ${holidayMonths.map(x => monthLabel(x.payslip.period).split(' ')[0]).join(' und im ')} (Urlaubs- und Weihnachtsgeld).` : '',
+    ...bonusMonths.map(x => `Bonus ${monthLabel(x.payslip.period)} ${euro.format(split(x).bonus)}.`)].filter(Boolean).join(' ');
   const source = `Abrechnung ${monthLabel(p.period)}${contract ? ` und Vertrag ab ${fmtDate(contract.validFrom)}` : ''}`;
   const row = (label, value, note = '', cls = '') => `<div class="po-detail-row${cls}"><dt>${label}</dt><dd>${value}</dd><dd class="gv-note">${note}</dd></div>`;
 
@@ -66,7 +68,8 @@ export async function renderMeinGehalt() {
       ${bavEmployer ? `<p class="extended-note gv-extra">Zusätzlich zahlt dein Arbeitgeber <strong>${euro2.format(bavEmployer)}</strong> im Monat in deine Altersvorsorge. Das steht nicht im Brutto.</p>` : ''}
       <div class="po-kpis gv-kpis">
         <div><span>${year.length} Monate Brutto</span><strong>${euro.format(sum('grossPay'))}</strong></div>
-        <div><span>davon Bonus</span><strong>${euro.format(sum('bonus'))}</strong></div>
+        ${holidaySum ? `<div><span>davon 13. Gehalt</span><strong>${euro.format(holidaySum)}</strong></div>` : ''}
+        ${bonusSum ? `<div><span>davon Bonus</span><strong>${euro.format(bonusSum)}</strong></div>` : ''}
         <div><span>Firmenwagen-Vorteil</span><strong>${euro.format(sum('companyCarTaxableBenefit'))}</strong></div>
         <div><span>bAV Arbeitgeber</span><strong>${euro.format(sum('bavEmployer'))}</strong></div>
         <div><span>Ausgezahlt</span><strong>${euro.format(sum('payout'))}</strong></div>

@@ -26,6 +26,19 @@ export const checked = id => !!$(`#${id}`)?.checked;
 export const setChecked = (id, v) => { const el = $(`#${id}`); if (el) el.checked = !!v; };
 export const spaceId = () => $('#space-select')?.value || '';
 
+// Was auf einer Abrechnung als "Bonus / Sonderzahlung" steht, ist zweierlei: das dreizehnte Gehalt (Urlaubs- und
+// Weihnachtsgeld, je ein halbes Monatsgehalt im Juni und im November) und ein Bonus, den es zusaetzlich gibt. Beides
+// wird getrennt gezeigt und gerechnet; der Bonus ist nur das, was ueber das halbe Monatsgehalt hinausgeht.
+export function splitSpecialPay(payslip) {
+  const special = Number(payslip.bonus) || 0;
+  const month = Number(String(payslip.period).slice(5, 7));
+  if (special <= 0 || (month !== 6 && month !== 11)) return { holiday: 0, bonus: special };
+  const half = ((Number(payslip.grossPay) || 0) - special - (Number(payslip.companyCarTaxableBenefit) || 0)) / 2;
+  const tolerance = Math.max(1, half * 0.06);
+  if (Math.abs(special - half) <= tolerance) return { holiday: special, bonus: 0 };
+  return special > half ? { holiday: Math.round(half * 100) / 100, bonus: Math.round((special - half) * 100) / 100 } : { holiday: 0, bonus: special };
+}
+
 export const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('de-DE', { month: 'long' }).format(new Date(2021, i, 1)));
 export const monthLabel = v => v ? new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(new Date(`${String(v).slice(0, 10)}T12:00:00`)) : '—';
 export const fmtDate = v => v ? new Intl.DateTimeFormat('de-DE').format(new Date(`${String(v).slice(0, 10)}T12:00:00`)) : '—';

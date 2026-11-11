@@ -591,7 +591,7 @@
 .gv-rows .po-detail-row{grid-template-columns:minmax(0,1.2fr) auto minmax(0,1fr)}
 .gv-rows .gv-note{color:var(--muted);font-size:var(--text-caption-size);text-align:left;align-self:center}
 .gv-extra{margin:var(--space-3) 0 0}
-.gv-kpis{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:var(--space-3)}
+.gv-kpis{grid-template-columns:repeat(6,minmax(0,1fr));margin-top:var(--space-3)}
 @media(max-width:560px){
   .gv-rows .po-detail-row{grid-template-columns:minmax(0,1fr) auto}
   .gv-rows .gv-note{grid-column:1/-1;margin-top:calc(var(--space-1) * -1)}
@@ -621,7 +621,7 @@
 .vl-hints:empty{display:none}
 .vl-years{display:grid;align-content:start;min-height:320px}
 .vl-year{border-bottom:1px solid var(--line)}
-.vl-summary{display:grid;grid-template-columns:4rem repeat(6,minmax(0,1fr)) 1rem;gap:var(--space-3);align-items:center;min-height:56px;padding:var(--space-2) 0;cursor:pointer;list-style:none}
+.vl-summary{display:grid;grid-template-columns:4rem repeat(7,minmax(0,1fr)) 1rem;gap:var(--space-3);align-items:center;min-height:56px;padding:var(--space-2) 0;cursor:pointer;list-style:none}
 .vl-summary::-webkit-details-marker{display:none}
 details>.vl-summary::after{content:"";justify-self:center;width:.5rem;height:.5rem;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(45deg)}
 details[open]>.vl-summary::after{transform:rotate(-135deg)}
@@ -647,7 +647,7 @@ details[open]>.vl-summary::after{transform:rotate(-135deg)}
 .vl-more>:not(summary){margin-bottom:var(--space-3)}
 @media(max-width:900px){
   .vl-summary{grid-template-columns:3.5rem repeat(3,minmax(0,1fr)) 1rem;gap:var(--space-2)}
-  .vl-summary .vl-cell:nth-child(3),.vl-summary .vl-cell:nth-child(5),.vl-summary .vl-cell:nth-child(6){display:none}
+  .vl-summary .vl-cell:nth-child(3),.vl-summary .vl-cell:nth-child(4),.vl-summary .vl-cell:nth-child(6),.vl-summary .vl-cell:nth-child(7){display:none}
 }
 /* Hinzufügen (add-dialog.js): ein Dialog, zwei Ebenen. Kopf und Reiter stehen fest, nur der Bereich darunter scrollt. */
 .va-dialog{max-width:min(94vw,720px);overflow:hidden}
