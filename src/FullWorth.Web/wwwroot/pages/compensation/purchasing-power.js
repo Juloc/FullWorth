@@ -58,7 +58,8 @@ function salaryByMonth(basis) {
   const smooth = new Map();
   for (const [m, value] of byMonth) {
     const around = [-2, -1, 0, 1, 2].map(d => byMonth.get(m + d)).filter(v => v > 0).sort((a, b) => a - b);
-    smooth.set(m, around.length >= 3 ? around[Math.floor(around.length / 2)] : around.length === 2 ? around[0] : value);
+    // Bei gerader Zahl der untere Median: zwei hohe Monate nebeneinander (Bonus und eine Nachzahlung) sollen nicht gewinnen.
+    smooth.set(m, around.length >= 3 ? around[Math.floor((around.length - 1) / 2)] : around.length === 2 ? around[0] : value);
   }
   return smooth;
 }
