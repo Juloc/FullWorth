@@ -10,3 +10,7 @@ Heiz- und Nebenkosten aus deinen Abrechnungen, neben den Preisen der Statistik.
 ## Wichtig
 
 - Eine Datenbank-Änderung (neue Tabelle „HousingCostEntries“), sonst nichts.
+
+## Behoben
+
+- Das Gehaltsgespräch füllt sich mit 13 statt 14 Monatsgehältern, wenn eine einmalige Prämie dabei war: gezählt werden nur Einmalzahlungen von etwa einem halben Monatsgehalt.
