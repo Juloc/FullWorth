@@ -37,6 +37,14 @@ export async function renderMeinGehalt() {
   const year = byNewest.slice(0, 12);
   const sum = key => year.reduce((total, x) => total + num(x.payslip[key]), 0);
   const bonusMonths = year.filter(x => num(x.payslip.bonus) > 0).sort((a, b) => a.payslip.period.localeCompare(b.payslip.period));
+  // Der Bonus steht in keinem Vertragsstand (ein Stand kennt nur das Monatsgehalt), sondern ergibt sich aus den
+  // Abrechnungen: ein halbes Monatsgehalt zusätzlich ist ein dreizehntes Gehalt, alles andere eine Prämie.
+  const salaryAt = period => states.filter(s => s.validFrom <= period).pop()?.grossMonthly || base;
+  const half = bonusMonths.filter(x => Math.abs(num(x.payslip.bonus) / salaryAt(x.payslip.period) - 0.5) < 0.06);
+  const premiums = bonusMonths.filter(x => !half.includes(x));
+  const bonusText = [
+    half.length ? `Bonus: ${half.length === 2 ? '13. Gehalt, je ½ Monatsgehalt im' : '½ Monatsgehalt im'} ${half.map(x => monthLabel(x.payslip.period).split(' ')[0]).join(' und ')}.` : '',
+    ...premiums.map(x => `Prämie ${monthLabel(x.payslip.period)} ${euro.format(num(x.payslip.bonus))}.`)].filter(Boolean).join(' ');
   const source = `Abrechnung ${monthLabel(p.period)}${contract ? ` und Vertrag ab ${fmtDate(contract.validFrom)}` : ''}`;
   const row = (label, value, note = '', cls = '') => `<div class="po-detail-row${cls}"><dt>${label}</dt><dd>${value}</dd><dd class="gv-note">${note}</dd></div>`;
 
@@ -63,7 +71,7 @@ export async function renderMeinGehalt() {
         <div><span>bAV Arbeitgeber</span><strong>${euro.format(sum('bavEmployer'))}</strong></div>
         <div><span>Ausgezahlt</span><strong>${euro.format(sum('payout'))}</strong></div>
       </div>
-      <p class="extended-note gv-extra">Quelle: ${esc(source)}.${bonusMonths.length ? ` Einmalzahlungen: ${esc(bonusMonths.map(x => `${monthLabel(x.payslip.period).split(' ')[0]} ${euro.format(num(x.payslip.bonus))}`).join(', '))}.` : ''}${year.length < 12 ? ` Es liegen ${year.length} von 12 Monaten vor.` : ''}</p>
+      <p class="extended-note gv-extra">Quelle: ${esc(source)}.${bonusText ? ` ${esc(bonusText)}` : ''}${year.length < 12 ? ` Es liegen ${year.length} von 12 Monaten vor.` : ''}</p>
     </div>
     <div class="panel comp-card pp-card" id="po-power"></div>
     <div class="panel comp-card hc-card" id="po-housing"></div>`;

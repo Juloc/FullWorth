@@ -1,4 +1,5 @@
 import { confirmMessage } from '../../components/confirm.js';
+import { renderActuals } from './verlauf-real.js';
 import {
   $ as H$, $$ as H$$, euro as heuro, euro2 as heuro2, esc, attr, val as hval, num as hnum, setVal as hset,
   spaceId, fmtDate, localIsoDate, api as hapi, json as hjson, notify as hmessage,
@@ -88,6 +89,8 @@ function syncHistoryControls(){
 
 function historyMarkup(){return `
 <section id="tab-history" class="comp-tab">
+  <article id="history-real" class="panel comp-card" hidden></article>
+  <details id="history-plan" class="history-plan"><summary>Planungsstand aus dem Rechner speichern</summary>
   <article class="panel history-toolbar">
     <label>Datum<input id="history-date" type="date"></label>
     <label>Art<select id="history-type">
@@ -103,6 +106,7 @@ function historyMarkup(){return `
     <label class="history-title">Notiz<input id="history-note" maxlength="1000" placeholder="optional"></label>
     <button id="history-save" class="btn btn-primary" type="button">Aktuellen Rechnerstand ab Datum speichern</button>
   </article>
+  </details>
   <div id="history-summary" class="metric-grid history-summary"></div>
   <article class="panel history-chart-card">
     <div class="history-chart-head">
@@ -152,6 +156,13 @@ async function loadHistory(){
     hapi(`api/compensation/timeline?${query}`)
   ]);
   hstate.entries=entries||[];hstate.timeline=timeline;
+  // Gibt es Abrechnungen, ist der Verlauf deren Verlauf; die Rechner-Planungsstaende stehen darunter und nur, wenn es
+  // welche gibt. Ohne beides steht hier die alte Aufforderung, den Rechner zu speichern.
+  const actual=await renderActuals(H$('#history-real')).catch(()=>false);
+  const planned=hstate.entries.length>0;
+  H$$('#tab-history .history-chart-card,#tab-history .history-years-card').forEach(card=>{card.hidden=!planned});
+  H$('#history-summary').hidden=actual&&!planned;
+  H$('#history-plan').open=!actual&&!planned;
   // Only once: the first timeline that carries other income turns its curves on, afterwards the user's
   // own legend choice is respected (including switching them off again).
   if(!hstate.otherSeriesPrimed&&hasOtherIncome(timeline)){
