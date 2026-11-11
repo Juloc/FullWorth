@@ -216,9 +216,10 @@ async function fillNegotiation(){
   if(!states.length){note.textContent='Noch keine bestätigten Vertragsstände - sie entstehen im Reiter „Arbeitsverträge“.';return}
   const first=states[0],latest=states[states.length-1];
   const lastYear=(payslips||[]).slice(0,12);
-  const bonus=lastYear.reduce((sum,p)=>sum+(p.payslip.bonus||0),0);
-  const extra=Math.round(bonus/latest.grossMonthly*2)/2;
-  const months=12+Math.min(Math.max(extra,0),2);
+  // Gezaehlt werden nur Einmalzahlungen von etwa einem halben Monatsgehalt (1,5 Gehaelter im Juni und November);
+  // eine Praemie von 4.000 EUR ist kein weiteres Monatsgehalt im Jahr.
+  const extra=lastYear.filter(p=>Math.abs((p.payslip.bonus||0)/latest.grossMonthly-0.5)<0.06).length*0.5;
+  const months=12+Math.min(extra,2);
   set('neg-old-salary',Math.round(first.grossMonthly*months));
   set('neg-old-date',first.validFrom);
   set('neg-current-salary',Math.round(latest.grossMonthly*months));
