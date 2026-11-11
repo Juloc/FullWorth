@@ -117,9 +117,7 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
     const list = docs.slice(0, 80).map(d => `<li><span>${esc(d.title)}</span><small>${esc(setup.options.documentTypes.find(t => t.id === d.documentType)?.name || '')}</small></li>`).join('');
 
     return `<div class="pf-setup">
-      <h3>Welche Dokumente in Paperless sind deine ${esc(texts.noun)}?</h3>
-      <p class="extended-note">FullWorth zeigt, was in deiner Paperless-Ablage liegt. Wähle den Dokumenttyp und danach, von wem die Dokumente sind – so landen nur deine ${esc(texts.noun)} hier, keine Bank-Entgelte oder Unterlagen anderer.</p>
-      <div class="pf-step"><span class="pf-step-title">1 · Dokumenttyp</span><div class="pf-rows">${chips}</div><select data-pf-more aria-label="Weiteren Dokumenttyp hinzufügen"><option value="">Weiterer Typ …</option>${more}</select></div>
+      <div class="pf-step"><span class="pf-step-title">1 · Dokumenttyp in Paperless</span><div class="pf-rows">${chips}</div><select data-pf-more aria-label="Weiteren Dokumenttyp hinzufügen"><option value="">Weiterer Typ …</option>${more}</select></div>
       ${setup.error ? `<p class="pf-error">${esc(setup.error)}</p>` : ''}
       ${groups.length ? `<div class="pf-step"><span class="pf-step-title">2 · Von wem?</span><div class="pf-rows">${groupHtml}</div>${setup.truncated ? `<p class="extended-note">Es gibt mehr als ${PREVIEW_LIMIT} Treffer, gezeigt werden die neuesten.</p>` : ''}</div>`
         : `<p class="extended-note">${setup.loading ? 'Paperless wird durchsucht …' : setup.types.size ? 'Zu diesen Typen gibt es in Paperless keine Dokumente.' : 'Wähle mindestens einen Dokumenttyp.'}</p>`}

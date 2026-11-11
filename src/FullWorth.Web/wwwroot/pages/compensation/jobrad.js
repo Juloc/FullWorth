@@ -126,14 +126,12 @@ function jobRadMarkup() { return `
   <div class="comp-layout">
     <div class="comp-form-stack">
       <article class="panel comp-card">
-        <div class="panel-head"><div><span class="step">1</span><h2>Leasing</h2></div></div>
+        <div class="panel-head"><div><h2>Leasing</h2></div></div>
         <div class="form-grid">
           <label>Bruttolistenpreis (UVP)<input id="jobrad-list-price" type="number" min="0" step="50" value="3000"></label>
           <label>Monatliche Leasingrate (brutto)<input id="jobrad-rate" type="number" min="0" step="1" value="89"></label>
           <label>Laufzeit<select id="jobrad-term"><option value="24">24 Monate</option><option value="36" selected>36 Monate</option><option value="48">48 Monate</option></select></label>
-          <label>Modell<select id="jobrad-conversion"><option value="true">Gehaltsumwandlung</option><option value="false">Gehaltsextra (zusätzlich zum Gehalt)</option></select>
-            <small class="field-help">Umwandlung senkt dein Bruttogehalt und wirkt sich auf Steuer, Sozialversicherung und Rente aus. Gehaltsextra ist nach § 3 Nr. 37 EStG steuer- und SV-frei und rührt dein Gehalt nicht an.</small>
-          </label>
+          <label>Modell<select id="jobrad-conversion"><option value="true">Gehaltsumwandlung</option><option value="false">Gehaltsextra (zusätzlich zum Gehalt)</option></select></label>
           <label id="jobrad-subsidy-field">Arbeitgeberzuschuss (monatlich)<input id="jobrad-subsidy" type="number" min="0" step="1" value="0"></label>
           <label>Versicherung/Service extra (monatlich)<input id="jobrad-insurance-service" type="number" min="0" step="1" value="0"></label>
         </div>
@@ -149,9 +147,9 @@ function jobRadMarkup() { return `
       </article>
 
       <article class="panel comp-card">
-        <div class="panel-head"><div><span class="step">2</span><h2>Vergleich: Barkauf</h2></div></div>
+        <div class="panel-head"><div><h2>Vergleich: Barkauf</h2></div></div>
         <div class="form-grid">
-          <label>Tatsächlicher Kaufpreis beim Händler<input id="jobrad-cash-price" type="number" min="0" step="10" value="2600"><small class="field-help">Nicht die UVP - der Preis, den du wirklich zahlen würdest.</small></label>
+          <label>Tatsächlicher Kaufpreis beim Händler<input id="jobrad-cash-price" type="number" min="0" step="10" value="2600"></label>
           <label>Versicherung pro Jahr<input id="jobrad-cash-insurance" type="number" min="0" step="5" value="0"></label>
           <label>Wartung/Service pro Jahr<input id="jobrad-cash-service" type="number" min="0" step="5" value="0"></label>
           <label>Finanzierungskosten insgesamt (falls nicht bar)<input id="jobrad-cash-financing" type="number" min="0" step="10" value="0"></label>
@@ -164,7 +162,6 @@ function jobRadMarkup() { return `
       <article class="panel comp-card comp-result-primary">
         <span>Netto pro Monat</span>
         <strong id="jobrad-net-impact">—</strong>
-        <small>Was ein normaler Monat mit dem Dienstrad weniger Netto bringt.</small>
       </article>
       <div class="metric-grid comp-metrics">
         <article class="metric"><span>Gesamtkosten Leasing bis Eigentum</span><strong id="jobrad-lease-total">—</strong></article>

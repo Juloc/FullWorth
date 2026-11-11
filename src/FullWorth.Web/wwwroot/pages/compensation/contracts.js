@@ -97,17 +97,18 @@ async function logAction(event) {
 // ---- Prüfen und bestätigen -------------------------------------------------------------------
 
 const hintText = text => { $('#ct-review-hint').textContent = text; };
-const DEFAULT_HINT = 'Alle Felder können vor dem Speichern korrigiert werden - oder du erfasst einen Stand von Hand.';
 
 function fillForm(x, importId, title) {
   reviewedImport = importId;
-  hintText(importId ? `Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.` : DEFAULT_HINT);
+  hintText(importId ? `Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.` : '');
+  // Das Formular klappt auf, wenn es etwas zu pruefen gibt, und zu, wenn es geleert wird.
+  $('#contract-manual').open = !!(importId || x.validFrom || x.grossMonthly != null);
   setVal('ct-from', x.validFrom || ''); setVal('ct-kind', x.kind || 'contract'); setVal('ct-employer', x.employer || '');
   setVal('ct-gross', x.grossMonthly); setVal('ct-hours', x.weeklyHours); setVal('ct-vacation', x.vacationDays);
   setChecked('ct-car', !!x.companyCar); setVal('ct-bav', x.bavEmployerShare); setVal('ct-notice', x.noticePeriod || ''); setVal('ct-position', x.position || '');
   $('#ct-extras').innerHTML = '';
   (x.extras || []).forEach(extra => addExtra(extra.label, extra.value));
-  if (importId) $('#ct-review-hint').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (importId) $('#contract-manual').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 const resetForm = () => fillForm({}, null);
@@ -119,7 +120,7 @@ function prefill(index) { suggest(state.overview.hints[index]); }
 function suggest(hint) {
   fillForm({ validFrom: hint.suggestedValidFrom, kind: 'addendum', grossMonthly: hint.suggestedGross }, null);
   hintText('Vorschlag aus den Abrechnungen. Zum Beispiel Wochenstunden und Urlaubstage aus dem Vertrag ergänzen, dann speichern.');
-  $('#ct-review-hint').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  $('#contract-manual').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function addExtra(label = '', value = '') {

@@ -50,48 +50,43 @@ function optimizerMarkup(){return `
 function payslipMarkup(){return `
 <section id="tab-payslips" class="comp-tab">
   <div id="payslip-overview" class="payslip-overview"></div>
-  <div class="payslip-layout">
-    <div class="payslip-stack">
-      <article class="panel comp-card">
-        <div class="panel-head"><div><h2>Aus Paperless</h2></div></div>
-        <div id="paperless-body" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
-      </article>
-      <article class="panel comp-card">
-        <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2></div></div>
-        <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button><button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button></div>
-        <div id="payslip-extraction-status" class="extended-note">Eine Datei füllt das Formular unten. Mehrere Dateien werden als Liste zur Prüfung angezeigt. Werte werden erst nach deiner Bestätigung gespeichert.</div>
-      </article>
-      <!-- Eigenes Element statt im Upload-Artikel: renderBatch() setzt hier eine eigene .panel.comp-card
-           hinein, sobald Ergebnisse da sind - innerhalb des Upload-Artikels waere das Kaesteli-in-Kaesteli
-           (Scheibe 11). -->
-      <div id="payslip-batch" class="payslip-batch" hidden></div>
+  <article class="panel comp-card pa-add">
+    <div class="panel-head"><div><h2>Abrechnung hinzufügen</h2></div></div>
+    <div id="paperless-body" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
+    <div class="pa-upload">
+      <input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp" aria-label="Lohnabrechnung als Datei">
+      <button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button>
+      <button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button>
     </div>
-    <aside class="payslip-stack">
-      <article class="panel comp-card">
-        <div class="panel-head"><div><h2>Erkannte Werte prüfen</h2><p id="ps-review-hint">Alle Felder können vor dem Speichern korrigiert werden.</p></div></div>
-        <div class="form-grid payslip-fields">
-          <label>Abrechnungsdatum<input id="ps-period" type="date"></label>
-          <label>Brutto<input id="ps-gross" type="number" min="0" step="0.01"></label>
-          <label>Netto<input id="ps-net" type="number" min="0" step="0.01"></label>
-          <label>Auszahlung<input id="ps-payout" type="number" min="0" step="0.01"></label>
-          <label>Lohnsteuer<input id="ps-tax" type="number" min="0" step="0.01"></label>
-          <label>Soli<input id="ps-soli" type="number" min="0" step="0.01"></label>
-          <label>Kirchensteuer<input id="ps-church" type="number" min="0" step="0.01"></label>
-          <label>Rentenversicherung<input id="ps-rv" type="number" min="0" step="0.01"></label>
-          <label>Arbeitslosenversicherung<input id="ps-av" type="number" min="0" step="0.01"></label>
-          <label>Krankenversicherung<input id="ps-kv" type="number" min="0" step="0.01"></label>
-          <label>Pflegeversicherung<input id="ps-pv" type="number" min="0" step="0.01"></label>
-          <label>Firmenwagen Sachbezug<input id="ps-car" type="number" min="0" step="0.01"></label>
-          <label>bAV Arbeitnehmer<input id="ps-bav" type="number" min="0" step="0.01"></label>
-          <label>bAV Arbeitgeber<input id="ps-bav-ag" type="number" min="0" step="0.01"></label>
-          <label>Bonus / Sonderzahlung<input id="ps-bonus" type="number" min="0" step="0.01"></label>
-          <label>Notiz<input id="ps-note" maxlength="500"></label>
-        </div>
-        <button id="payslip-save" class="btn btn-primary comp-calculate" type="button">Bestätigte Werte speichern</button>
-      </article>
-      <article class="panel comp-card"><h2>Warum ist mein Netto anders?</h2><div id="payslip-delta" class="delta-list"><p class="extended-note">Für den Vergleich werden mindestens zwei gespeicherte Monate benötigt.</p></div></article>
-    </aside>
-  </div>
+    <p id="payslip-extraction-status" class="extended-note" hidden></p>
+    <details id="payslip-manual" class="pa-manual">
+      <summary>Werte prüfen oder von Hand erfassen</summary>
+      <p id="ps-review-hint" class="extended-note"></p>
+      <div class="form-grid payslip-fields">
+        <label>Abrechnungsdatum<input id="ps-period" type="date"></label>
+        <label>Brutto<input id="ps-gross" type="number" min="0" step="0.01"></label>
+        <label>Netto<input id="ps-net" type="number" min="0" step="0.01"></label>
+        <label>Auszahlung<input id="ps-payout" type="number" min="0" step="0.01"></label>
+        <label>Lohnsteuer<input id="ps-tax" type="number" min="0" step="0.01"></label>
+        <label>Soli<input id="ps-soli" type="number" min="0" step="0.01"></label>
+        <label>Kirchensteuer<input id="ps-church" type="number" min="0" step="0.01"></label>
+        <label>Rentenversicherung<input id="ps-rv" type="number" min="0" step="0.01"></label>
+        <label>Arbeitslosenversicherung<input id="ps-av" type="number" min="0" step="0.01"></label>
+        <label>Krankenversicherung<input id="ps-kv" type="number" min="0" step="0.01"></label>
+        <label>Pflegeversicherung<input id="ps-pv" type="number" min="0" step="0.01"></label>
+        <label>Firmenwagen Sachbezug<input id="ps-car" type="number" min="0" step="0.01"></label>
+        <label>bAV Arbeitnehmer<input id="ps-bav" type="number" min="0" step="0.01"></label>
+        <label>bAV Arbeitgeber<input id="ps-bav-ag" type="number" min="0" step="0.01"></label>
+        <label>Bonus / Sonderzahlung<input id="ps-bonus" type="number" min="0" step="0.01"></label>
+        <label>Notiz<input id="ps-note" maxlength="500"></label>
+      </div>
+      <button id="payslip-save" class="btn btn-primary" type="button">Werte speichern</button>
+    </details>
+  </article>
+  <!-- Eigenes Element statt im Hinzufuegen-Artikel: renderBatch() setzt hier eine eigene .panel.comp-card
+       hinein, sobald Ergebnisse da sind - innerhalb davon waere das Kaesteli-in-Kaesteli (Scheibe 11). -->
+  <div id="payslip-batch" class="payslip-batch" hidden></div>
+  <article class="panel comp-card"><h2>Warum ist mein Netto anders?</h2><div id="payslip-delta" class="delta-list"><p class="extended-note">Für den Vergleich werden mindestens zwei gespeicherte Monate benötigt.</p></div></article>
 </section>`}
 
 async function loadOptimizer(){
@@ -129,17 +124,22 @@ function loadProfileIntoCalculator(profile){
 async function extractPayslip(){
   const file=$('#payslip-file').files?.[0];if(!file)throw new Error('Bitte eine Lohnabrechnung auswählen.');
   const data=new FormData();data.append('file',file);
-  $('#payslip-extraction-status').textContent='Analyse läuft …';
+  status('Analyse läuft …');
   const result=await api('api/compensation/payslips/extract',{method:'POST',body:data});
   fillExtraction(result,null);
-  $('#payslip-extraction-status').textContent=`Erkennungssicherheit ${Number(result.confidencePercent||0).toLocaleString('de-DE')} %. ${(result.warnings||[]).join(' ')}`;
+  status(`Erkennungssicherheit ${Number(result.confidencePercent||0).toLocaleString('de-DE')} %. ${(result.warnings||[]).join(' ')}`);
 }
+
+// Die Statuszeile steht nur da, solange sie etwas zu sagen hat.
+function status(text){const el=$('#payslip-extraction-status');el.textContent=text;el.hidden=!text}
 
 // Mit importId prueft der Benutzer einen Fund aus Paperless; das Speichern bestaetigt dann genau diesen.
 let reviewedImport=null;
 function fillExtraction(x,importId,title){
   reviewedImport=importId;
-  $('#ps-review-hint').textContent=importId?`Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.`:'Alle Felder können vor dem Speichern korrigiert werden.';
+  $('#ps-review-hint').textContent=importId?`Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.`:'';
+  // Das Formular klappt auf, wenn es etwas zu pruefen gibt, und zu, wenn es geleert wird.
+  $('#payslip-manual').open=!!(importId||x.period||x.grossPay!=null);
   set('ps-period',x.period||'');set('ps-gross',x.grossPay);set('ps-net',x.netPay);set('ps-payout',x.payout);set('ps-tax',x.wageTax);set('ps-soli',x.solidaritySurcharge);set('ps-church',x.churchTax);set('ps-rv',x.pensionInsurance);set('ps-av',x.unemploymentInsurance);set('ps-kv',x.healthInsurance);set('ps-pv',x.careInsurance);set('ps-car',x.companyCarTaxableBenefit);set('ps-bav',x.bavEmployee);set('ps-bav-ag',x.bavEmployer);set('ps-bonus',x.bonus)}
 
 let batchItems=[];
@@ -148,12 +148,12 @@ async function extractBatch(){
   if(!files.length)throw new Error('Bitte mindestens eine Lohnabrechnung auswählen.');
   if(files.length>40)throw new Error('Höchstens 40 Abrechnungen pro Durchlauf.');
   const data=new FormData();files.forEach(f=>data.append('files',f));
-  $('#payslip-extraction-status').textContent=`Analysiere ${files.length} Abrechnung(en) … mit Codex kann das etwas dauern.`;
+  status(`Analysiere ${files.length} Abrechnung(en) … mit Codex kann das etwas dauern.`);
   const result=await api('api/compensation/payslips/extract-batch',{method:'POST',body:data});
   batchItems=((result&&result.items)||[]).map(it=>({...it}));
   renderBatch(batchItems);
   const ok=batchItems.filter(it=>it.result).length;
-  $('#payslip-extraction-status').textContent=`${ok} von ${batchItems.length} Abrechnung(en) erkannt. Werte prüfen und speichern.`;
+  status(`${ok} von ${batchItems.length} Abrechnung(en) erkannt. Werte prüfen und speichern.`);
 }
 
 function renderBatch(items){
@@ -257,7 +257,7 @@ const loadPaperless=()=>finds.load();
 function reviewFind(id){
   const item=finds.find(id);if(!item)return;
   fillExtraction(item.extraction,item.id,item.title);
-  $('#ps-review-hint').scrollIntoView({block:'center',behavior:'smooth'});
+  $('#payslip-manual').scrollIntoView({block:'start',behavior:'smooth'});
 }
 
 function showError(error){console.error(error);showMessage(error?.message||'Unbekannter Fehler.')}
