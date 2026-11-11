@@ -11,7 +11,7 @@
 // same as the benefit and one-off rows — this file is only the tab, the API calls and the summary.
 import { confirmMessage } from '../../components/confirm.js';
 import {
-  $, $$, euro, euro2, esc, fmtDate, localIsoDate, spaceId, api, json, notify,
+  $, $$, euro2, localIsoDate, spaceId, api, json, notify,
   loadOtherIncomeTypes, fillOtherIncomeTypeList, otherIncomeTypeOptions, otherIncomeName,
   otherIncomeActiveOn, otherIncomeAmountsOn, addOtherIncomeRow, readOtherIncomeRow
 } from './shared.js';
@@ -47,22 +47,9 @@ function init() {
 
 function markup() { return `
 <section id="tab-other-income" class="comp-tab">
-  <article class="panel comp-card income-intro">
-    <div class="panel-head">
-      <div>
-        <h2>Sonstige regelmäßige Einkünfte</h2>
-      </div>
-      <button id="income-add" class="btn btn-secondary" type="button">Einkunft hinzufügen</button>
-    </div>
-    <p class="income-separate">Getrennt von Gehalt und Benefits: diese Beträge gehen in keine Gehaltsberechnung ein und sind <strong>nicht Teil des Arbeitgeber-Gesamtpakets</strong>. Sie erscheinen ausschließlich als eigene Linie im Verlauf.</p>
-  </article>
-  <div id="income-summary" class="metric-grid income-summary"></div>
   <article class="panel comp-card">
-    <div class="panel-head">
-      <div>
-        <h2>Erfasste Einkünfte</h2>
-      </div>
-    </div>
+    <div class="panel-head"><div><h2>Weitere Einkünfte</h2></div><button id="income-add" class="btn btn-secondary" type="button">Einkunft hinzufügen</button></div>
+    <div id="income-summary" class="po-kpis income-summary"></div>
     <div id="other-income-list" class="income-list"></div>
     <div id="income-empty" class="income-empty" hidden>Noch keine sonstigen Einkünfte erfasst.</div>
     <datalist id="other-income-types"></datalist>
@@ -101,12 +88,10 @@ function render() {
 function renderSummary() {
   const today = localIsoDate();
   const totals = otherIncomeAmountsOn(state.entries, today);
-  const notCounted = totals.monthlyTotal - totals.monthlyCounted;
   $('#income-summary').innerHTML = `
-    <article class="metric"><span>Aktuell aktiv</span><strong>${totals.activeCount}</strong><small>von ${state.entries.length} erfassten Einkünften · Stand ${esc(fmtDate(today))}</small></article>
-    <article class="metric"><span>Summe pro Monat</span><strong>${euro2.format(totals.monthlyTotal)}</strong><small>${euro.format(totals.annualTotal)} pro Jahr</small></article>
-    <article class="metric"><span>Persönlich verfügbar</span><strong>${euro2.format(totals.monthlyCounted)}</strong><small>${euro.format(totals.annualCounted)} pro Jahr · nur angerechnete Einkünfte</small></article>
-    <article class="metric"><span>Nicht angerechnet</span><strong>${euro2.format(notCounted)}</strong><small>Einkünfte ohne den Haken „persönlich verfügbar“</small></article>`;
+    <div><span>Summe pro Monat</span><strong>${euro2.format(totals.monthlyTotal)}</strong></div>
+    <div><span>Persönlich verfügbar</span><strong>${euro2.format(totals.monthlyCounted)}</strong></div>
+    <div><span>Aktiv</span><strong>${totals.activeCount} von ${state.entries.length}</strong></div>`;
 }
 
 function addRow() {

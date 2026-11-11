@@ -21,16 +21,14 @@
          Reiter sichtbar sind, entscheiden allein data-group (page.js und page.css). *@
       <nav class="comp-groups" aria-label="Bereiche">
         <button class="active" data-group-tab="gehalt" type="button">Mein Gehalt</button>
-        <button data-group-tab="dokumente" type="button">Abrechnungen</button>
+        <button data-group-tab="verlauf" type="button">Verlauf</button>
         <button data-group-tab="planen" type="button">Planen</button>
         <button data-group-tab="mehr" type="button">Mehr</button>
         <label class="comp-space-label" hidden>Finanzbereich <select id="space-select"></select></label>
       </nav>
       <nav class="comp-tabs" data-active-group="gehalt" aria-label="Unterbereiche">
         <button class="active" data-tab="overview" data-group="gehalt" type="button">Mein Gehalt</button>
-        <button data-extended-tab="payslips" data-group="dokumente" type="button">Abrechnungen</button>
-        <button data-extended-tab="contracts" data-group="dokumente" type="button">Verträge</button>
-        <button data-history-tab="history" data-group="dokumente" type="button">Verlauf</button>
+        <button data-history-tab="history" data-group="verlauf" type="button">Verlauf</button>
         <button data-tab="calculator" data-group="planen" type="button">Rechner</button>
         <button data-tab="scenarios" data-group="planen" type="button">Szenarien</button>
         <button data-extended-tab="optimizer" data-group="planen" type="button">Optimierer</button>
@@ -227,49 +225,28 @@
         </div>
       </section>
 
-      @* Arbeitsverträge: Diagramm und Änderungsprotokoll nebeneinander (auf dem Handy das Diagramm oben), darunter
-         Paperless-Funde und das Formular zum Prüfen und Bestätigen. Gezeichnet wird alles in contracts.js. *@
-      <section id="tab-contracts" class="comp-tab">
-        <div id="contract-hints" class="po-hints"></div>
-        <div class="contract-overview">
-          <article class="panel comp-card co-chart">
-            <div class="panel-head"><div><h2>Brutto laut Vertrag</h2></div></div>
-            <div class="po-legend"><span><i class="cc-key-line"></i>Vertrag</span><span><i class="cc-key-dot is-ok"></i>Abrechnung entspricht</span><span><i class="cc-key-dot is-off"></i>Abrechnung weicht ab</span></div>
-            <div class="cc-wrap"><div id="contract-chart"></div><div class="cc-tip" hidden></div></div>
-          </article>
-          <article class="panel comp-card co-log">
-            <div class="panel-head"><div><h2>Änderungsprotokoll</h2></div></div>
-            <div id="contract-log"></div>
-          </article>
-        </div>
-        <div class="payslip-layout">
-          <div class="payslip-stack">
-            <article class="panel comp-card">
-              <div class="panel-head"><div><h2>Aus Paperless</h2></div></div>
-              <div id="contract-finds" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
+      @* Verlauf: Abrechnungen, Verträge und gespeicherte Planungsstände in EINER Zeitachse, Jahr für Jahr, neueste zuerst
+         (verlauf.js). Ein Jahr klappt zu seinen Monaten auf; die Gehaltsänderungen aus den Verträgen stehen als Ereignisse
+         im Jahr. Hinzufügen - Paperless, PDF, von Hand, Vertragsstand - ist ein Dialog (add-dialog.js), keine Karte
+         am Ende der Seite. *@
+      <section id="tab-verlauf" class="comp-tab">
+        <div class="vl-head"><button id="verlauf-add-open" class="btn btn-primary" type="button">Hinzufügen</button></div>
+        <div id="contract-hints" class="po-hints vl-hints"></div>
+        <div id="verlauf-years" class="vl-years"></div>
+        <details id="verlauf-contracts" class="vl-more">
+          <summary>Vertragsverlauf</summary>
+          <div class="contract-overview">
+            <article class="co-chart">
+              <div class="po-legend"><span><i class="cc-key-line"></i>Vertrag</span><span><i class="cc-key-dot is-ok"></i>Abrechnung entspricht</span><span><i class="cc-key-dot is-off"></i>Abrechnung weicht ab</span></div>
+              <div class="cc-wrap"><div id="contract-chart"></div><div class="cc-tip" hidden></div></div>
             </article>
+            <article class="co-log"><div id="contract-log"></div></article>
           </div>
-          <aside class="payslip-stack">
-            <article class="panel comp-card">
-              <div class="panel-head"><div><h2>Vertragsstand prüfen</h2><p id="ct-review-hint">Alle Felder können vor dem Speichern korrigiert werden - oder du erfasst einen Stand von Hand.</p></div></div>
-              <div class="form-grid payslip-fields">
-                <label>Gültig ab<input id="ct-from" type="date"></label>
-                <label>Art<select id="ct-kind"><option value="contract">Arbeitsvertrag</option><option value="addendum">Nachtrag</option></select></label>
-                <label>Bruttogehalt / Monat<input id="ct-gross" type="number" min="0" step="0.01"></label>
-                <label>Wochenstunden<input id="ct-hours" type="number" min="0" max="80" step="0.5"></label>
-                <label>Urlaubstage<input id="ct-vacation" type="number" min="0" max="100" step="0.5"></label>
-                <label>bAV Arbeitgeberanteil / Monat<input id="ct-bav" type="number" min="0" step="0.01"></label>
-                <label>Arbeitgeber<input id="ct-employer" maxlength="200"></label>
-                <label>Position<input id="ct-position" maxlength="200"></label>
-                <label>Kündigungsfrist<input id="ct-notice" maxlength="200"></label>
-                <label class="check-row"><input id="ct-car" type="checkbox">Dienstwagen zur privaten Nutzung</label>
-              </div>
-              <div id="ct-extras" class="ct-extras"></div>
-              <div class="ct-extra-actions"><button id="ct-add-extra" class="btn btn-secondary" type="button">Weiteres Feld</button></div>
-              <button id="ct-save" class="btn btn-primary comp-calculate" type="button">Bestätigte Werte speichern</button>
-            </article>
-          </aside>
-        </div>
+        </details>
+        <details id="verlauf-planned" class="vl-more" hidden>
+          <summary>Planungsstände aus dem Rechner</summary>
+          <div id="history-planned"></div>
+        </details>
       </section>
 
       <section id="tab-scenarios" class="comp-tab">
@@ -283,6 +260,83 @@
           <div id="comparison-content"></div>
         </article>
       </section>
+
+      @* Hinzufügen: ein Dialog für alles, was in den Verlauf kommt. Die Felder behalten ihre Ids - extended.js (Abrechnungen,
+         Hochladen) und contracts.js (Vertragsstände) lesen und füllen sie wie zuvor; nur der Ort ist ein anderer. Welcher
+         Bereich zu sehen ist, steht in data-va-panel (add-dialog.js). *@
+      <dialog id="verlauf-add" class="fw-dialog fw-dialog--sheet va-dialog" aria-labelledby="verlauf-add-title">
+        <div class="dialog-card fw-dialog-card va-card">
+          <div class="panel-head fw-dialog-head">
+            <h2 id="verlauf-add-title">Hinzufügen</h2>
+            <button type="button" class="fw-dialog-close" data-close aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-close")"></use></svg></button>
+          </div>
+          <nav class="va-tabs" role="tablist" aria-label="Was hinzufügen">
+            <button type="button" role="tab" class="po-year" data-va-tab="paperless">Paperless</button>
+            <button type="button" role="tab" class="po-year" data-va-tab="upload">PDF</button>
+            <button type="button" role="tab" class="po-year" data-va-tab="payslip">Abrechnung</button>
+            <button type="button" role="tab" class="po-year" data-va-tab="contract">Vertrag</button>
+          </nav>
+
+          <section data-va-panel="paperless">
+            <h3 class="va-sub">Lohnabrechnungen</h3>
+            <div id="paperless-body" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
+            <h3 class="va-sub">Arbeitsverträge und Nachträge</h3>
+            <div id="contract-finds" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
+          </section>
+
+          <section data-va-panel="upload" hidden>
+            <div class="va-upload">
+              <input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp" aria-label="Lohnabrechnung als Datei">
+              <button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button>
+              <button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button>
+            </div>
+            <p id="payslip-extraction-status" class="extended-note" hidden></p>
+            <div id="payslip-batch" class="payslip-batch" hidden></div>
+          </section>
+
+          <section data-va-panel="payslip" hidden>
+            <p id="ps-review-hint" class="extended-note"></p>
+            <div class="form-grid payslip-fields">
+              <label>Abrechnungsdatum<input id="ps-period" type="date"></label>
+              <label>Brutto<input id="ps-gross" type="number" min="0" step="0.01"></label>
+              <label>Netto<input id="ps-net" type="number" min="0" step="0.01"></label>
+              <label>Auszahlung<input id="ps-payout" type="number" min="0" step="0.01"></label>
+              <label>Lohnsteuer<input id="ps-tax" type="number" min="0" step="0.01"></label>
+              <label>Soli<input id="ps-soli" type="number" min="0" step="0.01"></label>
+              <label>Kirchensteuer<input id="ps-church" type="number" min="0" step="0.01"></label>
+              <label>Rentenversicherung<input id="ps-rv" type="number" min="0" step="0.01"></label>
+              <label>Arbeitslosenversicherung<input id="ps-av" type="number" min="0" step="0.01"></label>
+              <label>Krankenversicherung<input id="ps-kv" type="number" min="0" step="0.01"></label>
+              <label>Pflegeversicherung<input id="ps-pv" type="number" min="0" step="0.01"></label>
+              <label>Firmenwagen Sachbezug<input id="ps-car" type="number" min="0" step="0.01"></label>
+              <label>bAV Arbeitnehmer<input id="ps-bav" type="number" min="0" step="0.01"></label>
+              <label>bAV Arbeitgeber<input id="ps-bav-ag" type="number" min="0" step="0.01"></label>
+              <label>Bonus / Sonderzahlung<input id="ps-bonus" type="number" min="0" step="0.01"></label>
+              <label>Notiz<input id="ps-note" maxlength="500"></label>
+            </div>
+            <button id="payslip-save" class="btn btn-primary" type="button">Speichern</button>
+          </section>
+
+          <section data-va-panel="contract" hidden>
+            <p id="ct-review-hint" class="extended-note"></p>
+            <div class="form-grid payslip-fields">
+              <label>Gültig ab<input id="ct-from" type="date"></label>
+              <label>Art<select id="ct-kind"><option value="contract">Arbeitsvertrag</option><option value="addendum">Nachtrag</option></select></label>
+              <label>Bruttogehalt / Monat<input id="ct-gross" type="number" min="0" step="0.01"></label>
+              <label>Wochenstunden<input id="ct-hours" type="number" min="0" max="80" step="0.5"></label>
+              <label>Urlaubstage<input id="ct-vacation" type="number" min="0" max="100" step="0.5"></label>
+              <label>bAV Arbeitgeberanteil / Monat<input id="ct-bav" type="number" min="0" step="0.01"></label>
+              <label>Arbeitgeber<input id="ct-employer" maxlength="200"></label>
+              <label>Position<input id="ct-position" maxlength="200"></label>
+              <label>Kündigungsfrist<input id="ct-notice" maxlength="200"></label>
+              <label class="check-row"><input id="ct-car" type="checkbox">Dienstwagen zur privaten Nutzung</label>
+            </div>
+            <div id="ct-extras" class="ct-extras"></div>
+            <div class="ct-extra-actions"><button id="ct-add-extra" class="btn btn-secondary" type="button">Weiteres Feld</button></div>
+            <button id="ct-save" class="btn btn-primary" type="button">Speichern</button>
+          </section>
+        </div>
+      </dialog>
 
       <div id="comp-error" class="comp-toast" role="status" aria-live="polite"></div>
     </section>

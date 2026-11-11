@@ -83,7 +83,7 @@
    tatsaechlich gerenderten .comp-line-Zeilen. */
 .result-rows{display:grid;gap:8px}
 .comp-assumptions p{margin:0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.5}
-.benefits-list{display:grid;gap:10px;margin-top:16px}.benefit-row{display:grid;grid-template-columns:1.5fr repeat(4,1fr) auto;gap:8px;align-items:end;padding:14px;border:1px solid var(--border);border-radius:13px}.benefit-row label{display:grid;gap:5px;font-size:var(--text-caption-size);color:var(--muted)}.benefit-row button{height:39px}.negotiation-layout{grid-template-columns:minmax(0,1fr) minmax(340px,.8fr)}.neg-explanation{display:grid;gap:10px;font-size:.9rem;line-height:1.5}.neg-line{padding:11px;border-radius:11px;background:var(--surface-2)}
+.benefits-list{display:grid;gap:10px;margin-top:16px}.benefit-row{display:grid;grid-template-columns:1.5fr repeat(4,1fr) auto;gap:var(--space-2);align-items:end;padding:var(--space-3) 0;border-bottom:1px solid var(--line)}.benefit-row label{display:grid;gap:5px;font-size:var(--text-caption-size);color:var(--muted)}.benefit-row button{height:39px}.negotiation-layout{grid-template-columns:minmax(0,1fr) minmax(340px,.8fr)}.neg-explanation{display:grid;gap:10px;font-size:.9rem;line-height:1.5}.neg-line{padding:11px;border-radius:11px;background:var(--surface-2)}
 /* Einmalige Sonderzahlungen: same row mechanism/look as .benefit-row, plus the two tax/SV flags and the
    hint line that spells out what the chosen combination means. */
 .oneoff-list{display:grid;gap:10px;margin-top:16px}
@@ -296,11 +296,11 @@
 .optimizer-section{margin-top:20px}.optimizer-section>h2{margin:0 0 10px;font-size:1rem}.optimizer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.optimizer-card{position:relative;padding:17px}.optimizer-card.best{outline:2px solid var(--accent);outline-offset:-2px}.optimizer-card h3{margin:0 0 6px}.optimizer-card p{min-height:44px;margin:0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.45}.optimizer-value{margin-top:18px;font-size:1.6rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.optimizer-card>small{color:var(--muted)}/* .optimizer-details strong zeigt Netto/AG-Kosten/Neues Netto - dieselbe fehlende tabular-nums-Luecke
    wie beim Ergebnis-Kopf oben. */
 .optimizer-details{display:grid;gap:6px;margin:14px 0;font-size:var(--text-caption-size)}.optimizer-details span{display:flex;justify-content:space-between;gap:10px}.optimizer-details strong{font-variant-numeric:tabular-nums}.optimizer-badge{display:inline-block;margin-bottom:10px;padding:4px 7px;border-radius:999px;background:var(--accent-soft,#edf5ff);font-size:var(--text-caption-size);font-weight:700}
-.payslip-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);gap:16px;align-items:start}.payslip-stack{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.paperless-body{min-height:96px}.paperless-setup{grid-template-columns:1fr}.upload-row{display:flex;gap:9px;align-items:center;margin:16px 0 9px}.upload-row input{flex:1;min-width:0}.payslip-fields{margin-bottom:16px}.payslip-list{display:grid;gap:8px;margin-top:14px}.payslip-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}.payslip-row:last-child{border-bottom:0}.payslip-row>div{display:grid;gap:3px}.payslip-row>div:last-child{display:flex;align-items:center;gap:8px;text-align:right}.payslip-row strong{font-variant-numeric:tabular-nums}.payslip-row small{color:var(--muted)}.payslip-row .btn-danger{width:30px;height:30px;padding:0}/* .delta-head span (der Netto-Vergleich) traegt denselben Geldbetrag-Fall wie .history-delta span
+.paperless-body{min-height:96px}.paperless-setup{grid-template-columns:1fr}.payslip-fields{margin-bottom:16px}.payslip-list{display:grid;gap:8px;margin-top:14px}.payslip-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}.payslip-row:last-child{border-bottom:0}.payslip-row>div{display:grid;gap:3px}.payslip-row>div:last-child{display:flex;align-items:center;gap:8px;text-align:right}.payslip-row strong{font-variant-numeric:tabular-nums}.payslip-row small{color:var(--muted)}.payslip-row .btn-danger{width:30px;height:30px;padding:0}/* .delta-head span (der Netto-Vergleich) traegt denselben Geldbetrag-Fall wie .history-delta span
    oben - tabular-nums fehlte. */
 .delta-list{display:grid;gap:8px;margin-top:12px}.delta-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:4px}.delta-head span{font-variant-numeric:tabular-nums}
-@media(max-width:980px){.optimizer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.payslip-layout{grid-template-columns:1fr}.extended-intro{grid-template-columns:1fr 1fr}.extended-intro>div{grid-column:1/-1}}
-@media(max-width:640px){.optimizer-grid,.extended-intro{grid-template-columns:1fr}.extended-intro>div{grid-column:auto}.upload-row{align-items:stretch;flex-direction:column}.delta-head{align-items:flex-start;flex-direction:column}}
+@media(max-width:980px){.optimizer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.extended-intro{grid-template-columns:1fr 1fr}.extended-intro>div{grid-column:1/-1}}
+@media(max-width:640px){.optimizer-grid,.extended-intro{grid-template-columns:1fr}.extended-intro>div{grid-column:auto}.delta-head{align-items:flex-start;flex-direction:column}}
 .payslip-batch{margin-top:12px}
 .payslip-batch .panel-head{display:flex;justify-content:space-between;gap:12px;align-items:center}
 .payslip-batch-list{display:grid;gap:8px;margin-top:12px}
@@ -321,18 +321,12 @@
 /* Sonstige regelmäßige Einkünfte (Gehalt page, own tab).
    Same record-row look as .benefit-row / .oneoff-row in compensation.css — tokens only, no own button
    styling: the rows use the shared .btn roles. */
-.income-intro{margin-bottom:14px}
-.income-separate{margin:14px 0 0;padding:11px 13px;border-radius:var(--radius-input);background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);line-height:1.45}
-.income-separate strong{color:var(--text)}
-.income-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
-.income-summary .metric{min-height:86px}
-.income-summary small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-caption-size);line-height:1.3}
 .income-list{display:grid;gap:10px;margin-top:16px}
-.income-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:13px}
+.income-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);align-items:end;padding:var(--space-3) 0;border-bottom:1px solid var(--line)}
 .income-row>label{display:grid;gap:5px;font-size:var(--text-caption-size);color:var(--muted)}
 .income-row input{width:100%;box-sizing:border-box}
 /* A row that was added but not saved yet, and a record whose von/bis window does not contain today. */
-.income-draft{border-style:dashed}
+.income-draft{border-bottom-style:dashed}
 .income-inactive{background:var(--surface-2)}
 /* The per-record "counts toward the personally available income" flag: always visible, always editable. */
 /* Selector must outrank `.income-row>label` above (that one would make the flag a grid and push the
@@ -344,18 +338,14 @@
 .income-annual{margin-right:auto;font-size:var(--text-caption-size);color:var(--muted);font-variant-numeric:tabular-nums}
 .income-empty{padding:26px;text-align:center;color:var(--muted);font-size:.82rem}
 @media(max-width:980px){
-  .income-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   .income-row{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:640px){
-  .income-summary{grid-template-columns:1fr}
   .income-row{grid-template-columns:1fr}
   .income-row-actions .btn{flex:1 1 auto}
 }
 /* Monats- und Jahresansicht der Lohnabrechnungen (payslip-overview.js). Nur Tokens: die Farben des Diagramms
    sind die kräftigen Kategorie-Farben (--cat-*), alles andere die Rollenfarben der App. */
-.payslip-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-3);margin-bottom:var(--space-4)}
-.po-head{display:grid;gap:var(--space-3)}
 .po-years{display:flex;gap:var(--space-2);flex-wrap:wrap}
 .po-year{min-height:40px;padding:0 var(--space-4);border-radius:var(--radius-pill);border:1px solid var(--line);background:var(--surface);font-weight:600}
 .po-year[aria-selected="true"]{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
@@ -616,8 +606,8 @@
 .comp-groups button{min-height:40px;padding:0 var(--space-4);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
 .comp-groups button.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
 .comp-groups .comp-space-label{margin-left:auto}
-.comp-tabs[data-active-group="gehalt"]{display:none}
-.comp-tabs[data-active-group="dokumente"] button:not([data-group="dokumente"]),
+.comp-tabs[data-active-group="gehalt"],
+.comp-tabs[data-active-group="verlauf"]{display:none}
 .comp-tabs[data-active-group="planen"] button:not([data-group="planen"]),
 .comp-tabs[data-active-group="mehr"] button:not([data-group="mehr"]){display:none}
 .comp-calc-actions{display:flex;justify-content:flex-end;margin-bottom:var(--space-3)}
@@ -626,11 +616,54 @@
   .comp-groups button{flex:none;padding:0 var(--space-3);font-size:.9rem}
   .gv-kpis > div:last-child:nth-child(odd){grid-column:1/-1}
 }
-/* Dein Verlauf (verlauf-real.js) */
-.vr-list{list-style:none;margin:0;padding:0;display:grid}
-.vr-row{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--line)}
-.vr-main{display:grid;gap:var(--space-1);min-width:0}
-.vr-main small,.vr-amount small{color:var(--muted);font-size:var(--text-caption-size)}
-.vr-amount{display:grid;text-align:right;font-variant-numeric:tabular-nums;flex:none}
-.vr-sub{margin:var(--space-4) 0 0;font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
-.history-plan summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted)}
+.income-summary{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:var(--space-3)}
+.comp-advanced>summary{display:flex;align-items:center;min-height:44px;cursor:pointer}
+/* Verlauf (verlauf.js): eine Zeitachse, Jahr für Jahr. Flache Zeilen mit dünnen Trennlinien; die Zeile eines Jahres
+   klappt zu seinen Monaten auf, Vertragsänderungen stehen als Ereignisse darunter. */
+.vl-head{display:flex;justify-content:flex-end;margin-bottom:var(--space-3)}
+.vl-hints{margin-bottom:var(--space-3)}
+.vl-hints:empty{display:none}
+.vl-years{display:grid;align-content:start;min-height:320px}
+.vl-year{border-bottom:1px solid var(--line)}
+.vl-summary{display:grid;grid-template-columns:4rem repeat(6,minmax(0,1fr)) 1rem;gap:var(--space-3);align-items:center;min-height:56px;padding:var(--space-2) 0;cursor:pointer;list-style:none}
+.vl-summary::-webkit-details-marker{display:none}
+details>.vl-summary::after{content:"";justify-self:center;width:.5rem;height:.5rem;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(45deg)}
+details[open]>.vl-summary::after{transform:rotate(-135deg)}
+.vl-summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.vl-plain{cursor:default;min-height:44px;color:var(--muted)}
+.vl-y{font-size:1.1rem;font-weight:700}
+.vl-cell{display:grid;gap:var(--space-1);min-width:0;font-variant-numeric:tabular-nums}
+.vl-cell small{color:var(--muted);font-size:var(--text-caption-size)}
+.vl-cell b{font-weight:600;white-space:nowrap}
+.vl-cell .positive{color:var(--positive)}
+.vl-cell .negative{color:var(--negative)}
+.vl-year details[open]>.vl-summary{border-bottom:1px solid var(--line)}
+.vl-body{display:grid;gap:var(--space-3);padding:var(--space-3) 0}
+.vl-events{list-style:none;margin:0;padding:0 0 var(--space-2)}
+.vl-event{display:flex;align-items:center;gap:var(--space-3);min-height:44px;padding:var(--space-1) 0}
+.vl-ev-date{flex:none;width:4rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.vl-ev-main{display:grid;gap:var(--space-1);min-width:0;flex:1}
+.vl-ev-main small{color:var(--muted);font-size:var(--text-caption-size)}
+.vl-empty{padding:var(--space-4) 0}
+.vl-more{border-bottom:1px solid var(--line)}
+.vl-more>summary,.history-plan>summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted);font-weight:600}
+.vl-more[open]>summary{color:var(--text)}
+.vl-more>:not(summary){margin-bottom:var(--space-3)}
+@media(max-width:900px){
+  .vl-summary{grid-template-columns:3.5rem repeat(3,minmax(0,1fr)) 1rem;gap:var(--space-2)}
+  .vl-summary .vl-cell:nth-child(3),.vl-summary .vl-cell:nth-child(5),.vl-summary .vl-cell:nth-child(6){display:none}
+}
+/* Hinzufügen (add-dialog.js): ein Dialog, vier Bereiche. */
+.va-dialog{max-width:min(94vw,720px)}
+.va-card{max-height:calc(100dvh - var(--space-6));overflow-y:auto}
+.va-tabs{display:flex;gap:var(--space-2);flex-wrap:wrap}
+.va-sub{margin:var(--space-3) 0 var(--space-2);font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
+.va-sub:first-child{margin-top:0}
+.va-upload{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
+.va-upload input[type=file]{flex:1 1 14rem;min-width:0}
+@media(max-width:640px){
+  .va-tabs button{flex:1 1 auto;padding:0 var(--space-3)}
+  .va-upload .btn{flex:1}
+  .va-card .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
+  .va-card .check-row,.va-card label:has(input:not([type="number"]):not([type="date"]):not([type="checkbox"])){grid-column:1/-1}
+}

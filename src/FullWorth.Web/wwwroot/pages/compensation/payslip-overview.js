@@ -1,6 +1,6 @@
-// Monats- und Jahresansicht der bestätigten Lohnabrechnungen: Kennzahlen, Hinweise, das Diagramm
-// "Wohin das Brutto geht" und darunter Monatsliste mit Detail. Alles wird aus den bestätigten
-// Abrechnungen abgeleitet - was sich daraus nicht ergibt, steht nicht da.
+// Ein aufgeklapptes Jahr im Verlauf (verlauf.js): Hinweise, das Diagramm "Wohin das Brutto geht" und darunter die
+// Monatsliste mit Detail. Alles wird aus den bestätigten Abrechnungen abgeleitet - was sich daraus nicht ergibt, steht
+// nicht da. Die Kennzahlen des Jahres stehen in seiner Zeile.
 import { $, esc, attr, euro, euro2, signedEuro } from './shared.js';
 import { spriteHref } from '../../components/sprite.js';
 
@@ -39,49 +39,42 @@ const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${s
 
 /**
  * Der Zustand der Ansicht. "payslips" sind die Einträge der API (Id, payslip, document), "finds" die
- * offenen Funde aus Paperless, "contract" die Vertragsstände und Hinweise aus dem Abgleich (Marker "Nachtrag" im
- * Diagramm, Hinweise darunter), "actions" die Dinge, die die Ansicht auslösen darf.
+ * offenen Funde aus Paperless, "contract" die Vertragsstände (Marker "Nachtrag" im Diagramm), "actions" die Dinge,
+ * die die Ansicht auslösen darf, "host" der Behälter des geöffneten Jahres.
  */
-const state = { payslips: [], finds: [], contract: { states: [], hints: [] }, searching: false, year: null, month: null, actions: null, model: null };
+const state = { payslips: [], finds: [], contract: { states: [] }, searching: false, year: null, month: null, actions: null, model: null, host: null };
 let chartObserver = null;
 
-export function renderOverview(input) {
+/** Legt fest, woraus ein Jahr gezeichnet wird (verlauf.js ruft das vor jedem renderYear auf). */
+export function setOverviewData(input) {
   Object.assign(state, input);
-  const root = $('#payslip-overview');
-  if (!root) return;
+}
 
-  if (!state.payslips.length) {
-    root.innerHTML = '<div class="panel comp-card po-empty"><h2>Noch keine bestätigten Abrechnungen</h2><p class="extended-note">Lade eine Lohnabrechnung hoch oder lass sie in Paperless suchen. Hier erscheinen dann Jahresübersicht, Diagramm und Monatsliste.</p></div>';
-    return;
-  }
-
-  const years = [...new Set(state.payslips.map(item => yearOf(item.payslip)))].sort((a, b) => b - a);
-  if (!years.includes(state.year)) state.year = years[0];
-  const model = state.model = buildYear(state.year);
+/**
+ * Zeichnet ein Jahr in <paramref name="host"/>: Hinweise, "Wohin das Brutto geht" und die Monatsliste mit Detail.
+ * Die Kennzahlen des Jahres stehen in seiner Zeile im Verlauf, hier nicht noch einmal. Es ist immer nur ein Jahr offen,
+ * deshalb tragen Diagramm und Hinweis feste Ids.
+ */
+export function renderYear(host, year) {
+  state.host = host;
+  if (state.year !== year) state.month = null;
+  state.year = year;
+  const model = state.model = buildYear(year);
   if (!model.months.some(m => m.month === state.month)) state.month = model.latest;
 
-  root.innerHTML = `
-    <div class="panel comp-card po-head">
-      <div class="po-years" role="tablist" aria-label="Jahr">${years.map(y => `<button type="button" role="tab" class="po-year" aria-selected="${y === state.year}" data-po-year="${y}">${y}</button>`).join('')}</div>
-      <div class="po-kpis">
-        <div><span>Brutto bisher</span><strong>${euro.format(model.gross)}</strong></div>
-        <div><span>Ausgezahlt bisher</span><strong>${euro.format(model.paid)}</strong></div>
-        <div><span>Anteil ausgezahlt</span><strong>${model.gross ? (model.paid / model.gross * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' %' : '—'}</strong></div>
-        <div><span>Abrechnungen</span><strong>${model.present} von ${model.expected}</strong></div>
-      </div>
-    </div>
+  host.innerHTML = `
     ${hintsHtml(model)}
-    <div class="panel comp-card po-chart-card">
-      <div class="panel-head"><div><h2>Wohin das Brutto geht</h2></div></div>
+    <div class="po-chart-card">
+      <h3 class="va-sub">Wohin das Brutto geht</h3>
       <div class="po-legend">${legendHtml(model)}</div>
       <div class="po-chart-wrap"><div id="po-chart"></div><div class="po-tip" hidden></div></div>
     </div>
     <div class="po-grid">
-      <div class="panel comp-card po-list-card"><div class="po-list-head" aria-hidden="true"><span>Monat</span><span class="po-h-gross">Brutto</span><span>Ausgezahlt</span><span>Änderung</span><span></span></div><ol class="po-list">${listHtml(model)}</ol></div>
-      <div class="panel comp-card po-side">${detailHtml(model, state.month)}</div>
+      <div class="po-list-card"><div class="po-list-head" aria-hidden="true"><span>Monat</span><span class="po-h-gross">Brutto</span><span>Ausgezahlt</span><span>Änderung</span><span></span></div><ol class="po-list">${listHtml(model)}</ol></div>
+      <div class="po-side">${detailHtml(model, state.month)}</div>
     </div>`;
 
-  bindOnce(root);
+  bindOnce(host);
   drawChart(model);
   chartObserver?.disconnect();
   chartObserver = new ResizeObserver(() => drawChart(state.model));
@@ -155,11 +148,6 @@ function hints(model) {
     else if (Math.abs(change) <= 0.01 && num(p.netPay) - num(prev.netPay) <= -10)
       result.push({ tone: 'warn', icon: 'ui-alert', text: `Netto im ${name} ${signedEuro(num(p.netPay) - num(prev.netPay))} bei gleichem Brutto${cause(p, prev)}` });
   }
-  // Hinweise aus dem Abgleich mit den Vertragsständen: das Backend rechnet sie, hier werden sie nur gezeigt.
-  state.contract.hints.forEach((hint, index) => result.push({
-    tone: hint.kind === 'change_detected' ? 'info' : 'warn', icon: hint.kind === 'change_detected' ? 'ui-info' : 'ui-alert', text: hint.message,
-    ...(hint.kind === 'change_detected' ? { action: 'contract', id: String(index), label: 'Stand anlegen' } : {})
-  }));
   return result.slice(0, 5);
 }
 
@@ -336,13 +324,6 @@ function bindOnce(root) {
   if (root.dataset.bound) return;
   root.dataset.bound = '1';
   root.addEventListener('click', event => {
-    const year = event.target.closest('[data-po-year]');
-    if (year) {
-      state.year = Number(year.dataset.poYear);
-      state.month = null;
-      renderOverview({});
-      return;
-    }
     const button = event.target.closest('button');
     if (button) {
       if (button.dataset.openPdf) state.actions.openPdf(button.dataset.openPdf);
@@ -350,7 +331,6 @@ function bindOnce(root) {
       if (button.dataset.deletePayslip) state.actions.deletePayslip(button.dataset.deletePayslip);
       if (button.dataset.poHint === 'upload') state.actions.upload();
       if (button.dataset.poHint === 'review') state.actions.review(button.dataset.poFind);
-      if (button.dataset.poHint === 'contract') state.actions.suggestContract(Number(button.dataset.poFind));
       return;
     }
     if (event.target.closest('a')) return;
@@ -369,7 +349,7 @@ function bindOnce(root) {
 function select(month, row) {
   const before = row?.getBoundingClientRect().top;
   state.month = month;
-  const root = $('#payslip-overview');
+  const root = state.host;
   root.querySelector('.po-list').innerHTML = listHtml(state.model);
   root.querySelector('.po-side').innerHTML = detailHtml(state.model, month);
   root.querySelectorAll('.po-col').forEach(col => col.classList.toggle('is-selected', Number(col.dataset.poMonth) === month));
