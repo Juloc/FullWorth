@@ -7,22 +7,24 @@ import { $, esc, euro, euro2, spaceId, api } from './shared.js';
 const MONTH = new Intl.DateTimeFormat('de-DE', { month: 'short', year: 'numeric' });
 const monthName = index => MONTH.format(new Date(Math.floor(index / 12), index % 12, 1)).replace('.', '');
 const num = value => Number(value) || 0;
+const BASIS = { payout: 'Ausgezahlt', net: 'Netto', gross: 'Brutto' };
+const BASIS_FIELD = { payout: 'payout', net: 'netPay', gross: 'grossPay' };
 const monthIndex = iso => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
 const signed = value => `${value >= 0 ? '+' : '−'}${Math.abs(value).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 
 // Die Linien neben dem Gehalt. "own" kommen aus den eigenen Belegen, die anderen aus der amtlichen Statistik.
 const LINES = [
-  { key: 'gesamt', label: 'Allgemeine Teuerung', color: 'var(--chart-inflation)', on: true },
+  { key: 'gesamt', label: 'Alle Preise', color: 'var(--chart-inflation)', on: true },
   { key: 'nahrung', label: 'Lebensmittel', color: 'var(--cat-3)', on: true },
   { key: 'nettokaltmiete', label: 'Miete', color: 'var(--cat-2)' },
   { key: 'haushaltsenergie', label: 'Energie', color: 'var(--cat-4)' },
   { key: 'superbenzin', label: 'Benzin', color: 'var(--cat-5)' },
-  { key: 'own', label: 'Meine Einkäufe', color: 'var(--cat-1)', own: true, on: true },
+  { key: 'own', label: 'Alle meine Einkäufe', color: 'var(--cat-1)', own: true, on: true },
   { key: 'own:food', label: 'Meine Lebensmittel', color: 'var(--cat-7)', own: true },
   { key: 'own:fuel', label: 'Mein Kraftstoff', color: 'var(--cat-6)', own: true }
 ];
 
-const view = { basis: 'net', since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)) };
+const view = { basis: 'payout', since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: false };
 let data = null, loading = null, host = null, payslips = [];
 
 export function renderPurchasingPower(element, items) {
@@ -53,7 +55,7 @@ function salaryByMonth(basis) {
   const byMonth = new Map();
   for (const item of payslips) {
     const m = monthIndex(item.payslip.period);
-    if (!byMonth.has(m)) byMonth.set(m, num(basis === 'net' ? item.payslip.netPay : item.payslip.grossPay));
+    if (!byMonth.has(m)) byMonth.set(m, num(item.payslip[BASIS_FIELD[basis]]));
   }
   const smooth = new Map();
   for (const [m, value] of byMonth) {
@@ -89,7 +91,7 @@ function buildModel() {
     return { value, base: value(start) };
   };
 
-  result.lines.push({ key: 'salary', label: view.basis === 'net' ? 'Netto' : 'Brutto', color: 'var(--accent)', main: true,
+  result.lines.push({ key: 'salary', label: BASIS[view.basis], color: 'var(--accent)', main: true,
     points: months.filter(m => m >= start && m <= end).map(m => [m, salaryAt(m) / salaryStart * 100]) });
 
   for (const line of LINES.filter(l => !l.own)) {
@@ -128,6 +130,13 @@ function draw() {
   if (!host) return;
   if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Die Preisdaten konnten gerade nicht geladen werden.</p></div></div>'; return; }
   const model = buildModel();
+  // Wo es zu einem Thema beides gibt - die Statistik und die eigenen Preise -, werden beide gezeigt, sonst
+  // sieht man nur eine Seite des Vergleichs. Einmal beim ersten Zeichnen; danach entscheidet der Benutzer.
+  if (!view.paired && model.ownAvailable) {
+    view.paired = true;
+    for (const [stat, own] of [['nahrung', 'own:food'], ['superbenzin', 'own:fuel']])
+      if (model.lines.some(l => l.key === own)) { view.lines.add(stat); view.lines.add(own); }
+  }
   const salary = model.lines[0], general = model.lines.find(l => l.key === 'gesamt');
   if (!salary.points.length || salary.points.length < 2) {
     host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Dafür braucht es Abrechnungen aus mindestens zwei Monaten.</p></div></div>';
@@ -138,17 +147,20 @@ function draw() {
   const priceChange = general ? last(general.points)[1] - 100 : null;
   const real = priceChange === null ? null : ((1 + salaryChange / 100) / (1 + priceChange / 100) - 1) * 100;
   const power = priceChange === null ? null : model.salaryNow - model.salaryStart * (1 + priceChange / 100);
-  const label = view.basis === 'net' ? 'Netto' : 'Brutto';
+  const label = BASIS[view.basis];
 
-  const chips = LINES.filter(l => model.lines.some(x => x.key === l.key)).map(l => {
+  const legendRow = l => {
     const line = model.lines.find(x => x.key === l.key);
-    return `<label class="pp-line" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><i></i><span>${esc(l.label)}</span><b>${signed(last(line.points)[1] - 100)}</b></label>`;
-  }).join('');
+    return `<label class="pp-line${l.own ? ' is-own' : ''}" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><i></i><span>${esc(l.label)}</span><b>${signed(last(line.points)[1] - 100)}</b></label>`;
+  };
+  const groupOf = own => LINES.filter(l => !!l.own === own && model.lines.some(x => x.key === l.key)).map(legendRow).join('');
+  const chips = `<div class="pp-legend-group"><h3>Statistik Deutschland <small>Destatis, alle Haushalte</small></h3>${groupOf(false)}</div>`
+    + (model.ownAvailable ? `<div class="pp-legend-group"><h3>Deine Einkäufe <small>aus deinen bestätigten Belegen</small></h3>${groupOf(true)}</div>` : '');
 
   host.innerHTML = `
     <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2><p>Alles beginnt im ${monthName(model.start)} bei 100. Liegt dein ${label} über den Preislinien, bleibt dir real mehr.</p></div></div>
     <div class="pp-controls">
-      <div class="po-years" role="tablist" aria-label="Gehalt"><button type="button" role="tab" class="po-year" data-pp-basis="net" aria-selected="${view.basis === 'net'}">Netto</button><button type="button" role="tab" class="po-year" data-pp-basis="gross" aria-selected="${view.basis === 'gross'}">Brutto</button></div>
+      <div class="po-years" role="tablist" aria-label="Gehalt">${Object.entries(BASIS).map(([key, name]) => `<button type="button" role="tab" class="po-year" data-pp-basis="${key}" aria-selected="${view.basis === key}">${name}</button>`).join('')}</div>
       ${model.startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${model.startOptions.map(m => `<option value="${m}"${m === model.start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
     </div>
     <div class="po-kpis pp-kpis">
@@ -195,7 +207,7 @@ function drawChart(model) {
 
   const path = points => points.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join('');
   const lines = shown.slice().sort((a, b) => Number(!!a.main) - Number(!!b.main)).map(l =>
-    `<path d="${path(l.points)}" fill="none" stroke="${l.color}" stroke-width="${l.main ? 3 : 2}" stroke-linecap="round" stroke-linejoin="round"${l.own ? ' stroke-dasharray="1 0"' : ''}/>`
+    `<path d="${path(l.points)}" fill="none" stroke="${l.color}" stroke-width="${l.main ? 3 : 2}" stroke-linecap="round" stroke-linejoin="round"${l.own ? ' stroke-dasharray="6 4"' : ''}/>`
     + (l.anchoredAt ? `<circle cx="${x(l.anchoredAt).toFixed(1)}" cy="${y(l.points[0][1]).toFixed(1)}" r="3.5" fill="${l.color}"/>` : '')
     + `<circle cx="${x(last(l.points)[0]).toFixed(1)}" cy="${y(last(l.points)[1]).toFixed(1)}" r="4" fill="${l.color}"/>`).join('');
 
@@ -224,7 +236,7 @@ function bind(model) {
       return Math.abs(nearest[0] - m) > 3 ? null : { l, v: nearest[1] };
     }).filter(Boolean);
     const salaryNow = rows.find(r => r.l.main);
-    tip.innerHTML = `<strong>${monthName(m)}</strong>${rows.map(r => `<div class="po-tip-row"><span><i style="background:${r.l.color}"></i>${esc(r.l.label)}</span><span>${r.v.toLocaleString('de-DE', { maximumFractionDigits: 1 })}</span></div>`).join('')}${salaryNow ? `<div class="po-tip-row po-tip-foot"><span>${view.basis === 'net' ? 'Netto' : 'Brutto'}</span><span>${euro2.format(salaryNow.v / 100 * model.salaryStart)}</span></div>` : ''}`;
+    tip.innerHTML = `<strong>${monthName(m)}</strong>${rows.map(r => `<div class="po-tip-row"><span><i style="background:${r.l.color}"></i>${esc(r.l.label)}</span><span>${r.v.toLocaleString('de-DE', { maximumFractionDigits: 1 })}</span></div>`).join('')}${salaryNow ? `<div class="po-tip-row po-tip-foot"><span>${BASIS[view.basis]}</span><span>${euro2.format(salaryNow.v / 100 * model.salaryStart)}</span></div>` : ''}`;
     tip.hidden = false;
     guide.removeAttribute('hidden'); guide.setAttribute('x1', x(m).toFixed(1)); guide.setAttribute('x2', x(m).toFixed(1));
     const w = tip.offsetWidth, room = wrap.clientWidth;

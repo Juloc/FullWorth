@@ -23,7 +23,8 @@ const DETAIL_ROWS = [
   ['bavEmployee', 'bAV Arbeitnehmer', 'deduction', true],
   ['companyCarTaxableBenefit', 'Firmenwagen Sachbezug', 'deduction', true],
   ['bonus', 'Bonus / Sonderzahlung', 'income', true],
-  ['netPay', 'Netto', 'income']
+  ['netPay', 'Netto-Verdienst', 'income'],
+  ['payout', 'Ausgezahlt', 'income']
 ];
 
 const num = value => Number(value) || 0;
@@ -65,8 +66,8 @@ export function renderOverview(input) {
       <div class="po-years" role="tablist" aria-label="Jahr">${years.map(y => `<button type="button" role="tab" class="po-year" aria-selected="${y === state.year}" data-po-year="${y}">${y}</button>`).join('')}</div>
       <div class="po-kpis">
         <div><span>Brutto bisher</span><strong>${euro.format(model.gross)}</strong></div>
-        <div><span>Netto bisher</span><strong>${euro.format(model.net)}</strong></div>
-        <div><span>Nettoquote</span><strong>${model.gross ? (model.net / model.gross * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' %' : '—'}</strong></div>
+        <div><span>Ausgezahlt bisher</span><strong>${euro.format(model.paid)}</strong></div>
+        <div><span>Anteil ausgezahlt</span><strong>${model.gross ? (model.paid / model.gross * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' %' : '—'}</strong></div>
         <div><span>Abrechnungen</span><strong>${model.present} von ${model.expected}</strong></div>
       </div>
     </div>
@@ -78,7 +79,7 @@ export function renderOverview(input) {
     </div>
     <div class="panel comp-card pp-card" id="po-power"></div>
     <div class="po-grid">
-      <div class="panel comp-card po-list-card"><div class="po-list-head" aria-hidden="true"><span>Monat</span><span class="po-h-gross">Brutto</span><span>Netto</span><span>Änderung</span><span></span></div><ol class="po-list">${listHtml(model)}</ol></div>
+      <div class="panel comp-card po-list-card"><div class="po-list-head" aria-hidden="true"><span>Monat</span><span class="po-h-gross">Brutto</span><span>Ausgezahlt</span><span>Änderung</span><span></span></div><ol class="po-list">${listHtml(model)}</ol></div>
       <div class="panel comp-card po-side">${detailHtml(model, state.month)}</div>
     </div>`;
 
@@ -117,7 +118,7 @@ function buildYear(year) {
     year, months, byMonth, first, last, latest: last,
     present: present.length, expected: last - first + 1,
     gross: payslips.reduce((sum, p) => sum + num(p.grossPay), 0),
-    net: payslips.reduce((sum, p) => sum + num(p.netPay), 0)
+    paid: payslips.reduce((sum, p) => sum + num(p.payout), 0)
   };
 }
 
@@ -298,11 +299,11 @@ function listItemHtml(model, entry) {
     return `<li class="po-item${selected ? ' is-open' : ''}" data-po-item="${entry.month}"><div class="po-row po-row-missing" role="button" tabindex="0" data-po-row="${entry.month}"><span class="po-month"><strong>${name}</strong></span><span class="po-missing">fehlt</span><span class="po-act"><button type="button" class="btn btn-secondary po-icon" data-po-hint="upload" aria-label="Abrechnung für ${name} hochladen">${icon('ui-upload')}</button></span></div>${selected ? `<div class="po-inline">${detailHtml(model, entry.month)}</div>` : ''}</li>`;
   }
   const p = entry.item.payslip, prev = entry.prev;
-  const change = prev ? num(p.netPay) - num(prev.netPay) : null;
+  const change = prev ? num(p.payout) - num(prev.payout) : null;
   return `<li class="po-item${selected ? ' is-open' : ''}" data-po-item="${entry.month}"><div class="po-row" role="button" tabindex="0" aria-expanded="${selected}" data-po-row="${entry.month}">`
     + `<span class="po-month"><strong>${name}</strong><small>${euro.format(num(p.grossPay))} brutto</small></span>`
     + `<span class="po-gross">${euro.format(num(p.grossPay))}</span>`
-    + `<span class="po-net">${euro.format(num(p.netPay))}</span>`
+    + `<span class="po-net">${euro.format(num(p.payout))}</span>`
     + `<span class="po-change ${change === null || Math.abs(change) < 0.005 ? '' : change > 0 ? 'positive' : 'negative'}">${change === null ? '—' : Math.abs(change) < 0.005 ? '±0 €' : signedEuro(change)}</span>`
     + `<span class="po-act">${entry.item.document ? `<button type="button" class="btn btn-secondary po-icon" data-open-pdf="${attr(entry.item.document.importId)}" aria-label="PDF für ${name} öffnen">${icon('ui-document')}</button>` : ''}</span>`
     + `</div>${selected ? `<div class="po-inline">${detailHtml(model, entry.month)}</div>` : ''}</li>`;
