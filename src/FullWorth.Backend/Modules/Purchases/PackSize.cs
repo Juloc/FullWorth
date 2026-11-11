@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
+using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Purchases;
 
@@ -95,7 +95,8 @@ public static partial class PackSize
 
     private static PackSizeReading? Read(Match hit, bool multi, bool pieces)
     {
-        if (!decimal.TryParse(hit.Groups["size"].Value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var size) || size <= 0m)
+        // Eine Packungsgroesse hat Nachkommastellen, wenn ein Trenner davorsteht ("1,250 kg" sind 1,25 kg).
+        if (ImportNumber.TryParse(hit.Groups["size"].Value, ImportNumber.ThreeDigitTail.Decimal) is not { } size || size <= 0m)
             return null;
         if (pieces) return new PackSizeReading(null, size, "piece", null);
         var unit = hit.Groups["unit"].Value.ToLowerInvariant();
@@ -104,7 +105,7 @@ public static partial class PackSize
         decimal? count = null;
         if (multi)
         {
-            count = decimal.Parse(hit.Groups["count"].Value, CultureInfo.InvariantCulture);
+            count = ImportNumber.TryParse(hit.Groups["count"].Value, ImportNumber.ThreeDigitTail.Decimal);
             if (count <= 1m) count = null;
         }
         return new PackSizeReading(count, size, unit, null);
