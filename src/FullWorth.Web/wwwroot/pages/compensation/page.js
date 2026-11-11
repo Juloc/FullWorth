@@ -67,6 +67,7 @@ function bind(){
   // The derived age depends on both the birth date and the selected tax year.
   ['birth-date','tax-year'].forEach(id=>$(`#${id}`)?.addEventListener('change',syncAgeFields));
   $('#analyze-negotiation').addEventListener('click',()=>analyzeNegotiation().catch(handle));
+  $('#fill-negotiation').addEventListener('click',()=>fillNegotiation().catch(handle));
   $('#save-scenario').addEventListener('click',()=>saveScenario().catch(handle));
   $('#clear-comparison').addEventListener('click',()=>{state.selected=[];renderScenarios();renderComparison()});
   $('#children').addEventListener('change',()=>{if(number('children')>0)$('#childless-surcharge').checked=false});
@@ -202,6 +203,28 @@ function renderResult(result){
   const year=$('#comp-hero-year');
   if(year)year.textContent=a.taxYear==null?'':String(a.taxYear);
   $('#assumptions').textContent=`${a.calculationKind}. ${a.taxSource}. ${a.socialInsuranceSource}. Stand ${a.dataAsOf}. ${a.disclaimer}`;
+}
+
+// Das Gehaltsgespraech rechnet mit Jahresbetraegen. Die Vertragsstaende nennen das Monatsgehalt, und wie viele
+// Monatsgehaelter im Jahr gezahlt werden, zeigen die Abrechnungen: ein Bonus von einem halben Monatsgehalt im Juni
+// und im November sind 13 Gehaelter. Ohne Abrechnungen mit Einmalzahlung sind es zwoelf.
+async function fillNegotiation(){
+  const space=state.space?.id;if(!space)return;
+  const [contracts,payslips]=await Promise.all([api(`api/compensation/contracts?fullWorthSpaceId=${space}`),api(`api/compensation/payslips?fullWorthSpaceId=${space}`)]);
+  const states=(contracts?.states||[]).map(x=>x.state).sort((a,b)=>a.validFrom.localeCompare(b.validFrom));
+  const note=$('#neg-fill-note');
+  if(!states.length){note.textContent='Noch keine bestätigten Vertragsstände - sie entstehen im Reiter „Arbeitsverträge“.';return}
+  const first=states[0],latest=states[states.length-1];
+  const lastYear=(payslips||[]).slice(0,12);
+  const bonus=lastYear.reduce((sum,p)=>sum+(p.payslip.bonus||0),0);
+  const extra=Math.round(bonus/latest.grossMonthly*2)/2;
+  const months=12+Math.min(Math.max(extra,0),2);
+  set('neg-old-salary',Math.round(first.grossMonthly*months));
+  set('neg-old-date',first.validFrom);
+  set('neg-current-salary',Math.round(latest.grossMonthly*months));
+  set('neg-date',localIsoDate());
+  note.textContent=`Gehalt ${months.toLocaleString('de-DE')} × Monatsbrutto: ${money.format(first.grossMonthly)} seit ${date(first.validFrom)}, heute ${money.format(latest.grossMonthly)}. Das gewünschte Gehalt trägst du selbst ein.`;
+  await analyzeNegotiation();
 }
 
 async function analyzeNegotiation(){

@@ -661,3 +661,5 @@
 .pp-guide{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
 .pp-foot{margin:0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.5}
 .pp-placeholder{min-height:250px}
+.neg-fill{display:grid;gap:var(--space-1);justify-items:start;margin:var(--space-3) 0}
+.neg-fill small{margin:0}
