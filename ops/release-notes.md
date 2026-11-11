@@ -9,7 +9,8 @@ Die Gehalt-Seite ist aufgeräumt, startet mit deinen echten Zahlen und hat einen
 - **„Hinzufügen“ statt Karten am Seitenende.** Ein Knopf öffnet einen Dialog: Paperless (Suche einrichten, Funde prüfen, neu lesen), PDF hochladen, Abrechnung oder Vertragsstand von Hand. Die Prüfformulare öffnen sich dort.
 - **Vier Gruppen statt elf Reiter:** Mein Gehalt, Verlauf, Planen (Rechner, Szenarien, Optimierer, Gehaltsgespräch), Mehr (Benefits, Dienstrad, weitere Einkünfte). Kopf mit Titel, Untertitel und Plakette und die Erklärtexte unter den Überschriften sind weg; „Profil speichern“ steht im Rechner.
 - **Verdienst gegen Preise verständlicher.** Ein Satz sagt, was die Linien bedeuten, die Kennzahlen heißen „Dein Verdienst“, „Preise insgesamt“, „Real für dich“, dazu ein Satz im Klartext. Die Legende zeigt oben nur sichtbare Linien mit Herkunft (Statistik oder deine Daten), der Rest steht hinter „Weitere Linien“.
-- **Auswahlfelder wie Buttons**, mit größerem Pfeil und genug Abstand.
+- **Auswahlfelder wie Buttons**, mit größerem Pfeil und genug Abstand; in Formularen sind Eingabe- und Auswahlfelder gleich hoch und gleich gerundet.
+- **Der „Hinzufügen“-Dialog** hat einen Scrollbereich, einen festen Kopf mit Schließen-Knopf und zwei Ebenen: Lohnabrechnung oder Vertrag, dann Paperless, PDF oder von Hand.
 - **Am Telefon steht von der Marke nur das Logo,** in der Kopfzeile neben dem Breadcrumb und der Suche.
 
 ## Behoben
