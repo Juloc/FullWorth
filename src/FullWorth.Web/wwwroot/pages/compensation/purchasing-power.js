@@ -3,6 +3,7 @@
 // Benzin) und, sobald bestaetigte Belege da sind, die Preise der eigenen Einkaeufe. Alle Linien beginnen am
 // selben Monat bei 100, damit man sie nebeneinander lesen kann.
 import { $, esc, euro, euro2, spaceId, api } from './shared.js';
+import { monthsOf } from './housing-costs.js';
 
 const MONTH = new Intl.DateTimeFormat('de-DE', { month: 'short', year: 'numeric' });
 const monthName = index => MONTH.format(new Date(Math.floor(index / 12), index % 12, 1)).replace('.', '');
@@ -19,13 +20,26 @@ const LINES = [
   { key: 'nettokaltmiete', label: 'Miete', color: 'var(--cat-2)' },
   { key: 'haushaltsenergie', label: 'Energie', color: 'var(--cat-4)' },
   { key: 'superbenzin', label: 'Benzin', color: 'var(--cat-5)' },
+  { key: 'erdgas', label: 'Gas', color: 'var(--cat-8)' },
+  { key: 'strom', label: 'Strom', color: 'var(--cat-7)' },
   { key: 'own', label: 'Alle meine Einkäufe', color: 'var(--cat-1)', own: true, on: true },
   { key: 'own:food', label: 'Meine Lebensmittel', color: 'var(--cat-7)', own: true },
-  { key: 'own:fuel', label: 'Mein Kraftstoff', color: 'var(--cat-6)', own: true }
+  { key: 'own:fuel', label: 'Mein Kraftstoff', color: 'var(--cat-6)', own: true },
+  // Aus den erfassten Abrechnungen (housing-costs.js): Euro je Monat, an die passende Statistiklinie angelegt.
+  { key: 'home:heating', label: 'Meine Heizkosten', color: 'var(--cat-4)', own: true, group: 'home', stat: 'haushaltsenergie' },
+  { key: 'home:electricity', label: 'Mein Strom', color: 'var(--cat-7)', own: true, group: 'home', stat: 'strom' },
+  { key: 'home:water', label: 'Mein Wasser', color: 'var(--cat-2)', own: true, group: 'home', stat: 'gesamt' },
+  { key: 'home:ancillary', label: 'Meine Nebenkosten', color: 'var(--cat-5)', own: true, group: 'home', stat: 'gesamt' }
 ];
 
-const view = { basis: 'payout', since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: false };
-let data = null, loading = null, host = null, payslips = [];
+const view = { basis: 'payout', since: null, lines: new Set(LINES.filter(l => l.on).map(l => l.key)), paired: new Set() };
+let data = null, loading = null, host = null, payslips = [], housing = [];
+
+/** Die erfassten Wohnkosten (housing-costs.js); zeichnet neu, sobald sich etwas aendert. */
+export function setHousingCosts(list) {
+  housing = list || [];
+  if (data && !data.failed && host?.isConnected) draw();
+}
 
 export function renderPurchasingPower(element, items) {
   host = element; payslips = items;
@@ -117,6 +131,23 @@ function buildModel() {
       if (line) own1(line, group.points);
     }
   }
+  // Wohnkosten: je Kostenart und Jahr ein Punkt in der Jahresmitte, Euro je Monat - aber nur, wenn fuer das Jahr mindestens
+  // elf Monate erfasst sind. Eine Abrechnung ueber vier Wintermonate neben einer ueber sieben Sommermonate waere sonst
+  // eine Heizsaison-Schwankung und keine Preisentwicklung. Erst ab zwei Jahren ist es eine Linie.
+  for (const line of LINES.filter(l => l.group === 'home')) {
+    const years = new Map();
+    for (const e of housing.filter(e => `home:${e.kind}` === line.key)) {
+      const year = Number(e.periodFrom.slice(0, 4)), sum = years.get(year) || { amount: 0, months: 0 };
+      years.set(year, { amount: sum.amount + e.amount, months: sum.months + monthsOf(e) });
+    }
+    const points = [...years].filter(([, v]) => v.months >= 11).map(([year, v]) => [year * 12 + 6, v.amount / v.months])
+      .filter(([m]) => m >= start && m <= end).sort((a, b) => a[0] - b[0]);
+    const base = result.lines.find(l => l.key === line.stat) || general;
+    if (points.length < 2 || !base) continue;
+    const anchor = base.points.find(p => p[0] >= points[0][0]) || base.points[base.points.length - 1];
+    const factor = anchor[1] / points[0][1];
+    result.lines.push({ ...line, points: points.map(([m, v]) => [m, v * factor]), anchoredAt: points[0][0] });
+  }
   result.ownAvailable = result.lines.filter(l => l.own).length > 0;
   return result;
 }
@@ -131,12 +162,9 @@ function draw() {
   if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Die Preisdaten konnten gerade nicht geladen werden.</p></div></div>'; return; }
   const model = buildModel();
   // Wo es zu einem Thema beides gibt - die Statistik und die eigenen Preise -, werden beide gezeigt, sonst
-  // sieht man nur eine Seite des Vergleichs. Einmal beim ersten Zeichnen; danach entscheidet der Benutzer.
-  if (!view.paired && model.ownAvailable) {
-    view.paired = true;
-    for (const [stat, own] of [['nahrung', 'own:food'], ['superbenzin', 'own:fuel']])
-      if (model.lines.some(l => l.key === own)) { view.lines.add(stat); view.lines.add(own); }
-  }
+  // sieht man nur eine Seite des Vergleichs. Einmal je Thema, sobald es die eigene Linie gibt; danach entscheidet der Benutzer.
+  for (const [stat, own] of [['nahrung', 'own:food'], ['superbenzin', 'own:fuel'], ['haushaltsenergie', 'home:heating'], ['strom', 'home:electricity']])
+    if (!view.paired.has(own) && model.lines.some(l => l.key === own)) { view.paired.add(own); view.lines.add(stat); view.lines.add(own); }
   const salary = model.lines[0], general = model.lines.find(l => l.key === 'gesamt');
   if (!salary.points.length || salary.points.length < 2) {
     host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Dafür braucht es Abrechnungen aus mindestens zwei Monaten.</p></div></div>';
@@ -153,9 +181,10 @@ function draw() {
     const line = model.lines.find(x => x.key === l.key);
     return `<label class="pp-line${l.own ? ' is-own' : ''}" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><i></i><span>${esc(l.label)}</span><b>${signed(last(line.points)[1] - 100)}</b></label>`;
   };
-  const groupOf = own => LINES.filter(l => !!l.own === own && model.lines.some(x => x.key === l.key)).map(legendRow).join('');
+  const groupOf = (own, group) => LINES.filter(l => !!l.own === own && l.group === group && model.lines.some(x => x.key === l.key)).map(legendRow).join('');
   const chips = `<div class="pp-legend-group"><h3>Statistik Deutschland <small>Destatis, alle Haushalte</small></h3>${groupOf(false)}</div>`
-    + (model.ownAvailable ? `<div class="pp-legend-group"><h3>Deine Einkäufe <small>aus deinen bestätigten Belegen</small></h3>${groupOf(true)}</div>` : '');
+    + (groupOf(true) ? `<div class="pp-legend-group"><h3>Deine Einkäufe <small>aus deinen bestätigten Belegen</small></h3>${groupOf(true)}</div>` : '')
+    + (groupOf(true, 'home') ? `<div class="pp-legend-group"><h3>Deine Wohnkosten <small>aus deinen Abrechnungen, € je Monat</small></h3>${groupOf(true, 'home')}</div>` : '');
 
   host.innerHTML = `
     <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2><p>Alles beginnt im ${monthName(model.start)} bei 100. Liegt dein ${label} über den Preislinien, bleibt dir real mehr.</p></div></div>

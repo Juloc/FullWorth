@@ -3,7 +3,8 @@
 // Abrechnungen abgeleitet - was sich daraus nicht ergibt, steht nicht da.
 import { $, esc, attr, euro, euro2, signedEuro } from './shared.js';
 import { spriteHref } from '../../components/sprite.js';
-import { renderPurchasingPower } from './purchasing-power.js';
+import { renderPurchasingPower, setHousingCosts } from './purchasing-power.js';
+import { renderHousingCosts } from './housing-costs.js';
 
 const MONTH_LONG = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('de-DE', { month: 'long' }).format(new Date(2021, i, 1)));
 const MONTH_SHORT = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('de-DE', { month: 'short' }).format(new Date(2021, i, 1)).replace('.', ''));
@@ -78,6 +79,7 @@ export function renderOverview(input) {
       <div class="po-chart-wrap"><div id="po-chart"></div><div class="po-tip" hidden></div></div>
     </div>
     <div class="panel comp-card pp-card" id="po-power"></div>
+    <div class="panel comp-card hc-card" id="po-housing"></div>
     <div class="po-grid">
       <div class="panel comp-card po-list-card"><div class="po-list-head" aria-hidden="true"><span>Monat</span><span class="po-h-gross">Brutto</span><span>Ausgezahlt</span><span>Änderung</span><span></span></div><ol class="po-list">${listHtml(model)}</ol></div>
       <div class="panel comp-card po-side">${detailHtml(model, state.month)}</div>
@@ -86,6 +88,7 @@ export function renderOverview(input) {
   bindOnce(root);
   drawChart(model);
   renderPurchasingPower($('#po-power'), state.payslips);
+  renderHousingCosts($('#po-housing'), setHousingCosts);
   chartObserver?.disconnect();
   chartObserver = new ResizeObserver(() => drawChart(state.model));
   chartObserver.observe($('#po-chart'));

@@ -663,3 +663,13 @@
 .pp-placeholder{min-height:250px}
 .neg-fill{display:grid;gap:var(--space-1);justify-items:start;margin:var(--space-3) 0}
 .neg-fill small{margin:0}
+/* Heiz- und Nebenkosten (housing-costs.js) */
+.hc-card{display:grid;gap:var(--space-3)}
+.hc-list{list-style:none;margin:0;padding:0;display:grid}
+.hc-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--line)}
+.hc-main{flex:1;min-width:0;display:grid;gap:var(--space-1)}
+.hc-main small,.hc-amount small{color:var(--muted);font-size:var(--text-caption-size)}
+.hc-amount{display:grid;text-align:right;font-variant-numeric:tabular-nums}
+.hc-row .btn-danger{flex:none;width:36px;padding:0}
+.hc-add summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted)}
+.hc-wide{grid-column:1/-1}

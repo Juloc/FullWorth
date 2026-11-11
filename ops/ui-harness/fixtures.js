@@ -512,6 +512,12 @@
     'purchases/w1/workspace': { access: 'write', reconciliation: {}, purchase: { id: 'w1', merchant: 'REWE Markt GmbH', purchaseDate: '2026-09-02', purchaseTime: null, totalAmount: 3.48, currency: 'EUR', source: 'receipt', reviewState: 'needs_review', visibility: 'space', isBookmarked: false, payments: [], documents: [],
       items: [{ id: 'i1', name: 'Brokolo 1kg', rawName: 'Brokolo 1kg', productId: null, quantity: 1, quantityUnit: 'piece', unitPrice: 1.99, totalPrice: 1.99, currency: 'EUR', lineType: 'product' },
         { id: 'i2', name: 'Bananen', rawName: 'Bananen', productId: null, quantity: 1, quantityUnit: 'piece', unitPrice: 1.49, totalPrice: 1.49, currency: 'EUR', lineType: 'product' }] } },
+    // Zwei ganze Jahre Heizkosten (eine Linie) und eine Wasser-Abrechnung ueber vier Monate (keine Linie).
+    'compensation/housing-costs': [
+      { id: 'h1', kind: 'heating', periodFrom: '2025-01-01', periodTo: '2025-12-31', amount: 1180, note: 'Heizkostenabrechnung 2025', paperlessDocumentId: 2494, createdAt: '2026-09-01T08:00:00Z' },
+      { id: 'h2', kind: 'heating', periodFrom: '2026-01-01', periodTo: '2026-12-31', amount: 1260, note: 'Heizkostenabrechnung 2026', paperlessDocumentId: 2941, createdAt: '2026-09-01T08:00:00Z' },
+      { id: 'h3', kind: 'water', periodFrom: '2025-01-01', periodTo: '2025-04-30', amount: 11.20, note: null, paperlessDocumentId: 2941, createdAt: '2026-09-01T08:00:00Z' }
+    ],
     'purchases/receipt-imports/paperless/uploads': { paperlessConfigured: true, canUpload: true, reason: null, uploadedAt: null },
     'purchases/receipt-imports/paperless/connection': {
       fullWorthSpaceId: SPACE, baseUrl: 'https://paperless.example.local/', configured: true,
