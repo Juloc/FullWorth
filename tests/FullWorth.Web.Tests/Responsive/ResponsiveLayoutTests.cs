@@ -110,24 +110,22 @@ public sealed class ResponsiveLayoutTests
     }
 
     /// <summary>
-    /// Regression found while verifying #171 live: shell.css's `html.nav-collapsed .brand strong` and
-    /// `.brand-name` rules hide the name/badge to make the desktop sidebar a narrow icon column - and
-    /// that class is set unconditionally from a `localStorage` flag (`app/boot.js`) before first paint,
-    /// with no viewport check. A user who ever collapsed the sidebar on desktop carries `nav-collapsed`
-    /// into mobile too, which silently re-broke the #171 fix (logo visible, name and "Alpha" badge gone
-    /// again) without touching `.sidebar{display:none}` at all - the assertions above alone don't catch
-    /// this, because they only look at the plain (non-collapsed) mobile rule.
+    /// Am Telefon steht von der Marke nur das Logo, in der Zeile der Kopfleiste (Name und Plakette sind dort
+    /// ueberfluessig). Das gilt unabhaengig davon, ob der Browser einen am Desktop gespeicherten Zustand
+    /// `nav-collapsed` mitbringt (app/boot.js setzt ihn vor dem ersten Bild, ohne Blick auf die Breite): Name und
+    /// Plakette bleiben in beiden Zustaenden weg, und das Logo bleibt in einer Zeile stehen. Frueher war es
+    /// umgekehrt - die Marke mit Name musste ueberleben -, das war der Regress aus #171.
     /// </summary>
     [Fact]
-    public void MobileBrandSurvivesAPersistedDesktopNavCollapsedState()
+    public void MobileBrandIsOnlyTheLogoEvenWithAPersistedDesktopNavCollapsedState()
     {
         var css = ReadCss();
         var start = css.IndexOf("@media(max-width:767px)", StringComparison.Ordinal);
         Assert.True(start >= 0);
         var mobile = css[start..];
 
-        Assert.Matches(@"html\.nav-collapsed \.brand strong,html\.nav-auto-collapsed \.brand strong\{display:(?!none)", mobile);
-        Assert.Matches(@"html\.nav-collapsed \.brand-name,html\.nav-auto-collapsed \.brand-name\{display:(?!none)", mobile);
+        Assert.Matches(@"\.brand strong,\.brand-name,html\.nav-collapsed \.brand-name,html\.nav-auto-collapsed \.brand-name\{display:none\}", mobile);
+        Assert.Matches(@"\.brand,html\.nav-collapsed \.brand,html\.nav-auto-collapsed \.brand\{flex-direction:row", mobile);
     }
 
     [Fact]
