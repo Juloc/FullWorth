@@ -1,5 +1,4 @@
 import { confirmMessage } from '../../components/confirm.js';
-import { renderActuals } from './verlauf-real.js';
 import {
   $ as H$, $$ as H$$, euro as heuro, euro2 as heuro2, esc, attr, val as hval, num as hnum, setVal as hset,
   spaceId, fmtDate, localIsoDate, api as hapi, json as hjson, notify as hmessage,
@@ -44,19 +43,21 @@ initHistory();
 function initHistory(){
   const tabs=H$('.comp-tabs'),toast=H$('#comp-error');
   if(!tabs||!toast)return;
-  // Der Reiter steht im Markup der Seite, siehe Compensation/Index.cshtml.
-  toast.insertAdjacentHTML('beforebegin',historyMarkup());
+  // Die gespeicherten Planungsstände stehen im Verlauf (#history-planned, siehe Compensation/Index.cshtml); der Knopf,
+  // der einen anlegt, steht im Rechner - dort entsteht der Stand, den er festhält.
+  H$('#history-planned').innerHTML=historyMarkup();
+  H$('#tab-calculator .comp-calc-actions')?.insertAdjacentHTML('afterend',historyToolbarMarkup());
   const stack=H$('#tab-calculator .comp-form-stack');
   if(stack)stack.insertAdjacentHTML('afterbegin',historyEditMarkup());
   H$$('[data-history-tab]').forEach(b=>b.addEventListener('click',()=>openHistory()));
   H$('#history-save').addEventListener('click',()=>createHistoryEvent().catch(herror));
   H$('#history-edit-save').addEventListener('click',()=>saveEditedEvent().catch(herror));
   H$('#history-edit-cancel').addEventListener('click',cancelEdit);
-  H$('#space-select').addEventListener('change',()=>{if(H$('#tab-history')?.classList.contains('active'))loadHistory().catch(herror)});
+  H$('#space-select').addEventListener('change',()=>{if(H$('#tab-verlauf')?.classList.contains('active'))loadHistory().catch(herror)});
   H$('#history-date').value=localIsoDate();
 
   // One delegated handler for the time window, the single/joint scope and the curve toggles.
-  H$('#tab-history')?.addEventListener('click',event=>{
+  H$('#history-planned')?.addEventListener('click',event=>{
     const win=event.target.closest('[data-history-window]');
     if(win){hstate.windowMonths=Number(win.dataset.historyWindow)||0;syncHistoryControls();loadHistory().catch(herror);return}
     const scope=event.target.closest('[data-history-scope]');
@@ -87,10 +88,9 @@ function syncHistoryControls(){
   });
 }
 
-function historyMarkup(){return `
-<section id="tab-history" class="comp-tab">
-  <article id="history-real" class="panel comp-card" hidden></article>
-  <details id="history-plan" class="history-plan"><summary>Planungsstand aus dem Rechner speichern</summary>
+// Die Leiste zum Speichern eines Planungsstands gehört zum Rechner, nicht zum Verlauf: dort steht sie, eingeklappt.
+function historyToolbarMarkup(){return `
+<details id="history-plan" class="history-plan"><summary>Planungsstand speichern</summary>
   <article class="panel history-toolbar">
     <label>Datum<input id="history-date" type="date"></label>
     <label>Art<select id="history-type">
@@ -106,7 +106,9 @@ function historyMarkup(){return `
     <label class="history-title">Notiz<input id="history-note" maxlength="1000" placeholder="optional"></label>
     <button id="history-save" class="btn btn-primary" type="button">Aktuellen Rechnerstand ab Datum speichern</button>
   </article>
-  </details>
+</details>`}
+
+function historyMarkup(){return `
   <div id="history-summary" class="metric-grid history-summary"></div>
   <article class="panel history-chart-card">
     <div class="history-chart-head">
@@ -122,8 +124,7 @@ function historyMarkup(){return `
     <div id="history-other-income" class="history-track" hidden></div>
   </article>
   <article class="panel history-years-card"><h2>Jahresvergleich</h2><div id="history-years"></div></article>
-  <div id="history-list" class="history-list"></div>
-</section>`}
+  <div id="history-list" class="history-list"></div>`}
 
 function historyEditMarkup(){return `
 <div id="history-edit-bar" class="history-edit-bar" hidden>
@@ -142,7 +143,8 @@ function historyEditMarkup(){return `
 
 async function openHistory(){
   H$$('.comp-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.historyTab==='history'));
-  H$$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id==='tab-history'));
+  H$$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id==='tab-verlauf'));
+  document.dispatchEvent(new CustomEvent('fw-gehalt-open'));
   await loadHistory().catch(herror);
 }
 
@@ -156,13 +158,11 @@ async function loadHistory(){
     hapi(`api/compensation/timeline?${query}`)
   ]);
   hstate.entries=entries||[];hstate.timeline=timeline;
-  // Gibt es Abrechnungen, ist der Verlauf deren Verlauf; die Rechner-Planungsstaende stehen darunter und nur, wenn es
-  // welche gibt. Ohne beides steht hier die alte Aufforderung, den Rechner zu speichern.
-  const actual=await renderActuals(H$('#history-real')).catch(()=>false);
+  // Die Zeitachse (verlauf.js) kommt aus den Abrechnungen; gespeicherte Planungsstände aus dem Rechner stehen darunter,
+  // eingeklappt, und nur wenn es welche gibt.
   const planned=hstate.entries.length>0;
-  H$$('#tab-history .history-chart-card,#tab-history .history-years-card').forEach(card=>{card.hidden=!planned});
-  H$('#history-summary').hidden=actual&&!planned;
-  H$('#history-plan').open=!actual&&!planned;
+  H$('#verlauf-planned').hidden=!planned;
+  if(!planned)return;
   // Only once: the first timeline that carries other income turns its curves on, afterwards the user's
   // own legend choice is respected (including switching them off again).
   if(!hstate.otherSeriesPrimed&&hasOtherIncome(timeline)){

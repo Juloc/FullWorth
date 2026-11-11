@@ -13,6 +13,7 @@ import {
 import './extended.js';
 import './contracts.js';
 import './history.js';
+import './verlauf.js';
 import './other-income.js';
 import './benchmarks.js';
 import './jobrad.js';

@@ -1,11 +1,13 @@
-// Der Reiter "Arbeitsverträge": die bestätigten Vertragsstände als Änderungsprotokoll (neueste zuerst, nur
-// geänderte Felder, alt durchgestrichen und neu daneben), das Diagramm "Brutto laut Vertrag", Hinweise aus dem
-// Abgleich mit den Abrechnungen - und darunter das Finden in Paperless und das Prüfen und Bestätigen.
+// Die Vertragsstände im Verlauf: das Änderungsprotokoll (neueste zuerst, nur geänderte Felder, alt durchgestrichen und
+// neu daneben), das Diagramm "Brutto laut Vertrag" und die Hinweise aus dem Abgleich mit den Abrechnungen stehen
+// aufklappbar unter der Zeitachse (#verlauf-contracts). Das Finden in Paperless und das Prüfen und Bestätigen eines
+// Standes steht im Dialog "Hinzufügen" (add-dialog.js).
 import { confirmMessage } from '../../components/confirm.js';
 import { spriteHref } from '../../components/sprite.js';
 import { $, $$, esc, attr, euro2, spaceId, api, json, notify, val, setVal, checked, setChecked } from './shared.js';
 import { drawContractChart } from './contract-chart.js';
 import { createFindsCard, openImportPdf } from './paperless-finds.js';
+import { openAdd, closeAdd } from './add-dialog.js';
 
 const state = { overview: { states: [], events: [], hints: [] }, payslips: [] };
 let reviewedImport = null;
@@ -14,7 +16,7 @@ const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${s
 const BADGE_TONE = { Start: 'start', 'Gehaltserhöhung': 'raise', 'Gehaltsänderung': 'change', Arbeitszeit: 'info', Benefits: 'info' };
 
 const finds = createFindsCard({
-  kind: 'contract', root: '#contract-finds', isActive: () => $('#tab-contracts')?.classList.contains('active'), onError: showError,
+  kind: 'contract', root: '#contract-finds', isActive: () => !!$('#verlauf-add')?.open, onError: showError,
   texts: { preset: 'Arbeitsverträge', noun: 'Verträge und Nachträge', typePattern: 'arbeitsvertrag|anstellungsvertrag|vertragsnachtrag|vertragsänderung', empty: 'Keine Verträge zur Prüfung.' },
   summarize: item => {
     const x = item.extraction;
@@ -28,10 +30,13 @@ const finds = createFindsCard({
 init();
 
 function init() {
-  const tab = $('#tab-contracts');
-  if (!tab) return;
-  $('[data-extended-tab="contracts"]')?.addEventListener('click', () => loadAll().catch(showError));
-  $('#space-select')?.addEventListener('change', () => { if (tab.classList.contains('active')) loadAll().catch(showError); });
+  if (!$('#verlauf-contracts')) return;
+  // Geladen wird, wenn der Verlauf aufgeht oder sich eine Abrechnung ändert (der Abgleich rechnet gegen sie), und
+  // die Funde, wenn der Dialog aufgeht.
+  document.addEventListener('fw-gehalt-open', () => loadAll().catch(showError));
+  document.addEventListener('fw-gehalt-changed', () => loadAll().catch(showError));
+  document.addEventListener('fw-add-opened', () => finds.load().catch(showError));
+  $('#space-select')?.addEventListener('change', () => loadAll().catch(showError));
   $('#ct-save').addEventListener('click', () => save().catch(showError));
   $('#ct-add-extra').addEventListener('click', () => addExtra());
   $('#ct-extras').addEventListener('click', event => event.target.closest('[data-remove-extra]')?.closest('.ct-extra').remove());
@@ -43,15 +48,16 @@ function init() {
   new ResizeObserver(() => drawChart()).observe($('#contract-chart'));
 }
 
-async function loadAll() {
+// announce: true, wenn der Benutzer selbst etwas geaendert hat (speichern, loeschen) - dann zeichnet der Verlauf neu.
+async function loadAll(announce = false) {
   const space = spaceId(); if (!space) return;
   const [overview, payslips] = await Promise.all([
     api(`api/compensation/contracts?fullWorthSpaceId=${space}`),
-    api(`api/compensation/payslips?fullWorthSpaceId=${space}`),
-    finds.load()]);
+    api(`api/compensation/payslips?fullWorthSpaceId=${space}`)]);
   state.overview = overview || state.overview;
   state.payslips = payslips || [];
   render();
+  if (announce) document.dispatchEvent(new Event('fw-contracts-changed'));
 }
 
 function render() {
@@ -90,7 +96,7 @@ async function logAction(event) {
   if (button.dataset.deleteState) {
     if (!await confirmMessage({ message: 'Diesen Vertragsstand löschen? Das abgelegte PDF wird mitgelöscht.', title: 'Vertragsstand löschen', confirmLabel: 'Löschen', cancelLabel: 'Abbrechen', destructive: true })) return;
     await api(`api/compensation/contracts/${button.dataset.deleteState}?fullWorthSpaceId=${spaceId()}`, { method: 'DELETE' });
-    await loadAll();
+    await loadAll(true);
   }
 }
 
@@ -101,26 +107,24 @@ const hintText = text => { $('#ct-review-hint').textContent = text; };
 function fillForm(x, importId, title) {
   reviewedImport = importId;
   hintText(importId ? `Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.` : '');
-  // Das Formular klappt auf, wenn es etwas zu pruefen gibt, und zu, wenn es geleert wird.
-  $('#contract-manual').open = !!(importId || x.validFrom || x.grossMonthly != null);
+  // Gibt es etwas zu pruefen, zeigt der Dialog "Hinzufuegen" das Formular; geleert wird es still.
+  if (importId || x.validFrom || x.grossMonthly != null) openAdd('contract');
   setVal('ct-from', x.validFrom || ''); setVal('ct-kind', x.kind || 'contract'); setVal('ct-employer', x.employer || '');
   setVal('ct-gross', x.grossMonthly); setVal('ct-hours', x.weeklyHours); setVal('ct-vacation', x.vacationDays);
   setChecked('ct-car', !!x.companyCar); setVal('ct-bav', x.bavEmployerShare); setVal('ct-notice', x.noticePeriod || ''); setVal('ct-position', x.position || '');
   $('#ct-extras').innerHTML = '';
   (x.extras || []).forEach(extra => addExtra(extra.label, extra.value));
-  if (importId) $('#contract-manual').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 const resetForm = () => fillForm({}, null);
 
 function prefill(index) { suggest(state.overview.hints[index]); }
 
-// Der Vorschlag aus dem Abgleich - auch von der Abrechnungsansicht aus (suggestState): der Reiter öffnet sich mit dem
+// Der Vorschlag aus dem Abgleich - auch von den Jahren im Verlauf aus (suggestState): der Dialog öffnet sich mit dem
 // ausgefüllten Formular.
 function suggest(hint) {
   fillForm({ validFrom: hint.suggestedValidFrom, kind: 'addendum', grossMonthly: hint.suggestedGross }, null);
   hintText('Vorschlag aus den Abrechnungen. Zum Beispiel Wochenstunden und Urlaubstage aus dem Vertrag ergänzen, dann speichern.');
-  $('#contract-manual').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function addExtra(label = '', value = '') {
@@ -128,8 +132,6 @@ function addExtra(label = '', value = '') {
 }
 
 export async function suggestState(hint) {
-  $('[data-extended-tab="contracts"]').click();
-  await loadAll();
   suggest(hint);
 }
 
@@ -148,7 +150,8 @@ async function save() {
   await api(`api/compensation/contracts?fullWorthSpaceId=${space}${reviewedImport ? `&importId=${reviewedImport}` : ''}`, json('POST', payload));
   resetForm();
   notify('Vertragsstand gespeichert.');
-  await loadAll();
+  closeAdd();
+  await Promise.all([loadAll(true), finds.load()]);
 }
 
 function showError(error) { console.error(error); notify(error?.message || 'Unbekannter Fehler.'); }

@@ -346,8 +346,6 @@
 }
 /* Monats- und Jahresansicht der Lohnabrechnungen (payslip-overview.js). Nur Tokens: die Farben des Diagramms
    sind die kräftigen Kategorie-Farben (--cat-*), alles andere die Rollenfarben der App. */
-.payslip-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-3);margin-bottom:var(--space-4)}
-.po-head{display:grid;gap:var(--space-3)}
 .po-years{display:flex;gap:var(--space-2);flex-wrap:wrap}
 .po-year{min-height:40px;padding:0 var(--space-4);border-radius:var(--radius-pill);border:1px solid var(--line);background:var(--surface);font-weight:600}
 .po-year[aria-selected="true"]{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
@@ -605,8 +603,8 @@
 .comp-groups button{min-height:40px;padding:0 var(--space-4);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
 .comp-groups button.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
 .comp-groups .comp-space-label{margin-left:auto}
-.comp-tabs[data-active-group="gehalt"]{display:none}
-.comp-tabs[data-active-group="dokumente"] button:not([data-group="dokumente"]),
+.comp-tabs[data-active-group="gehalt"],
+.comp-tabs[data-active-group="verlauf"]{display:none}
 .comp-tabs[data-active-group="planen"] button:not([data-group="planen"]),
 .comp-tabs[data-active-group="mehr"] button:not([data-group="mehr"]){display:none}
 .comp-calc-actions{display:flex;justify-content:flex-end;margin-bottom:var(--space-3)}
@@ -615,26 +613,54 @@
   .comp-groups button{flex:none;padding:0 var(--space-3);font-size:.9rem}
   .gv-kpis > div:last-child:nth-child(odd){grid-column:1/-1}
 }
-/* Hinzufuegen (Abrechnungen und Vertraege): eine Karte - die Funde zuerst, das Hochladen als eine Zeile, das Formular
-   klappt erst auf, wenn es etwas zu pruefen gibt. */
-.pa-add{display:grid;gap:var(--space-3)}
-.pa-upload{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
-.pa-upload input[type=file]{flex:1 1 14rem;min-width:0}
-.pa-manual>summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted);font-weight:600}
-.pa-manual[open]>summary{color:var(--text)}
-.pa-manual .payslip-fields{margin-top:var(--space-2)}
 .income-summary{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:var(--space-3)}
 .comp-advanced>summary{display:flex;align-items:center;min-height:44px;cursor:pointer}
-@media(max-width:640px){
-  .pa-upload .btn{flex:1}
-  .pa-manual .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
-  .pa-manual .check-row,.pa-manual label:has(input:not([type="number"]):not([type="date"]):not([type="checkbox"])){grid-column:1/-1}
+/* Verlauf (verlauf.js): eine Zeitachse, Jahr für Jahr. Flache Zeilen mit dünnen Trennlinien; die Zeile eines Jahres
+   klappt zu seinen Monaten auf, Vertragsänderungen stehen als Ereignisse darunter. */
+.vl-head{display:flex;justify-content:flex-end;margin-bottom:var(--space-3)}
+.vl-hints{margin-bottom:var(--space-3)}
+.vl-hints:empty{display:none}
+.vl-years{display:grid;align-content:start;min-height:320px}
+.vl-year{border-bottom:1px solid var(--line)}
+.vl-summary{display:grid;grid-template-columns:4rem repeat(6,minmax(0,1fr)) 1rem;gap:var(--space-3);align-items:center;min-height:56px;padding:var(--space-2) 0;cursor:pointer;list-style:none}
+.vl-summary::-webkit-details-marker{display:none}
+details>.vl-summary::after{content:"";justify-self:center;width:.5rem;height:.5rem;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(45deg)}
+details[open]>.vl-summary::after{transform:rotate(-135deg)}
+.vl-summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.vl-plain{cursor:default;min-height:44px;color:var(--muted)}
+.vl-y{font-size:1.1rem;font-weight:700}
+.vl-cell{display:grid;gap:var(--space-1);min-width:0;font-variant-numeric:tabular-nums}
+.vl-cell small{color:var(--muted);font-size:var(--text-caption-size)}
+.vl-cell b{font-weight:600;white-space:nowrap}
+.vl-cell .positive{color:var(--positive)}
+.vl-cell .negative{color:var(--negative)}
+.vl-year details[open]>.vl-summary{border-bottom:1px solid var(--line)}
+.vl-body{display:grid;gap:var(--space-3);padding:var(--space-3) 0}
+.vl-events{list-style:none;margin:0;padding:0 0 var(--space-2)}
+.vl-event{display:flex;align-items:center;gap:var(--space-3);min-height:44px;padding:var(--space-1) 0}
+.vl-ev-date{flex:none;width:4rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.vl-ev-main{display:grid;gap:var(--space-1);min-width:0;flex:1}
+.vl-ev-main small{color:var(--muted);font-size:var(--text-caption-size)}
+.vl-empty{padding:var(--space-4) 0}
+.vl-more{border-bottom:1px solid var(--line)}
+.vl-more>summary,.history-plan>summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted);font-weight:600}
+.vl-more[open]>summary{color:var(--text)}
+.vl-more>:not(summary){margin-bottom:var(--space-3)}
+@media(max-width:900px){
+  .vl-summary{grid-template-columns:3.5rem repeat(3,minmax(0,1fr)) 1rem;gap:var(--space-2)}
+  .vl-summary .vl-cell:nth-child(3),.vl-summary .vl-cell:nth-child(5),.vl-summary .vl-cell:nth-child(6){display:none}
 }
-/* Dein Verlauf (verlauf-real.js) */
-.vr-list{list-style:none;margin:0;padding:0;display:grid}
-.vr-row{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--line)}
-.vr-main{display:grid;gap:var(--space-1);min-width:0}
-.vr-main small,.vr-amount small{color:var(--muted);font-size:var(--text-caption-size)}
-.vr-amount{display:grid;text-align:right;font-variant-numeric:tabular-nums;flex:none}
-.vr-sub{margin:var(--space-4) 0 0;font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
-.history-plan summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted)}
+/* Hinzufügen (add-dialog.js): ein Dialog, vier Bereiche. */
+.va-dialog{max-width:min(94vw,720px)}
+.va-card{max-height:calc(100dvh - var(--space-6));overflow-y:auto}
+.va-tabs{display:flex;gap:var(--space-2);flex-wrap:wrap}
+.va-sub{margin:var(--space-3) 0 var(--space-2);font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
+.va-sub:first-child{margin-top:0}
+.va-upload{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
+.va-upload input[type=file]{flex:1 1 14rem;min-width:0}
+@media(max-width:640px){
+  .va-tabs button{flex:1 1 auto;padding:0 var(--space-3)}
+  .va-upload .btn{flex:1}
+  .va-card .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
+  .va-card .check-row,.va-card label:has(input:not([type="number"]):not([type="date"]):not([type="checkbox"])){grid-column:1/-1}
+}
