@@ -9,6 +9,11 @@ public sealed record InsightItemRow(
     decimal Quantity, decimal TotalPrice, decimal? UnitPrice, decimal? BaseUnitPrice,
     string? PackageUnit, string? QuantityUnit);
 
+/// <summary>Eine gekaufte Zeile fuer den Preisindex - auch ohne Produkt, dafuer mit dem Schluessel ihrer Kategorie.</summary>
+public sealed record InsightPriceRow(
+    Guid? ProductId, string Name, string Merchant, DateOnly Date, string Currency,
+    decimal Quantity, decimal TotalPrice, decimal? UnitPrice, decimal? OriginalUnitPrice, string? CategoryKey);
+
 /// <summary>Ein Einkauf, wie die Korbentwicklung ihn braucht.</summary>
 public sealed record InsightBasketRow(Guid Id, DateOnly Date, decimal TotalAmount, string Currency, decimal Savings);
 
@@ -64,6 +69,28 @@ public sealed class PurchaseInsightStore(FullWorthDbContext db)
                 item.BaseUnitPrice,
                 item.PackageUnit,
                 item.QuantityUnit))
+            .ToListAsync(ct);
+
+    /// <summary>Alle bestaetigten Warenzeilen mit Preis - Pfand, Rabatt und Gebuehren zaehlen nicht als Preis einer Ware.</summary>
+    public Task<List<InsightPriceRow>> PriceRowsAsync(
+        Guid userId, Guid fullWorthSpaceId, DateOnly from, DateOnly to, CancellationToken ct) =>
+        VisibleItems(userId, fullWorthSpaceId)
+            .Where(item => item.Purchase.ReviewState == "confirmed"
+                        && item.Purchase.PurchaseDate >= from
+                        && item.Purchase.PurchaseDate <= to
+                        && item.LineType == "product"
+                        && item.TotalPrice > 0m)
+            .Select(item => new InsightPriceRow(
+                item.ProductId,
+                item.Name,
+                item.Purchase.Merchant,
+                item.Purchase.PurchaseDate!.Value,
+                item.Currency,
+                item.Quantity,
+                item.TotalPrice,
+                item.UnitPrice,
+                item.OriginalUnitPrice,
+                db.Categories.Where(category => category.Id == item.CategoryId).Select(category => category.Key).FirstOrDefault()))
             .ToListAsync(ct);
 
     /// <summary>

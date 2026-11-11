@@ -19,6 +19,17 @@ public static class PurchaseAdvancedInsightsEndpoints
             var value = await PersonalInflationAsync(insights, currencyConverter, user.RequireUserId(), fullWorthSpaceId, from, to, ct);
             return value is null ? Results.NotFound() : Results.Ok(value);
         });
+        group.MapGet("/price-index", async (
+            Guid fullWorthSpaceId,
+            DateOnly? from,
+            DateOnly? to,
+            FullWorth.Backend.Security.CurrentUserContext user,
+            PurchaseInsightStore insights,
+            CancellationToken ct) =>
+        {
+            var value = await PriceIndexAsync(insights, user.RequireUserId(), fullWorthSpaceId, from, to, ct);
+            return value is null ? Results.NotFound() : Results.Ok(value);
+        });
         group.MapGet("/basket-trend", async (
             Guid fullWorthSpaceId,
             DateOnly? from,
@@ -118,6 +129,62 @@ public static class PurchaseAdvancedInsightsEndpoints
             incompleteFx = acc.Incomplete,
             methodology = "confirmed_product_price_change_spend_weighted",
             products = products.OrderByDescending(x => Math.Abs(x.ChangePercent)).ThenByDescending(x => x.Weight).Take(100).ToList()
+        };
+    }
+
+    // Welche Kategorie zu welchem Grundbedarf zaehlt. Die Schluessel sind die der Systemkategorien; eine eigene
+    // Kategorie zaehlt nur zum Gesamtindex.
+    private static readonly IReadOnlyDictionary<string, string> BasicNeedsGroups = new Dictionary<string, string>
+    {
+        ["food.groceries"] = "food",
+        ["food.bakery"] = "food",
+        ["vehicle.fuel"] = "fuel",
+        ["shopping.household"] = "household",
+        ["shopping.drugstore"] = "household",
+        ["health.pharmacy"] = "health"
+    };
+
+    private static async Task<object?> PriceIndexAsync(
+        PurchaseInsightStore insights,
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct)
+    {
+        var baseCurrency = await insights.BaseCurrencyAsync(userId, fullWorthSpaceId, ct);
+        if (baseCurrency is null) return null;
+        var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var start = from ?? end.AddYears(-10);
+        if (start > end) (start, end) = (end, start);
+
+        var rows = await insights.PriceRowsAsync(userId, fullWorthSpaceId, start, end, ct);
+        // Fremdwaehrung wird nicht umgerechnet: ein Preisverhaeltnis ueber zwei Kurse waere eine Mischung aus
+        // Teuerung und Wechselkurs.
+        var usable = rows.Where(row => string.Equals(row.Currency, baseCurrency, StringComparison.OrdinalIgnoreCase)).ToList();
+        var observations = usable.Select(row => new PriceObservation(
+            PriceIndexCalculator.ItemKey(row.Merchant, row.ProductId, row.Name),
+            row.CategoryKey is not null && BasicNeedsGroups.TryGetValue(row.CategoryKey, out var group) ? group : null,
+            row.Date,
+            row.OriginalUnitPrice is > 0m ? row.OriginalUnitPrice.Value : row.UnitPrice is > 0m ? row.UnitPrice.Value : row.Quantity > 0m ? row.TotalPrice / row.Quantity : row.TotalPrice,
+            row.TotalPrice)).ToList();
+
+        return new
+        {
+            from = start,
+            to = end,
+            currency = baseCurrency,
+            method = "chained_quarterly_matched_items",
+            minMatchedItems = PriceIndexCalculator.MinMatchedItems,
+            itemCount = observations.Count,
+            skippedOtherCurrency = rows.Count - usable.Count,
+            overall = PriceIndexCalculator.Chain(observations),
+            groups = BasicNeedsGroups.Values.Distinct().Select(key => new
+            {
+                key,
+                itemCount = observations.Count(o => o.GroupKey == key),
+                points = PriceIndexCalculator.Chain(observations.Where(o => o.GroupKey == key))
+            }).ToList()
         };
     }
 

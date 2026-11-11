@@ -146,6 +146,7 @@ GET              /api/compensation/document-imports/
 GET              /api/compensation/document-imports/{id:guid}/document
 GET              /api/compensation/history
 GET              /api/compensation/inflation
+GET              /api/compensation/inflation/series
 GET              /api/compensation/other-income
 GET              /api/compensation/other-income/types
 GET              /api/compensation/payslips/
@@ -246,6 +247,7 @@ GET              /api/purchase-analytics/by-product
 GET              /api/purchase-analytics/overview
 GET              /api/purchase-analytics/personal-inflation
 GET              /api/purchase-analytics/price-changes
+GET              /api/purchase-analytics/price-index
 GET              /api/purchase-analytics/products/{productId:guid}/merchants
 GET              /api/purchase-analytics/restock-forecast
 GET              /api/purchases/

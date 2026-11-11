@@ -46,6 +46,12 @@ public static class CompensationEndpoints
             return Results.Ok(InflationIndex.Metadata());
         });
 
+        group.MapGet("/inflation/series", (CurrentUserContext currentUser) =>
+        {
+            _ = currentUser.RequireUserId();
+            return Results.Ok(new { source = InflationSeries.Source, @base = "2020=100", firstMonth = InflationSeries.FirstMonth, lastMonth = InflationSeries.LastMonth, series = InflationSeries.All });
+        });
+
         group.MapGet("/profile", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
             var profile = await store.GetProfileAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);

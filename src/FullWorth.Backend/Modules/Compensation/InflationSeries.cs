@@ -1,0 +1,30 @@
+namespace FullWorth.Backend.Modules.Compensation;
+
+/// <summary>
+/// Monatliche Verbraucherpreisindizes (Destatis, Deutschland, 2020=100) je Ausgabenart, fuer die Linien
+/// "Gehalt gegen Preise". Alle Reihen stammen aus derselben Quelle und laufen im selben Monat los - das
+/// Diagramm legt sie uebereinander, und zwei Quellen wuerden das stillschweigend verfaelschen. Die
+/// Gesamtreihe stimmt in jedem Monat mit <see cref="InflationIndex"/> ueberein, soweit dieser sie fuehrt.
+/// </summary>
+public static class InflationSeries
+{
+    public const string Source = "Destatis Verbraucherpreisindex Deutschland, 2020=100";
+    public const string FirstMonth = "2022-01";
+    public const string LastMonth = "2026-09";
+
+    public sealed record Series(string Key, string Label, string Description, decimal[] Values);
+
+    public static readonly IReadOnlyList<Series> All =
+    [
+        new("gesamt", "Allgemeine Teuerung", "Alle Waren und Dienstleistungen", [105.2m, 106.0m, 108.1m, 108.8m, 109.8m, 109.8m, 110.3m, 110.7m, 112.7m, 113.5m, 113.7m, 113.2m, 114.3m, 115.2m, 116.1m, 116.6m, 116.5m, 116.8m, 117.1m, 117.5m, 117.8m, 117.8m, 117.3m, 117.4m, 117.6m, 118.1m, 118.6m, 119.2m, 119.3m, 119.4m, 119.8m, 119.7m, 119.7m, 120.2m, 119.9m, 120.5m, 120.3m, 120.8m, 121.2m, 121.7m, 121.8m, 121.8m, 122.2m, 122.3m, 122.6m, 123.0m, 122.7m, 122.7m, 122.8m, 123.1m, 124.5m, 125.2m, 125.0m, 124.6m, 125.6m, 125.8m, 126.6m]),
+        new("nahrung", "Lebensmittel", "Nahrungsmittel und alkoholfreie Getränke", [106.5m, 107.6m, 108.5m, 112.0m, 114.0m, 115.0m, 117.3m, 118.9m, 121.0m, 122.6m, 124.0m, 125.1m, 127.0m, 129.9m, 131.5m, 130.8m, 130.5m, 130.4m, 130.1m, 129.7m, 130.3m, 130.4m, 131.2m, 131.2m, 132.3m, 132.0m, 131.7m, 132.2m, 132.1m, 132.3m, 132.5m, 132.4m, 133.0m, 134.1m, 134.4m, 134.6m, 134.2m, 135.7m, 136.2m, 136.5m, 136.5m, 135.9m, 136.2m, 136.6m, 136.8m, 136.8m, 136.8m, 136.5m, 137.7m, 137.8m, 138.0m, 138.6m, 137.5m, 136.7m, 136.8m, 136.7m, 137.2m]),
+        new("nettokaltmiete", "Miete", "Nettokaltmiete", [102.0m, 102.2m, 102.3m, 102.5m, 102.7m, 102.8m, 102.9m, 103.1m, 103.2m, 103.5m, 103.6m, 103.7m, 104.0m, 104.2m, 104.4m, 104.5m, 104.7m, 104.9m, 105.1m, 105.3m, 105.4m, 105.6m, 105.7m, 105.8m, 106.2m, 106.3m, 106.6m, 106.9m, 107.0m, 107.2m, 107.4m, 107.5m, 107.6m, 107.8m, 107.9m, 108.0m, 108.3m, 108.5m, 108.8m, 109.1m, 109.2m, 109.3m, 109.6m, 109.7m, 109.8m, 110.0m, 110.2m, 110.4m, 110.6m, 110.8m, 110.9m, 111.1m, 111.3m, 111.4m, 111.6m, 111.8m, 111.9m]),
+        new("haushaltsenergie", "Energie", "Strom, Gas und andere Brennstoffe im Haushalt", [115.1m, 118.6m, 128.9m, 129.7m, 133.1m, 136.3m, 135.9m, 139.9m, 146.5m, 154.0m, 155.7m, 139.0m, 157.1m, 156.8m, 157.1m, 157.1m, 156.2m, 155.4m, 154.9m, 155.9m, 155.7m, 154.1m, 151.5m, 149.7m, 151.8m, 151.2m, 149.8m, 152.1m, 151.1m, 150.8m, 150.8m, 150.0m, 149.4m, 149.2m, 148.8m, 148.9m, 148.0m, 147.8m, 147.4m, 146.9m, 146.5m, 146.6m, 146.9m, 146.6m, 146.6m, 146.6m, 147.0m, 146.4m, 143.2m, 142.6m, 145.7m, 146.4m, 145.3m, 144.2m, 144.8m, 145.6m, 147.4m]),
+        new("strom", "Strom", "Strom", [110.5m, 113.4m, 118.4m, 120.0m, 122.3m, 123.4m, 115.3m, 116.7m, 121.9m, 127.9m, 129.7m, 130.4m, 138.9m, 139.6m, 138.7m, 138.5m, 137.8m, 136.3m, 135.6m, 136.1m, 135.4m, 133.9m, 131.8m, 130.4m, 129.4m, 128.6m, 127.5m, 127.7m, 127.6m, 127.7m, 127.2m, 126.9m, 126.7m, 126.5m, 126.4m, 126.6m, 124.8m, 124.7m, 124.8m, 124.5m, 124.6m, 124.6m, 124.6m, 124.7m, 124.7m, 124.7m, 124.5m, 124.3m, 120.8m, 119.6m, 119.2m, 118.9m, 118.4m, 118.1m, 118.0m, 117.8m, 117.8m]),
+        new("erdgas", "Gas", "Erdgas", [132.5m, 137.9m, 146.0m, 151.7m, 160.5m, 165.2m, 182.1m, 192.0m, 204.8m, 220.1m, 227.2m, 137.6m, 201.0m, 202.2m, 203.7m, 203.0m, 201.6m, 199.6m, 197.6m, 196.3m, 194.0m, 191.5m, 185.7m, 184.4m, 188.6m, 187.0m, 184.9m, 192.1m, 191.2m, 191.1m, 191.0m, 190.2m, 190.3m, 189.9m, 190.4m, 191.5m, 189.6m, 190.7m, 191.4m, 191.8m, 191.1m, 191.2m, 191.5m, 191.6m, 191.6m, 191.6m, 191.3m, 190.9m, 182.8m, 182.4m, 182.4m, 182.7m, 183.3m, 183.5m, 184.2m, 184.8m, 186.3m]),
+        new("superbenzin", "Benzin", "Superbenzin", [133.0m, 138.1m, 166.2m, 156.9m, 162.1m, 153.9m, 144.3m, 136.8m, 155.7m, 153.2m, 148.8m, 135.6m, 138.6m, 140.6m, 141.0m, 145.0m, 142.6m, 143.3m, 143.1m, 147.5m, 150.0m, 144.6m, 141.2m, 136.6m, 138.1m, 140.1m, 141.7m, 147.7m, 145.1m, 140.9m, 141.6m, 137.9m, 132.0m, 133.5m, 132.8m, 133.0m, 138.3m, 140.4m, 135.6m, 135.2m, 134.6m, 134.2m, 134.1m, 133.5m, 132.8m, 133.6m, 134.5m, 131.7m, 138.9m, 140.2m, 159.1m, 164.8m, 155.7m, 147.6m, 163.8m, 167.2m, 178.4m]),
+        new("diesel", "Diesel", "Dieselkraftstoff", [141.8m, 147.2m, 192.6m, 178.7m, 181.3m, 179.7m, 174.4m, 169.6m, 186.1m, 187.7m, 178.1m, 161.0m, 162.7m, 156.9m, 154.4m, 151.2m, 142.7m, 141.8m, 145.4m, 156.7m, 162.8m, 162.0m, 156.8m, 151.0m, 151.8m, 156.1m, 154.4m, 155.5m, 149.0m, 146.9m, 148.4m, 143.1m, 138.5m, 140.8m, 142.4m, 142.7m, 150.4m, 150.8m, 145.6m, 142.5m, 140.1m, 140.4m, 144.7m, 142.5m, 141.9m, 142.5m, 146.5m, 142.9m, 151.5m, 154.0m, 188.8m, 200.3m, 176.5m, 162.6m, 183.1m, 194.9m, 209.6m]),
+        new("verkehr", "Verkehr", "Verkehr insgesamt", [112.8m, 114.5m, 122.2m, 121.4m, 122.8m, 118.5m, 118.0m, 116.6m, 124.4m, 124.3m, 123.0m, 121.2m, 121.3m, 121.8m, 122.6m, 124.6m, 122.5m, 122.9m, 124.3m, 125.3m, 125.9m, 125.3m, 123.4m, 123.8m, 122.6m, 123.7m, 125.1m, 125.7m, 125.7m, 124.9m, 126.3m, 125.1m, 123.7m, 124.9m, 123.8m, 125.6m, 126.2m, 126.7m, 126.2m, 127.5m, 126.5m, 126.9m, 127.6m, 126.9m, 126.7m, 128.1m, 127.9m, 128.5m, 129.0m, 129.6m, 135.4m, 137.4m, 135.1m, 133.3m, 137.7m, 138.1m, 140.4m]),
+        new("gesundheit", "Gesundheit", "Gesundheit", [101.0m, 101.1m, 101.4m, 101.2m, 101.5m, 101.7m, 101.9m, 102.0m, 102.2m, 102.5m, 102.6m, 102.8m, 103.9m, 104.2m, 104.2m, 104.6m, 104.8m, 104.8m, 105.1m, 105.2m, 105.3m, 105.4m, 105.4m, 105.5m, 106.8m, 107.3m, 107.4m, 107.6m, 107.6m, 107.8m, 107.9m, 108.0m, 108.0m, 108.2m, 108.3m, 108.5m, 110.1m, 110.3m, 110.6m, 110.6m, 110.7m, 110.9m, 111.0m, 110.9m, 111.1m, 111.2m, 111.4m, 111.2m, 112.2m, 112.5m, 112.7m, 112.8m, 113.2m, 113.1m, 116.5m, 116.7m, 116.8m]),
+    ];
+}
