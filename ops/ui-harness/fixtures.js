@@ -495,6 +495,14 @@
           { id: '8a000000-0000-4000-8000-0000000000a2', name: 'Bananen', quantity: 0.75, totalPrice: 2.79, currency: 'EUR' }
         ] }
     ],
+    'compensation/inflation/series': {"source": "Destatis Verbraucherpreisindex Deutschland, 2020=100", "base": "2020=100", "firstMonth": "2022-01", "lastMonth": "2026-09", "series": [{"key": "gesamt", "label": "Allgemeine Teuerung", "description": "Allgemeine Teuerung", "values": [105.2, 106.0, 108.1, 108.8, 109.8, 109.8, 110.3, 110.7, 112.7, 113.5, 113.7, 113.2, 114.3, 115.2, 116.1, 116.6, 116.5, 116.8, 117.1, 117.5, 117.8, 117.8, 117.3, 117.4, 117.6, 118.1, 118.6, 119.2, 119.3, 119.4, 119.8, 119.7, 119.7, 120.2, 119.9, 120.5, 120.3, 120.8, 121.2, 121.7, 121.8, 121.8, 122.2, 122.3, 122.6, 123.0, 122.7, 122.7, 122.8, 123.1, 124.5, 125.2, 125.0, 124.6, 125.6, 125.8, 126.6]}, {"key": "nahrung", "label": "Lebensmittel", "description": "Lebensmittel", "values": [106.5, 107.6, 108.5, 112.0, 114.0, 115.0, 117.3, 118.9, 121.0, 122.6, 124.0, 125.1, 127.0, 129.9, 131.5, 130.8, 130.5, 130.4, 130.1, 129.7, 130.3, 130.4, 131.2, 131.2, 132.3, 132.0, 131.7, 132.2, 132.1, 132.3, 132.5, 132.4, 133.0, 134.1, 134.4, 134.6, 134.2, 135.7, 136.2, 136.5, 136.5, 135.9, 136.2, 136.6, 136.8, 136.8, 136.8, 136.5, 137.7, 137.8, 138.0, 138.6, 137.5, 136.7, 136.8, 136.7, 137.2]}, {"key": "nettokaltmiete", "label": "Miete", "description": "Miete", "values": [102.0, 102.2, 102.3, 102.5, 102.7, 102.8, 102.9, 103.1, 103.2, 103.5, 103.6, 103.7, 104.0, 104.2, 104.4, 104.5, 104.7, 104.9, 105.1, 105.3, 105.4, 105.6, 105.7, 105.8, 106.2, 106.3, 106.6, 106.9, 107.0, 107.2, 107.4, 107.5, 107.6, 107.8, 107.9, 108.0, 108.3, 108.5, 108.8, 109.1, 109.2, 109.3, 109.6, 109.7, 109.8, 110.0, 110.2, 110.4, 110.6, 110.8, 110.9, 111.1, 111.3, 111.4, 111.6, 111.8, 111.9]}, {"key": "haushaltsenergie", "label": "Energie", "description": "Energie", "values": [115.1, 118.6, 128.9, 129.7, 133.1, 136.3, 135.9, 139.9, 146.5, 154.0, 155.7, 139.0, 157.1, 156.8, 157.1, 157.1, 156.2, 155.4, 154.9, 155.9, 155.7, 154.1, 151.5, 149.7, 151.8, 151.2, 149.8, 152.1, 151.1, 150.8, 150.8, 150.0, 149.4, 149.2, 148.8, 148.9, 148.0, 147.8, 147.4, 146.9, 146.5, 146.6, 146.9, 146.6, 146.6, 146.6, 147.0, 146.4, 143.2, 142.6, 145.7, 146.4, 145.3, 144.2, 144.8, 145.6, 147.4]}, {"key": "superbenzin", "label": "Benzin", "description": "Benzin", "values": [133.0, 138.1, 166.2, 156.9, 162.1, 153.9, 144.3, 136.8, 155.7, 153.2, 148.8, 135.6, 138.6, 140.6, 141.0, 145.0, 142.6, 143.3, 143.1, 147.5, 150.0, 144.6, 141.2, 136.6, 138.1, 140.1, 141.7, 147.7, 145.1, 140.9, 141.6, 137.9, 132.0, 133.5, 132.8, 133.0, 138.3, 140.4, 135.6, 135.2, 134.6, 134.2, 134.1, 133.5, 132.8, 133.6, 134.5, 131.7, 138.9, 140.2, 159.1, 164.8, 155.7, 147.6, 163.8, 167.2, 178.4]}]},
+    // Zwei Jahre eigene Belege in Quartalen: Lebensmittel teurer als die Statistik, der Rest etwa gleich.
+    'purchase-analytics/price-index': {
+      currency: 'EUR', method: 'chained_quarterly_matched_items', minMatchedItems: 3, itemCount: 640, skippedOtherCurrency: 0,
+      overall: [['2024-Q3', '2024-07-01', 100, 9], ['2024-Q4', '2024-10-01', 100.8, 11], ['2025-Q1', '2025-01-01', 102.1, 12], ['2025-Q2', '2025-04-01', 102.9, 14], ['2025-Q3', '2025-07-01', 104.2, 15], ['2025-Q4', '2025-10-01', 105.0, 13], ['2026-Q1', '2026-01-01', 106.4, 16], ['2026-Q2', '2026-04-01', 107.3, 14]].map(([quarter, start, index, matchedItems]) => ({ quarter, start, index, matchedItems })),
+      groups: [{ key: 'food', itemCount: 410, points: [['2024-Q3', '2024-07-01', 100], ['2024-Q4', '2024-10-01', 101.4], ['2025-Q1', '2025-01-01', 103.5], ['2025-Q2', '2025-04-01', 104.1], ['2025-Q3', '2025-07-01', 106.0], ['2025-Q4', '2025-10-01', 107.2], ['2026-Q1', '2026-01-01', 108.9], ['2026-Q2', '2026-04-01', 110.2]].map(([quarter, start, index]) => ({ quarter, start, index, matchedItems: 8 })) },
+        { key: 'fuel', itemCount: 22, points: [] }, { key: 'household', itemCount: 60, points: [] }, { key: 'health', itemCount: 8, points: [] }]
+    },
     'purchases/receipt-imports/paperless/uploads': { paperlessConfigured: true, canUpload: true, reason: null, uploadedAt: null },
     'purchases/receipt-imports/paperless/connection': {
       fullWorthSpaceId: SPACE, baseUrl: 'https://paperless.example.local/', configured: true,
@@ -1819,7 +1827,16 @@
   // Bestaetigte Abrechnungen fuer die Monats-/Jahresansicht: 2026 mit einem fehlenden Monat (April), einem
   // Bonus (Maerz), einem Brutto-Sprung (Juli, +8 %) und einem sinkenden Netto bei gleichem Brutto (August,
   // hoehere Krankenversicherung); dazu zwei Monate 2025 fuer den Jahreswechsel und den Jahres-Reiter.
+  // Zwei Jahre Abrechnungen mit zwei Gehaltserhoehungen (Januar 2025 und 2026) und einem Bonus im November -
+  // der Bonus ist der Ausreisser, den das Diagramm "Gehalt gegen Preise" glaetten muss.
   const PAYSLIPS = [];
+  for (let m = 2026 * 12 + 7; m >= 2024 * 12 + 8; m--) {
+    const year = Math.floor(m / 12), month = m % 12 + 1;
+    const gross = (year >= 2026 ? 5100 : year >= 2025 ? 4800 : 4500) + (month === 11 ? 2000 : 0);
+    const net = Math.round(gross * 0.64 * 100) / 100;
+    PAYSLIPS.push({ id: `seed${m}`, fullWorthSpaceId: SPACE, createdAt: '2026-09-01T08:00:00Z', updatedAt: '2026-09-01T08:00:00Z', document: null,
+      payslip: { period: `${year}-${String(month).padStart(2, '0')}-28`, grossPay: gross, netPay: net, payout: net, wageTax: Math.round(gross * 0.15), pensionInsurance: Math.round(gross * 0.093), healthInsurance: Math.round(gross * 0.08), careInsurance: Math.round(gross * 0.018), unemploymentInsurance: Math.round(gross * 0.013), source: 'paperless' } });
+  }
   (() => {
     const make = (year, month, gross, extra = {}) => {
       const tax = Math.round(gross * 0.17), pension = Math.round(gross * 0.093), unemployment = Math.round(gross * 0.013),

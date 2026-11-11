@@ -104,4 +104,24 @@ public sealed class PayslipParserTests
         Assert.Null(result.SolidaritySurcharge);
         Assert.Null(result.Bonus);
     }
+
+    // Mit einem Bonus im Monat steht das Brutto in einer Zeile mit dem Wort "Sonst.Bezug", und die Tabellenraender
+    // der Texterkennung kommen als senkrechte Striche mit. Der Monat bleibt die erste Zahl.
+    [Fact]
+    public void Parse_ReadsTheMonthWhenARowCarriesTableBordersAndABonusLabel()
+    {
+        const string text = """
+            Lohn- und Gehaltsabrechnung 06.2026
+            GESAMTBRUTTO: Sonst.Bezug Gesamt: 5.000,00 | Jahressumme 27.000,00
+            NETTOVERDIENST: 3.300,00 | 18.700,00
+            ZAHLBETRAG: 3.000,00
+            """;
+
+        var result = PayslipTextParser.Parse(text);
+
+        Assert.Equal(new DateOnly(2026, 6, 30), result.Period);
+        Assert.Equal(5_000m, result.GrossPay);
+        Assert.Equal(3_300m, result.NetPay);
+        Assert.Equal(3_000m, result.Payout);
+    }
 }
