@@ -503,6 +503,15 @@
       groups: [{ key: 'food', itemCount: 410, points: [['2024-Q3', '2024-07-01', 100], ['2024-Q4', '2024-10-01', 101.4], ['2025-Q1', '2025-01-01', 103.5], ['2025-Q2', '2025-04-01', 104.1], ['2025-Q3', '2025-07-01', 106.0], ['2025-Q4', '2025-10-01', 107.2], ['2026-Q1', '2026-01-01', 108.9], ['2026-Q2', '2026-04-01', 110.2]].map(([quarter, start, index]) => ({ quarter, start, index, matchedItems: 8 })) },
         { key: 'fuel', itemCount: 22, points: [] }, { key: 'household', itemCount: 60, points: [] }, { key: 'health', itemCount: 8, points: [] }]
     },
+    // Produkte und ein Kauf mit zwei Zeilen: "Brokolo 1kg" ist der Name, den ein Beleg falsch gelesen hat.
+    'products': { total: 2, items: [
+      { id: 'p1', canonicalName: 'Brokolo 1kg', brand: null, purchaseCount: 3, lastPrice: 1.99, lastCurrency: 'EUR', lastBasePrice: 1.99, defaultQuantityUnit: 'kg' },
+      { id: 'p2', canonicalName: 'Bananen', brand: null, purchaseCount: 5, lastPrice: 1.49, lastCurrency: 'EUR', lastBasePrice: 1.49, defaultQuantityUnit: 'kg' }] },
+    'products/p1': { product: { id: 'p1', canonicalName: 'Brokolo 1kg', brand: null, defaultCategoryId: null, defaultQuantityUnit: 'kg', defaultPackageQuantity: null, defaultPackageUnit: null, imageReference: null, notes: null, aliases: [], barcodes: [], isArchived: false },
+      history: { observations: [{ merchant: 'REWE', purchaseDate: '2026-09-02', name: 'Brokolo 1kg', unitPrice: 1.99, totalPrice: 1.99, currency: 'EUR' }] } },
+    'purchases/w1/workspace': { access: 'write', reconciliation: {}, purchase: { id: 'w1', merchant: 'REWE Markt GmbH', purchaseDate: '2026-09-02', purchaseTime: null, totalAmount: 3.48, currency: 'EUR', source: 'receipt', reviewState: 'needs_review', visibility: 'space', isBookmarked: false, payments: [], documents: [],
+      items: [{ id: 'i1', name: 'Brokolo 1kg', rawName: 'Brokolo 1kg', productId: null, quantity: 1, quantityUnit: 'piece', unitPrice: 1.99, totalPrice: 1.99, currency: 'EUR', lineType: 'product' },
+        { id: 'i2', name: 'Bananen', rawName: 'Bananen', productId: null, quantity: 1, quantityUnit: 'piece', unitPrice: 1.49, totalPrice: 1.49, currency: 'EUR', lineType: 'product' }] } },
     'purchases/receipt-imports/paperless/uploads': { paperlessConfigured: true, canUpload: true, reason: null, uploadedAt: null },
     'purchases/receipt-imports/paperless/connection': {
       fullWorthSpaceId: SPACE, baseUrl: 'https://paperless.example.local/', configured: true,

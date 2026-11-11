@@ -23,7 +23,7 @@ const strings = {
     product: 'Produkt', category: 'Kategorie', name: 'Name', rawName: 'OCR-Name', brand: 'Marke', barcode: 'Barcode',
     quantity: 'Menge', unit: 'Einheit', unitPrice: 'Einzelpreis', basePrice: 'Grundpreis', lineTotal: 'Positionssumme',
     lineType: 'Typ', warranty: 'Garantie bis', returnUntil: 'Rückgabe bis', serial: 'Seriennummer',
-    chooseProduct: 'Produkt zuordnen', newProduct: 'Neues Produkt', purchaseCount: 'Käufe', lastPrice: 'Letzter Preis',
+    chooseProduct: 'Produkt zuordnen', correctName: 'Name korrigieren', correctNameHint: 'Der Name, wie er richtig heißen soll.', applyToSimilar: 'Auch bei allen gleichen Zeilen und künftigen Belegen', rename: 'Umbenennen', cancel: 'Abbrechen', newProduct: 'Neues Produkt', purchaseCount: 'Käufe', lastPrice: 'Letzter Preis',
     history: 'Preisverlauf', noData: 'Keine Daten.', overview: 'Übersicht', spend: 'Ausgaben', needsReview: 'Zu prüfen',
     topCategories: 'Kategorien', topProducts: 'Produkte', topBrands: 'Marken', topMerchants: 'Händler', priceChanges: 'Preisänderungen',
     learned: 'Gelernte Kategorien', learnedHint: 'Artikeltexte, die du mehrfach selbst derselben Kategorie zugeordnet hast', learnedAccept: 'Übernehmen',
@@ -49,7 +49,7 @@ const strings = {
     product: 'Product', category: 'Category', name: 'Name', rawName: 'OCR name', brand: 'Brand', barcode: 'Barcode',
     quantity: 'Quantity', unit: 'Unit', unitPrice: 'Unit price', basePrice: 'Base price', lineTotal: 'Line total',
     lineType: 'Type', warranty: 'Warranty until', returnUntil: 'Return until', serial: 'Serial number',
-    chooseProduct: 'Assign product', newProduct: 'New product', purchaseCount: 'Purchases', lastPrice: 'Last price',
+    chooseProduct: 'Assign product', correctName: 'Correct name', correctNameHint: 'The name as it should read.', applyToSimilar: 'Also for all matching lines and future receipts', rename: 'Rename', cancel: 'Cancel', newProduct: 'New product', purchaseCount: 'Purchases', lastPrice: 'Last price',
     history: 'Price history', noData: 'No data.', overview: 'Overview', spend: 'Spend', needsReview: 'Needs review',
     topCategories: 'Categories', topProducts: 'Products', topBrands: 'Brands', topMerchants: 'Merchants', priceChanges: 'Price changes',
     learned: 'Learned categories', learnedHint: 'Article texts you assigned to the same category more than once', learnedAccept: 'Apply',
@@ -312,7 +312,7 @@ function itemEditor(item, categoryOptions, writable) {
       <label>${esc(t('returnUntil'))}<input data-f="returnDeadline" type="date" value="${esc(item.returnDeadline || '')}" ${disabled}></label>
       <label>${esc(t('serial'))}<input data-f="serialNumber" value="${esc(item.serialNumber || '')}" ${disabled}></label>
     </div>
-    <div class="pa-item-product">${item.productId ? `<span>${esc(t('product'))}: ${esc(item.productId)}</span>` : `<span class="row-sub">${esc(t('product'))}: —</span>`}${writable ? `<div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-choose-product>${esc(t('chooseProduct'))}</button>${item.productId ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-unlink-product>${esc(t('unlinkProduct'))}</button>` : ''}<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-save-item>${esc(t('save'))}</button><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-item>${esc(t('remove'))}</button></div>` : ''}</div>
+    <div class="pa-item-product">${item.productId ? `<span>${esc(t('product'))}: ${esc(item.productId)}</span>` : `<span class="row-sub">${esc(t('product'))}: —</span>`}${writable ? `<div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-correct-name>${esc(t('correctName'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-choose-product>${esc(t('chooseProduct'))}</button>${item.productId ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-unlink-product>${esc(t('unlinkProduct'))}</button>` : ''}<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-save-item>${esc(t('save'))}</button><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-item>${esc(t('remove'))}</button></div>` : ''}</div>
   </div>`;
 }
 
@@ -339,6 +339,7 @@ function bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable, cate
       try { await api(`api/purchases/${purchase.id}/items/${item.id}`, { method: 'DELETE' }); await refreshWorkspace(dlg, purchase.id); }
       catch (error) { showDialogError(dlg, error.message); }
     };
+    row.querySelector('[data-correct-name]').onclick = () => correctItemName(dlg, purchase.id, item.id, row);
     row.querySelector('[data-choose-product]').onclick = () => chooseProduct(dlg, purchase.id, item.id, row);
     row.querySelector('[data-unlink-product]')?.addEventListener('click', async () => {
       try { await api(`api/purchases/${purchase.id}/items/${item.id}/unlink-product`, { method: 'POST' }); await refreshWorkspace(dlg, purchase.id); }
@@ -480,6 +481,27 @@ async function refreshWorkspace(oldDialog, id) {
   await openPurchaseWorkspace(id);
 }
 
+// "Brokolo 1kg" -> "Brokkoli": der Name wird fuer diese Zeile und - auf Wunsch - fuer alle gleichen korrigiert, und
+// der Server merkt sich den alten Text, damit der naechste Beleg damit von selbst richtig heisst.
+function correctItemName(parent, purchaseId, itemId, itemRow) {
+  const current = itemRow.querySelector('[data-f="name"]')?.value || '';
+  const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(t('correctName'))}</h2><button type="button" data-close>×</button></div>
+    <label>${esc(t('correctNameHint'))}<input name="name" value="${esc(current)}" maxlength="500" required autocomplete="off"></label>
+    <label class="check inline"><input type="checkbox" name="similar" checked> ${esc(t('applyToSimilar'))}</label>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(t('cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`);
+  dlg.querySelectorAll('[data-close],[data-cancel]').forEach(button => button.onclick = () => dlg.close());
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api(`api/purchases/${purchaseId}/items/${itemId}/correct-name`, json('POST', { name: String(form.get('name')).trim(), applyToSimilar: form.get('similar') === 'on' }));
+      dlg.close(); await refreshWorkspace(parent, purchaseId);
+    } catch (error) { showDialogError(dlg, error.message); }
+  };
+  dlg.showModal();
+  dlg.querySelector('[name="name"]').select();
+}
+
 async function chooseProduct(parent, purchaseId, itemId, itemRow) {
   const initial = itemRow.querySelector('[data-f="name"]')?.value || '';
   const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(t('chooseProduct'))}</h2><button type="button" data-close>×</button></div><div class="pa-toolbar"><input type="search" data-product-query value="${esc(initial)}" placeholder="${esc(t('search'))}"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-product-search>${esc(t('search'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-product-create>${esc(t('newProduct'))}</button></div><div data-product-results class="pa-list"></div></div>`);
@@ -608,10 +630,25 @@ export async function openProduct(id) {
   const product = data.product;
   const history = data.history || {};
   const comp = history.latestComparison;
-  const dlg = makeDialog(`<div class="pa-dialog-card pa-product-detail"><div class="panel-head"><div><h2>${esc(product.canonicalName)}</h2><div class="row-sub">${esc(product.brand || '')}</div></div><button type="button" data-close>×</button></div>
+  const dlg = makeDialog(`<div class="pa-dialog-card pa-product-detail"><div class="panel-head"><div data-product-title><h2>${esc(product.canonicalName)}</h2><div class="row-sub">${esc(product.brand || '')}</div></div><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-product-rename>${esc(t('rename'))}</button><button type="button" data-close>×</button></div></div>
     ${comp ? `<div class="pa-metrics"><div><span>Packung</span><strong>${comp.packPriceChangePercent == null ? '—' : `${comp.packPriceChangePercent}%`}</strong></div><div><span>${esc(t('basePrice'))}</span><strong>${comp.basePriceChangePercent == null ? '—' : `${comp.basePriceChangePercent}%`}</strong></div><div><span>Packungsgröße</span><strong>${comp.packageSizeChangePercent == null ? '—' : `${comp.packageSizeChangePercent}%`}</strong></div>${comp.possibleShrinkflation ? `<div class="warn"><span>⚠</span><strong>${esc(t('shrinkflation'))}</strong></div>` : ''}</div>` : ''}
     <h3>${esc(t('history'))}</h3><div class="pa-list">${(history.observations || []).slice().reverse().map(row => `<div class="pa-history-row"><div><strong>${esc(row.merchant)}</strong><span>${esc(fmtDate(row.purchaseDate))} · ${esc(row.name)}</span></div><div><strong>${esc(money(row.unitPrice ?? row.totalPrice, row.currency))}</strong>${row.baseUnitPrice == null ? '' : `<span>${esc(money(row.baseUnitPrice, row.currency))}/${esc(row.packageUnit || row.quantityUnit)}</span>`}</div></div>`).join('') || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  // Der Name steht gleich oben zum Aendern: die Produktverwaltung weiter unten ist auf dem Handy ein langer Scroll entfernt.
+  dlg.querySelector('[data-product-rename]').onclick = event => {
+    const title = dlg.querySelector('[data-product-title]');
+    title.innerHTML = `<input data-product-name value="${esc(product.canonicalName)}" maxlength="500" aria-label="${esc(t('rename'))}"><div class="pa-inline-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-product-name-save>${esc(t('save'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-product-name-cancel>${esc(t('cancel'))}</button></div>`;
+    event.currentTarget.hidden = true;
+    const input = title.querySelector('input'); input.focus(); input.select();
+    title.querySelector('[data-product-name-cancel]').onclick = () => { dlg.close(); void openProduct(id); };
+    title.querySelector('[data-product-name-save]').onclick = async () => {
+      const name = input.value.trim(); if (!name) return;
+      try {
+        await api(`api/products/${id}`, json('PATCH', { canonicalName: name, brand: product.brand || null, defaultCategoryId: product.defaultCategoryId || null, defaultQuantityUnit: product.defaultQuantityUnit || null, defaultPackageQuantity: product.defaultPackageQuantity ?? null, defaultPackageUnit: product.defaultPackageUnit || null, imageReference: product.imageReference || null, notes: product.notes || null }));
+        dlg.close(); await openProduct(id);
+      } catch (error) { showDialogError(dlg, error.message); }
+    };
+  };
   dlg.dataset.productId = id;
   dlg.showModal();
   notifyPurchaseUiChanged({dialog:dlg,productId:id,kind:'product'});

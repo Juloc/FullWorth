@@ -16,6 +16,17 @@ public static class PurchaseWorkspaceEndpoints
         group.MapDelete("/{id:guid}/items/{itemId:guid}", async (Guid id, Guid itemId, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) => Mutation(await service.DeleteItemAsync(user.RequireUserId(), fullWorthSpaceId, id, itemId, ct)));
         group.MapPut("/{id:guid}/items/reorder", async (Guid id, Guid fullWorthSpaceId, List<Guid> itemIds, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) => Mutation(await service.ReorderItemsAsync(user.RequireUserId(), fullWorthSpaceId, id, itemIds, ct)));
         group.MapPost("/{id:guid}/items/{itemId:guid}/match-product", async (Guid id, Guid itemId, Guid productId, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) => Mutation(await service.MatchItemProductAsync(user.RequireUserId(), fullWorthSpaceId, id, itemId, productId, ct)));
+        group.MapPost("/{id:guid}/items/{itemId:guid}/correct-name", async (Guid id, Guid itemId, Guid fullWorthSpaceId, ItemNameCorrection request, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) =>
+        {
+            var (result, value, error) = await service.CorrectItemNameAsync(user.RequireUserId(), fullWorthSpaceId, id, itemId, request, ct);
+            return result switch
+            {
+                PurchaseMutationResult.Success => Results.Ok(value),
+                PurchaseMutationResult.Invalid => Results.BadRequest(new { error }),
+                PurchaseMutationResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                _ => Results.NotFound()
+            };
+        });
         group.MapPost("/{id:guid}/items/{itemId:guid}/unlink-product", async (Guid id, Guid itemId, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) => Mutation(await service.UnlinkItemProductAsync(user.RequireUserId(), fullWorthSpaceId, id, itemId, ct)));
         group.MapGet("/{id:guid}/payments", async (Guid id, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) => { var value = await service.PaymentsAsync(user.RequireUserId(), fullWorthSpaceId, id, ct); return value is null ? Results.NotFound() : Results.Ok(value); });
         group.MapGet("/{id:guid}/payment-candidates", async (Guid id, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseWorkspaceService service, CancellationToken ct) => { var value = await service.PaymentCandidatesAsync(user.RequireUserId(), fullWorthSpaceId, id, ct); return value is null ? Results.NotFound() : Results.Ok(value); });

@@ -182,9 +182,50 @@ public sealed class ProductService(FullWorthDbContext db)
         if (entity is null) return (PurchaseMutationResult.NotFound, null, null);
         var error = await ValidateWriteAsync(fullWorthSpaceId, request, ct);
         if (error is not null) return (PurchaseMutationResult.Invalid, null, error);
+        var oldName = entity.CanonicalName;
         Apply(entity, request);
+        if (Normalize(oldName) != Normalize(entity.CanonicalName)) await RememberRenameAsync(entity, oldName, ct);
         await db.SaveChangesAsync(ct);
         return (PurchaseMutationResult.Success, await GetAsync(userId, fullWorthSpaceId, id, ct), null);
+    }
+
+    /// <summary>
+    /// Eine Umbenennung ist keine neue Sache: der alte Name bleibt als Alias, damit ein Beleg, der so heisst,
+    /// weiter hier landet, und die Zeilen, die den alten Namen als eigenen trugen, zeigen den neuen. Die Produkt-Id
+    /// bleibt - Preisverlauf und Preisindex haengen an ihr.
+    /// </summary>
+    private async Task RememberRenameAsync(Product product, string oldName, CancellationToken ct)
+    {
+        var oldNormalized = Normalize(oldName);
+        if (oldNormalized.Length > 0
+            && !await db.Set<ProductAlias>().AnyAsync(a => a.ProductId == product.Id && a.MerchantId == null && a.NormalizedAlias == oldNormalized, ct))
+            db.Set<ProductAlias>().Add(new ProductAlias { ProductId = product.Id, Alias = oldName.Trim(), NormalizedAlias = oldNormalized, AliasType = "rename" });
+
+        var lines = await db.PurchaseItems.Where(x => x.ProductId == product.Id && x.Name.ToLower() == oldName.Trim().ToLower()).ToListAsync(ct);
+        foreach (var line in lines) { line.Name = product.CanonicalName; line.UpdatedAt = DateTimeOffset.UtcNow; }
+    }
+
+    /// <summary>
+    /// Kaufzeilen, die ein System liest (Scan, Paperless, Amazon), bekommen den Namen und das Produkt, die ein
+    /// Mensch ihrem Text schon einmal gegeben hat: Alias gleich normalisierter Zeilentext, ohne Haendler.
+    /// Eine Zeile, die schon an einem Produkt haengt, bleibt wie sie ist.
+    /// </summary>
+    public async Task<IReadOnlyList<PurchaseItemWrite>> ApplyKnownNamesAsync(Guid fullWorthSpaceId, IReadOnlyList<PurchaseItemWrite> items, CancellationToken ct)
+    {
+        var texts = items.Where(x => x.ProductId is null).SelectMany(x => new[] { x.RawName, x.Name }).Select(Normalize).Where(x => x.Length > 0).ToHashSet();
+        if (texts.Count == 0) return items;
+        var known = await db.Set<ProductAlias>().AsNoTracking()
+            .Where(a => a.MerchantId == null && texts.Contains(a.NormalizedAlias) && a.Product.FullWorthSpaceId == fullWorthSpaceId && !a.Product.IsArchived)
+            .Select(a => new { a.NormalizedAlias, a.ProductId, a.Product.CanonicalName, a.Product.DefaultCategoryId, a.CreatedAt })
+            .ToListAsync(ct);
+        if (known.Count == 0) return items;
+        var byText = known.OrderBy(x => x.CreatedAt).GroupBy(x => x.NormalizedAlias).ToDictionary(g => g.Key, g => g.Last());
+        return items.Select(item =>
+        {
+            if (item.ProductId is not null) return item;
+            var hit = (item.RawName is null ? null : byText.GetValueOrDefault(Normalize(item.RawName))) ?? byText.GetValueOrDefault(Normalize(item.Name));
+            return hit is null ? item : item with { ProductId = hit.ProductId, Name = hit.CanonicalName, RawName = item.RawName ?? item.Name, CategoryId = item.CategoryId ?? hit.DefaultCategoryId };
+        }).ToList();
     }
 
     public async Task<PurchaseMutationResult> ArchiveAsync(Guid userId, Guid fullWorthSpaceId, Guid id, bool archived, CancellationToken ct)

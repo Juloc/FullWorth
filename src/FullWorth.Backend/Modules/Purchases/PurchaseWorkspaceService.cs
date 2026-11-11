@@ -20,6 +20,10 @@ public sealed record PurchasePaymentPatch(decimal Amount, string Currency);
 public sealed record DifferenceAcceptanceWrite(string Kind, string Reason, string? Note = null);
 public sealed record PurchaseAllocationImportRequest(string Mode = "replace", Guid? RemainderCategoryId = null, bool AddRemainder = false);
 public sealed record PurchaseVisibilityWrite(string Visibility);
+
+/// <summary>Der Name, der auf dem Beleg falsch gelesen oder verkuerzt steht, wird zu einem richtigen - fuer diese Zeile oder fuer alle gleichen.</summary>
+public sealed record ItemNameCorrection(string Name, bool ApplyToSimilar = true);
+public sealed record ItemNameCorrectionResult(Guid ProductId, string ProductName, int UpdatedItems);
 public sealed record PurchaseReturnWrite(decimal Quantity, decimal Amount, string Currency, Guid? RefundTransactionId, string? Note);
 
 public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<PurchaseStorageOptions> purchaseStorage)
@@ -210,6 +214,77 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<Pur
         item.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return PurchaseMutationResult.Success;
+    }
+
+    /// <summary>
+    /// Korrigiert den Namen einer Kaufzeile ("Brokolo 1kg" -> "Brokkoli") so, dass die Korrektur bleibt: die Zeile
+    /// haengt danach an einem Produkt dieses Namens (ein vorhandenes, sonst ein neues), der alte Name steht als
+    /// Alias daran - ein kuenftiger Import mit demselben Beleg-Text landet dort von selbst (siehe
+    /// <see cref="ProductService.ApplyKnownNamesAsync"/>) - und auf Wunsch tragen alle gleich benannten, noch
+    /// keinem Produkt zugeordneten Zeilen im Space denselben Namen. Die Produkt-Id aendert sich bei einer spaeteren
+    /// Umbenennung nicht mehr, Preisverlauf und Preisindex haengen deshalb an ihr und nicht am Text.
+    /// </summary>
+    public async Task<(PurchaseMutationResult Result, ItemNameCorrectionResult? Value, string? Error)> CorrectItemNameAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid purchaseId, Guid itemId, ItemNameCorrection request, CancellationToken ct)
+    {
+        var access = await WriteAccessAsync(userId, fullWorthSpaceId, purchaseId, ct);
+        if (access != PurchaseMutationResult.Success) return (access, null, null);
+        var name = request.Name?.Trim();
+        if (string.IsNullOrEmpty(name)) return (PurchaseMutationResult.Invalid, null, "Name is required.");
+        if (name.Length > 500) return (PurchaseMutationResult.Invalid, null, "Name is too long.");
+        var item = await db.PurchaseItems.SingleOrDefaultAsync(x => x.PurchaseId == purchaseId && x.Id == itemId, ct);
+        if (item is null) return (PurchaseMutationResult.NotFound, null, null);
+
+        var wanted = ProductService.Normalize(name);
+        var product = await FindProductByNameAsync(fullWorthSpaceId, name, wanted, ct);
+        if (product is null)
+        {
+            product = new Product
+            {
+                FullWorthSpaceId = fullWorthSpaceId, CanonicalName = name, Brand = item.Brand, DefaultCategoryId = item.CategoryId,
+                DefaultQuantityUnit = "piece"
+            };
+            db.Set<Product>().Add(product);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var oldTexts = new[] { item.Name, item.RawName }.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
+            .GroupBy(ProductService.Normalize).Where(g => g.Key.Length > 0 && g.Key != wanted).Select(g => g.First()).ToList();
+        var known = (await db.Set<ProductAlias>().Where(a => a.ProductId == product.Id && a.MerchantId == null).Select(a => a.NormalizedAlias).ToListAsync(ct)).ToHashSet();
+        foreach (var text in oldTexts)
+            if (known.Add(ProductService.Normalize(text)))
+                db.Set<ProductAlias>().Add(new ProductAlias { ProductId = product.Id, Alias = text, NormalizedAlias = ProductService.Normalize(text), AliasType = "correction" });
+
+        var updated = 1;
+        if (request.ApplyToSimilar && oldTexts.Count > 0)
+        {
+            var lowered = oldTexts.Select(x => x.ToLower()).ToList();
+            var writable = WritablePurchases(userId, fullWorthSpaceId).Select(x => x.Id);
+            var similar = await db.PurchaseItems.Where(x => x.Id != itemId && x.ProductId == null && writable.Contains(x.PurchaseId)
+                    && (lowered.Contains(x.Name.ToLower()) || lowered.Contains(x.RawName.ToLower())))
+                .ToListAsync(ct);
+            foreach (var other in similar) { other.Name = product.CanonicalName; other.ProductId = product.Id; other.UpdatedAt = DateTimeOffset.UtcNow; }
+            updated += similar.Count;
+        }
+
+        item.Name = product.CanonicalName;
+        item.ProductId = product.Id;
+        item.IsManuallyCorrected = true;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return (PurchaseMutationResult.Success, new ItemNameCorrectionResult(product.Id, product.CanonicalName, updated), null);
+    }
+
+    // Ein Produkt, das schon so heisst - oder unter diesem Namen als Alias bekannt ist: wer "Brokkoli" tippt, will
+    // nicht ein zweites Produkt "Brokkoli" neben dem ersten.
+    private async Task<Product?> FindProductByNameAsync(Guid fullWorthSpaceId, string name, string normalized, CancellationToken ct)
+    {
+        var pattern = name.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+        var byName = (await db.Set<Product>().Where(x => x.FullWorthSpaceId == fullWorthSpaceId && !x.IsArchived && EF.Functions.ILike(x.CanonicalName, pattern)).ToListAsync(ct))
+            .FirstOrDefault(x => ProductService.Normalize(x.CanonicalName) == normalized);
+        if (byName is not null) return byName;
+        return await db.Set<ProductAlias>().Where(a => a.NormalizedAlias == normalized && a.MerchantId == null && a.Product.FullWorthSpaceId == fullWorthSpaceId && !a.Product.IsArchived)
+            .Select(a => a.Product).FirstOrDefaultAsync(ct);
     }
 
     public async Task<PurchaseMutationResult> UnlinkItemProductAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, Guid itemId, CancellationToken ct)
