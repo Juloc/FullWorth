@@ -103,10 +103,10 @@ html.nav-collapsed .nav-group+.nav-group,html.nav-auto-collapsed .nav-group+.nav
 html.nav-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items,html.nav-auto-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items{display:flex}
 
 /* Kompakte Kopfleiste auf dem Telefon (Scheibe 13: aus styles/mobile-polish.css geloest, dort zuletzt
-   geladen und damit ohnehin die einzige Fassung, die je gewirkt hat - hierher verschoben, ohne die
-   Werte zu aendern). */
+   geladen und damit ohnehin die einzige Fassung, die je gewirkt hat - hierher verschoben). Seit der
+   Verdichtung fuers Telefon (tokens.css) 48px statt 56px hoch. */
 @media(max-width:767px){
-  .topbar{min-height:56px;padding-top:8px;padding-bottom:8px;align-items:center;flex-direction:row;gap:8px}
+  .topbar{min-height:48px;padding-top:6px;padding-bottom:6px;align-items:center;flex-direction:row;gap:8px}
   html.pwa-standalone .topbar{padding-top:calc(8px + env(safe-area-inset-top,0px))}
   .topbar-search{flex:none;justify-content:center;width:40px;min-width:0;padding:0;border-radius:50%}
   .topbar-search span{display:none}

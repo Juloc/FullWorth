@@ -68,7 +68,7 @@
   html.nav-collapsed .brand,html.nav-auto-collapsed .brand{flex-direction:row;padding-bottom:0}
   html.nav-collapsed .brand strong,html.nav-auto-collapsed .brand strong{display:inline}
   html.nav-collapsed .brand-name,html.nav-auto-collapsed .brand-name{display:inline-flex}
-  main{width:100%;min-width:0;padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom,0px));max-width:none}
+  main{width:100%;min-width:0;padding:0 var(--s4) calc(72px + env(safe-area-inset-bottom,0px));max-width:none}
   /* Installed, there is no browser chrome above the page, so the sticky topbar sat under the status
      bar and the notch ate the page title. In a tab the inset is 0 and nothing moves. The horizontal
      insets matter in landscape, where the notch is at the side. */
@@ -77,14 +77,14 @@
      (8px statt var(--s6)) - diese Regel hier war seit mobile-polish.css zuletzt lud bereits wirkungslos. */
   html.pwa-standalone #bottom-nav{padding-left:max(6px,env(safe-area-inset-left,0px));padding-right:max(6px,env(safe-area-inset-right,0px))}
   #bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px))}
-  #bottom-nav .nav-item{display:flex;text-decoration:none;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
+  #bottom-nav .nav-item{display:flex;text-decoration:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;height:50px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
   #bottom-nav .nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   #bottom-nav .nav-item span{font-size:10px;line-height:1}
   #bottom-nav .nav-item.active{color:var(--text);background:var(--surface-2);border-radius:10px}
   .metric-grid{grid-template-columns:repeat(2,1fr)}
   /* Auch als Popover: #toast[popover] ist spezifischer als #toast, sonst bliebe der Toast auf dem
      Handy rechts kleben statt die Breite zu nehmen. */
-  #toast,#toast[popover]{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:none;inset-block-start:auto}
+  #toast,#toast[popover]{left:16px;right:16px;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:none;inset-block-start:auto}
 }
 @media(max-width:767px){
   /* Die Topbar am Telefon gehört mobile-polish.css. Hier standen vier Regeln dafür, von denen
@@ -95,38 +95,40 @@
   .span-2{grid-column:auto}
   .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
   .metric strong{font-size:20px}
-  select,input,textarea{min-height:44px;font-size:16px}
+  select,input,textarea{min-height:40px;font-size:16px;padding-block:7px}
+  input[type=search]{border-radius:var(--radius-input)}
   /* .btn-icon steht neben .icon-button, weil buttonClass()/applyButtonRole() dieselbe 36x36-Box
      versprechen wie .icon-button (components.css) - ohne diese Zeile bekäme .btn-icon hier nur den
      generischen .btn-Floor unten (nur min-height, keine Breite) und würde am Telefon 36×44 statt 44×44,
      während .icon-button quadratisch bleibt. Eine Box, zwei Klassennamen. */
-  .icon-button,.btn-icon{width:44px;height:44px;min-width:44px;min-height:44px}
-  .toolbar>button,.dialog-actions>button,.panel-head-actions>button,.btn{min-height:44px}
+  .icon-button,.btn-icon{width:40px;height:40px;min-width:40px;min-height:40px}
+  .toolbar>button,.panel-head-actions>button,.btn{min-height:40px}
+  .dialog-actions>button,.btn-primary{min-height:44px}
   /* The touch floor, in one place. Roles that were missing from it shipped 28-40px targets across
      twelve views: .secondary and .fw-card-action (Vermögen, 28px), and the unclassed buttons in the
      segmented filter rows (38px). .primary-action/.ghost standen hier ebenfalls, bis die Rollen-
      Migration jedem Button zusaetzlich die Basisklasse .btn gab - .btn{min-height:44px} oben deckt
      .btn-primary/.btn-secondary damit bereits ab, die beiden Eintraege waren redundant. */
-  .secondary,.fw-card-action,.ux-icon-text-button,main button{min-height:44px}
-  .ux-icon-text-button,.icon-button,.btn-icon{min-width:44px}
+  .secondary,.fw-card-action,.ux-icon-text-button,main button{min-height:40px}
+  .ux-icon-text-button,.icon-button,.btn-icon{min-width:40px}
   /* These three shrink a shared role from a higher-specificity selector, so the floor above cannot
      reach them - a media query adds no specificity. Matched here rather than fought with !important;
      responsive.css is loaded after app.css and components.css, so equal specificity wins. */
-  .detected-actions .btn{min-height:44px}
-  .field-inline .icon-button{width:44px;height:44px}
-  .dialog-card [data-close]:not(.icon-button){width:44px;height:44px}
+  .detected-actions .btn{min-height:40px}
+  .field-inline .icon-button{width:40px;height:40px}
+  .dialog-card [data-close]:not(.icon-button){width:40px;height:40px}
   /* Both live in app.css with a specificity the role-based floor above cannot reach. The period
      steppers are isolated arrow targets (aria-label "Vorheriger Zeitraum"), not part of a segmented
      strip, so 30px is a genuine miss. */
-  .fw-window button{min-width:44px;min-height:44px}
-  .nw-custom-range-fields button{min-height:44px}
+  .fw-window button{min-width:40px;min-height:40px}
+  .nw-custom-range-fields button{min-height:40px}
   /* Three number fields side by side is 90px each on a phone - unusable. */
   .nw-projection-fields{grid-template-columns:1fr}
   /* Exempting the box from the floor was right - a 44px checkbox looks broken - but the target has to
      live somewhere, so the LABEL carries it. Without this pair every checkbox row on a phone was a
      20px target: select-all, the import options, the sharing lists. */
   label.check input{min-height:0}
-  label.check{min-height:44px}
+  label.check{min-height:40px}
   .toolbar input[type=search]{min-width:100%}
   .panel-head{align-items:flex-start;flex-wrap:wrap}
   .panel-head-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end}
@@ -141,12 +143,13 @@
 @media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
 @media(max-width:767px){
   #view-transactions .tx-summary{padding:var(--s3)}
+  #view-transactions .tx-row,#view-transactions .tx-skeleton{gap:10px;padding:8px 4px}
+  #view-transactions .tx-date-head{margin:6px 0 0}
   /* Die uebrige Karten-Aufteilung fuer .tx-skeleton steckt schon im @media(max-width:1023px)-Block
      oben, gemeinsam mit .tx-row - eine zweite Kopie hier war Drift, seit beide dieselbe Zeile teilen
      (Scheibe 13). Nur das Skeleton-eigene Detail bleibt: der Avatar-Platzhalter braucht am Telefon
      keinen rechten Abstand, weil hier nichts mehr danebensteht. */
   #view-transactions .tx-skeleton .tx-sk-avatar{margin-right:0}
-  #view-transactions .tx-row:not(.tx-is-transfer) .number.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft)}
 }
 @media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
 @media(max-width:640px){.comp-dedu-head{gap:var(--s3)}.comp-donut{width:96px;height:96px}}
@@ -189,7 +192,7 @@
   .contracts-sortbar,
   .tx-filter-btn,
   .contracts-filter-open{
-    min-height:44px;
+    min-height:40px;
   }
 }
 @media(max-width:1100px){.typography-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.typography-font{grid-column:1/-1}}
@@ -212,4 +215,9 @@
 @media(max-width:620px){
   .appearance-color-fields{grid-template-columns:1fr}
   .appearance-preset{min-height:44px}
+}
+/* Phone: die gemeinsamen Zeilen (.row, .fw-row) sind zwei Textzeilen hoch, nicht zwei plus 22px Luft. */
+@media(max-width:767px){
+  .row,.fw-row{padding-block:8px}
+  .row-sub{margin-top:1px}
 }

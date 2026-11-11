@@ -57,14 +57,14 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .fw-ident-stack>*{grid-area:1/1;width:100%;height:100%;display:grid;place-items:center}
 .fw-ident-cat{background:var(--surface-2);color:var(--muted);font-size:20px}
 .fw-ident-cat svg{width:23px;height:23px}
-/* Groesseres Symbol auf Touchscreens (Scheibe 13: aus styles/mobile-polish.css geloest). .tx-ident hat
+/* Kompaktes Symbol am Telefon (Scheibe 13: aus styles/mobile-polish.css geloest; 44px waren eine Fingerflaeche fuer ein Bild, das nichts antippt - die Zeile darum ist das Ziel). .tx-ident hat
    eine eigene Basis in pages/transactions/page.css und bekommt dort auch ihre eigene mobile Variante -
    eine hier geschriebene Regel fuer .tx-ident wuerde von jener spaeter geladenen Basis wieder
    ueberschrieben. */
 @media(max-width:767px){
-  .fw-ident{width:44px;height:44px;min-width:44px;min-height:44px}
+  .fw-ident{width:36px;height:36px;min-width:36px;min-height:36px;font-size:14px}
   .fw-ident-brand-logo{padding:3px}
-  .fw-ident-cat svg{width:24px;height:24px}
+  .fw-ident-cat svg{width:20px;height:20px}
 }
 /* SectionCard. Flaeche/Rand/Rundung/Schatten stehen seit Scheibe 11 gemeinsam mit .metric/.panel/
    .dialog-card in styles/components.css - hier bleibt nur, was an dieser Karte wirklich eigen ist. */

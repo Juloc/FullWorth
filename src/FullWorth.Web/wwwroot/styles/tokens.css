@@ -137,6 +137,18 @@
      das ist keine Elevation-Stufe der Ruhelage. */
   --elevation-0:none;--elevation-1:var(--shadow-float);--elevation-2:var(--shadow-menu);
 }
+/* Phone (<768px): dieselben Leitern, eine Stufe enger. Das Telefon ist die Oberflaeche, auf der mit einem Blick
+   moeglichst viel stehen soll; die Skalen aus :root waren fuer Desktop-Abstaende und -Schriften gemessen und
+   machten jede Karte, jeden Abschnitt und jede Zeile darauf zu gross. Nur die WERTE der Tokens aendern sich, kein
+   Verbraucher: Aliase (--s1 bis --s8) und alles, was die --space- und --font-size-Tokens liest, folgt von selbst, und Desktop bleibt
+   byteweise gleich. Eingabefelder behalten 16px (kleiner zoomt iOS beim Fokus) - das steht in responsive.css. */
+@media(max-width:767px){
+  :root{
+    --font-size-base:15px;--font-size-sm:13px;--font-size-lg:16px;--font-size-xl:18px;--font-size-2xl:20px;
+    --font-size-3xl:24px;--font-size-4xl:28px;--font-size-5xl:36px;
+    --space-3:10px;--space-4:12px;--space-5:16px;--space-6:24px;--space-7:32px;
+  }
+}
 html[data-theme="dark"]{
   color-scheme:dark;
   /* Neutral dark surfaces use visible elevation instead of near-black-on-near-black. */

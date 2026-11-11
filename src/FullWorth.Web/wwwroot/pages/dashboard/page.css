@@ -119,6 +119,7 @@ html[data-theme="light"] #dashboard-grid .widget:nth-child(2n)::before{
 }
 
 @media(max-width:767px){
+  .widget-metric strong{font-size:var(--font-size-4xl)}
   /* Zeilen in einer Karte bekommen drei feste Spalten, damit ein langer Name den Betrag nie aus dem
      Bild schiebt. */
   .widget .fw-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:10px;width:100%;box-sizing:border-box}
