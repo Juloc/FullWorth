@@ -2036,6 +2036,11 @@
       if (found >= 0) CONTRACT_IMPORTS.splice(found, 1);
       return { status: 201, body: { id: 'new' } };
     }
+    if (method === 'PUT' && /\/compensation\/contracts\/[^/]+$/.test(path)) {
+      const found = CONTRACT_STATES.find(item => path.endsWith('/' + item.id));
+      if (found) found.state = JSON.parse(init.body);
+      return { status: 204, body: null };
+    }
     if (method === 'DELETE' && /\/compensation\/contracts\/[^/]+$/.test(path)) {
       const index = CONTRACT_STATES.findIndex(item => path.endsWith('/' + item.id));
       if (index >= 0) CONTRACT_STATES.splice(index, 1);

@@ -26,6 +26,15 @@ public static class EmploymentContractEndpoints
             return id is null ? Results.NotFound() : Results.Created($"/api/compensation/contracts?fullWorthSpaceId={fullWorthSpaceId}", new { id });
         });
 
+        group.MapPut("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, ContractStateWrite request, CurrentUserContext currentUser, SpaceAccess access, EmploymentContractStore store, CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            if (!await access.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            try { EmploymentContractStore.Validate(request); }
+            catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
+            return await store.UpdateAsync(userId, fullWorthSpaceId, id, request, ct) ? Results.NoContent() : Results.NotFound();
+        });
+
         group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess access, EmploymentContractService service, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();

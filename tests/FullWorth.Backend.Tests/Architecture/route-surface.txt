@@ -599,6 +599,7 @@ PUT              /api/categorization-rules/{id:guid}
 PUT              /api/category-intelligence/category-appearances/{categoryId:guid}
 PUT              /api/category-order
 PUT              /api/collections/{id:guid}
+PUT              /api/compensation/contracts/{id:guid}
 PUT              /api/compensation/history/{id:guid}
 PUT              /api/compensation/housing-costs/{id:guid}
 PUT              /api/compensation/other-income/{id:guid}

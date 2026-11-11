@@ -6,6 +6,7 @@
 import { esc, euro, spaceId, api, splitSpecialPay } from './shared.js';
 import { setOverviewData, renderYear } from './payslip-overview.js';
 import { openImportPdf } from './paperless-finds.js';
+import { editContractState } from './contracts.js';
 import { openAdd } from './add-dialog.js';
 
 const num = value => Number(value) || 0;
@@ -78,6 +79,7 @@ function eventHtml(event) {
   return `<li class="vl-event"><span class="vl-ev-date">${String(when.getDate()).padStart(2, '0')}.${String(when.getMonth() + 1).padStart(2, '0')}.</span>`
     + `<span class="vl-ev-main"><strong>${esc(event.title)}</strong><small>${detail}</small></span>`
     + (event.document ? `<button type="button" class="btn btn-quiet" data-open-pdf="${esc(event.document.importId)}">PDF</button>` : '')
+    + `<button type="button" class="btn btn-quiet" data-edit-state="${esc(event.id)}">Bearbeiten</button>`
     + '</li>';
 }
 
@@ -141,6 +143,8 @@ if (host) {
   host.addEventListener('click', event => {
     const pdf = event.target.closest('[data-open-pdf]');
     if (pdf) openImportPdf(pdf.dataset.openPdf);
+    const edit = event.target.closest('[data-edit-state]');
+    if (edit) editContractState(edit.dataset.editState);
   });
   document.addEventListener('fw-gehalt-changed', event => { context = { ...context, ...(event.detail || {}) }; schedule(); });
   document.addEventListener('fw-contracts-changed', schedule);

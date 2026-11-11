@@ -268,6 +268,31 @@ public sealed class DocumentImportIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_confirmed_contract_state_can_be_corrected_but_only_by_its_owner()
+    {
+        using var factory = CreateFactory(new FakePaperless());
+        using var client = factory.CreateClient();
+        var spaceId = Guid.NewGuid();
+        var owner = await SeedMemberAsync(factory, Guid.NewGuid(), spaceId);
+        var colleague = await SeedMemberAsync(factory, Guid.NewGuid(), spaceId, createSpace: false);
+        Assert.Equal(HttpStatusCode.Created, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={spaceId:D}", owner, ContractBody("2025-01-01", "contract", 5000)));
+        Assert.Equal(HttpStatusCode.Created, await StatusAsync(client, HttpMethod.Post, $"/api/compensation/contracts?fullWorthSpaceId={spaceId:D}", owner, ContractBody("2026-07-01", "addendum", 5400)));
+        var addendum = (await OverviewAsync(client, owner)).GetProperty("events")[0].GetProperty("id").GetGuid();
+        HttpContent Corrected() => JsonContent.Create(new { validFrom = "2026-07-01", kind = "addendum", grossMonthly = 5400, companyCar = true });
+
+        // Ein Kollege findet den Stand nicht; der Besitzer berichtigt ihn, und der Dienstwagen ist wieder da.
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(client, HttpMethod.Put, $"/api/compensation/contracts/{addendum:D}?fullWorthSpaceId={spaceId:D}", colleague, Corrected()));
+        Assert.Equal(HttpStatusCode.NoContent, await StatusAsync(client, HttpMethod.Put, $"/api/compensation/contracts/{addendum:D}?fullWorthSpaceId={spaceId:D}", owner, Corrected()));
+
+        var latest = (await OverviewAsync(client, owner)).GetProperty("events")[0];
+        Assert.Equal(addendum, latest.GetProperty("id").GetGuid());
+        var car = latest.GetProperty("changed").EnumerateArray().Single(x => x.GetProperty("key").GetString() == "car");
+        Assert.Equal("nein", car.GetProperty("old").GetString());
+        Assert.Equal("ja", car.GetProperty("new").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, await StatusAsync(client, HttpMethod.Put, $"/api/compensation/contracts/{addendum:D}?fullWorthSpaceId={spaceId:D}", owner, ContractBody("2026-07-01", "addendum", 0)));
+    }
+
+    [Fact]
     public async Task AccountDeletionRemovesContractStatesToo()
     {
         using var factory = CreateFactory(new FakePaperless());

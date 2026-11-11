@@ -62,6 +62,16 @@ public sealed class EmploymentContractStore(FullWorthDbContext db)
         return added == 0 ? null : id;
     }
 
+    /// <summary>
+    /// Ersetzt die Werte eines bestehenden Standes. Das Dokument, aus dem er bestaetigt wurde, bleibt verknuepft: es
+    /// belegt den Stand, auch wenn jemand einen falsch gelesenen Wert nachtraeglich berichtigt.
+    /// </summary>
+    public async Task<bool> UpdateAsync(Guid userId, Guid fullWorthSpaceId, Guid id, ContractStateWrite write, CancellationToken ct) =>
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "EmploymentContractStates" SET "ValidFrom" = {write.ValidFrom}, "Payload" = {JsonSerializer.Serialize(Clean(write), Json)}::jsonb, "UpdatedAt" = {DateTimeOffset.UtcNow}
+            WHERE "Id" = {id} AND "UserId" = {userId} AND "FullWorthSpaceId" = {fullWorthSpaceId}
+            """, ct) > 0;
+
     public async Task<bool> DeleteAsync(Guid userId, Guid fullWorthSpaceId, Guid id, CancellationToken ct) =>
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "EmploymentContractStates" WHERE "Id" = {id} AND "UserId" = {userId} AND "FullWorthSpaceId" = {fullWorthSpaceId}

@@ -11,6 +11,7 @@ import { openAdd, closeAdd } from './add-dialog.js';
 
 const state = { overview: { states: [], events: [], hints: [] }, payslips: [] };
 let reviewedImport = null;
+let editingState = null;   // die Id des Standes, der gerade berichtigt wird; sonst legt Speichern einen neuen an
 const dmy = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="${spriteHref(name)}"></use></svg>`;
 const BADGE_TONE = { Start: 'start', 'Gehaltserhöhung': 'raise', 'Gehaltsänderung': 'change', Arbeitszeit: 'info', Benefits: 'info' };
@@ -86,13 +87,14 @@ function eventHtml(event) {
   return `<li class="co-event"><div class="co-date"><strong>${String(when.getDate()).padStart(2, '0')}.${String(when.getMonth() + 1).padStart(2, '0')}.</strong><small>${when.getFullYear()}</small></div>`
     + `<div class="co-body"><div class="co-head"><h3>${esc(event.title)}</h3><span class="po-badge co-badge co-badge-${BADGE_TONE[event.badge] || 'plain'}">${esc(event.badge)}</span></div>`
     + `<dl class="co-changes">${changes}</dl>${unchanged}`
-    + `<div class="co-foot"><p class="po-foot">${esc(source)}</p><div class="co-actions">${doc ? `<button type="button" class="btn btn-secondary" data-open-pdf="${attr(doc.importId)}">PDF</button><button type="button" class="btn btn-secondary" data-open-url="${attr(doc.paperlessUrl)}">Paperless</button>` : ''}<button type="button" class="btn btn-danger" data-delete-state="${attr(event.id)}" title="Löschen" aria-label="Stand vom ${when.getFullYear()} löschen">×</button></div></div></div></li>`;
+    + `<div class="co-foot"><p class="po-foot">${esc(source)}</p><div class="co-actions">${doc ? `<button type="button" class="btn btn-secondary" data-open-pdf="${attr(doc.importId)}">PDF</button><button type="button" class="btn btn-secondary" data-open-url="${attr(doc.paperlessUrl)}">Paperless</button>` : ''}<button type="button" class="btn btn-secondary" data-edit-state="${attr(event.id)}">Bearbeiten</button><button type="button" class="btn btn-danger" data-delete-state="${attr(event.id)}" title="Löschen" aria-label="Stand vom ${when.getFullYear()} löschen">×</button></div></div></div></li>`;
 }
 
 async function logAction(event) {
   const button = event.target.closest('button'); if (!button) return;
   if (button.dataset.openPdf) return openImportPdf(button.dataset.openPdf);
   if (button.dataset.openUrl) return window.open(button.dataset.openUrl, '_blank', 'noopener,noreferrer');
+  if (button.dataset.editState) return editContractState(button.dataset.editState);
   if (button.dataset.deleteState) {
     if (!await confirmMessage({ message: 'Diesen Vertragsstand löschen? Das abgelegte PDF wird mitgelöscht.', title: 'Vertragsstand löschen', confirmLabel: 'Löschen', cancelLabel: 'Abbrechen', destructive: true })) return;
     await api(`api/compensation/contracts/${button.dataset.deleteState}?fullWorthSpaceId=${spaceId()}`, { method: 'DELETE' });
@@ -104,9 +106,28 @@ async function logAction(event) {
 
 const hintText = text => { $('#ct-review-hint').textContent = text; };
 
-function fillForm(x, importId, title) {
+// Ein Nachtrag ändert nur, was er nennt. Alles andere gilt weiter wie im Stand davor - ein Dienstwagen, der im Nachtrag
+// nicht steht, ist nicht weg. Deshalb übernimmt das Formular, was der Nachtrag offen lässt, aus dem letzten Stand davor;
+// geändert wird es dann von Hand, und nur das.
+function carriedOver(x) {
+  if (x.kind === 'contract' || (!x.validFrom && x.grossMonthly == null)) return null;
+  const day = x.validFrom || '9999-12-31';
+  return state.overview.states.map(item => item.state).filter(item => item.validFrom < day).sort((a, b) => a.validFrom.localeCompare(b.validFrom)).pop() || null;
+}
+
+function fillForm(x, importId, title, editId = null) {
   reviewedImport = importId;
-  hintText(importId ? `Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.` : '');
+  editingState = editId;
+  const before = editId ? null : carriedOver(x);
+  if (before) {
+    x = { ...x, employer: x.employer || before.employer, weeklyHours: x.weeklyHours ?? before.weeklyHours, vacationDays: x.vacationDays ?? before.vacationDays,
+      companyCar: x.companyCar ?? before.companyCar, bavEmployerShare: x.bavEmployerShare ?? before.bavEmployerShare, noticePeriod: x.noticePeriod || before.noticePeriod,
+      position: x.position || before.position,
+      extras: [...(x.extras || []), ...(before.extras || []).filter(extra => !(x.extras || []).some(own => own.label === extra.label))] };
+  }
+  const carried = before ? `Was der Nachtrag nicht nennt (zum Beispiel Dienstwagen), gilt weiter wie im Stand vom ${dmy.format(new Date(`${before.validFrom}T12:00:00`))}. Ändere nur, was der Nachtrag ändert.` : '';
+  hintText(editId ? 'Vorhandenen Stand berichtigen. Beim Speichern ersetzt er den alten.'
+    : [importId ? `Aus Paperless: „${title}“. Werte mit dem Original abgleichen, dann speichern.` : '', carried].filter(Boolean).join(' '));
   // Gibt es etwas zu pruefen, zeigt der Dialog "Hinzufuegen" das Formular; geleert wird es still.
   if (importId || x.validFrom || x.grossMonthly != null) openAdd('contract');
   setVal('ct-from', x.validFrom || ''); setVal('ct-kind', x.kind || 'contract'); setVal('ct-employer', x.employer || '');
@@ -118,13 +139,19 @@ function fillForm(x, importId, title) {
 
 const resetForm = () => fillForm({}, null);
 
+// Einen bestehenden Stand berichtigen (auch vom Verlauf der Jahre aus): der Dialog öffnet sich mit seinen Werten.
+export function editContractState(id) {
+  const view = state.overview.states.find(item => item.id === id);
+  if (view) fillForm(view.state, null, null, view.id);
+}
+
 function prefill(index) { suggest(state.overview.hints[index]); }
 
 // Der Vorschlag aus dem Abgleich - auch von den Jahren im Verlauf aus (suggestState): der Dialog öffnet sich mit dem
 // ausgefüllten Formular.
 function suggest(hint) {
   fillForm({ validFrom: hint.suggestedValidFrom, kind: 'addendum', grossMonthly: hint.suggestedGross }, null);
-  hintText('Vorschlag aus den Abrechnungen. Zum Beispiel Wochenstunden und Urlaubstage aus dem Vertrag ergänzen, dann speichern.');
+  hintText(`Vorschlag aus den Abrechnungen. ${$('#ct-review-hint').textContent || 'Zum Beispiel Wochenstunden und Urlaubstage aus dem Vertrag ergänzen, dann speichern.'}`);
 }
 
 function addExtra(label = '', value = '') {
@@ -147,9 +174,11 @@ async function save() {
     weeklyHours: optional('ct-hours'), vacationDays: optional('ct-vacation'), companyCar: checked('ct-car'), bavEmployerShare: optional('ct-bav'),
     noticePeriod: val('ct-notice') || null, position: val('ct-position') || null, extras
   };
-  await api(`api/compensation/contracts?fullWorthSpaceId=${space}${reviewedImport ? `&importId=${reviewedImport}` : ''}`, json('POST', payload));
+  const edited = editingState;
+  if (edited) await api(`api/compensation/contracts/${edited}?fullWorthSpaceId=${space}`, json('PUT', payload));
+  else await api(`api/compensation/contracts?fullWorthSpaceId=${space}${reviewedImport ? `&importId=${reviewedImport}` : ''}`, json('POST', payload));
   resetForm();
-  notify('Vertragsstand gespeichert.');
+  notify(edited ? 'Vertragsstand berichtigt.' : 'Vertragsstand gespeichert.');
   closeAdd();
   await Promise.all([loadAll(true), finds.load()]);
 }
