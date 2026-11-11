@@ -72,7 +72,8 @@ public sealed class DocumentImportService(
                     throw new InvalidOperationException("Die Paperless-Verbindung dieses Fundes besteht nicht mehr.");
 
                 await using var download = await paperless.DownloadAsync(connection.BaseUrl, connection.Token, item.PaperlessDocumentId, ct);
-                var result = await readers.Single(reader => reader.Kind == item.Kind).ReadAsync(item.UserId, download.Content, download.FileName, ct);
+                var paperlessText = await paperless.GetContentAsync(connection.BaseUrl, connection.Token, item.PaperlessDocumentId, ct);
+                var result = await readers.Single(reader => reader.Kind == item.Kind).ReadAsync(item.UserId, download.Content, download.FileName, paperlessText, ct);
                 await imports.StoreReadAsync(item.Id, download.Content.ToArray(), download.FileName, download.ContentType, result, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

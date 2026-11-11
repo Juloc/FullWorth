@@ -20,12 +20,12 @@ public sealed class ContractExtractionService(IDocumentOcr ocr, ContractCodexExt
 
     public string Kind => DocumentKinds.Contract;
 
-    async Task<object> IDocumentReader.ReadAsync(Guid userId, Stream content, string fileName, CancellationToken ct) =>
-        await ExtractAsync(userId, content, fileName, ct);
+    async Task<object> IDocumentReader.ReadAsync(Guid userId, Stream content, string fileName, string? paperlessText, CancellationToken ct) =>
+        await ExtractAsync(userId, content, fileName, ct, paperlessText);
 
-    public async Task<ContractExtractionResult> ExtractAsync(Guid userId, Stream content, string fileName, CancellationToken ct)
+    public async Task<ContractExtractionResult> ExtractAsync(Guid userId, Stream content, string fileName, CancellationToken ct, string? paperlessText = null)
     {
-        var text = await ocr.ReadTextAsync(content, fileName, MaxPages, ct);
+        var text = LocalDocumentOcr.HasText(paperlessText) ? paperlessText! : await ocr.ReadTextAsync(content, fileName, MaxPages, ct);
         if (string.IsNullOrWhiteSpace(text)) return ContractTextParser.Empty("OCR konnte keinen Text erkennen.");
         return await codex.TryStructureAsync(userId, text, ct) ?? ContractTextParser.Parse(text);
     }

@@ -124,6 +124,25 @@ public sealed class PaperlessClient(
     }
 
     /// <summary>Die Nummer des Korrespondenten, der genau so heisst (ohne Beachtung der Gross-/Kleinschreibung); null, wenn es keinen gibt.</summary>
+    /// <summary>
+    /// Der Text, den Paperless selbst aus dem Dokument gelesen hat. Er ist meist besser als eine zweite Erkennung
+    /// derselben Datei: Paperless liest die Seite in voller Aufloesung und hat sie oft schon ausgerichtet.
+    /// Null, wenn es keinen gibt oder die Anfrage scheitert - dann liest der Aufrufer die Datei selbst.
+    /// </summary>
+    public async Task<string?> GetContentAsync(string baseUrl, string token, int documentId, CancellationToken ct)
+    {
+        try
+        {
+            using var request = CreateRequest(HttpMethod.Get, baseUrl, token, $"api/documents/{documentId}/");
+            using var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+            if (!response.IsSuccessStatusCode) return null;
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            return json.RootElement.TryGetProperty("content", out var content) ? content.GetString() : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException) { return null; }
+    }
+
     public async Task<int?> FindCorrespondentIdAsync(string baseUrl, string token, string name, CancellationToken ct)
     {
         var found = await ReadNamedOptionsAsync(baseUrl, token, $"api/correspondents/?page_size=100&name__iexact={Uri.EscapeDataString(name)}", ct);

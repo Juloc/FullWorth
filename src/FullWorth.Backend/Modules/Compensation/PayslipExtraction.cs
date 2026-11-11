@@ -23,12 +23,12 @@ public sealed class PayslipExtractionService(IDocumentOcr ocr, PayslipCodexExtra
 {
     public string Kind => DocumentKinds.Payslip;
 
-    async Task<object> IDocumentReader.ReadAsync(Guid userId, Stream content, string fileName, CancellationToken ct) =>
-        await ExtractAsync(userId, content, fileName, ct);
+    async Task<object> IDocumentReader.ReadAsync(Guid userId, Stream content, string fileName, string? paperlessText, CancellationToken ct) =>
+        await ExtractAsync(userId, content, fileName, ct, paperlessText);
 
-    public async Task<PayslipExtractionResult> ExtractAsync(Guid userId, Stream content, string fileName, CancellationToken ct)
+    public async Task<PayslipExtractionResult> ExtractAsync(Guid userId, Stream content, string fileName, CancellationToken ct, string? paperlessText = null)
     {
-        var text = await ocr.ReadTextAsync(content, fileName, 1, ct);
+        var text = LocalDocumentOcr.HasText(paperlessText) ? paperlessText! : await ocr.ReadTextAsync(content, fileName, 1, ct);
         if (string.IsNullOrWhiteSpace(text))
             return PayslipTextParser.Empty("OCR konnte keinen Text erkennen.");
         return await codex.TryStructureAsync(userId, text, ct) ?? PayslipTextParser.Parse(text);
@@ -46,6 +46,9 @@ public sealed class LocalDocumentOcr : IDocumentOcr
     private const long MaxBytes = 25L * 1024 * 1024;
     // Weniger als das ist keine Textebene, sondern ein Scan mit ein paar Fusszeilen.
     private const int MinTextLayerCharacters = 200;
+
+    /// <summary>Ob ein Text (aus der Textebene oder von Paperless) genug ist, um ihn statt einer Erkennung zu lesen.</summary>
+    public static bool HasText(string? text) => text is not null && text.Count(char.IsLetterOrDigit) >= MinTextLayerCharacters;
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp" };
 

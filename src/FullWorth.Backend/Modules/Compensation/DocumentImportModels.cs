@@ -28,7 +28,8 @@ public interface IDocumentReader
 {
     string Kind { get; }
 
-    Task<object> ReadAsync(Guid userId, Stream content, string fileName, CancellationToken ct);
+    /// <param name="paperlessText">Der Text, den Paperless selbst aus dem Dokument gelesen hat; gilt, wenn er brauchbar ist, sonst liest der Leser die Datei.</param>
+    Task<object> ReadAsync(Guid userId, Stream content, string fileName, string? paperlessText, CancellationToken ct);
 }
 
 public sealed class CompensationStorageOptions
