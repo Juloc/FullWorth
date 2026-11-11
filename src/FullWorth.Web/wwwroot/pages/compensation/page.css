@@ -566,7 +566,10 @@
 .pp-controls select{min-height:44px}
 .pp-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
 .pp-sentence{margin:0}
-.pp-lines{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-2) var(--space-5)}
+.pp-lines{display:grid;gap:var(--space-2)}
+.pp-hint{margin:0}
+.pp-line small{display:block;color:var(--muted);font-size:var(--text-caption-size)}
+.pp-more summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted);font-size:var(--text-caption-size)}
 .pp-legend-group{display:grid;align-content:start}
 .pp-legend-group h3{margin:0 0 var(--space-1);font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
 .pp-legend-group h3 small{font-weight:400}

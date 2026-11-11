@@ -8,8 +8,14 @@ import { monthsOf } from './housing-costs.js';
 const MONTH = new Intl.DateTimeFormat('de-DE', { month: 'short', year: 'numeric' });
 const monthName = index => MONTH.format(new Date(Math.floor(index / 12), index % 12, 1)).replace('.', '');
 const num = value => Number(value) || 0;
-const BASIS = { payout: 'Ausgezahlt', net: 'Netto', gross: 'Brutto' };
-const BASIS_FIELD = { payout: 'payout', net: 'netPay', gross: 'grossPay' };
+const BASIS = { payout: 'Ausgezahlt', net: 'Netto', gross: 'Brutto-Gehalt' };
+// "Brutto-Gehalt" ist das Brutto der Abrechnung ohne Bonus und ohne den Firmenwagen-Vorteil: der ist kein Geld, und als
+// das neue Auto 2025 weniger Vorteil brachte, sah es aus, als sinke das Gehalt.
+const BASIS_VALUE = {
+  payout: p => num(p.payout),
+  net: p => num(p.netPay),
+  gross: p => num(p.grossPay) - num(p.bonus) - num(p.companyCarTaxableBenefit)
+};
 const monthIndex = iso => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
 const signed = value => `${value >= 0 ? '+' : '−'}${Math.abs(value).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 
@@ -45,7 +51,7 @@ export function renderPurchasingPower(element, items) {
   host = element; payslips = items;
   if (!host) return;
   if (data) return draw();
-  host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2></div></div><div class="pp-placeholder"></div>';
+  host.innerHTML = '<div class="panel-head"><div><h2>Verdienst gegen Preise</h2></div></div><div class="pp-placeholder"></div>';
   loading ||= load().then(result => { data = result; }).catch(() => { data = { failed: true }; });
   loading.then(draw);
 }
@@ -70,7 +76,7 @@ function salaryByMonth(basis) {
   for (const item of payslips) {
     const m = monthIndex(item.payslip.period);
     if (byMonth.has(m)) continue;
-    byMonth.set(m, num(item.payslip[BASIS_FIELD[basis]]));
+    byMonth.set(m, BASIS_VALUE[basis](item.payslip));
     if (num(item.payslip.bonus) > 0) withBonus.add(m);
   }
   const lowerMedian = list => list[Math.floor((list.length - 1) / 2)];
@@ -161,7 +167,7 @@ const last = points => points[points.length - 1];
 
 function draw() {
   if (!host) return;
-  if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2></div></div>'; return; }
+  if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Verdienst gegen Preise</h2></div></div>'; return; }
   const model = buildModel();
   // Wo es zu einem Thema beides gibt - die Statistik und die eigenen Preise -, werden beide gezeigt, sonst
   // sieht man nur eine Seite des Vergleichs. Einmal je Thema, sobald es die eigene Linie gibt; danach entscheidet der Benutzer.
@@ -169,7 +175,7 @@ function draw() {
     if (!view.paired.has(own) && model.lines.some(l => l.key === own)) { view.paired.add(own); view.lines.add(stat); view.lines.add(own); }
   const salary = model.lines[0], general = model.lines.find(l => l.key === 'gesamt');
   if (!salary.points.length || salary.points.length < 2) {
-    host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2></div></div>';
+    host.innerHTML = '<div class="panel-head"><div><h2>Verdienst gegen Preise</h2></div></div>';
     return;
   }
 
@@ -181,24 +187,26 @@ function draw() {
 
   const legendRow = l => {
     const line = model.lines.find(x => x.key === l.key);
-    return `<label class="pp-line${l.own ? ' is-own' : ''}" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><i></i><span>${esc(l.label)}</span><b>${signed(last(line.points)[1] - 100)}</b></label>`;
+    return `<label class="pp-line${l.own ? ' is-own' : ''}" style="--pp-color:${l.color}"><input type="checkbox" data-pp-line="${l.key}"${view.lines.has(l.key) ? ' checked' : ''}><i></i><span>${esc(l.label)}<small>${l.own ? 'deine Daten' : 'Statistik'}</small></span><b>${signed(last(line.points)[1] - 100)}</b></label>`;
   };
-  const groupOf = (own, group) => LINES.filter(l => !!l.own === own && l.group === group && model.lines.some(x => x.key === l.key)).map(legendRow).join('');
-  const chips = `<div class="pp-legend-group"><h3>Statistik Deutschland <small>Destatis, alle Haushalte</small></h3>${groupOf(false)}</div>`
-    + (groupOf(true) ? `<div class="pp-legend-group"><h3>Deine Einkäufe <small>aus deinen bestätigten Belegen</small></h3>${groupOf(true)}</div>` : '')
-    + (groupOf(true, 'home') ? `<div class="pp-legend-group"><h3>Deine Wohnkosten <small>aus deinen Abrechnungen, € je Monat</small></h3>${groupOf(true, 'home')}</div>` : '');
+  // Oben stehen die Linien, die im Diagramm zu sehen sind - mit Herkunft; alle anderen warten hinter "Weitere Linien".
+  const available = LINES.filter(l => model.lines.some(x => x.key === l.key));
+  const shownRows = available.filter(l => view.lines.has(l.key)).map(legendRow).join('');
+  const restRows = available.filter(l => !view.lines.has(l.key)).map(legendRow).join('');
+  const chips = `<div class="pp-legend-group">${shownRows}</div>${restRows ? `<details class="pp-more"><summary>Weitere Linien (${available.length - available.filter(l => view.lines.has(l.key)).length})</summary><div class="pp-legend-group">${restRows}</div></details>` : ''}`;
 
   host.innerHTML = `
-    <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2></div></div>
+    <div class="panel-head pp-head"><div><h2>Verdienst gegen Preise</h2></div></div>
+    <p class="extended-note pp-hint">Alle Linien starten im ${monthName(model.start)} bei 100. Steigt deine schwarze Linie schneller als die Preise, kaufst du heute mehr als damals.</p>
     <div class="pp-controls">
       <div class="po-years" role="tablist" aria-label="Gehalt">${Object.entries(BASIS).map(([key, name]) => `<button type="button" role="tab" class="po-year" data-pp-basis="${key}" aria-selected="${view.basis === key}">${name}</button>`).join('')}</div>
       ${model.startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${model.startOptions.map(m => `<option value="${m}"${m === model.start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}
     </div>
     <div class="po-kpis pp-kpis">
-      <div><span>${label} seit ${monthName(model.start)}</span><strong>${signed(salaryChange)}</strong></div>
-      ${priceChange === null ? '' : `<div><span>Preise allgemein</span><strong>${signed(priceChange)}</strong></div><div><span>Real</span><strong class="${real >= 0 ? 'positive' : 'negative'}">${signed(real)}</strong></div>`}
+      <div><span>Dein Verdienst (${label})</span><strong>${signed(salaryChange)}</strong></div>
+      ${priceChange === null ? '' : `<div><span>Preise insgesamt</span><strong>${signed(priceChange)}</strong></div><div><span>Real für dich</span><strong class="${real >= 0 ? 'positive' : 'negative'}">${signed(real)}</strong></div>`}
     </div>
-    ${power === null ? '' : `<p class="extended-note pp-sentence">Das sind rund ${euro.format(Math.abs(power))} im Monat ${power >= 0 ? 'mehr' : 'weniger'} Kaufkraft als am Anfang.</p>`}
+    ${power === null ? '' : `<p class="extended-note pp-sentence">Von deinem Verdienst kaufst du heute ${Math.abs(real).toLocaleString('de-DE', { maximumFractionDigits: 1 })} % ${real >= 0 ? 'mehr' : 'weniger'} als im ${monthName(model.start)} - das sind rund ${euro.format(Math.abs(power))} im Monat.</p>`}
     <div class="pp-wrap"><div id="pp-chart"></div><div class="po-tip" hidden></div></div>
     <div class="pp-lines">${chips}</div>
     <p class="pp-foot">Preise: Destatis Verbraucherpreisindex Deutschland (${esc(data.inflation.base)}), Stand ${monthName(monthIndex(`${data.inflation.lastMonth}-01`))}.${data.own && model.ownAvailable ? ' „Meine Einkäufe“: Preisentwicklung derselben Artikel im selben Geschäft aus deinen bestätigten Belegen, je Quartal, ab dem ersten Quartal an die allgemeine Linie angelegt.' : ''}${data.own && !model.ownAvailable ? ' Deine eigenen Einkaufspreise erscheinen hier, sobald genug bestätigte Belege mit denselben Artikeln da sind.' : ''} Das Gehalt ist je Monat geglättet (Median aus den Monaten ringsum, ohne Monate mit Einmalzahlung), damit weder ein Bonus noch eine Nachzahlung einen Sprung vortäuscht.</p>`;
@@ -236,9 +244,11 @@ function drawChart(model) {
   for (let m = Math.ceil(model.start / stepMonths) * stepMonths; m <= model.end; m += stepMonths)
     axis += `<text class="po-axis" x="${x(m).toFixed(1)}" y="${height - 7}" text-anchor="middle">${m % 12 === 0 ? Math.floor(m / 12) : monthName(m).split(' ')[0]}</text>`;
 
-  const path = points => points.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join('');
+  // Das Gehalt ist eine Treppe: es gilt, bis die naechste Abrechnung etwas anderes zeigt. Eine schraege Linie ueber
+  // fehlende Monate (nicht jede Abrechnung liegt vor) taeuschte einen allmaehlichen Anstieg vor.
+  const path = (points, steps) => points.map((p, i) => `${i ? (steps ? `H${x(p[0]).toFixed(1)}V` : 'L') : 'M'}${steps && i ? '' : `${x(p[0]).toFixed(1)} `}${y(p[1]).toFixed(1)}`).join('');
   const lines = shown.slice().sort((a, b) => Number(!!a.main) - Number(!!b.main)).map(l =>
-    `<path d="${path(l.points)}" fill="none" stroke="${l.color}" stroke-width="${l.main ? 3 : 2}" stroke-linecap="round" stroke-linejoin="round"${l.own ? ' stroke-dasharray="6 4"' : ''}/>`
+    `<path d="${path(l.points, l.main)}" fill="none" stroke="${l.color}" stroke-width="${l.main ? 3 : 2}" stroke-linecap="round" stroke-linejoin="round"${l.own ? ' stroke-dasharray="6 4"' : ''}/>`
     + (l.anchoredAt ? `<circle cx="${x(l.anchoredAt).toFixed(1)}" cy="${y(l.points[0][1]).toFixed(1)}" r="3.5" fill="${l.color}"/>` : '')
     + `<circle cx="${x(last(l.points)[0]).toFixed(1)}" cy="${y(last(l.points)[1]).toFixed(1)}" r="4" fill="${l.color}"/>`).join('');
 
