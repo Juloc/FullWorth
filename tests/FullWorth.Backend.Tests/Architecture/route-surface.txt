@@ -152,7 +152,6 @@ GET              /api/compensation/inflation/series
 GET              /api/compensation/other-income
 GET              /api/compensation/other-income/types
 GET              /api/compensation/payslips/
-GET              /api/compensation/payslips/latest-delta
 GET              /api/compensation/profile
 GET              /api/compensation/scenarios
 GET              /api/compensation/timeline

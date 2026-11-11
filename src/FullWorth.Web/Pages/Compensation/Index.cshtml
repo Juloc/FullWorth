@@ -270,17 +270,25 @@
             <h2 id="verlauf-add-title">Hinzufügen</h2>
             <button type="button" class="fw-dialog-close" data-close aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="@IconSprite.Href(ViewContext.HttpContext, "ui-close")"></use></svg></button>
           </div>
+          @* Zwei Ebenen: erst WAS (Lohnabrechnung oder Vertrag), dann WIE (Paperless, PDF, von Hand). Welche Knöpfe der
+             zweiten Zeile zu sehen sind, steht in data-va-for (add-dialog.js). *@
           <nav class="va-tabs" role="tablist" aria-label="Was hinzufügen">
-            <button type="button" role="tab" class="po-year" data-va-tab="paperless">Paperless</button>
-            <button type="button" role="tab" class="po-year" data-va-tab="upload">PDF</button>
-            <button type="button" role="tab" class="po-year" data-va-tab="payslip">Abrechnung</button>
-            <button type="button" role="tab" class="po-year" data-va-tab="contract">Vertrag</button>
+            <button type="button" role="tab" class="po-year" data-va-what="payslip">Lohnabrechnung</button>
+            <button type="button" role="tab" class="po-year" data-va-what="contract">Vertrag</button>
+          </nav>
+          <nav class="va-tabs va-how" role="tablist" aria-label="Wie hinzufügen">
+            <button type="button" role="tab" class="va-how-tab" data-va-tab="paperless" data-va-for="payslip">Aus Paperless</button>
+            <button type="button" role="tab" class="va-how-tab" data-va-tab="upload" data-va-for="payslip">PDF hochladen</button>
+            <button type="button" role="tab" class="va-how-tab" data-va-tab="payslip" data-va-for="payslip">Von Hand</button>
+            <button type="button" role="tab" class="va-how-tab" data-va-tab="contract-paperless" data-va-for="contract">Aus Paperless</button>
+            <button type="button" role="tab" class="va-how-tab" data-va-tab="contract" data-va-for="contract">Von Hand</button>
           </nav>
 
           <section data-va-panel="paperless">
-            <h3 class="va-sub">Lohnabrechnungen</h3>
             <div id="paperless-body" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
-            <h3 class="va-sub">Arbeitsverträge und Nachträge</h3>
+          </section>
+
+          <section data-va-panel="contract-paperless" hidden>
             <div id="contract-finds" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
           </section>
 

@@ -2080,7 +2080,6 @@
       return { status: 204, body: null };
     }
     if (method === 'GET' && path.endsWith('/compensation/payslips')) return { status: 200, body: PAYSLIPS };
-    if (method === 'GET' && path.endsWith('/compensation/payslips/latest-delta')) return { status: 404, body: null };
     if (method === 'POST' && path.endsWith('/compensation/payslips')) {
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }

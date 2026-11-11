@@ -53,15 +53,3 @@ public sealed record PayslipRecordView(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DocumentRef? Document = null);
-
-public sealed record PayslipDelta(
-    PayslipRecordView Previous,
-    PayslipRecordView Current,
-    decimal GrossDelta,
-    decimal NetDelta,
-    decimal PayoutDelta,
-    decimal TaxDelta,
-    decimal SocialInsuranceDelta,
-    decimal BavDelta,
-    decimal CompanyCarDelta,
-    IReadOnlyList<string> Explanations);

@@ -175,3 +175,5 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 @media(max-width:560px){
   .dialog-actions .fw-actions-spacer{flex-basis:100%;min-width:0;height:0}
 }
+
+html:has(dialog.fw-dialog[open]){overflow:hidden}

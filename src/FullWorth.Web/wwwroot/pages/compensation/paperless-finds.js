@@ -97,33 +97,30 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
     const setup = state.setup, { options } = setup;
     const typeIds = [...new Set([...setup.types, ...options.documentTypes.filter(t => new RegExp(texts.typePattern, 'i').test(t.name)).map(t => t.id)])];
     const typeName = new Map(options.documentTypes.map(t => [t.id, t.name]));
-    const chips = typeIds.map(id => `<label class="pf-row"><input type="checkbox" data-pf-type="${id}"${setup.types.has(id) ? ' checked' : ''}><span class="pf-row-main"><strong>${esc(typeName.get(id))}</strong></span></label>`).join('');
+    const chips = typeIds.map(id => `<label class="pf-type"><input type="checkbox" data-pf-type="${id}"${setup.types.has(id) ? ' checked' : ''}><span>${esc(typeName.get(id))}</span></label>`).join('');
     const more = options.documentTypes.filter(t => !typeIds.includes(t.id)).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
     const groups = setup.correspondents ? correspondentGroups(setup) : [];
     const picked = groups.filter(g => setup.correspondents.has(g.id));
     const count = picked.reduce((sum, g) => sum + g.docs.length, 0);
-    const query = buildQuery(options.documentTypes.filter(t => setup.types.has(t.id)).map(t => t.name), picked.filter(g => g.id).map(g => g.name));
 
     const groupHtml = groups.map(g => {
       const years = [...new Set(g.docs.map(d => year(d.created)).filter(Boolean))].sort();
       const range = years.length ? (years.length > 1 ? `${years[0]}–${years[years.length - 1]}` : years[0]) : '';
-      const tags = [...g.tags].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([name]) => `<i>${esc(name)}</i>`).join('');
+      const tags = [...g.tags].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => esc(name)).join(', ');
       return `<label class="pf-row"><input type="checkbox" data-pf-corr="${g.id}"${setup.correspondents.has(g.id) ? ' checked' : ''}>`
-        + `<span class="pf-row-main"><strong>${esc(g.name)}</strong><small>${g.docs.length} Dokument${g.docs.length === 1 ? '' : 'e'}${range ? ` · ${range}` : ''}</small>`
-        + `<small class="pf-example">${esc(g.docs[0].title)}</small>${tags ? `<span class="pf-tags">${tags}</span>` : ''}</span></label>`;
+        + `<span class="pf-row-main"><strong>${esc(g.name)}</strong><small>${g.docs.length} Dokument${g.docs.length === 1 ? '' : 'e'}${range ? ` · ${range}` : ''}${tags ? ` · ${tags}` : ''}</small></span></label>`;
     }).join('');
 
     const docs = picked.flatMap(g => g.docs).sort((a, b) => (b.created || '').localeCompare(a.created || ''));
     const list = docs.slice(0, 80).map(d => `<li><span>${esc(d.title)}</span><small>${esc(setup.options.documentTypes.find(t => t.id === d.documentType)?.name || '')}</small></li>`).join('');
 
     return `<div class="pf-setup">
-      <div class="pf-step"><span class="pf-step-title">1 · Dokumenttyp in Paperless</span><div class="pf-rows">${chips}</div><select data-pf-more aria-label="Weiteren Dokumenttyp hinzufügen"><option value="">Weiterer Typ …</option>${more}</select></div>
+      <div class="pf-step"><span class="pf-step-title">Dokumenttyp in Paperless</span><div class="pf-types">${chips}<select data-pf-more aria-label="Weiteren Dokumenttyp hinzufügen"><option value="">Weiterer Typ …</option>${more}</select></div></div>
       ${setup.error ? `<p class="pf-error">${esc(setup.error)}</p>` : ''}
-      ${groups.length ? `<div class="pf-step"><span class="pf-step-title">2 · Von wem?</span><div class="pf-rows">${groupHtml}</div>${setup.truncated ? `<p class="extended-note">Es gibt mehr als ${PREVIEW_LIMIT} Treffer, gezeigt werden die neuesten.</p>` : ''}</div>`
+      ${groups.length ? `<div class="pf-step"><span class="pf-step-title">Von wem?</span><div class="pf-rows">${groupHtml}</div>${setup.truncated ? `<p class="extended-note">Es gibt mehr als ${PREVIEW_LIMIT} Treffer, gezeigt werden die neuesten.</p>` : ''}</div>`
         : `<p class="extended-note">${setup.loading ? 'Paperless wird durchsucht …' : setup.types.size ? 'Zu diesen Typen gibt es in Paperless keine Dokumente.' : 'Wähle mindestens einen Dokumenttyp.'}</p>`}
       ${picked.length ? `<details class="pf-docs"><summary>${count} Treffer ansehen</summary><ul>${list}</ul>${docs.length > 80 ? `<p class="extended-note">… und ${docs.length - 80} weitere.</p>` : ''}</details>` : ''}
       <div class="pf-actions"><button class="btn btn-primary" type="button" data-pf-save ${picked.length ? '' : 'disabled'}>${count ? `${count} ${esc(texts.noun)} holen` : 'Suche speichern'}</button>${state.preset ? '<button class="btn btn-secondary" type="button" data-pf-cancel>Abbrechen</button>' : ''}</div>
-      ${query ? `<p class="pf-query"><small>Suche in Paperless: <code>${esc(query)}</code></small></p>` : ''}
     </div>`;
   }
 
@@ -161,6 +158,9 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
     return result;
   }
 
+  // Die gespeicherte Suche in Worten: Typen und Absender, ohne die Paperless-Syntax.
+  const summaryOf = query => [...names(query, 'type'), ...names(query, 'correspondent')].join(' · ') || 'Eigene Suche';
+
   function render() {
     const el = $(root); if (!el) return;
     const { connected, preset, items } = state;
@@ -168,7 +168,7 @@ export function createFindsCard({ kind, root, texts, summarize, group, onReview,
     if (state.setup) { el.innerHTML = setupHtml(); return; }
     const status = preset.lastError ? `Letzte Suche: ${esc(preset.lastError)}` : preset.lastCheckedAt ? `Zuletzt gesucht: ${new Date(preset.lastCheckedAt).toLocaleString('de-DE')}` : 'Noch nicht gesucht.';
     const open = items.some(item => item.status === 'needs_review' || item.status === 'failed');
-    el.innerHTML = `<div class="payslip-row"><div><small>${status}</small><small class="pf-query">Suche: <code>${esc(preset.query)}</code></small></div><div>`
+    el.innerHTML = `<div class="payslip-row"><div><small>${status}</small><small class="pf-query">${esc(summaryOf(preset.query))}</small></div><div>`
       + `<button type="button" class="btn btn-secondary" data-paperless-run>Jetzt suchen</button>`
       + (open ? '<button type="button" class="btn btn-secondary" data-paperless-reread title="Liest die offenen Funde noch einmal aus dem Original">Neu lesen</button>' : '')
       + '<button type="button" class="btn btn-secondary" data-paperless-setup>Suche ändern</button></div></div>'

@@ -354,13 +354,13 @@
 .po-kpis>div:first-child{padding-left:0;border-left:0}
 .po-kpis span{color:var(--muted);font-size:var(--text-caption-size)}
 .po-kpis strong{font-size:clamp(1.05rem,2.4vw,1.35rem);white-space:nowrap;font-variant-numeric:tabular-nums}
-.po-hints{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-2)}
-.po-hint{display:flex;align-items:center;gap:var(--space-3);min-height:44px;padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);font-size:.88rem}
+.po-hints{display:grid;grid-template-columns:minmax(0,1fr)}
+.po-hint{display:flex;align-items:center;gap:var(--space-3);min-height:44px;padding:var(--space-2) 0;border-bottom:1px solid var(--line);font-size:.88rem}
 .po-hint svg{flex:none;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .po-hint>span{flex:1;min-width:0}
-.po-hint-warn{background:var(--warning-soft);color:var(--text)}
+.po-hint-warn{color:var(--text)}
 .po-hint-warn svg{color:var(--warning-solid)}
-.po-hint-info{background:var(--info-soft);color:var(--text)}
+.po-hint-info{color:var(--text)}
 .po-hint-info svg{color:var(--info-solid)}
 .po-legend{display:flex;gap:var(--space-4);flex-wrap:wrap;margin:var(--space-3) 0 var(--space-1);color:var(--muted);font-size:var(--text-caption-size)}
 .po-legend i,.po-tip i{display:inline-block;width:9px;height:9px;border-radius:var(--space-1);margin-right:var(--space-2)}
@@ -529,10 +529,6 @@
 .pf-row input{flex:none;width:22px;height:22px;margin:var(--space-1) 0 0}
 .pf-row-main{display:grid;gap:var(--space-1);min-width:0;flex:1}
 .pf-row-main small{color:var(--muted);font-size:var(--text-caption-size)}
-.pf-example{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pf-tags{color:var(--muted);font-size:var(--text-caption-size)}
-.pf-tags i{font-style:normal}
-.pf-tags i+i::before{content:" · "}
 .pf-docs summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted);font-size:var(--text-caption-size)}
 .pf-docs ul{list-style:none;margin:0;padding:0;display:grid;max-height:260px;overflow:auto}
 .pf-docs li{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--line);font-size:.85rem}
@@ -653,17 +649,29 @@ details[open]>.vl-summary::after{transform:rotate(-135deg)}
   .vl-summary{grid-template-columns:3.5rem repeat(3,minmax(0,1fr)) 1rem;gap:var(--space-2)}
   .vl-summary .vl-cell:nth-child(3),.vl-summary .vl-cell:nth-child(5),.vl-summary .vl-cell:nth-child(6){display:none}
 }
-/* Hinzufügen (add-dialog.js): ein Dialog, vier Bereiche. */
-.va-dialog{max-width:min(94vw,720px)}
-.va-card{max-height:calc(100dvh - var(--space-6));overflow-y:auto}
+/* Hinzufügen (add-dialog.js): ein Dialog, zwei Ebenen. Kopf und Reiter stehen fest, nur der Bereich darunter scrollt. */
+.va-dialog{max-width:min(94vw,720px);overflow:hidden}
+.va-card{display:flex;flex-direction:column;gap:var(--space-3);max-height:calc(100dvh - var(--space-6));overflow:hidden}
+.va-card>.fw-dialog-head,.va-card>.va-tabs{flex:none}
+.va-card>section{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .va-tabs{display:flex;gap:var(--space-2);flex-wrap:wrap}
-.va-sub{margin:var(--space-3) 0 var(--space-2);font-size:var(--text-caption-size);font-weight:700;color:var(--muted)}
-.va-sub:first-child{margin-top:0}
+.va-how{gap:var(--space-4);border-bottom:1px solid var(--line)}
+.va-how .va-how-tab{min-height:44px;padding:0;border:0;border-bottom-width:0;box-shadow:none;border-radius:0;background:transparent;color:var(--muted);font:inherit;cursor:pointer}
+.va-how .va-how-tab[aria-selected="true"]{color:var(--text);box-shadow:inset 0 -2px 0 var(--text);font-weight:600}
+.va-card .form-grid label{text-transform:none;letter-spacing:normal;min-width:0;overflow-wrap:anywhere}
+.va-how-tab[hidden]{display:none}
 .va-upload{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
 .va-upload input[type=file]{flex:1 1 14rem;min-width:0}
 @media(max-width:640px){
-  .va-tabs button{flex:1 1 auto;padding:0 var(--space-3)}
+  .va-tabs:not(.va-how) button{flex:1 1 auto;padding:0 var(--space-3)}
   .va-upload .btn{flex:1}
   .va-card .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
   .va-card .check-row,.va-card label:has(input:not([type="number"]):not([type="date"]):not([type="checkbox"])){grid-column:1/-1}
 }
+
+/* Eingabefelder im FullWorth-Ton statt Browser-Blau, und hinter einem offenen Dialog scrollt die Seite nicht mit. */
+.pf-row input[type="checkbox"],.check-row input[type="checkbox"],.va-card input[type="checkbox"]{accent-color:var(--cta)}
+.pf-types{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-4)}
+.pf-type{display:inline-flex;align-items:center;gap:var(--space-2);min-height:44px;cursor:pointer;text-transform:none;letter-spacing:normal;color:var(--text);font-size:inherit;font-weight:400}
+.pf-type input{width:20px;height:20px;margin:0;accent-color:var(--cta)}
+.pf-step select{min-height:44px}

@@ -57,12 +57,6 @@ public static class PayslipEndpoints
             return payslips is null ? Results.NotFound() : Results.Ok(payslips);
         });
 
-        group.MapGet("/latest-delta", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, PayslipStore store, CancellationToken ct) =>
-        {
-            var delta = await store.GetLatestDeltaAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
-            return delta is null ? Results.NoContent() : Results.Ok(delta);
-        });
-
         group.MapPost("/", async (Guid fullWorthSpaceId, Guid? importId, PayslipRecordWrite request, CurrentUserContext currentUser, PayslipStore store, CancellationToken ct) =>
         {
             try

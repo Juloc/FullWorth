@@ -122,30 +122,6 @@ public sealed class PayslipStore(FullWorthDbContext db)
         }, ct);
     }
 
-    public async Task<PayslipDelta?> GetLatestDeltaAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        var list = await ListAsync(userId, fullWorthSpaceId, ct);
-        if (list is null || list.Count < 2) return null;
-        var current = list[0]; var previous = list[1];
-        var a = previous.Payslip; var b = current.Payslip;
-        var taxA = a.WageTax + a.SolidaritySurcharge + a.ChurchTax;
-        var taxB = b.WageTax + b.SolidaritySurcharge + b.ChurchTax;
-        var socialA = a.PensionInsurance + a.UnemploymentInsurance + a.HealthInsurance + a.CareInsurance;
-        var socialB = b.PensionInsurance + b.UnemploymentInsurance + b.HealthInsurance + b.CareInsurance;
-        var explanations = new List<string>();
-        Explain(explanations, "Brutto", b.GrossPay - a.GrossPay);
-        Explain(explanations, "Steuern", taxB - taxA, inverse: true);
-        Explain(explanations, "Sozialabgaben", socialB - socialA, inverse: true);
-        Explain(explanations, "bAV-Eigenbeitrag", b.BavEmployee - a.BavEmployee, inverse: true);
-        Explain(explanations, "Firmenwagen-Sachbezug", b.CompanyCarTaxableBenefit - a.CompanyCarTaxableBenefit, inverse: true);
-        Explain(explanations, "Bonus", b.Bonus - a.Bonus);
-        if (explanations.Count == 0) explanations.Add("Keine größere Einzelabweichung in den erfassten Komponenten erkannt.");
-        return new PayslipDelta(previous, current,
-            Money(b.GrossPay - a.GrossPay), Money(b.NetPay - a.NetPay), Money(b.Payout - a.Payout),
-            Money(taxB - taxA), Money(socialB - socialA), Money(b.BavEmployee - a.BavEmployee),
-            Money(b.CompanyCarTaxableBenefit - a.CompanyCarTaxableBenefit), explanations);
-    }
-
     private async Task EnsureSchemaAsync(CancellationToken ct)
     {
         await WithConnectionAsync(async connection =>
@@ -199,14 +175,6 @@ public sealed class PayslipStore(FullWorthDbContext db)
         return trimmed[..Math.Min(trimmed.Length, 40)];
     }
 
-    private static decimal Money(decimal x) => Math.Round(x,2,MidpointRounding.AwayFromZero);
     private static DateTimeOffset Timestamp(object? value) => value switch { DateTimeOffset dto=>dto, DateTime dt=>new DateTimeOffset(DateTime.SpecifyKind(dt,DateTimeKind.Utc)), _=>DateTimeOffset.UtcNow };
     private static void Add(DbCommand command,string name,object value){var p=command.CreateParameter();p.ParameterName=name;p.Value=value;command.Parameters.Add(p);}
-    private static void Explain(List<string> target,string label,decimal delta,bool inverse=false)
-    {
-        if (Math.Abs(delta) < 1m) return;
-        var direction = delta > 0m ? "höher" : "niedriger";
-        var effect = inverse ? (delta > 0m ? "belastet das Netto" : "entlastet das Netto") : (delta > 0m ? "erhöht die Vergütung" : "senkt die Vergütung");
-        target.Add($"{label} ist um {Math.Abs(delta):0.00} € {direction}; das {effect}.");
-    }
 }
