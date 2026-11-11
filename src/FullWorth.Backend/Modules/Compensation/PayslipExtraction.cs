@@ -36,10 +36,10 @@ public sealed class PayslipExtractionService(IDocumentOcr ocr, PayslipCodexExtra
 }
 
 /// <summary>
-/// Liest ein PDF oder Bild lokal. Eine Seite (die Lohnabrechnung): die Seite wird gerendert und mit
-/// Tesseract (deu+eng) gelesen. Mehrere (der Arbeitsvertrag): ein digitales PDF hat eine Textebene, die
-/// genauer ist als jede Erkennung, also wird zuerst sie gelesen - nur ohne brauchbaren Text werden die
-/// Seiten gerendert und erkannt. Die Datei wird hier nie abgelegt.
+/// Liest ein PDF oder Bild lokal. Ein digitales PDF hat eine Textebene, die genauer ist als jede Erkennung -
+/// auch bei einer einzelnen Lohnabrechnung, deren Zahlen eine Erkennung gern um eine Stelle verfehlt -, also
+/// wird zuerst sie gelesen; nur ohne brauchbaren Text werden die Seiten gerendert und mit Tesseract (deu+eng)
+/// erkannt. Die Datei wird hier nie abgelegt.
 /// </summary>
 public sealed class LocalDocumentOcr : IDocumentOcr
 {
@@ -67,11 +67,8 @@ public sealed class LocalDocumentOcr : IDocumentOcr
 
             if (extension != ".pdf") return await RunProcessAsync("tesseract", [source, "stdout", "-l", "deu+eng", "--psm", "6"], ct);
 
-            if (maxPages > 1)
-            {
-                var layer = await RunProcessAsync("pdftotext", ["-l", maxPages.ToString(), "-layout", source, "-"], ct);
-                if (layer.Count(char.IsLetterOrDigit) >= MinTextLayerCharacters) return layer;
-            }
+            var layer = await RunProcessAsync("pdftotext", ["-l", maxPages.ToString(), "-layout", source, "-"], ct);
+            if (layer.Count(char.IsLetterOrDigit) >= MinTextLayerCharacters) return layer;
 
             var prefix = Path.Combine(workDir, "page");
             await RunProcessAsync("pdftoppm", ["-f", "1", "-l", maxPages.ToString(), "-png", "-r", "220", source, prefix], ct);
@@ -105,17 +102,19 @@ public static partial class PayslipTextParser
 {
     private static readonly string[] GrossLabels = { "gesamtbrutto", "brutto gesamt", "steuerbrutto", "bruttoentgelt", "brutto" };
     private static readonly string[] NetLabels = { "nettoverdienst", "netto-entgelt", "netto entgelt", "netto" };
-    private static readonly string[] PayoutLabels = { "auszahlungsbetrag", "auszahlung", "überweisungsbetrag", "ueberweisungsbetrag", "überweisung" };
+    private static readonly string[] PayoutLabels = { "auszahlungsbetrag", "zahlbetrag", "auszahlung", "überweisungsbetrag", "ueberweisungsbetrag", "überweisung" };
     private static readonly string[] WageTaxLabels = { "lohnsteuer", "lst" };
     private static readonly string[] SoliLabels = { "solidaritätszuschlag", "solidaritaetszuschlag", "soli" };
     private static readonly string[] ChurchLabels = { "kirchensteuer", "kist" };
-    private static readonly string[] PensionLabels = { "rentenversicherung", "rv-beitrag", "rv beitrag", "rv an", "rv-an" };
-    private static readonly string[] UnemploymentLabels = { "arbeitslosenversicherung", "av-beitrag", "av beitrag", "av an", "av-an" };
-    private static readonly string[] HealthLabels = { "krankenversicherung", "kv-beitrag", "kv beitrag", "kv an", "kv-an" };
-    private static readonly string[] CareLabels = { "pflegeversicherung", "pv-beitrag", "pv beitrag", "pv an", "pv-an" };
-    private static readonly string[] CompanyCarLabels = { "geldwerter vorteil", "firmenwagen", "pkw-nutzung", "pkw nutzung", "kfz-nutzung", "kfz nutzung" };
-    private static readonly string[] BavLabels = { "entgeltumwandlung", "betriebliche altersvorsorge", "direktversicherung", "bav" };
-    private static readonly string[] BavEmployerLabels = { "ag-zuschuss bav", "ag zuschuss bav", "arbeitgeber bav", "ag direktversicherung" };
+    // Die knappen Kuerzel der Abzugszeilen stehen vorn: der volle Name steht auf vielen Abrechnungen noch einmal in
+    // einer Tabelle der Beitragsgrundlagen, und dort ist die erste Zahl die Grundlage, nicht der Beitrag.
+    private static readonly string[] PensionLabels = { "rv-beitrag", "rv beitrag", "rv an", "rv-an", "rentenversicherung" };
+    private static readonly string[] UnemploymentLabels = { "av-beitrag", "av beitrag", "av an", "av-an", "arbeitslosenversicherung" };
+    private static readonly string[] HealthLabels = { "kv-beitrag", "kv beitrag", "kv an", "kv-an", "krankenversicherung" };
+    private static readonly string[] CareLabels = { "pv-beitrag", "pv beitrag", "pv an", "pv-an", "pflegeversicherung" };
+    private static readonly string[] CompanyCarLabels = { "geldwerter vorteil", "firmenwagen", "pkw private nutzung", "pkw-nutzung", "pkw nutzung", "kfz-nutzung", "kfz nutzung" };
+    private static readonly string[] BavLabels = { "entgeltumw", "betriebliche altersvorsorge", "direktversicherung", "bav" };
+    private static readonly string[] BavEmployerLabels = { "ag-zuschuss bav", "ag zuschuss bav", "arbeitgeber bav", "ag direktversicherung", "ag-direktversich" };
     private static readonly string[] BonusLabels = { "bonus", "prämie", "praemie", "sonderzahlung", "tantieme" };
 
     public static PayslipExtractionResult Parse(string text)
@@ -174,17 +173,28 @@ public static partial class PayslipTextParser
         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
         0m, Array.Empty<string>(), new[] { warning });
 
+    /// <summary>
+    /// Der Betrag der ersten Zeile, die das Etikett traegt. Auf einer Abrechnung stehen hinter dem Etikett oft zwei
+    /// Spalten, "Monat" und "Jahr" (die Jahressumme seit Januar): gemeint ist der Monat, also die ERSTE Zahl.
+    /// Dass hier einmal die letzte genommen wurde, machte aus 3.567 € Brutto im Februar die 11.134 € der
+    /// Jahressumme - und jeder Monat sah aus wie ein Gehaltssprung.
+    ///
+    /// Zeilen mit "pauschal" sind Abgaben des Arbeitgebers, keine Abzuege des Arbeitnehmers; und eine Zeile mit
+    /// vier oder mehr Betraegen ist die Tabelle der Beitragsgrundlagen unter der Abrechnung (Grundlage Monat und
+    /// Jahr, Beitrag Monat und Jahr), in der die erste Zahl die Grundlage ist und nicht der Beitrag.
+    /// </summary>
     private static decimal? FindAmount(IEnumerable<string> lines, IEnumerable<string> labels)
     {
         foreach (var label in labels)
         {
             foreach (var line in lines)
             {
-                if (!line.Contains(label, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!line.Contains(label, StringComparison.OrdinalIgnoreCase) || line.Contains("pauschal", StringComparison.OrdinalIgnoreCase)) continue;
                 var matches = MoneyRegex().Matches(line);
-                for (var index = matches.Count - 1; index >= 0; index--)
+                if (matches.Count >= 4) continue;
+                foreach (Match match in matches)
                 {
-                    if (TryParseAmount(matches[index].Value, out var amount)) return Math.Abs(amount);
+                    if (TryParseAmount(match.Value, out var amount)) return Math.Abs(amount);
                 }
             }
         }

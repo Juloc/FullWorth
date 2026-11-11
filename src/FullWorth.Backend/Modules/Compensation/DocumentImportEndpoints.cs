@@ -35,6 +35,16 @@ public static class DocumentImportEndpoints
                 : Results.File(document.Content, "application/octet-stream", fileDownloadName: document.FileName);
         });
 
+        group.MapPost("/reread", async (Guid fullWorthSpaceId, string? kind, CurrentUserContext currentUser, SpaceAccess access, DocumentImportStore store, CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            kind ??= DocumentKinds.Payslip;
+            if (kind is not (DocumentKinds.Payslip or DocumentKinds.Contract)) return Results.BadRequest(new { error = "Unknown document kind." });
+            return await access.IsMemberAsync(userId, fullWorthSpaceId, ct)
+                ? Results.Ok(new { requeued = await store.RequeueOpenAsync(userId, fullWorthSpaceId, kind, ct) })
+                : Results.NotFound();
+        });
+
         group.MapPost("/{id:guid}/dismiss", async (Guid id, CurrentUserContext currentUser, DocumentImportStore store, CancellationToken ct) =>
             await store.DismissAsync(currentUser.RequireUserId(), id, ct) ? Results.NoContent() : Results.NotFound());
 

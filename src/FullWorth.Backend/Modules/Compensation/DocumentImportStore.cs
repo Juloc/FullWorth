@@ -128,6 +128,30 @@ public sealed class DocumentImportStore(FullWorthDbContext db, IOptions<Compensa
     public Task<bool> DismissAsync(Guid userId, Guid id, CancellationToken ct) =>
         ReleaseAsync(userId, id, null, [DocumentImportStatuses.Pending, DocumentImportStatuses.NeedsReview, DocumentImportStatuses.Failed], ct);
 
+    /// <summary>
+    /// Schickt alle offenen, ausgelesenen Funde einer Art noch einmal durchs Lesen - nach einer Verbesserung des
+    /// Lesers, oder weil ein Fund nicht ausgelesen werden konnte. Die alten Werte und die abgelegte Datei sind weg;
+    /// der Leser holt das Original frisch aus Paperless. Bestaetigtes bleibt unberuehrt.
+    /// </summary>
+    public async Task<int> RequeueOpenAsync(Guid userId, Guid fullWorthSpaceId, string kind, CancellationToken ct)
+    {
+        string[] statuses = [DocumentImportStatuses.NeedsReview, DocumentImportStatuses.Failed];
+        var paths = await db.Database.SqlQuery<PathRow>($"""
+            SELECT "StoragePath" AS "Value" FROM "CompensationDocumentImports"
+            WHERE "UserId" = {userId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "Kind" = {kind}
+              AND "Status" = ANY({statuses}) AND "StoragePath" IS NOT NULL
+            """).ToListAsync(ct);
+        var requeued = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "CompensationDocumentImports"
+            SET "Status" = {DocumentImportStatuses.Pending}, "Attempts" = 0, "Error" = NULL, "Extraction" = NULL,
+                "StoragePath" = NULL, "EncryptionScheme" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
+            WHERE "UserId" = {userId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "Kind" = {kind}
+              AND "Status" = ANY({statuses})
+            """, ct);
+        foreach (var path in paths) await blobs.DeleteAsync(path.Value, ct);
+        return requeued;
+    }
+
     /// <summary>Die bestaetigte Abrechnung wurde geloescht: auch ihr Original verschwindet, die Erinnerung bleibt.</summary>
     public Task<bool> ReleaseConfirmedAsync(Guid userId, Guid confirmedId, CancellationToken ct) =>
         ReleaseAsync(userId, null, confirmedId, [DocumentImportStatuses.Confirmed], ct);

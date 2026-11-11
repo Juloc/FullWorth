@@ -54,4 +54,54 @@ public sealed class PayslipParserTests
         Assert.True(result.ConfidencePercent < 70m);
         Assert.NotEmpty(result.Warnings);
     }
+
+    // Das Layout, das viele Lohnprogramme drucken: je Zeile "Monat  Jahr" (Jahressumme seit Januar), die
+    // Abzuege als Kuerzel, darunter eine Tabelle der Beitragsgrundlagen. Alle Zahlen sind erfunden.
+    [Fact]
+    public void Parse_ReadsTheMonthColumnNotTheYearToDateColumn()
+    {
+        const string text = """
+            Muster GmbH
+            Lohn- und Gehaltsabrechnung 02.2026
+            Eintrittsdatum 01.09.2020
+            1000 Gehalt  3.000,00  * * *
+            5100 Pkw private Nutzung  250,00  * * *
+            7130 AG-Direktversich. lfd.  80,00
+            GESAMTBRUTTO: 3.330,00  10.000,00
+            Lohnsteuer 100,00  800,00
+            KV-Beitrag AN² 270,00  540,00
+            RV-Beitrag AN 300,00  600,00
+            AV-Beitrag AN 40,00  80,00
+            PV-Beitrag AN¹ 70,00  140,00
+            Summe gesetzlicher Abzüge -780,00
+            NETTOVERDIENST: 2.550,00  7.500,00
+            7000 Entgeltumw.Altersv.lfd. -200,00
+            Summe sonst. Abzüge/Zuzahlungen -500,00
+            ZAHLBETRAG: 2.050,00
+            Pauschale Lohnsteuer 6,00
+            Pauschaler Solidaritätszuschlag 0,30
+            WERTE:  Monat  Jahr  SV-Brutto  Monat  Jahr  AG-Ant. (M)²  AG-Ant. (J)²
+            Steuerbrutto: 3.100,00  10.000,00  Krankenversicherung: 3.100,00  6.200,00  270,00  540,00
+            Rentenversicherung: 3.100,00  6.200,00  300,00  600,00
+            Pflegeversicherung: 3.100,00  6.200,00  60,00  120,00
+            """;
+
+        var result = PayslipTextParser.Parse(text);
+
+        Assert.Equal(new DateOnly(2026, 2, 28), result.Period);
+        Assert.Equal(3_330m, result.GrossPay);
+        Assert.Equal(2_550m, result.NetPay);
+        Assert.Equal(2_050m, result.Payout);
+        Assert.Equal(100m, result.WageTax);
+        Assert.Equal(300m, result.PensionInsurance);
+        Assert.Equal(40m, result.UnemploymentInsurance);
+        Assert.Equal(270m, result.HealthInsurance);
+        Assert.Equal(70m, result.CareInsurance);
+        Assert.Equal(250m, result.CompanyCarTaxableBenefit);
+        Assert.Equal(200m, result.BavEmployee);
+        Assert.Equal(80m, result.BavEmployer);
+        // "Pauschaler Solidaritaetszuschlag" zahlt der Arbeitgeber; ein Soli des Arbeitnehmers steht hier nicht.
+        Assert.Null(result.SolidaritySurcharge);
+        Assert.Null(result.Bonus);
+    }
 }
