@@ -45,7 +45,7 @@ export function renderPurchasingPower(element, items) {
   host = element; payslips = items;
   if (!host) return;
   if (data) return draw();
-  host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Wird geladen …</p></div></div><div class="pp-placeholder"></div>';
+  host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2></div></div><div class="pp-placeholder"></div>';
   loading ||= load().then(result => { data = result; }).catch(() => { data = { failed: true }; });
   loading.then(draw);
 }
@@ -161,7 +161,7 @@ const last = points => points[points.length - 1];
 
 function draw() {
   if (!host) return;
-  if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Die Preisdaten konnten gerade nicht geladen werden.</p></div></div>'; return; }
+  if (!data || data.failed || !payslips.length) { host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2></div></div>'; return; }
   const model = buildModel();
   // Wo es zu einem Thema beides gibt - die Statistik und die eigenen Preise -, werden beide gezeigt, sonst
   // sieht man nur eine Seite des Vergleichs. Einmal je Thema, sobald es die eigene Linie gibt; danach entscheidet der Benutzer.
@@ -169,7 +169,7 @@ function draw() {
     if (!view.paired.has(own) && model.lines.some(l => l.key === own)) { view.paired.add(own); view.lines.add(stat); view.lines.add(own); }
   const salary = model.lines[0], general = model.lines.find(l => l.key === 'gesamt');
   if (!salary.points.length || salary.points.length < 2) {
-    host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2><p>Dafür braucht es Abrechnungen aus mindestens zwei Monaten.</p></div></div>';
+    host.innerHTML = '<div class="panel-head"><div><h2>Gehalt gegen Preise</h2></div></div>';
     return;
   }
 
@@ -189,7 +189,7 @@ function draw() {
     + (groupOf(true, 'home') ? `<div class="pp-legend-group"><h3>Deine Wohnkosten <small>aus deinen Abrechnungen, € je Monat</small></h3>${groupOf(true, 'home')}</div>` : '');
 
   host.innerHTML = `
-    <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2><p>Alles beginnt im ${monthName(model.start)} bei 100. Liegt dein ${label} über den Preislinien, bleibt dir real mehr.</p></div></div>
+    <div class="panel-head pp-head"><div><h2>Gehalt gegen Preise</h2></div></div>
     <div class="pp-controls">
       <div class="po-years" role="tablist" aria-label="Gehalt">${Object.entries(BASIS).map(([key, name]) => `<button type="button" role="tab" class="po-year" data-pp-basis="${key}" aria-selected="${view.basis === key}">${name}</button>`).join('')}</div>
       ${model.startOptions.length > 1 ? `<select data-pp-since aria-label="Vergleich seit">${model.startOptions.map(m => `<option value="${m}"${m === model.start ? ' selected' : ''}>seit ${monthName(m)}</option>`).join('')}</select>` : ''}

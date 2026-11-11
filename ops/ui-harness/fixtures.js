@@ -1873,7 +1873,7 @@
     const gross = (year >= 2026 ? 5100 : year >= 2025 ? 4800 : 4500) + (month === 11 ? 2000 : 0);
     const net = Math.round(gross * 0.64 * 100) / 100;
     PAYSLIPS.push({ id: `seed${m}`, fullWorthSpaceId: SPACE, createdAt: '2026-09-01T08:00:00Z', updatedAt: '2026-09-01T08:00:00Z', document: null,
-      payslip: { period: `${year}-${String(month).padStart(2, '0')}-28`, grossPay: gross, netPay: net, payout: net, wageTax: Math.round(gross * 0.15), pensionInsurance: Math.round(gross * 0.093), healthInsurance: Math.round(gross * 0.08), careInsurance: Math.round(gross * 0.018), unemploymentInsurance: Math.round(gross * 0.013), source: 'paperless' } });
+      payslip: { period: `${year}-${String(month).padStart(2, '0')}-28`, grossPay: gross, netPay: net, payout: net, wageTax: Math.round(gross * 0.15), pensionInsurance: Math.round(gross * 0.093), healthInsurance: Math.round(gross * 0.08), careInsurance: Math.round(gross * 0.018), unemploymentInsurance: Math.round(gross * 0.013), companyCarTaxableBenefit: 300, bavEmployee: 200, bavEmployer: 80, bonus: month === 11 ? 2000 : 0, source: 'paperless' } });
   }
   (() => {
     const make = (year, month, gross, extra = {}) => {

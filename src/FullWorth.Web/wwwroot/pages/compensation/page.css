@@ -1,13 +1,10 @@
 /* compensation: aus styles/app.css hierher gezogen.
-
    app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
    betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
-
    Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
    app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
    Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
    sie gewinnen, wo sie vorher verloren haben. */
-
 /* --- Gehalt & Benefits (compensation.js): hero + Cash-Brutto donut + rows --- */
 /* Scheibe 11 Teil 2: die vielen 11-12px-Reste (Beschriftungen/Pills/Hilfetexte, oft als .7x-.79rem
    notiert) laufen jetzt ueber --text-caption-size, 13-14px-Zeilen ueber --text-metadata-size - dieselbe
@@ -17,93 +14,52 @@
 /* Traegt das Jahresnetto (und im Teiljahr-Fall den Monatswert) - derselbe fehlende tabular-nums-Fall
    wie bei .comp-result-primary>strong oben. */
 .comp-result-primary .comp-hero-sub{display:block;font-variant-numeric:tabular-nums}
-
 .comp-result-primary .comp-hero-badge{margin-top:var(--s1)}
-
 .comp-dedu-head{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;padding:2px 0 var(--s4);border-bottom:1px solid var(--line);margin-bottom:var(--s3)}
-
 .comp-donut-legend{display:grid;gap:var(--s2);flex:1 1 168px;min-width:160px}
-
 /* War 12px - exakt --text-caption (Scheibe 11 Teil 2, derselbe Drift wie bei den vorigen Seiten). */
 .comp-leg{display:flex;align-items:center;gap:var(--s2);font-size:var(--text-caption-size);color:var(--muted)}
-
 .comp-leg-label{flex:1 1 auto}
-
 .comp-leg-amt{color:var(--text)}
-
 .comp-sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
-
 .comp-sw-net{background:var(--positive)}
-
 .comp-sw-tax{background:var(--k2)}
-
 .comp-sw-social{background:var(--k4)}
-
 .comp-arc-track{fill:none;stroke:var(--surface-3);stroke-width:12}
-
 .comp-arc{fill:none;stroke-width:12;stroke-linecap:round}
-
 .comp-arc-net{stroke:url(#comp-net-grad)}
-
 .comp-arc-tax{stroke:var(--k2)}
-
 .comp-arc-social{stroke:var(--k4)}
-
 .comp-grad-a{stop-color:var(--positive)}
-
 .comp-grad-b{stop-color:var(--positive-soft)}
-
 /* 17px passt in keine vorhandene Rolle (zwischen --text-amount, 16px, und --text-amount-lg, 24px) -
    dieselbe Lage wie beim Donut-Zentrum der Analyse-/Vertrags-/Steuerseite, bleibt daher roh (Scheibe 11
    Teil 2). */
 .comp-donut-pct{font-size:17px;font-weight:600;fill:var(--text);text-anchor:middle;dominant-baseline:middle;font-variant-numeric:tabular-nums}
-
 .comp-donut-cap{font-size:7.5px;fill:var(--muted);text-anchor:middle;dominant-baseline:middle;text-transform:uppercase;letter-spacing:.12em}
-
 .comp-dedu-rows{display:grid}
-
 /* War 13px - exakt --text-metadata (Scheibe 11 Teil 2, wie .widget-split im Dashboard). */
 .comp-line{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:9px 0;border-bottom:1px solid var(--line);font-size:var(--text-metadata-size)}
-
 .comp-line:last-child{border-bottom:0}
-
 .comp-line-key{display:flex;align-items:center;gap:var(--s2);min-width:0;color:var(--muted)}
-
 .comp-line-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
 .comp-line .amount{white-space:nowrap;text-align:right;flex:0 0 auto}
-
 /* War 11px - Drift wie die anderen 11px-Reste im Haus; --text-caption ist die Fussnoten-Rolle darunter. */
 .comp-line-sub{color:var(--muted);font-size:var(--text-caption-size);margin-left:6px;opacity:.85;white-space:nowrap}
-
 .comp-line-total{margin-top:2px;padding-top:11px;border-top:1px solid var(--line);border-bottom:0}
-
 .comp-line-total .comp-line-key{color:var(--text);font-weight:600}
-
 .comp-amount-muted{color:var(--muted);font-weight:500}
-
 .comp-dot{width:8px;height:8px;border-radius:var(--radius-pill);flex:0 0 auto;background:var(--k3)}
-
 .comp-dot-tax{background:var(--k2)}
-
 .comp-dot-social{background:var(--k4)}
-
 .comp-dot-cat1{background:var(--cat-1)}
-
 .comp-dot-cat2{background:var(--cat-2)}
-
 .comp-dot-cat3{background:var(--cat-3)}
-
 .comp-dot-cat4{background:var(--cat-4)}
-
 .comp-dot-cat5{background:var(--cat-5)}
-
 .comp-dot-cat6{background:var(--cat-6)}
-
 .comp-dot-cat7{background:var(--cat-7)}
-
 .comp-dot-cat8{background:var(--cat-8)}
-
 .comp-body{margin:0;min-height:100dvh;background:var(--bg,#f5f6f7);color:var(--text,#17191d)}
 /* The page now sits in the shared .shell grid next to the app sidebar. */
 .comp-column{min-width:0;display:flex;flex-direction:column}
@@ -112,16 +68,9 @@
 /* .comp-topbar/.comp-brand/.comp-top-actions gehoerten zur alten eigenstaendigen Kopfzeile dieser Seite
    von vor dem App-Shell-Umbau (Issue #107) - kein Markup irgendwo im Repo traegt diese Klassen mehr
    (repo-weit gegrepped, auch in JS-Template-Strings), tote Reste. .comp-space-label bleibt, das
-   traegt die Finanzbereich-Auswahl im page-actions-Kopf von heute. */
+   traegt die Finanzbereich-Auswahl in der Gruppenleiste. */
 .comp-space-label{display:grid;gap:4px;font-size:var(--text-caption-size);color:var(--muted)}
-/* .comp-page-actions (Finanzbereich-Auswahl + "Profil speichern") hatte ueberhaupt keine eigene Regel -
-   beide Kinder liefen als volle Bloecke untereinander statt in einer Zeile. Die Mobil-Regel
-   ".comp-space-label{flex:1}" weiter unten wartete schon auf genau diesen Flex-Container, lief bisher
-   aber ins Leere - derselbe "Markup ohne CSS"-Fall wie beim Rabatt-Formular der Einkaeufe-Seite. */
-.comp-page-actions{display:flex;align-items:end;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s4)}
-.comp-shell{width:min(1480px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}.comp-hero{display:flex;justify-content:space-between;gap:24px;align-items:end;padding:18px 4px 24px}.comp-hero h1{margin:4px 0 8px;font-size:clamp(2rem,4vw,3.5rem);letter-spacing:-.045em}.comp-hero p{margin:0;color:var(--muted);max-width:760px}.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:var(--text-caption-size);font-weight:700}.comp-hero-note{padding:10px 13px;border:1px solid var(--border);border-radius:999px;font-size:var(--text-caption-size);color:var(--muted);white-space:nowrap}
-/* Vier Stellen Platz fuer die Jahreszahl, damit die Plakette nicht waechst, wenn sie eintrifft. */
-.comp-hero-year{display:inline-block;min-width:4ch}
+.comp-shell{width:min(1480px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}
 .comp-tabs{display:flex;gap:6px;padding:5px;margin-bottom:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface,#fff);overflow:auto}.comp-tabs button{border:0;background:transparent;border-radius:10px;padding:10px 14px;white-space:nowrap}.comp-tabs button.active{background:var(--surface-2);font-weight:700}.comp-tab{display:none}.comp-tab.active{display:block}
 .comp-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.65fr);gap:18px;align-items:start}.comp-form-stack,.comp-results{display:grid;gap:14px}.comp-results{position:sticky;top:82px}.comp-card{padding:20px}.comp-card.wide{max-width:none}.panel-head>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.panel-head h2{margin:0}.panel-head p{width:100%;margin:4px 0 0;color:var(--muted);font-size:.88rem}.step{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:var(--accent-soft,#edf5ff);font-size:var(--text-caption-size);font-weight:800}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}.form-grid label{display:grid;gap:6px;font-size:var(--text-caption-size);color:var(--muted)}.form-grid input,.form-grid select,.comp-space-label select,.scenario-toolbar input{width:100%;box-sizing:border-box}.check-row{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px;font-size:.85rem}.switch-row{display:flex!important;align-items:center;gap:7px!important;margin-left:auto}.muted-fields{opacity:.48;pointer-events:none}.muted-fields.enabled{opacity:1;pointer-events:auto}.comp-calculate{width:100%;min-height:48px}
@@ -159,9 +108,8 @@
    Steuerseite, bleibt daher roh (Scheibe 11 Teil 2). */
 .scenario-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px;margin-bottom:14px}.scenario-toolbar h2,.scenario-toolbar p{margin:0}.scenario-toolbar p{margin-top:4px;color:var(--muted);font-size:.84rem}.scenario-toolbar>div:last-child{display:flex;gap:8px}.scenario-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.scenario-card{padding:17px}.scenario-card h3{margin:0}.scenario-card .scenario-value{font-size:1.55rem;font-weight:800;margin:12px 0 2px;font-variant-numeric:tabular-nums}.scenario-card small{color:var(--muted)}.scenario-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.scenario-card.selected{outline:2px solid var(--accent);outline-offset:-2px}.scenario-comparison{margin-top:14px;padding:18px}.comparison-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.comparison-cell{padding:13px;border-radius:12px;background:var(--surface-2)}.comparison-cell span{display:block;color:var(--muted);font-size:var(--text-caption-size);margin-bottom:5px}.comparison-cell strong{font-size:1.15rem;font-variant-numeric:tabular-nums}.positive{color:var(--positive)}.negative{color:var(--negative)}
 .comp-toast{position:fixed;right:18px;bottom:18px;max-width:min(440px,calc(100vw - 36px));padding:11px 14px;border-radius:12px;background:var(--text);color:var(--surface);box-shadow:var(--shadow-float);opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.comp-toast.show{opacity:1;transform:none}
-@media(max-width:980px){.comp-layout,.negotiation-layout{grid-template-columns:1fr}.comp-results{position:static}.scenario-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.comp-hero{align-items:start;flex-direction:column}.comp-hero-note{white-space:normal}.benefit-row{grid-template-columns:repeat(2,minmax(0,1fr))}.benefit-row label:first-child{grid-column:1/-1}}
-@media(max-width:640px){.comp-page-actions{align-items:stretch}.comp-space-label{flex:1}.comp-shell{width:min(100% - 20px,1480px);padding-top:18px}.form-grid,.comp-metrics,.scenario-grid,.comparison-grid{grid-template-columns:1fr}.scenario-toolbar,.scenario-toolbar>div:last-child{align-items:stretch;flex-direction:column}.benefit-row{grid-template-columns:1fr}.benefit-row label:first-child{grid-column:auto}.oneoff-row{grid-template-columns:repeat(2,minmax(0,1fr))}.oneoff-row>button{grid-column:1/-1}.panel-head .oneoff-add{width:100%}.panel-head .oneoff-add label{flex:1;min-width:140px}.comp-tabs{position:static}.comp-card{padding:15px}}
-
+@media(max-width:980px){.comp-layout,.negotiation-layout{grid-template-columns:1fr}.comp-results{position:static}.scenario-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.benefit-row{grid-template-columns:repeat(2,minmax(0,1fr))}.benefit-row label:first-child{grid-column:1/-1}}
+@media(max-width:640px){.comp-space-label{flex:1}.comp-shell{width:min(100% - 20px,1480px);padding-top:18px}.form-grid,.comp-metrics,.scenario-grid,.comparison-grid{grid-template-columns:1fr}.scenario-toolbar,.scenario-toolbar>div:last-child{align-items:stretch;flex-direction:column}.benefit-row{grid-template-columns:1fr}.benefit-row label:first-child{grid-column:auto}.oneoff-row{grid-template-columns:repeat(2,minmax(0,1fr))}.oneoff-row>button{grid-column:1/-1}.panel-head .oneoff-add{width:100%}.panel-head .oneoff-add label{flex:1;min-width:140px}.comp-tabs{position:static}.comp-card{padding:15px}}
 /* Phone: Controls mindestens 40 px (Pixel 8 Pro PWA und kleiner), und die Seite ist enger gesetzt - die
    Desktop-Masse (Karte 20 px, Titel bis 56 px, Reiter in einer Kapsel) sind auf 340 px Breite Leerraum. Der
    Reiter ist hier eine Unterstreichung statt einer umrandeten Kapsel mit Pillen. */
@@ -169,8 +117,7 @@
   .comp-shell input:not([type=checkbox]),.comp-shell select,.comp-shell button{min-height:40px}
   .comp-shell input[type=checkbox]{width:20px;height:20px}
   .comp-shell{padding-top:var(--space-2)}
-  .comp-hero{padding:var(--space-1) 0 var(--space-3);gap:var(--space-2)}
-  .comp-hero h1{margin:var(--space-1) 0;font-size:1.5rem}
+  
   .comp-tabs{gap:0;padding:0;margin-bottom:var(--space-3);border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent}
   .comp-tabs button{padding:var(--space-2) var(--space-4);border-radius:0;border-bottom:2px solid transparent}
   .comp-tabs button.active{background:transparent;border-bottom-color:var(--text)}
@@ -180,27 +127,22 @@
   .comp-result-primary{padding:var(--space-4)}
   .comp-result-primary>strong{font-size:1.75rem}
 }
-
 .field-help{display:block;color:var(--muted);font-size:var(--text-caption-size);line-height:1.35}
 .field-summary{grid-column:1/-1;padding:10px 12px;border-radius:10px;background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);line-height:1.4}
 [hidden]{display:none!important}
-
 .comp-advanced{margin-top:16px;border-top:1px solid var(--border);padding-top:12px}
 .comp-advanced summary{cursor:pointer;font-size:.8rem;font-weight:700;color:var(--muted)}
 .comp-advanced[open] summary{margin-bottom:4px}
-
 /* The mobile bottom nav is fixed, so the page toast must sit above it (responsive.css only lifts #toast). */
 @media(max-width:767px){
   .comp-toast{left:16px;right:16px;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:none}
 }
-
 /* Must stay LAST: .comp-shell is declared again further up with a `padding` shorthand at the same
    specificity, so an earlier mobile override would be silently reset. The fixed mobile bottom nav needs
    this clearance or the last panel is hidden behind it. */
 @media(max-width:767px){
   .comp-shell{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
 }
-
 /* A partial employment year is stated in the hero, not left to be inferred from smaller numbers. */
 .comp-partial-year{color:var(--warning)}
 .history-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px;padding:16px}
@@ -249,7 +191,6 @@
 .history-track-label{font-weight:700;color:var(--text)}
 .history-track-item{padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);white-space:nowrap}
 .history-track-item.counted{border:1px solid color-mix(in srgb,var(--cat-2) 45%,var(--line))}
-
 .history-chart-wrap{position:relative}
 /* The chart is meant to be hovered to read values, so it must never lift/jump like a clickable card. */
 .history-chart-card:hover{transform:none!important;box-shadow:none!important}
@@ -284,30 +225,25 @@
 .history-event-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent-soft,#edf5ff);font-size:var(--text-caption-size);font-weight:700}
 @media(max-width:980px){.history-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.history-edit-grid{grid-template-columns:1fr 1fr}.history-entry{grid-template-columns:90px 1fr}.history-entry-actions{grid-column:2}}
 @media(max-width:640px){.history-summary{grid-template-columns:1fr}.history-toolbar{align-items:stretch}.history-toolbar label,.history-toolbar input,.history-toolbar select{width:100%;min-width:0}.history-entry{grid-template-columns:1fr}.history-entry-actions{grid-column:auto;justify-content:flex-start}.history-edit-grid{grid-template-columns:1fr}.history-chart-head{align-items:stretch;flex-direction:column}}
-
 .history-years-card{padding:18px;margin-bottom:14px;overflow:auto}.history-years-card h2{margin:0 0 12px;font-size:1rem}
 .history-years{width:100%;border-collapse:collapse;font-size:var(--text-caption-size)}.history-years th,.history-years td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.history-years th:first-child,.history-years td:first-child{text-align:left}.history-years th{color:var(--muted);font-weight:700}
 /* .history-delta span traegt Geldbetraege (Brutto/Netto/Steuern/... -Differenzen) und hatte bisher kein
    tabular-nums, obwohl jeder andere Betrag im Haus das traegt (Scheibe 11 Teil 2, Amounts-Punkt). */
 .history-delta{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}.history-delta span{font-size:var(--text-caption-size);font-variant-numeric:tabular-nums}.history-delta .positive{color:var(--positive)}.history-delta .negative{color:var(--negative)}
-
 /* Aus styles/features/compensation-benchmarks.css. */
 /* Marktvergleich (salary benchmarks) inside the Gehaltsgespräch tab.
    Every figure of the dataset is an estimate, so the "Schätzwert" marker is part of the layout, not an
    afterthought: it sits in the heading, on the result and above the numbers. Tokens only. */
-
 .bench-card{margin-top:14px}
 .bench-result{display:grid;gap:14px;margin-top:14px}
 .bench-detail{display:grid;gap:12px}
 .bench-filters{margin-top:16px}
 .bench-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .bench-actions .btn{min-height:44px}
-
 .bench-disclaimer{margin:6px 0 0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.45}
 .bench-badges{display:flex;flex-wrap:wrap;gap:6px}
 .bench-badge{display:inline-block;padding:3px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);font-weight:700;white-space:nowrap}
 .bench-badge-estimate{background:var(--warning-soft);color:var(--warning)}
-
 .bench-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
 .bench-metrics .metric{min-height:88px}
 /* .bench-metrics steckt schon in der gerahmten .bench-detail-Karte (panel comp-card); die geteilte
@@ -329,18 +265,15 @@
 }
 .bench-metrics small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-caption-size);line-height:1.3}
 .bench-metric-median strong{letter-spacing:-.02em}
-
 .bench-compare{display:grid;gap:6px;padding:12px 14px;border-radius:var(--radius-input);background:var(--surface-2)}
 .bench-compare-row{display:flex;justify-content:space-between;gap:16px;font-size:.8rem}
 .bench-compare-row span{color:var(--muted)}
 .bench-compare-row strong{font-variant-numeric:tabular-nums}
-
 .bench-explain{margin:0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.5}
 .bench-notes h3,.bench-details h3{margin:12px 0 6px;font-size:.8rem}
 .bench-notes ul,.bench-notes-list{margin:0;padding-left:18px;color:var(--muted);font-size:var(--text-caption-size);line-height:1.55}
 .bench-sources{margin:0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.45}
 .bench-source-links{margin:0;padding-left:18px;font-size:var(--text-caption-size);line-height:1.6;color:var(--muted)}
-
 .bench-details summary{cursor:pointer;font-size:var(--text-caption-size);font-weight:700;color:var(--muted);min-height:44px;display:flex;align-items:center}
 .bench-years{width:100%;border-collapse:collapse;font-size:var(--text-caption-size)}
 .bench-years th,.bench-years td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -348,7 +281,6 @@
 .bench-years th{color:var(--muted);font-weight:700}
 /* The table is the only wide element here; it scrolls inside the card instead of widening the page. */
 .bench-details{overflow-x:auto}
-
 @media(max-width:980px){.bench-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.bench-metrics{grid-template-columns:1fr}.bench-actions .btn{flex:1 1 auto}}
 /* Phone: the source links are the only remaining tap targets, so give them a full 44 px row. */
@@ -356,11 +288,9 @@
   .bench-source-links{padding-left:0;list-style:none}
   .bench-source-links a{display:inline-flex;align-items:center;min-height:44px}
 }
-
 /* The verification note is a caveat, not help text: it gets the same warning accent as the
    "Schätzwert" badge so it does not read as ordinary small print. */
 .bench-verification>p{border-left:2px solid var(--warning);padding-left:10px}
-
 /* Aus styles/features/compensation-extended.css. */
 .extended-intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,260px) auto;gap:14px;align-items:end}.extended-intro h2,.extended-intro p{margin:0}.extended-intro p,.extended-note{color:var(--muted);font-size:.82rem;line-height:1.5}.extended-intro label{display:grid;gap:6px;font-size:var(--text-caption-size);color:var(--muted)}
 .optimizer-section{margin-top:20px}.optimizer-section>h2{margin:0 0 10px;font-size:1rem}.optimizer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.optimizer-card{position:relative;padding:17px}.optimizer-card.best{outline:2px solid var(--accent);outline-offset:-2px}.optimizer-card h3{margin:0 0 6px}.optimizer-card p{min-height:44px;margin:0;color:var(--muted);font-size:var(--text-caption-size);line-height:1.45}.optimizer-value{margin-top:18px;font-size:1.6rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.optimizer-card>small{color:var(--muted)}/* .optimizer-details strong zeigt Netto/AG-Kosten/Neues Netto - dieselbe fehlende tabular-nums-Luecke
@@ -387,19 +317,16 @@
 @media(max-width:980px){.payslip-batch-row{grid-template-columns:1fr 1fr 1fr;gap:8px}.payslip-batch-row .pb-file{grid-column:1/-1}.payslip-batch-row button{grid-column:1/-1}}
 @media(max-width:560px){.payslip-batch-row{grid-template-columns:1fr}.payslip-batch-row label{min-width:0}.payslip-batch-row button{width:100%}}
 @media(max-width:560px){.payslip-batch-row.error{grid-template-columns:1fr}}
-
 /* Aus styles/features/compensation-other-income.css. */
 /* Sonstige regelmäßige Einkünfte (Gehalt page, own tab).
    Same record-row look as .benefit-row / .oneoff-row in compensation.css — tokens only, no own button
    styling: the rows use the shared .btn roles. */
-
 .income-intro{margin-bottom:14px}
 .income-separate{margin:14px 0 0;padding:11px 13px;border-radius:var(--radius-input);background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);line-height:1.45}
 .income-separate strong{color:var(--text)}
 .income-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
 .income-summary .metric{min-height:86px}
 .income-summary small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-caption-size);line-height:1.3}
-
 .income-list{display:grid;gap:10px;margin-top:16px}
 .income-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:13px}
 .income-row>label{display:grid;gap:5px;font-size:var(--text-caption-size);color:var(--muted)}
@@ -416,7 +343,6 @@
 .income-row-actions .btn{min-width:44px;min-height:44px}
 .income-annual{margin-right:auto;font-size:var(--text-caption-size);color:var(--muted);font-variant-numeric:tabular-nums}
 .income-empty{padding:26px;text-align:center;color:var(--muted);font-size:.82rem}
-
 @media(max-width:980px){
   .income-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   .income-row{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -426,7 +352,6 @@
   .income-row{grid-template-columns:1fr}
   .income-row-actions .btn{flex:1 1 auto}
 }
-
 /* Monats- und Jahresansicht der Lohnabrechnungen (payslip-overview.js). Nur Tokens: die Farben des Diagramms
    sind die kräftigen Kategorie-Farben (--cat-*), alles andere die Rollenfarben der App. */
 .payslip-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-3);margin-bottom:var(--space-4)}
@@ -524,7 +449,6 @@
   .po-detail-actions .btn{flex:1;min-height:44px}
   .po-detail-actions .btn-danger{flex:none;width:44px}
 }
-
 /* Arbeitsverträge (contracts.js, contract-chart.js): Diagramm und Änderungsprotokoll. Farben nur über Tokens -
    die Stufenlinie ist --cat-1, die Abrechnungspunkte --cat-3 (entspricht) und --cat-4 (weicht ab). */
 .contract-overview{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"log chart";gap:var(--space-4);align-items:start;margin-bottom:var(--space-4)}
@@ -673,3 +597,29 @@
 .hc-row .btn-danger{flex:none;width:36px;padding:0}
 .hc-add summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:var(--muted)}
 .hc-wide{grid-column:1/-1}
+/* Mein Gehalt (overview.js) und die Gruppen der Reiter */
+#gehalt-overview{display:grid;gap:var(--space-3);align-content:start;min-height:640px}
+.gv-rows .po-detail-row{grid-template-columns:minmax(0,1.2fr) auto minmax(0,1fr)}
+.gv-rows .gv-note{color:var(--muted);font-size:var(--text-caption-size);text-align:left;align-self:center}
+.gv-extra{margin:var(--space-3) 0 0}
+.gv-kpis{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:var(--space-3)}
+@media(max-width:560px){
+  .gv-rows .po-detail-row{grid-template-columns:minmax(0,1fr) auto}
+  .gv-rows .gv-note{grid-column:1/-1;margin-top:calc(var(--space-1) * -1)}
+  .gv-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2) 0}
+}
+/* Zwei Ebenen: die Gruppen oben, darunter nur die Reiter der gewaehlten Gruppe (page.js setzt data-active-group). */
+.comp-groups{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-3)}
+.comp-groups button{min-height:40px;padding:0 var(--space-4);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
+.comp-groups button.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+.comp-groups .comp-space-label{margin-left:auto}
+.comp-tabs[data-active-group="gehalt"]{display:none}
+.comp-tabs[data-active-group="dokumente"] button:not([data-group="dokumente"]),
+.comp-tabs[data-active-group="planen"] button:not([data-group="planen"]),
+.comp-tabs[data-active-group="mehr"] button:not([data-group="mehr"]){display:none}
+.comp-calc-actions{display:flex;justify-content:flex-end;margin-bottom:var(--space-3)}
+@media(max-width:560px){
+  .comp-groups{gap:var(--space-1);flex-wrap:nowrap;overflow-x:auto}
+  .comp-groups button{flex:none;padding:0 var(--space-3);font-size:.9rem}
+  .gv-kpis > div:last-child:nth-child(odd){grid-column:1/-1}
+}

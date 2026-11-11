@@ -38,7 +38,7 @@ async function openExtendedTab(name){
 function optimizerMarkup(){return `
 <section id="tab-optimizer" class="comp-tab">
   <article class="panel comp-card extended-intro">
-    <div><h2>Was lohnt sich mehr?</h2><p>Vergleicht Gehaltserhöhungen, Teilzeit und den Einsatz eines festen Arbeitgeberbudgets auf Basis der aktuellen Rechnerdaten.</p></div>
+    <div><h2>Was lohnt sich mehr?</h2></div>
     <label>Arbeitgeberbudget / Monat<input id="optimizer-budget" type="number" min="0" step="25" value="300"></label>
     <button id="optimizer-run" class="btn btn-primary" type="button">Vergleichen</button>
   </article>
@@ -53,11 +53,11 @@ function payslipMarkup(){return `
   <div class="payslip-layout">
     <div class="payslip-stack">
       <article class="panel comp-card">
-        <div class="panel-head"><div><h2>Aus Paperless</h2><p>Gefundene Lohnabrechnungen warten hier auf deine Prüfung. Gespeichert wird erst, wenn du die Werte bestätigst.</p></div></div>
+        <div class="panel-head"><div><h2>Aus Paperless</h2></div></div>
         <div id="paperless-body" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
       </article>
       <article class="panel comp-card">
-        <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2><p>PDF oder Bild wird lokal im Backend verarbeitet. Die Originaldatei wird nicht gespeichert.</p></div></div>
+        <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2></div></div>
         <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button><button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button></div>
         <div id="payslip-extraction-status" class="extended-note">Eine Datei füllt das Formular unten. Mehrere Dateien werden als Liste zur Prüfung angezeigt. Werte werden erst nach deiner Bestätigung gespeichert.</div>
       </article>
@@ -160,7 +160,7 @@ function renderBatch(items){
   const root=$('#payslip-batch');if(!root)return;
   if(!items.length){root.hidden=true;root.innerHTML='';return}
   root.hidden=false;
-  root.innerHTML=`<div class="panel comp-card"><div class="panel-head"><div><h2>Mehrere Abrechnungen prüfen</h2><p>Jede Zeile wird als Monatswert gespeichert. Korrigiere bei Bedarf, dann speichern.</p></div><button id="payslip-save-all" class="btn btn-primary" type="button">Alle speichern</button></div>`+
+  root.innerHTML=`<div class="panel comp-card"><div class="panel-head"><div><h2>Mehrere Abrechnungen prüfen</h2></div><button id="payslip-save-all" class="btn btn-primary" type="button">Alle speichern</button></div>`+
     `<div class="payslip-batch-list">${items.map((it,i)=>batchRow(it,i)).join('')}</div></div>`;
   root.querySelectorAll('[data-batch-save]').forEach(b=>b.addEventListener('click',()=>saveBatchRow(Number(b.dataset.batchSave)).catch(showError)));
   $('#payslip-save-all')?.addEventListener('click',()=>saveAllBatch().catch(showError));

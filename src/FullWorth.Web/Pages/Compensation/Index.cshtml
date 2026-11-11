@@ -13,53 +13,37 @@
 *@
 
 <section id="view-compensation" class="comp-view">
-      <div class="comp-page-actions">
-        <label class="comp-space-label">Finanzbereich <select id="space-select"></select></label>
-        <button id="save-profile" class="btn btn-primary" type="button">Profil speichern</button>
-      </div>
-      <section class="comp-hero">
-        <div>
-          <p class="eyebrow">Vergütung verstehen</p>
-          <h2>Was ist dein Gehalt wirklich wert?</h2>
-          <p>Netto, Arbeitgeberkosten, Firmenwagen, bAV, Benefits und Kaufkraft in einer Rechnung.</p>
-        </div>
-        @* Das Steuerjahr steht hier von Anfang an, nur die Ziffern fehlen noch.
+      @* Zwei Ebenen statt elf Reitern nebeneinander: vier Gruppen oben, darunter nur die Reiter der gewählten Gruppe.
 
-           Vorher trug die Plakette nur "Planungsrechnung für Deutschland" und bekam nach der
-           Berechnung " · Steuerjahr 2026" angehängt. Am Schreibtisch wurde sie dadurch breiter,
-           drückte den Text daneben schmaler und der brach eine Zeile mehr um; am Telefon brach sie
-           selbst um. Beides schob die ganze Seite 22 px nach unten - gemessen 0,228.
-
-           Die Ziffern kommen aus der Berechnung, der Rest des Satzes nicht. Also steht der Rest im
-           Markup und die vier Stellen sind reserviert. *@
-        <div id="comp-hero-note" class="comp-hero-note">Planungsrechnung für Deutschland · Steuerjahr <span id="comp-hero-year"></span></div>
-      </section>
-
-      @* Alle acht Reiter stehen hier, auch die der Nachbarmodule.
-
-         Bis #154 hingen vier davon sich selbst per insertAdjacentHTML in diese Leiste, sobald ihr
-         Modul geladen war - also nach dem ersten Bild. "Weitere Einkünfte" schob sich dabei hinter
-         "Benefits" und drückte die zwei Reiter dahinter um 162 px nach rechts. In der alten Hülle
-         sah das niemand, weil die Seite erst beim Umschalten sichtbar wurde; als eigene Adresse
-         passiert es vor den Augen des Benutzers.
-
-         Die Reihenfolge ist die, die vorher am Ende herauskam - sie ist fest, und genau deshalb
-         gehört sie ins Markup und nicht in vier Module. Jedes Modul bindet jetzt nur noch an
-         seinen Knopf. *@
-      <nav class="comp-tabs" aria-label="Bereiche">
-        <button class="active" data-tab="calculator" type="button">Rechner</button>
-        <button data-tab="benefits" type="button">Benefits</button>
-        <button data-income-tab="other-income" type="button">Weitere Einkünfte</button>
-        <button data-tab="negotiation" type="button">Gehaltsgespräch</button>
-        <button data-tab="scenarios" type="button">Szenarien</button>
-        <button data-extended-tab="optimizer" type="button">Optimierer</button>
-        <button data-extended-tab="payslips" type="button">Lohnabrechnungen</button>
-        <button data-extended-tab="contracts" type="button">Arbeitsverträge</button>
-        <button data-history-tab="history" type="button">Verlauf</button>
-        <button data-jobrad-tab="jobrad" type="button">Dienstrad</button>
+         Alle Reiter stehen im Markup, auch die der Nachbarmodule, und ihre Reihenfolge ist fest: Bis #154 hingen vier
+         davon sich selbst per insertAdjacentHTML in die Leiste, sobald ihr Modul geladen war - also nach dem ersten
+         Bild - und drückten die Reiter dahinter um 162 px nach rechts. Jedes Modul bindet nur an seinen Knopf; welche
+         Reiter sichtbar sind, entscheiden allein data-group (page.js und page.css). *@
+      <nav class="comp-groups" aria-label="Bereiche">
+        <button class="active" data-group-tab="gehalt" type="button">Mein Gehalt</button>
+        <button data-group-tab="dokumente" type="button">Abrechnungen</button>
+        <button data-group-tab="planen" type="button">Planen</button>
+        <button data-group-tab="mehr" type="button">Mehr</button>
+        <label class="comp-space-label" hidden>Finanzbereich <select id="space-select"></select></label>
+      </nav>
+      <nav class="comp-tabs" data-active-group="gehalt" aria-label="Unterbereiche">
+        <button class="active" data-tab="overview" data-group="gehalt" type="button">Mein Gehalt</button>
+        <button data-extended-tab="payslips" data-group="dokumente" type="button">Abrechnungen</button>
+        <button data-extended-tab="contracts" data-group="dokumente" type="button">Verträge</button>
+        <button data-history-tab="history" data-group="dokumente" type="button">Verlauf</button>
+        <button data-tab="calculator" data-group="planen" type="button">Rechner</button>
+        <button data-tab="scenarios" data-group="planen" type="button">Szenarien</button>
+        <button data-extended-tab="optimizer" data-group="planen" type="button">Optimierer</button>
+        <button data-tab="negotiation" data-group="planen" type="button">Gehaltsgespräch</button>
+        <button data-tab="benefits" data-group="mehr" type="button">Benefits</button>
+        <button data-jobrad-tab="jobrad" data-group="mehr" type="button">Dienstrad</button>
+        <button data-income-tab="other-income" data-group="mehr" type="button">Weitere Einkünfte</button>
       </nav>
 
-      <section id="tab-calculator" class="comp-tab active">
+      <section id="tab-overview" class="comp-tab active"><div id="gehalt-overview"></div></section>
+
+      <section id="tab-calculator" class="comp-tab">
+        <div class="comp-calc-actions"><button id="save-profile" class="btn btn-primary" type="button">Profil speichern</button></div>
         <div class="comp-layout">
           <div class="comp-form-stack">
             <article class="panel comp-card">
@@ -133,7 +117,7 @@
 
             <article class="panel comp-card">
               <div class="panel-head">
-                <div><span class="step">2</span><h2>Einmalige Sonderzahlungen</h2><p>Weihnachtsgeld, Urlaubsgeld oder Prämien. Sie verändern nur das Jahresnetto, nicht das Netto im normalen Monat.</p></div>
+                <div><span class="step">2</span><h2>Einmalige Sonderzahlungen</h2></div>
                 <div class="oneoff-add">
                   <label>Vorlage<select id="oneoff-preset"></select></label>
                   <button id="add-oneoff" class="btn btn-secondary" type="button">Hinzufügen</button>
@@ -209,7 +193,7 @@
 
       <section id="tab-benefits" class="comp-tab">
         <article class="panel comp-card wide">
-          <div class="panel-head"><div><h2>Weitere Benefits</h2><p>Arbeitgeberkosten und dein tatsächlicher persönlicher Wert werden getrennt geführt.</p></div><button id="add-benefit" class="btn btn-secondary" type="button">Benefit hinzufügen</button></div>
+          <div class="panel-head"><div><h2>Weitere Benefits</h2></div><button id="add-benefit" class="btn btn-secondary" type="button">Benefit hinzufügen</button></div>
           <div id="benefits-list" class="benefits-list"></div>
         </article>
       </section>
@@ -217,7 +201,7 @@
       <section id="tab-negotiation" class="comp-tab">
         <div class="comp-layout negotiation-layout">
           <article class="panel comp-card">
-            <div class="panel-head"><div><h2>Gehaltsgespräch vorbereiten</h2><p>Nominale Erhöhung und reale Kaufkraft getrennt.</p></div></div>
+            <div class="panel-head"><div><h2>Gehaltsgespräch vorbereiten</h2></div></div>
             <div class="neg-fill"><button id="fill-negotiation" class="btn btn-secondary" type="button">Aus meinen Verträgen und Abrechnungen füllen</button><small id="neg-fill-note" class="extended-note">Nimmt das Gehalt seit deinem ersten Vertragsstand und das heutige.</small></div>
             <div class="form-grid">
               <label>Gehalt damals<input id="neg-old-salary" type="number" min="1" step="100" value="50000"></label>
@@ -249,19 +233,19 @@
         <div id="contract-hints" class="po-hints"></div>
         <div class="contract-overview">
           <article class="panel comp-card co-chart">
-            <div class="panel-head"><div><h2>Brutto laut Vertrag</h2><p>Die Stufen der bestätigten Vertragsstände, dazu das laufende Brutto der Abrechnungen. Die Achse beginnt nicht bei null, damit die Sprünge lesbar bleiben.</p></div></div>
+            <div class="panel-head"><div><h2>Brutto laut Vertrag</h2></div></div>
             <div class="po-legend"><span><i class="cc-key-line"></i>Vertrag</span><span><i class="cc-key-dot is-ok"></i>Abrechnung entspricht</span><span><i class="cc-key-dot is-off"></i>Abrechnung weicht ab</span></div>
             <div class="cc-wrap"><div id="contract-chart"></div><div class="cc-tip" hidden></div></div>
           </article>
           <article class="panel comp-card co-log">
-            <div class="panel-head"><div><h2>Änderungsprotokoll</h2><p>Jede bestätigte Änderung mit allen Details, neueste zuerst. Gezeigt wird, was sich gegenüber dem vorherigen Stand geändert hat.</p></div></div>
+            <div class="panel-head"><div><h2>Änderungsprotokoll</h2></div></div>
             <div id="contract-log"></div>
           </article>
         </div>
         <div class="payslip-layout">
           <div class="payslip-stack">
             <article class="panel comp-card">
-              <div class="panel-head"><div><h2>Aus Paperless</h2><p>Gefundene Arbeitsverträge und Nachträge warten hier auf deine Prüfung. Gespeichert wird erst, wenn du die Werte bestätigst.</p></div></div>
+              <div class="panel-head"><div><h2>Aus Paperless</h2></div></div>
               <div id="contract-finds" class="paperless-body"><p class="extended-note">Wird geladen …</p></div>
             </article>
           </div>
@@ -290,7 +274,7 @@
 
       <section id="tab-scenarios" class="comp-tab">
         <div class="scenario-toolbar panel">
-          <div><h2>Szenarien</h2><p>Aktuellen Rechnerstand als Vertrag, Angebot oder Teilzeitmodell speichern.</p></div>
+          <div><h2>Szenarien</h2></div>
           <div><input id="scenario-name" placeholder="z. B. Angebot A"><button id="save-scenario" class="btn btn-primary" type="button">Szenario speichern</button></div>
         </div>
         <div id="scenario-list" class="scenario-grid"></div>

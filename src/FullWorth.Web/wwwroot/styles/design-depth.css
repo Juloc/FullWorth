@@ -405,6 +405,8 @@ html[data-theme="light"] dialog.drawer .dialog-card{
 }
 
 @media(max-width:767px){
+  /* Am Telefon ist die Sidebar nur das Logo in der Kopfzeile (responsive.css): ohne Flaeche, Schatten und Unschaerfe. */
+  html[data-theme="light"] .sidebar{background:none;box-shadow:none;backdrop-filter:none}
   html[data-theme="light"] .panel:hover,
   html[data-theme="light"] .metric:hover{
     transform:none;

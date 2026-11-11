@@ -53,21 +53,17 @@
 }
 @media(max-width:767px){
   .shell{display:block;width:100%;min-width:0}
-  /* #171: die Sidebar verschwindet nicht mehr komplett - sie bleibt dieselbe Komponente, zeigt am
-     Telefon aber nur noch die Marke als schmalen Streifen ueber der Kopfleiste. Menue und Nutzerfuss
-     sind hier ueberzaehlig (dafuer gibt es #bottom-nav und die "Mehr"-Ansicht), deshalb ausgeblendet
-     statt eine zweite Marken-Kopie eigens fuer mobil einzufuehren. */
-  .sidebar{position:static;height:auto;display:flex;flex-direction:row;align-items:center;padding:var(--s2) var(--s4);border-right:0;border-bottom:1px solid var(--line)}
+  /* #171: die Sidebar verschwindet nicht mehr komplett - sie bleibt dieselbe Komponente. Am Telefon steht von ihr nur
+     das Logo, und zwar in der Zeile der Kopfleiste: links das Logo, daneben der Breadcrumb, rechts die Suche - statt
+     eines eigenen Streifens mit Name und Plakette darueber. Menue und Nutzerfuss sind hier ueberzaehlig (dafuer gibt
+     es #bottom-nav und die "Mehr"-Ansicht). nav-collapsed (shell.css) ist ein reines Desktop-Konzept; die Regeln
+     hier gelten auch, wenn ein davon gespeicherter Zustand gesetzt ist. */
+  .sidebar{position:fixed;top:0;left:max(var(--s4),env(safe-area-inset-left,0px));z-index:6;width:auto;height:48px;display:flex;align-items:center;padding:0;border:0;background:transparent}
+  html.pwa-standalone .sidebar{top:env(safe-area-inset-top,0px)}
   .sidebar #nav,.sidebar .sidebar-foot,.sidebar .sidebar-resizer,#nav-collapse{display:none}
-  .brand{padding:0}
-  /* nav-collapsed/nav-auto-collapsed (shell.css) sind ein reines Desktop-Konzept - sie schrumpfen die
-     volle Sidebar auf eine schmale Icon-Spalte, was hier ohnehin keine Rolle mehr spielt (#nav ist am
-     Telefon schon immer ausgeblendet). Ohne diese Ruecknahme wuerde ein von Desktop persistierter
-     nav-collapsed-Zustand (localStorage) denselben Marken-Streifen wieder auf Name/Badge-los reduzieren,
-     den #171 gerade erst repariert hat. */
-  html.nav-collapsed .brand,html.nav-auto-collapsed .brand{flex-direction:row;padding-bottom:0}
-  html.nav-collapsed .brand strong,html.nav-auto-collapsed .brand strong{display:inline}
-  html.nav-collapsed .brand-name,html.nav-auto-collapsed .brand-name{display:inline-flex}
+  .brand,html.nav-collapsed .brand,html.nav-auto-collapsed .brand{flex-direction:row;padding:0}
+  .brand strong,.brand-name,html.nav-collapsed .brand-name,html.nav-auto-collapsed .brand-name{display:none}
+  .breadcrumb{margin-left:calc(2.8rem + var(--s3))}
   main{width:100%;min-width:0;padding:0 var(--s4) calc(72px + env(safe-area-inset-bottom,0px));max-width:none}
   /* Installed, there is no browser chrome above the page, so the sticky topbar sat under the status
      bar and the notch ate the page title. In a tab the inset is 0 and nothing moves. The horizontal

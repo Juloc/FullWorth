@@ -156,7 +156,6 @@ function renderRecord(record, series) {
   <div class="panel-head">
     <div>
       <h2>${esc(record.professionName)} · ${esc(record.stateName)} · ${record.year}</h2>
-      <p>${esc(record.experienceLabel)} · ${esc(BASIS_LABELS[record.basis] || record.basis)} · ${esc(record.currency)} · Stand ${esc(record.dataAsOf)}</p>
     </div>
   </div>
   <div class="bench-badges">

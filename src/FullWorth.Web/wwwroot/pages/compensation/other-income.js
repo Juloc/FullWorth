@@ -51,7 +51,6 @@ function markup() { return `
     <div class="panel-head">
       <div>
         <h2>Sonstige regelmäßige Einkünfte</h2>
-        <p>Regelmäßige Einkünfte, die nicht vom Arbeitgeber kommen — zum Beispiel eine Halbwaisenrente, Unterhalt oder Mieteinnahmen.</p>
       </div>
       <button id="income-add" class="btn btn-secondary" type="button">Einkunft hinzufügen</button>
     </div>
@@ -62,7 +61,6 @@ function markup() { return `
     <div class="panel-head">
       <div>
         <h2>Erfasste Einkünfte</h2>
-        <p>Jede Zeile wird einzeln gespeichert. „Zählt zum persönlich verfügbaren Einkommen“ entscheidet, ob die Einkunft im Verlauf zu „Persönlich verfügbar“ addiert wird.</p>
       </div>
     </div>
     <div id="other-income-list" class="income-list"></div>

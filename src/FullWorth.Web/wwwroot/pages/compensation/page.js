@@ -16,6 +16,7 @@ import './history.js';
 import './other-income.js';
 import './benchmarks.js';
 import './jobrad.js';
+import { renderMeinGehalt } from './overview.js';
 
 const state={spaces:[],space:null,result:null,scenarios:[],selected:[]};
 // Months employed can be fractional - a month entered mid-month counts 15/30 - so 4 and 4,5 both have
@@ -37,7 +38,7 @@ async function load(){
     renderSpaces();
     if(!state.space){notify('Kein Finanzbereich vorhanden.');return}
     await loadProfile();
-    await Promise.all([calculate(),loadScenarios(),loadInflationMetadata()]);
+    await Promise.all([calculate(),loadScenarios(),loadInflationMetadata(),renderMeinGehalt()]);
   }catch(error){handle(error)}
 }
 
@@ -50,7 +51,7 @@ function bind(){
     if(state.space)localStorage.setItem('finance.space',state.space.id);
     state.selected=[];
     await loadProfile();
-    await Promise.all([calculate(),loadScenarios()]);
+    await Promise.all([calculate(),loadScenarios(),renderMeinGehalt()]);
   });
   $('#car-enabled').addEventListener('change',syncCarFields);
   $('#gross-period').addEventListener('change',syncGrossFields);
@@ -62,6 +63,7 @@ function bind(){
   $('#calculate').addEventListener('click',()=>calculate().catch(handle));
   $('#save-profile').addEventListener('click',()=>saveProfile().catch(handle));
   $('#add-benefit').addEventListener('click',()=>addBenefit());
+  bindGroups();
   fillOneOffPresets();
   $('#add-oneoff').addEventListener('click',()=>addOneOff());
   // The derived age depends on both the birth date and the selected tax year.
@@ -74,14 +76,33 @@ function bind(){
   syncGrossFields();syncTaxFactor();syncCarRuleFields();syncCarCommuteFields();syncAgeFields();
 }
 
+// Die Gruppen oben schalten nur um, welche Reiter darunter stehen, und drücken den ersten davon - so, wie es der Benutzer
+// täte. Welche Gruppe aktiv ist, folgt jedem Klick auf einen Reiter, auch auf die der Nachbarmodule.
+function bindGroups(){
+  const tabs=$('.comp-tabs');
+  const setGroup=group=>{
+    tabs.dataset.activeGroup=group;
+    $$('.comp-groups button').forEach(b=>b.classList.toggle('active',b.dataset.groupTab===group));
+  };
+  $$('.comp-groups button').forEach(button=>button.addEventListener('click',()=>{
+    const group=button.dataset.groupTab;
+    setGroup(group);
+    tabs.querySelector(`button[data-group="${group}"]`)?.click();
+  }));
+  tabs.addEventListener('click',event=>{const group=event.target.closest('button[data-group]')?.dataset.group;if(group)setGroup(group)});
+}
+
 function showTab(name){
   $$('.comp-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
   $$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id===`tab-${name}`));
   if(name==='scenarios')loadScenarios().catch(handle);
   if(name==='negotiation')analyzeNegotiation().catch(handle);
+  if(name==='overview')renderMeinGehalt().catch(handle);
 }
 
 function renderSpaces(){
+  // Das Auswahlfeld erscheint nur, wenn es etwas zu wählen gibt.
+  $('.comp-space-label').hidden=state.spaces.length<2;
   $('#space-select').innerHTML=state.spaces.map(space=>`<option value="${space.id}"${space.id===state.space?.id?' selected':''}>${esc(space.name)}</option>`).join('');
 }
 
@@ -196,12 +217,6 @@ function renderResult(result){
   if(!summary.length)summary.push(['Weitere Benefits','Keine erfasst','muted']);
   $('#benefit-summary').innerHTML=summary.map(([label,val,tone])=>benefitLine(label,val,tone)).join('');
   const a=result.assumptions;
-  // The tax year comes from the calculation, so the badge always matches the law that was actually applied.
-  // Nur die Ziffern, nicht der ganze Satz: der steht im Markup und hat den Platz dafuer schon frei.
-  // Und nur, wenn es wirklich eine Jahreszahl gibt - vorher stand hier bei fehlendem Wert
-  // "Steuerjahr undefined" auf dem Schirm.
-  const year=$('#comp-hero-year');
-  if(year)year.textContent=a.taxYear==null?'':String(a.taxYear);
   $('#assumptions').textContent=`${a.calculationKind}. ${a.taxSource}. ${a.socialInsuranceSource}. Stand ${a.dataAsOf}. ${a.disclaimer}`;
 }
 
