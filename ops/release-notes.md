@@ -1,7 +1,12 @@
-# 0.85.4
+# 0.85.5
 
-Das Gehaltsgespräch füllt sich aus deinen Verträgen und Abrechnungen.
+Heiz- und Nebenkosten aus deinen Abrechnungen, neben den Preisen der Statistik.
 
 ## Neu
 
-- **Gehaltsgespräch aus Vertrag und Abrechnung füllen.** Ein Knopf trägt Gehalt damals (erster Vertragsstand) samt Datum, das aktuelle Gehalt und das Vergleichsdatum ein und rechnet die Kaufkraft. Das Jahresgehalt ist das Monatsbrutto mal zwölf plus die Einmalzahlungen der letzten zwölf Abrechnungen in halben Monatsgehältern (bei 1,5 Gehältern im Juni und November also 13). Das gewünschte Gehalt trägst du selbst ein.
+- **Heiz- und Nebenkosten erfassen.** Unter „Lohnabrechnungen“ gibt es die Karte „Heiz- und Nebenkosten“: Beträge aus Heizkosten-, Wasser-, Nebenkosten- und Hausgeldabrechnungen mit ihrem Zeitraum (und Notiz), mit Löschen. Sie gehören dir und werden bei der Kontolöschung entfernt.
+- **Linien in „Gehalt gegen Preise“.** Je Kostenart eine Linie in Euro je Monat („Deine Wohnkosten“), an die passende Statistiklinie angelegt (Heizung gegen Haushaltsenergie, Strom gegen Strom) und mit ihr zusammen gezeigt. Eine Linie entsteht erst, wenn für ein Jahr mindestens elf Monate erfasst sind: ein Wintersegment neben einem Sommersegment wäre eine Heizsaison-Schwankung und keine Preisentwicklung. Gas und Strom der Statistik sind in der Legende wählbar.
+
+## Wichtig
+
+- Eine Datenbank-Änderung (neue Tabelle „HousingCostEntries“), sonst nichts.
