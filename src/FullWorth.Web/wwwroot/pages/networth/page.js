@@ -4,6 +4,7 @@ import { createWizard } from '../../components/wizard.js';
 import { openRealEstateDetail, refreshWealthExtensions } from './real-estate.js';
 import { sectionCard, trendBadge, esc, identityIcon } from '../../features/ux-kit.js';
 import { seriesChartMarkup, hasSeriesHistory, bindSeriesChart } from './history-series.js';
+import { LONG_WINDOW_MS, MS_PER_MONTH, axesMarkup, monthEnds, timeTicks } from './chart-axes.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
@@ -67,7 +68,7 @@ const COPY = {
     fxRatesUsed: 'Umgerechnet mit', fxRateAsOf: 'Kurs vom', fxRateStale: 'Kurs ist älter als ein paar Tage',
     moreDetails: 'Mehr Angaben',
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
-    seriesTitle: 'Reihen im Zeitverlauf',
+    seriesTitle: 'Woraus dein Vermögen besteht',
     real_estate: 'Immobilie', vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', collectible: 'Sammlerstück / Wertgegenstand',
     receivable: 'Forderung / privates Darlehen', business_interest: 'Unternehmensbeteiligung', insurance_pension: 'Versicherung / Vorsorge', other: 'Sonstiger Wert',
     manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen',
@@ -127,7 +128,7 @@ const COPY = {
     fxRatesUsed: 'Converted at', fxRateAsOf: 'rate of', fxRateStale: 'this rate is more than a few days old',
     moreDetails: 'More details',
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
-    seriesTitle: 'Series over time',
+    seriesTitle: 'What your wealth is made of',
     real_estate: 'Real estate', vehicle: 'Vehicle', precious_metal: 'Precious metal', collectible: 'Collectible / valuable',
     receivable: 'Receivable / private loan', business_interest: 'Business interest', insurance_pension: 'Insurance / pension', other: 'Other asset',
     manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated',
@@ -454,67 +455,12 @@ function trendChartGeometry(history, activity = nw.bookingActivity) {
       return { top: (y / height) * 100, value: min + ((plotHeight - pad - y) / (plotHeight - pad * 2)) * span };
     })
     : [];
-  const xTicks = dateTicks(domain).map(time => {
-    const iso = new Date(time).toISOString().slice(0, 10);
-    return { left: (xForDate(iso) / width) * 100, label: tickLabel(time, domain) };
-  });
+  const xTicks = timeTicks(domain, iso => (xForDate(iso) / width) * 100, isDe());
   return {
     usable, activityUsable, values, width, height, plotHeight, pts, xForDate, yFor, yTicks, xTicks,
     forecast, forecastPts, forecastPath,
     todayX: forecast ? xForDate(forecast.anchor.date) : null
   };
-}
-
-// Ab zwei Jahren zeichnet die Kurve den letzten Stand jedes Monats: Tageswerte waeren ein Saegezahn aus
-// Gehalt und Ausgaben, keine Entwicklung.
-const LONG_WINDOW_MS = 2 * 366 * 24 * 60 * 60 * 1000;
-
-function monthEnds(points) {
-  const byMonth = new Map();
-  for (const point of points) byMonth.set(String(point.date).slice(0, 7), point);
-  return [...byMonth.values()];
-}
-
-// Der Abstand der Zeitmarken folgt der Spanne, damit es nie mehr als etwa sechs sind: Monate bis zu einem
-// Jahr, dann Quartale, Halbjahre, Jahre. Sie stehen immer am Monatsersten, das bei der Schrittweite aufgeht.
-function dateTicks(domain) {
-  const months = (domain.end - domain.start) / MS_PER_MONTH;
-  const step = months <= 4 ? 1 : months <= 14 ? 3 : months <= 30 ? 6 : months <= 72 ? 12 : 24;
-  const first = new Date(domain.start);
-  const ticks = [];
-  for (let month = Math.ceil(first.getUTCMonth() / step) * step; ; month += step) {
-    const time = Date.UTC(first.getUTCFullYear(), month, 1);
-    if (time > domain.end) break;
-    if (time >= domain.start) ticks.push(time);
-  }
-  return ticks;
-}
-
-function tickLabel(time, domain) {
-  const yearly = (domain.end - domain.start) / MS_PER_MONTH > 30;
-  try {
-    return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-GB', yearly
-      ? { year: 'numeric', timeZone: 'UTC' }
-      : { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(time));
-  } catch { return new Date(time).toISOString().slice(0, 7); }
-}
-
-function axisMoney(value) {
-  try {
-    return new Intl.NumberFormat(isDe() ? 'de-DE' : 'en-GB', {
-      style: 'currency', currency: nw.currency, notation: 'compact', maximumSignificantDigits: 3
-    }).format(value);
-  } catch { return ctx.money(value, nw.currency); }
-}
-
-function chartAxesMarkup(geometry) {
-  const y = ctx.isPrivate() ? '' : geometry.yTicks.map(tick =>
-    `<span style="top:${tick.top.toFixed(1)}%">${ctx.esc(axisMoney(tick.value))}</span>`).join('');
-  const x = geometry.xTicks.map(tick => {
-    const edge = tick.left < 6 ? ' class="start"' : tick.left > 94 ? ' class="end"' : '';
-    return `<span${edge} style="left:${tick.left.toFixed(1)}%">${ctx.esc(tick.label)}</span>`;
-  }).join('');
-  return `<div class="nw-chart-y" aria-hidden="true">${y}</div><div class="nw-chart-x" aria-hidden="true">${x}</div>`;
 }
 
 function bookingActivityMarkup(geometry) {
@@ -575,7 +521,7 @@ function trendChartSvg(history) {
   // genau einem Messpunkt steht dort, woran das liegt, statt einer leeren Flaeche.
   const emptyLabel = pts.length === 1 ? t('trendSinglePoint') : t('noTrend');
   const empty = pts.length > 1 ? '' : `<text class="nw-chart-no-wealth" x="${width / 2}" y="${plotHeight / 2}" text-anchor="middle">${ctx.esc(emptyLabel)}</text>`;
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(label)}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${forecast}${empty}</svg>${chartAxesMarkup(geometry)}${bookingHistoryHint()}`;
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(label)}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${forecast}${empty}</svg>${axesMarkup({ yTicks: geometry.yTicks, xTicks: geometry.xTicks, esc: ctx.esc, german: isDe(), currency: nw.currency, showValues: !ctx.isPrivate() })}${bookingHistoryHint()}`;
 }
 
 function bindNetWorthScrubber(hero) {
@@ -805,7 +751,6 @@ const PROJECTION_FALLBACK = { returnPercent: 5, inflationPercent: 2, years: 0 };
 // A 30-year horizon is 361 monthly values; drawing and scrubbing every one of them buys nothing. The
 // series stays COMPOUNDED monthly - only the points that end up in the path are thinned.
 const PROJECTION_MAX_POINTS = 60;
-const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
 
 // Session-only, deliberately not a preference field: the stored value is the calculation's inputs, not
 // whether a disclosure happens to be open.

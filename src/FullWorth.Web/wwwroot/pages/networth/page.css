@@ -1085,18 +1085,17 @@
 /* Die Reihen des Verlaufs (#178). Duenne Linien statt Flaechen: acht gefuellte Flaechen uebereinander
    sind ein Farbbrei, und gemeint ist der VERLAUF je Reihe, nicht ihr Anteil - den zeigt die
    Aufteilung darunter. */
-.nw-series-chart{width:100%;height:200px;margin-bottom:var(--space-3)}
-.nw-series-chart svg{width:100%;height:100%;display:block}
+.nw-series-chart{position:relative;width:100%;min-height:218px;margin-bottom:var(--space-3)}
+.nw-series-chart svg{width:100%;height:200px;display:block}
+.nw-series-chart .nw-chart-y{height:200px}
 
-.nw-series-line{stroke:var(--k4)}
-.nw-series-line[data-cat="1"]{stroke:var(--cat-1)}
-.nw-series-line[data-cat="2"]{stroke:var(--cat-2)}
-.nw-series-line[data-cat="3"]{stroke:var(--cat-3)}
-.nw-series-line[data-cat="4"]{stroke:var(--cat-4)}
-.nw-series-line[data-cat="5"]{stroke:var(--cat-5)}
-.nw-series-line[data-cat="6"]{stroke:var(--cat-6)}
-.nw-series-line[data-cat="7"]{stroke:var(--cat-7)}
-.nw-series-line[data-cat="8"]{stroke:var(--cat-8)}
+.nw-series-area{fill:var(--k4);opacity:.85}
+.nw-series-area[data-cat="1"]{fill:var(--cat-1)}
+.nw-series-area[data-cat="2"]{fill:var(--cat-2)}
+.nw-series-area[data-cat="3"]{fill:var(--cat-3)}
+.nw-series-area[data-cat="4"]{fill:var(--cat-4)}
+.nw-series-area[data-cat="5"]{fill:var(--cat-5)}
+.nw-series-area[data-cat="6"]{fill:var(--cat-6)}
 
 .nw-series-legend{
   display:grid;

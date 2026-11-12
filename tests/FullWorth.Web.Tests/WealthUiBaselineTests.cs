@@ -51,7 +51,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var css = await GetAsync("/pages/networth/page.css");
 
         Assert.Contains("inflationPercent: 2, years: 0 }", js);
-        Assert.Contains("chartAxesMarkup(geometry)", js);
+        Assert.Contains("axesMarkup({ yTicks: geometry.yTicks", js);
         Assert.Contains(".nw-chart-x{position:relative;height:18px}", css);
         Assert.Contains("monthEnds(measured)", js);
         Assert.Contains("api/preferences/wealth.window", js);
