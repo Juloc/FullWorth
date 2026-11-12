@@ -219,14 +219,12 @@ export async function renderNetWorth(context) {
     nw.customFrom = localDate(start);
   }
 
+  // Die Praeferenz laeuft neben der Uebersicht her, ohne in deren Ladeblock zu stehen: der gehoert dem
+  // grossen Promise.all unten (WatchlistUiTests).
+  const windowRequest = windowRestored ? null : ctx.api('api/preferences/wealth.window').catch(() => null);
   let overview;
-  let windowPref = null;
-  try {
-    [overview, windowPref] = await Promise.all([
-      ctx.api('api/wealth/overview'),
-      windowRestored ? null : ctx.api('api/preferences/wealth.window').catch(() => null)
-    ]);
-  } catch {
+  try { overview = await ctx.api('api/wealth/overview'); }
+  catch {
     const host = ctx.$('#view-networth');
     if (host) host.innerHTML = sectionCard(t('trendTitle'), emptyRow(ctx.get('common.error')), { className: 'nw-hero' });
     return;
@@ -235,7 +233,7 @@ export async function renderNetWorth(context) {
   // Der zuletzt gewaehlte Zeitraum gilt beim ersten Oeffnen; danach hat die Sitzung ihn im Speicher.
   if (!windowRestored) {
     windowRestored = true;
-    const remembered = Number(windowPref?.value?.months);
+    const remembered = Number((await windowRequest)?.value?.months);
     if (WINDOWS.some(window => window.m === remembered)) nw.windowMonths = remembered;
   }
 
