@@ -54,7 +54,13 @@
 
 .nw-range-error{color:var(--negative);flex-basis:100%}
 
-.nw-chart{margin:var(--s2) 0}
+.nw-chart{position:relative;margin:var(--s2) 0}
+.nw-chart-y{position:absolute;inset:0 0 auto;height:140px;pointer-events:none}
+.nw-chart-y span{position:absolute;left:0;transform:translateY(-100%);font-size:var(--text-caption-size);color:var(--muted)}
+.nw-chart-x{position:relative;height:18px}
+.nw-chart-x span{position:absolute;top:2px;transform:translateX(-50%);font-size:var(--text-caption-size);color:var(--muted);white-space:nowrap}
+.nw-chart-x .start{transform:none}
+.nw-chart-x .end{transform:translateX(-100%)}
 
 .nw-chart svg{display:block;width:100%;height:140px}
 

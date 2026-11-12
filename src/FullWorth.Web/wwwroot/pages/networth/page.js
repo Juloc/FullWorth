@@ -22,6 +22,7 @@ import { emptyRow } from '../../components/empty.js';
 // per-space target preference and never invents a target automatically.
 let ctx = null;
 let lastOverview = null;
+let windowRestored = false;
 
 // Trend window options for card 1's segmented control. `m` = months back from today.
 // m=0 means all available history; m=-1 is reserved for the custom date range.
@@ -218,12 +219,22 @@ export async function renderNetWorth(context) {
     nw.customFrom = localDate(start);
   }
 
+  // Die Praeferenz laeuft neben der Uebersicht her, ohne in deren Ladeblock zu stehen: der gehoert dem
+  // grossen Promise.all unten (WatchlistUiTests).
+  const windowRequest = windowRestored ? null : ctx.api('api/preferences/wealth.window').catch(() => null);
   let overview;
   try { overview = await ctx.api('api/wealth/overview'); }
   catch {
     const host = ctx.$('#view-networth');
     if (host) host.innerHTML = sectionCard(t('trendTitle'), emptyRow(ctx.get('common.error')), { className: 'nw-hero' });
     return;
+  }
+
+  // Der zuletzt gewaehlte Zeitraum gilt beim ersten Oeffnen; danach hat die Sitzung ihn im Speicher.
+  if (!windowRestored) {
+    windowRestored = true;
+    const remembered = Number((await windowRequest)?.value?.months);
+    if (WINDOWS.some(window => window.m === remembered)) nw.windowMonths = remembered;
   }
 
   const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref, projectionPref, previewBasis, watchlist] = await Promise.all([
@@ -361,10 +372,10 @@ function selectedChartDomain(history, activity) {
     date.setMonth(date.getMonth() - nw.windowMonths);
     start = parseChartDate(localDate(date));
   } else {
-    const dates = [
-      ...(history || []).map(point => parseChartDate(point.date)),
-      ...(activity || []).map(point => parseChartDate(point.month))
-    ].filter(Number.isFinite);
+    // Max beginnt am ersten gemessenen Tag. Buchungen davor gibt es, aber keine Kurve - die Kurve auf ihr
+    // Fuenftel der Breite zu quetschen, damit der Streifen davor Platz hat, zeigte nur Leere.
+    const measured = (history || []).map(point => parseChartDate(point.date)).filter(Number.isFinite);
+    const dates = measured.length ? measured : (activity || []).map(point => parseChartDate(point.month)).filter(Number.isFinite);
     start = dates.length ? Math.min(...dates) : end;
   }
   const safeEnd = Number.isFinite(end) ? end : Date.now();
@@ -398,11 +409,15 @@ function activityPoints(activity = nw.bookingActivity) {
 const FORECAST_MAX_WIDTH_SHARE = 0.5;
 
 function trendChartGeometry(history, activity = nw.bookingActivity) {
-  const usable = measuredPoints(history);
-  const activityUsable = activityPoints(activity);
-  if (!usable.length && !activityUsable.length) return null;
+  const measured = measuredPoints(history);
+  const allActivity = activityPoints(activity);
+  if (!measured.length && !allActivity.length) return null;
+  const domain = selectedChartDomain(measured, allActivity);
+  // Buchungsbalken vor dem Fenster wuerden sich am linken Rand stapeln: der Streifen zeigt nur, was im
+  // Fenster liegt.
+  const activityUsable = allActivity.filter(point => parseChartDate(point.month) + MS_PER_MONTH >= domain.start);
+  const usable = domain.end - domain.start > LONG_WINDOW_MS ? monthEnds(measured) : measured;
   const values = usable.map(point => Number(point.netWorth));
-  const domain = selectedChartDomain(usable, activityUsable);
   const model = forecastModel();
   const forecast = forecastIsInWindow(model, domain) ? model : null;
   // The projected values belong in the scale, or the forward curve would run off the top of the card.
@@ -432,11 +447,74 @@ function trendChartGeometry(history, activity = nw.bookingActivity) {
   // The dashed path starts at the last measured point so the curve is one line, not two: between that
   // point and today nothing was measured either, and dashed is exactly what that stretch is.
   const forecastPath = forecast ? (pts.length ? [pts.at(-1)] : []).concat(forecastPts) : [];
+  // Die Beschriftung der Achsen: die drei Hilfslinien tragen ihren Wert, unten stehen Monate oder Jahre.
+  const yTicks = scaleValues.length
+    ? [0.25, 0.5, 0.75].map(fraction => {
+      const y = plotHeight * fraction;
+      return { top: (y / height) * 100, value: min + ((plotHeight - pad - y) / (plotHeight - pad * 2)) * span };
+    })
+    : [];
+  const xTicks = dateTicks(domain).map(time => {
+    const iso = new Date(time).toISOString().slice(0, 10);
+    return { left: (xForDate(iso) / width) * 100, label: tickLabel(time, domain) };
+  });
   return {
-    usable, activityUsable, values, width, height, plotHeight, pts, xForDate, yFor,
+    usable, activityUsable, values, width, height, plotHeight, pts, xForDate, yFor, yTicks, xTicks,
     forecast, forecastPts, forecastPath,
     todayX: forecast ? xForDate(forecast.anchor.date) : null
   };
+}
+
+// Ab zwei Jahren zeichnet die Kurve den letzten Stand jedes Monats: Tageswerte waeren ein Saegezahn aus
+// Gehalt und Ausgaben, keine Entwicklung.
+const LONG_WINDOW_MS = 2 * 366 * 24 * 60 * 60 * 1000;
+
+function monthEnds(points) {
+  const byMonth = new Map();
+  for (const point of points) byMonth.set(String(point.date).slice(0, 7), point);
+  return [...byMonth.values()];
+}
+
+// Der Abstand der Zeitmarken folgt der Spanne, damit es nie mehr als etwa sechs sind: Monate bis zu einem
+// Jahr, dann Quartale, Halbjahre, Jahre. Sie stehen immer am Monatsersten, das bei der Schrittweite aufgeht.
+function dateTicks(domain) {
+  const months = (domain.end - domain.start) / MS_PER_MONTH;
+  const step = months <= 4 ? 1 : months <= 14 ? 3 : months <= 30 ? 6 : months <= 72 ? 12 : 24;
+  const first = new Date(domain.start);
+  const ticks = [];
+  for (let month = Math.ceil(first.getUTCMonth() / step) * step; ; month += step) {
+    const time = Date.UTC(first.getUTCFullYear(), month, 1);
+    if (time > domain.end) break;
+    if (time >= domain.start) ticks.push(time);
+  }
+  return ticks;
+}
+
+function tickLabel(time, domain) {
+  const yearly = (domain.end - domain.start) / MS_PER_MONTH > 30;
+  try {
+    return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-GB', yearly
+      ? { year: 'numeric', timeZone: 'UTC' }
+      : { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(time));
+  } catch { return new Date(time).toISOString().slice(0, 7); }
+}
+
+function axisMoney(value) {
+  try {
+    return new Intl.NumberFormat(isDe() ? 'de-DE' : 'en-GB', {
+      style: 'currency', currency: nw.currency, notation: 'compact', maximumSignificantDigits: 3
+    }).format(value);
+  } catch { return ctx.money(value, nw.currency); }
+}
+
+function chartAxesMarkup(geometry) {
+  const y = ctx.isPrivate() ? '' : geometry.yTicks.map(tick =>
+    `<span style="top:${tick.top.toFixed(1)}%">${ctx.esc(axisMoney(tick.value))}</span>`).join('');
+  const x = geometry.xTicks.map(tick => {
+    const edge = tick.left < 6 ? ' class="start"' : tick.left > 94 ? ' class="end"' : '';
+    return `<span${edge} style="left:${tick.left.toFixed(1)}%">${ctx.esc(tick.label)}</span>`;
+  }).join('');
+  return `<div class="nw-chart-y" aria-hidden="true">${y}</div><div class="nw-chart-x" aria-hidden="true">${x}</div>`;
 }
 
 function bookingActivityMarkup(geometry) {
@@ -455,10 +533,10 @@ function bookingActivityMarkup(geometry) {
 
 function bookingHistoryHint() {
   if (!nw.bookingActivity?.length) return '';
-  if (!nw.history?.length)
+  if (!measuredPoints(nw.history).length)
     return `<div class="nw-booking-history-hint"><span class="nw-booking-history-dot"></span><span>${ctx.esc(t('bookingOnlyHint'))}</span></div>`;
   const firstActivity = Math.min(...nw.bookingActivity.map(point => parseChartDate(point.month)).filter(Number.isFinite));
-  const firstHistory = Math.min(...nw.history.map(point => parseChartDate(point.date)).filter(Number.isFinite));
+  const firstHistory = Math.min(...measuredPoints(nw.history).map(point => parseChartDate(point.date)).filter(Number.isFinite));
   if (!Number.isFinite(firstActivity) || !Number.isFinite(firstHistory) || firstActivity >= firstHistory) return '';
   return `<div class="nw-booking-history-hint"><span class="nw-booking-history-dot"></span><span>${ctx.esc(t('bookingHistoryHint'))}</span></div>`;
 }
@@ -497,7 +575,7 @@ function trendChartSvg(history) {
   // genau einem Messpunkt steht dort, woran das liegt, statt einer leeren Flaeche.
   const emptyLabel = pts.length === 1 ? t('trendSinglePoint') : t('noTrend');
   const empty = pts.length > 1 ? '' : `<text class="nw-chart-no-wealth" x="${width / 2}" y="${plotHeight / 2}" text-anchor="middle">${ctx.esc(emptyLabel)}</text>`;
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(label)}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${forecast}${empty}</svg>${bookingHistoryHint()}`;
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(label)}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${forecast}${empty}</svg>${chartAxesMarkup(geometry)}${bookingHistoryHint()}`;
 }
 
 function bindNetWorthScrubber(hero) {
@@ -663,6 +741,11 @@ function wireHero(hero) {
       const months = Number(button.dataset.window);
       if (months === nw.windowMonths) return;
       nw.windowMonths = months;
+      ctx.api('api/preferences/wealth.window', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ months })
+      }).catch(() => { /* den Zeitraum zu merken ist Komfort, nicht Teil der Anzeige */ });
       hero.querySelectorAll('[data-window]').forEach(other => {
         const on = other === button;
         other.classList.toggle('active', on);
@@ -715,7 +798,10 @@ function wireHero(hero) {
 // stored as 0 years), savings rate, return and inflation persist in the existing `wealth.projection`
 // preference.
 const PROJECTION_YEARS = [5, 10, 20, 30];
-const PROJECTION_FALLBACK = { returnPercent: 5, inflationPercent: 2, years: 10 };
+// Die Vorschau ist standardmaessig aus (years: 0): sie ist eine Rechnung aus Annahmen und gehoert nicht
+// ungefragt in die Kurve des Gemessenen - mit einer Sparrate unter null zog sie die Skala auf -379 000 EUR
+// und machte aus dem echten Verlauf einen flachen Strich.
+const PROJECTION_FALLBACK = { returnPercent: 5, inflationPercent: 2, years: 0 };
 // A 30-year horizon is 361 monthly values; drawing and scrubbing every one of them buys nothing. The
 // series stays COMPOUNDED monthly - only the points that end up in the path are thinned.
 const PROJECTION_MAX_POINTS = 60;
