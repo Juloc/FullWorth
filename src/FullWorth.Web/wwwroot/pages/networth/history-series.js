@@ -1,56 +1,45 @@
-// Die Reihen des Vermögensverlaufs (#178).
+// Woraus das Vermögen besteht, im Zeitverlauf (#178, #222).
 //
-// Die Kurve oben zeigt eine Zahl: das Nettovermögen. Gefordert waren acht Reihen — Konten,
-// Investments, Immobilien, Edelmetalle, Altersvorsorge, sonstige Sachwerte, Schulden und
-// Immobilien-Eigenkapital —, und vier davon gab es im Tageswert bis #178 gar nicht: sie steckten
-// gemeinsam in einer Summe.
+// Die Kurve oben zeigt eine Zahl: das Nettovermögen. Diese Karte zeigt es in Teilen, als gestapelte
+// Fläche mit dem letzten Stand jedes Monats: Konten, Investments, Immobilien, Edelmetalle,
+// Altersvorsorge und sonstige Sachwerte. Die Höhe ist die Summe dieser Werte.
 //
-// Warum eine eigene Karte und nicht eine Auswahl in der Hero-Kurve: die trägt Vorschau, Scrubber und
-// den Buchungsstreifen, und all das gilt für das Nettovermögen und für nichts sonst. Eine zweite
-// Reihe dort hätte entweder die Vorschau mitgeschleppt (die es für Immobilien nicht gibt) oder sie
-// abgeschaltet — beides ändert die Karte, um die es gar nicht geht.
+// Schulden und Immobilien-Eigenkapital stehen nicht im Stapel. Schulden sind eine Last, keine Schicht:
+// "minus 200 000" über "plus 300 000" läse sich als Vermögen, und sie stehen oben bei den Kennzahlen.
+// Das Eigenkapital ist Immobilie minus Darlehen, also dieselbe Immobilie ein zweites Mal.
 //
-// Warum die Legende schaltbar ist und nicht nur beschriftet: eine Immobilie steht bei 300 000 und
-// das Edelmetall bei 4 700. Auf einer gemeinsamen Achse ist die kleinere Reihe ein Strich auf der
-// Grundlinie — sichtbar, aber nicht lesbar. Abschalten lässt die Achse neu rechnen, und dann ist der
-// Verlauf der kleinen Reihe wirklich zu sehen. Eine logarithmische Achse wäre die andere Antwort und
-// die schlechtere: sie macht aus einer Verdopplung und einer Verzehnfachung optisch dasselbe.
+// Warum eine eigene Karte und nicht eine Auswahl in der Hero-Kurve: die trägt den Buchungsstreifen und
+// den Scrubber, und beides gilt für das Nettovermögen und für nichts sonst.
 //
-// Und die Regel, die hier trägt: `null` heißt NICHT null Euro, sondern „an diesem Tag nicht
-// festgehalten". Tage vor #178 kennen die Aufteilung nicht. Eine Linie bricht dort ab und beginnt
-// danach neu, statt auf die Grundlinie zu fallen — ein Absturz auf 0 wäre eine Behauptung über
+// Warum die Legende schaltbar ist: eine Immobilie steht bei 300 000 und das Edelmetall bei 4 700. Auf
+// einer gemeinsamen Achse ist die kleinere Schicht ein Streifen an der Kante - sichtbar, aber nicht
+// lesbar. Abschalten lässt die Achse neu rechnen.
+//
+// Und die Regel, die hier trägt: `null` heißt NICHT null Euro, sondern „in diesem Monat nicht
+// festgehalten". Monate vor #178 kennen die Aufteilung nicht. Eine Schicht bricht dort ab und beginnt
+// danach neu, statt auf die Grundlinie zu fallen - ein Absturz auf 0 wäre eine Behauptung über
 // Vermögen, das niemand gemessen hat.
+
+import { axesMarkup, monthEnds, timeTicks } from './chart-axes.js';
 
 const W = 720;
 const H = 200;
 
-const bilingual = (german, english) =>
-  (document.documentElement.lang || '').startsWith('en') ? english : german;
+const german = () => !(document.documentElement.lang || '').toLowerCase().startsWith('en');
+const bilingual = (de, en) => (german() ? de : en);
 
-/** Reihe, Feld in der Antwort und Farbtoken. Die Reihenfolge ist die der Legende. */
+/** Schicht, Feld in der Antwort und Farbtoken. Die Reihenfolge ist die der Legende, unten nach oben. */
 const SERIES = [
   { key: 'accounts', cat: 1, label: () => bilingual('Konten', 'Accounts') },
   { key: 'investments', cat: 2, label: () => bilingual('Investments', 'Investments') },
   { key: 'realEstateAssets', cat: 3, label: () => bilingual('Immobilien', 'Real estate') },
   { key: 'preciousMetalAssets', cat: 4, label: () => bilingual('Edelmetalle', 'Precious metals') },
   { key: 'pensionAssets', cat: 5, label: () => bilingual('Altersvorsorge', 'Pension') },
-  { key: 'otherAssets', cat: 6, label: () => bilingual('Sonstige Sachwerte', 'Other assets') },
-  { key: 'realEstateEquity', cat: 7, label: () => bilingual('Immobilien-Eigenkapital', 'Real-estate equity') },
-  // Schulden sind eine Last, keine Position: gezeigt wird die Summe aus Darlehen und sonstigen
-  // Verbindlichkeiten, positiv, denn "minus 200 000" neben "plus 300 000" liest sich als Vermögen.
-  {
-    key: 'debt', cat: 8, label: () => bilingual('Schulden', 'Debt'),
-    derive: point => sum(point.loans, point.otherLiabilities)
-  }
+  { key: 'otherAssets', cat: 6, label: () => bilingual('Sonstige Sachwerte', 'Other assets') }
 ];
 
-function sum(a, b) {
-  if (a == null && b == null) return null;
-  return (Number(a) || 0) + (Number(b) || 0);
-}
-
 function valueOf(series, point) {
-  const raw = series.derive ? series.derive(point) : point[series.key];
+  const raw = point[series.key];
   return raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
 }
 
@@ -61,18 +50,23 @@ export function hasSeriesHistory(history) {
     point.pensionAssets != null || point.otherAssets != null);
 }
 
-/** Die Reihen, für die es überhaupt einen Wert gibt - der Rest steht gar nicht erst in der Legende. */
-function available(history) {
-  const points = (history || []).filter(point => point?.date);
+/** Der letzte Stand jedes Monats, in dem der Tag überhaupt Daten hat. */
+function monthly(history) {
+  return monthEnds((history || []).filter(point => point?.date));
+}
+
+/** Die Schichten, für die es überhaupt einen Wert gibt - der Rest steht gar nicht erst in der Legende. */
+function available(months) {
   return SERIES
-    .map(series => ({ series, values: points.map(point => valueOf(series, point)) }))
+    .map(series => ({ series, values: months.map(point => valueOf(series, point)) }))
     .filter(line => line.values.some(value => value != null));
 }
 
 /** Das Gerüst der Karte. Gezeichnet wird erst beim Binden, weil die Auswahl dort lebt. */
 export function seriesChartMarkup(ctx, history, currency) {
-  const lines = available(history);
-  if (lines.length === 0 || (history || []).filter(point => point?.date).length < 2) return '';
+  const months = monthly(history);
+  const lines = available(months);
+  if (lines.length === 0 || months.length < 2) return '';
 
   const legend = lines.map(line =>
     `<button type="button" class="nw-series-legend-item" data-series="${ctx.esc(line.series.key)}" aria-pressed="true">`
@@ -83,16 +77,17 @@ export function seriesChartMarkup(ctx, history, currency) {
   return `<div class="nw-series-chart"></div>`
     + `<div class="nw-series-legend">${legend}</div>`
     + `<p class="row-sub">${ctx.esc(bilingual(
-      'Eine Lücke heißt: für diesen Tag wurde die Aufteilung nicht festgehalten - nicht null. '
-        + 'Reihen lassen sich abschalten; die Achse rechnet dann neu.',
-      'A gap means the split was not recorded for that day - not zero. '
-        + 'Series can be switched off; the axis then rescales.'))}</p>`;
+      'Die Höhe ist die Summe der Vermögenswerte ohne Schulden. Fehlt eine Schicht in einem Monat, '
+        + 'wurde sie dort nicht festgehalten - sie ist nicht null. Schichten lassen sich abschalten; '
+        + 'die Achse rechnet dann neu.',
+      'The height is the sum of the assets, without debt. If a layer is missing in a month, it was '
+        + 'not recorded then - it is not zero. Layers can be switched off; the axis then rescales.'))}</p>`;
 }
 
 /**
  * Zeichnet und verdrahtet die Karte.
  *
- * @param {object} ctx      Seitenkontext (esc, money).
+ * @param {object} ctx      Seitenkontext (esc, money, isPrivate).
  * @param {Element} card    Die Karte aus {@link seriesChartMarkup}.
  * @param {Array} history   Die Antwort von api/wealth/history.
  * @param {string} currency Die Anzeigewährung.
@@ -103,41 +98,37 @@ export function bindSeriesChart(ctx, card, history, currency) {
   const buttons = [...card.querySelectorAll('[data-series]')];
   if (!host || !buttons.length) return;
 
-  const lines = available(history);
-  const points = (history || []).filter(point => point?.date);
+  const months = monthly(history);
+  const lines = available(months);
   const selected = new Set(lines.map(line => line.series.key));
+  const start = Date.parse(`${months[0].date.slice(0, 10)}T00:00:00Z`);
+  const end = Date.parse(`${months.at(-1).date.slice(0, 10)}T00:00:00Z`);
+  const x = index => (index / (months.length - 1)) * W;
 
   const draw = () => {
     const shown = lines.filter(line => selected.has(line.series.key));
-    const all = shown.flatMap(line => line.values).filter(value => value != null);
-    if (!all.length) { host.replaceChildren(); return; }
+    // Die Höhe des Stapels je Monat. Eine Schicht ohne Wert zählt dort nichts - und wird dort auch
+    // nicht gezeichnet.
+    const totals = months.map((_, index) =>
+      shown.reduce((sum, line) => sum + (line.values[index] ?? 0), 0));
+    const max = Math.max(...totals);
+    if (!(max > 0)) { host.replaceChildren(); return; }
+    // Die Null ist die Grundlinie: eine Fläche, die bei 4 600 beginnt, sähe sonst nach einer Verdopplung aus.
+    const y = value => H - (value / max) * H;
 
-    // Die Achse folgt der Auswahl - das ist der ganze Zweck des Abschaltens. Die Null bleibt
-    // trotzdem im Bild: eine Reihe, die zwischen 4 600 und 4 700 pendelt, sähe sonst nach einer
-    // Verdopplung aus.
-    const min = Math.min(0, ...all);
-    const max = Math.max(...all);
-    const span = max - min || 1;
-    const x = index => points.length === 1 ? 0 : (index / (points.length - 1)) * W;
-    const y = value => H - ((value - min) / span) * H;
+    let base = months.map(() => 0);
+    const areas = shown.map(line => {
+      const lower = base;
+      const tops = lower.map((below, index) => line.values[index] == null ? null : below + line.values[index]);
+      base = tops.map((top, index) => top ?? lower[index]);
+      return `<path class="nw-series-area" data-cat="${line.series.cat}" d="${areaPath(lower, tops, x, y)}"></path>`;
+    });
 
-    const pathOf = values => {
-      const parts = [];
-      let open = false;
-      values.forEach((value, index) => {
-        if (value == null) { open = false; return; }
-        parts.push(`${open ? 'L' : 'M'}${x(index).toFixed(1)},${y(value).toFixed(1)}`);
-        open = true;
-      });
-      return parts.join(' ');
-    };
-
-    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" `
-      + `aria-label="${ctx.esc(bilingual('Reihen des Vermögensverlaufs', 'Net-worth series over time'))}">`
-      + shown.map(line =>
-        `<path class="nw-series-line" data-cat="${line.series.cat}" d="${pathOf(line.values)}" `
-        + `fill="none" stroke-width="2" vector-effect="non-scaling-stroke"></path>`).join('')
-      + `</svg>`;
+    const xTicks = timeTicks({ start, end }, iso => ((Date.parse(`${iso}T00:00:00Z`) - start) / (end - start)) * 100, german());
+    const yTicks = [0.25, 0.5, 0.75].map(fraction => ({ top: (1 - fraction) * 100, value: max * fraction }));
+    const label = ctx.esc(bilingual('Zusammensetzung des Vermögens', 'Composition of wealth'));
+    const axes = axesMarkup({ yTicks, xTicks, esc: ctx.esc, german: german(), currency, showValues: !ctx.isPrivate() });
+    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${label}">${areas.join('')}</svg>${axes}`;
   };
 
   for (const line of lines) {
@@ -146,7 +137,7 @@ export function bindSeriesChart(ctx, card, history, currency) {
     const value = button?.querySelector('[data-series-value]');
     if (value) value.textContent = last == null ? '—' : ctx.money(last, currency);
     button?.addEventListener('click', () => {
-      // Die letzte Reihe bleibt an: ein leeres Diagramm ist kein Zustand, den jemand wählt.
+      // Die letzte Schicht bleibt an: ein leeres Diagramm ist kein Zustand, den jemand wählt.
       if (selected.has(line.series.key) && selected.size === 1) return;
       if (selected.has(line.series.key)) selected.delete(line.series.key);
       else selected.add(line.series.key);
@@ -156,4 +147,24 @@ export function bindSeriesChart(ctx, card, history, currency) {
   }
 
   draw();
+}
+
+/**
+ * Die Fläche einer Schicht zwischen ihrer Unterkante und ihrer Oberkante. Ein Monat ohne Wert (`null`
+ * in `tops`) hebt den Stift: davor und danach entstehen zwei Flächen, keine Brücke darüber.
+ */
+function areaPath(lower, tops, x, y) {
+  const parts = [];
+  let run = [];
+  const close = () => {
+    if (run.length > 1) {
+      const up = run.map(index => `${x(index).toFixed(1)},${y(tops[index]).toFixed(1)}`);
+      const down = [...run].reverse().map(index => `${x(index).toFixed(1)},${y(lower[index]).toFixed(1)}`);
+      parts.push(`M${up.join(' L')} L${down.join(' L')} Z`);
+    }
+    run = [];
+  };
+  tops.forEach((top, index) => { if (top == null) close(); else run.push(index); });
+  close();
+  return parts.join(' ');
 }
