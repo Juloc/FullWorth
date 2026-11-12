@@ -22,6 +22,7 @@ Issues — not in a document.
 
 - [Roadmap](../ROADMAP.md) — scope and release priorities
 - [Product decisions](PRODUCT_DECISIONS.md) — product rules and trade-offs
+- [Produktteile](PRODUCT_AREAS.md) — Ziel, Begriffe (Netto = Auszahlung) und Verknüpfungen je Produktteil
 - [UI/UX specification](UI_UX_SPEC.md) — application behaviour and interface
 - [Potential finance data ideas](POTENTIAL_FINANCE_DATA_IDEAS.md) — non-binding ideas that still need a
   decision before they become work
