@@ -96,7 +96,7 @@ public sealed class FxRateBackfillWindowTests
     [Fact]
     public void An_empty_rate_table_is_backfilled_across_the_whole_history_window()
     {
-        var from = FxRateBackfill.ResolveFrom(Today, earliestStored: null, new FxRateOptions());
+        var from = FxRateBackfill.ResolveFrom(Today, earliestStored: null, earliestBooking: null, new FxRateOptions());
 
         Assert.Equal(Today.AddDays(-400), from);
     }
@@ -104,7 +104,7 @@ public sealed class FxRateBackfillWindowTests
     [Fact]
     public void History_that_only_reaches_back_60_days_is_still_backfilled()
     {
-        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-60), new FxRateOptions());
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-60), earliestBooking: null, new FxRateOptions());
 
         Assert.Equal(Today.AddDays(-400), from);
     }
@@ -114,7 +114,7 @@ public sealed class FxRateBackfillWindowTests
     {
         var options = new FxRateOptions();
 
-        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-400), options);
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-400), earliestBooking: null, options);
 
         Assert.Equal(Today.AddDays(-options.BackfillDays), from);
     }
@@ -125,7 +125,7 @@ public sealed class FxRateBackfillWindowTests
     [Fact]
     public void A_weekend_at_the_start_of_the_range_does_not_retrigger_the_deep_fetch()
     {
-        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-397), new FxRateOptions());
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-397), earliestBooking: null, new FxRateOptions());
 
         Assert.Equal(Today.AddDays(-60), from);
     }
@@ -134,7 +134,46 @@ public sealed class FxRateBackfillWindowTests
     public void The_window_stays_within_the_providers_supported_range()
     {
         var from = FxRateBackfill.ResolveFrom(
-            Today, earliestStored: null, new FxRateOptions { HistoryBackfillDays = 5000 });
+            Today, earliestStored: null, earliestBooking: null, new FxRateOptions { HistoryBackfillDays = 5000 });
+
+        Assert.Equal(Today.AddDays(-400), from);
+    }
+
+    // Der Verlauf reicht bis zur ersten Buchung zurueck, auch wenn die Jahre alt ist: ein Fremdwaehrungskonto
+    // braucht fuer jeden dieser Tage einen Kurs.
+    [Fact]
+    public void The_deep_fetch_reaches_back_to_the_first_booking()
+    {
+        var booking = Today.AddDays(-1900);
+
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-400), booking, new FxRateOptions());
+
+        Assert.Equal(booking, from);
+    }
+
+    [Fact]
+    public void Once_the_first_booking_is_covered_only_the_recent_window_is_refetched()
+    {
+        var booking = Today.AddDays(-1900);
+        var options = new FxRateOptions();
+
+        var from = FxRateBackfill.ResolveFrom(Today, booking.AddDays(3), booking, options);
+
+        Assert.Equal(Today.AddDays(-options.BackfillDays), from);
+    }
+
+    [Fact]
+    public void A_booking_before_the_first_ecb_fixing_does_not_reach_further_back_than_the_provider()
+    {
+        var from = FxRateBackfill.ResolveFrom(Today, earliestStored: null, new DateOnly(1970, 1, 1), new FxRateOptions());
+
+        Assert.Equal(new DateOnly(1999, 1, 4), from);
+    }
+
+    [Fact]
+    public void A_recent_first_booking_leaves_the_window_as_it_was()
+    {
+        var from = FxRateBackfill.ResolveFrom(Today, earliestStored: null, Today.AddDays(-30), new FxRateOptions());
 
         Assert.Equal(Today.AddDays(-400), from);
     }

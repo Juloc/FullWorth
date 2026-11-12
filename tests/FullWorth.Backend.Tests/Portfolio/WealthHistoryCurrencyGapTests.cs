@@ -37,6 +37,22 @@ public sealed class WealthHistoryCurrencyGapTests
             point.GetProperty("missingCurrencies").EnumerateArray().Select(x => x.GetString()));
     }
 
+    // Ein Konto in Fremdwaehrung, das an diesem Tag noch leer war, braucht keinen Kurs: null Einheiten sind
+    // null Euro, nicht "unbekannt". Sonst waere jeder Tag vor dem ersten Kurs eine Luecke.
+    [Fact]
+    public async Task A_foreign_account_that_was_still_empty_needs_no_rate()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var (owner, space) = await SeedAsync(factory, withIdrRate: false, idrAmount: 0m);
+        using var client = factory.CreateClient();
+
+        var point = await HistoryPointAsync(client, owner, space);
+
+        Assert.Equal(100m, point.GetProperty("accounts").GetDecimal());
+        Assert.Equal(100m, point.GetProperty("netWorth").GetDecimal());
+        Assert.Empty(point.GetProperty("missingCurrencies").EnumerateArray());
+    }
+
     [Fact]
     public async Task With_the_rate_present_the_foreign_account_is_part_of_the_curve()
     {
@@ -53,7 +69,7 @@ public sealed class WealthHistoryCurrencyGapTests
     }
 
     private static async Task<(Guid Owner, Guid Space)> SeedAsync(
-        BackendWebApplicationFactory factory, bool withIdrRate)
+        BackendWebApplicationFactory factory, bool withIdrRate, decimal idrAmount = 5_000_000m)
     {
         var owner = Guid.NewGuid();
         var space = Guid.NewGuid();
@@ -93,10 +109,10 @@ public sealed class WealthHistoryCurrencyGapTests
                 UserId = owner,
                 Date = Day,
                 Currency = "IDR",
-                Accounts = 5_000_000m,
+                Accounts = idrAmount,
                 Assets = 0m,
                 Liabilities = 0m,
-                NetWorth = 5_000_000m
+                NetWorth = idrAmount
             });
 
             if (withIdrRate)
