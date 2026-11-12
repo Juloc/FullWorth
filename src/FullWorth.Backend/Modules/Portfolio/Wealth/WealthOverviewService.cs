@@ -620,6 +620,9 @@ public sealed class WealthOverviewService(
         // Accounts remain native-currency legacy values, so aggregate them from every row for the day.
         foreach (var row in allRows)
         {
+            // Null Einheiten brauchen keinen Kurs: ein Konto in IDR, das an diesem Tag noch leer war,
+            // machte sonst jeden Tag davor "unbekannt", nur weil es fuer die Waehrung keinen Kurs gibt.
+            if (row.Accounts == 0m) continue;
             var multiplier = fx.ToBaseOn(1m, row.Currency, date);
             if (!multiplier.HasValue)
             {
@@ -705,6 +708,8 @@ public sealed class WealthOverviewService(
         var accountComplete = true;
         foreach (var row in rows)
         {
+            // Siehe BuildExplicitHistoryPoint: Null braucht keinen Kurs.
+            if (row.Accounts == 0m && row.NetWorth == 0m) continue;
             var multiplier = fx.ToBaseOn(1m, row.Currency, date);
             if (!multiplier.HasValue)
             {

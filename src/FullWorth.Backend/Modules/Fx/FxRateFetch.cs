@@ -85,9 +85,19 @@ public static class FxRateBackfill
     /// </summary>
     private const int WeekendSlackDays = 7;
 
-    public static DateOnly ResolveFrom(DateOnly today, DateOnly? earliestStored, FxRateOptions options)
+    /// <summary>Der erste Tag mit einem EZB-Referenzkurs; davor gibt es beim Anbieter nichts.</summary>
+    private static readonly DateOnly FirstEcbFixing = new(1999, 1, 4);
+
+    /// <summary>
+    /// Wie weit zurueck der tiefe Abruf reicht: <see cref="FxRateOptions.HistoryBackfillDays"/>, oder bis zur
+    /// ersten Buchung, wenn die weiter zurueckliegt. Der Verlauf rechnet jeden Tag mit dem Kurs dieses Tages -
+    /// ohne Kurs ist ein Tag mit Fremdwaehrungsbetrag "unbekannt" und die Kurve hat dort eine Luecke.
+    /// </summary>
+    public static DateOnly ResolveFrom(DateOnly today, DateOnly? earliestStored, DateOnly? earliestBooking, FxRateOptions options)
     {
         var deepFrom = today.AddDays(-Math.Clamp(options.HistoryBackfillDays, 1, 400));
+        if (earliestBooking is { } booking && booking < deepFrom)
+            deepFrom = booking < FirstEcbFixing ? FirstEcbFixing : booking;
         if (earliestStored is null || earliestStored > deepFrom.AddDays(WeekendSlackDays))
             return deepFrom;
         return today.AddDays(-Math.Clamp(options.BackfillDays, 1, 400));
@@ -132,7 +142,9 @@ public sealed class FxRateFetchWorker(IServiceScopeFactory scopeFactory, FxRateP
             // not already cover it - afterwards the cheap recent window is enough.
             var earliestStored = await db.FxRates.AsNoTracking()
                 .MinAsync(rate => (DateOnly?)rate.Date, ct);
-            var from = FxRateBackfill.ResolveFrom(today, earliestStored, _options);
+            var earliestBooking = await db.Transactions.AsNoTracking()
+                .MinAsync(transaction => transaction.BookingDate, ct);
+            var from = FxRateBackfill.ResolveFrom(today, earliestStored, earliestBooking, _options);
 
             var fetched = await provider.GetRangeAsync(from, today, ct);
             if (fetched.Count == 0) return;
