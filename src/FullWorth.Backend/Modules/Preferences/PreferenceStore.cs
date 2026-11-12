@@ -33,6 +33,7 @@ public sealed class PreferenceStore(FullWorthDbContext db)
         "notifications.display",
         "wealth.emergencyFund",
         "wealth.projection",
+        "wealth.window",
     };
     // Vier Schluessel standen hier bis #177 und stehen jetzt in eigenen Tabellen:
     // accounts.visuals und account-groups.visuals in AccountAppearances/AccountGroupAppearances,

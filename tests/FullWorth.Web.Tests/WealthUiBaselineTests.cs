@@ -38,6 +38,26 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     /// <summary>
+    /// Die Kurve soll lesbar sein (#222). Vier Dinge halten das, und jedes geht leise verloren: die
+    /// Vorschau ist aus, bis jemand sie einschaltet (mit einer Sparrate unter null zog sie die Skala auf
+    /// -379 000 EUR und machte aus dem Gemessenen einen flachen Strich); die Kurve hat Achsen; ab zwei
+    /// Jahren zeichnet sie Monatsendstaende statt eines Saegezahns aus Gehalt und Ausgaben; und der zuletzt
+    /// gewaehlte Zeitraum wird gemerkt.
+    /// </summary>
+    [Fact]
+    public async Task WealthTrendIsReadableAndThePreviewIsOptIn()
+    {
+        var js = await GetAsync("/pages/networth/page.js");
+        var css = await GetAsync("/pages/networth/page.css");
+
+        Assert.Contains("inflationPercent: 2, years: 0 }", js);
+        Assert.Contains("chartAxesMarkup(geometry)", js);
+        Assert.Contains(".nw-chart-x{position:relative;height:18px}", css);
+        Assert.Contains("monthEnds(measured)", js);
+        Assert.Contains("api/preferences/wealth.window", js);
+    }
+
+    /// <summary>
     /// Ein Punkt ist kein Verlauf (#123). <c>api/wealth/history</c> haengt den heutigen Stand immer
     /// an, auch wenn fuer den Zeitraum sonst nichts gespeichert ist. Mit genau einem Punkt zeichnete
     /// die Seite einen Pfad ohne Laenge - unsichtbar - und der Leerzustand griff nicht, weil
