@@ -333,6 +333,13 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Der Abruf bringt Bankzeilen, die es zum Zeitpunkt des Imports noch nicht gab - oder die der Import
+        // nicht erkannt hat, weil Bank und Finanzguru den Namen verschieden schreiben. Die Importkonten oben
+        // sind dann laengst leer; die Zeilen liegen schon auf dem echten Konto.
+        foreach (var live in liveAccounts)
+            transactionsMerged += (await MergeAttachedDuplicatesAsync(live.Id, ct)).Merged;
+
         return new(accountsReconciled, transactionsMoved, transactionsMerged);
     }
 
@@ -376,17 +383,20 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         var balanceAdded = await EnsureCurrentBalanceAsync(
             targetAccount, currentBalance, currentBalanceCurrency, ct);
 
+        var attached = await MergeAttachedDuplicatesAsync(targetAccount.Id, ct);
         var result = await ReconcileAccountAsync(
             importedAccount, targetAccount, trustMovedHistory: true, ct,
             preferImport, excludedImportTransactionIds);
 
         // Automatic reconciliation may already have moved imported rows onto this target account. Explicit
         // user confirmation upgrades every remaining Finanzguru row on the target to a trusted history source.
-        var importedRowsOnTarget = await db.Transactions
+        var importedRowsOnTarget = (await db.Transactions
             .Where(transaction =>
                 transaction.AccountId == targetAccount.Id &&
                 transaction.ExternalKey.StartsWith("finanzguru:"))
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .Where(row => !attached.Unmergeable.Contains(row.Id))
+            .ToList();
         foreach (var row in importedRowsOnTarget)
         {
             row.UseForBalanceHistory = true;
@@ -411,7 +421,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             importedAccount.Id,
             targetAccount.Id,
             result.Moved,
-            result.Merged,
+            result.Merged + attached.Merged,
             result.Moved + importedRowsOnTarget.Count,
             balanceAdded);
     }
@@ -434,12 +444,18 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         if (targetAccount is null) return null;
 
         var balanceAdded = await EnsureCurrentBalanceAsync(targetAccount, currentBalance, currentBalanceCurrency, ct);
-        var rows = await db.Transactions
+
+        // Erst zusammenfuehren, dann freischalten: eine Zeile, die die Bank auch geliefert hat, zaehlte sonst in
+        // der Rueckrechnung zweimal und rechnete die Vergangenheit um deren Summe zu hoch.
+        var attached = await MergeAttachedDuplicatesAsync(targetAccount.Id, ct);
+        var rows = (await db.Transactions
             .Where(transaction =>
                 transaction.AccountId == targetAccount.Id &&
                 transaction.ExternalKey.StartsWith("finanzguru:") &&
                 !transaction.UseForBalanceHistory)
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .Where(row => !attached.Unmergeable.Contains(row.Id))
+            .ToList();
         foreach (var row in rows)
         {
             row.UseForBalanceHistory = true;
@@ -458,6 +474,53 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             0,
             rows.Count,
             balanceAdded);
+    }
+
+    /// <summary>
+    /// Fuehrt Finanzguru-Zeilen, die schon auf einem echten Konto liegen, mit der Bankzeile derselben Buchung
+    /// zusammen - nach derselben Paarung und denselben Regeln wie das Zuordnen eines Importkontos.
+    ///
+    /// Der Import ordnet eine Zeile nur der Bankzeile zu, die ihren Namen genau teilt: "Kaufland" gegen
+    /// "KAUFLAND.BIETIGHEIM.BIS/BIETIGHEIM.BI" kommt dort nie an, und die Zeile entsteht ein zweites Mal. Solange
+    /// beide fuer die Vermoegenshistorie zaehlen, steht jede dieser Buchungen doppelt in der Rueckrechnung.
+    /// </summary>
+    /// <returns>
+    /// Wie viele Paare zusammengefuehrt wurden, und welche Finanzguru-Zeilen eine Bankzeile haben, mit der sie sich
+    /// nicht zusammenfuehren lassen (beide aufgeteilt) - die darf kein Freischalten fuer die Historie mitnehmen.
+    /// </returns>
+    private async Task<(int Merged, IReadOnlySet<Guid> Unmergeable)> MergeAttachedDuplicatesAsync(
+        Guid liveAccountId, CancellationToken ct)
+    {
+        var attached = await db.Transactions
+            .Where(transaction => transaction.AccountId == liveAccountId
+                                  && transaction.ExternalKey.StartsWith("finanzguru:"))
+            .OrderBy(transaction => transaction.BookingDate).ThenBy(transaction => transaction.Id)
+            .ToListAsync(ct);
+        if (attached.Count == 0) return (0, new HashSet<Guid>());
+
+        var bank = await db.Transactions
+            .Where(transaction => transaction.AccountId == liveAccountId
+                                  && transaction.Status != "PDNG"
+                                  && !transaction.ExternalKey.StartsWith("finanzguru:"))
+            .OrderBy(transaction => transaction.BookingDate).ThenBy(transaction => transaction.Id)
+            .ToListAsync(ct);
+        var pairs = Pair(attached, bank, excluded: null);
+
+        var merged = 0;
+        var unmergeable = new HashSet<Guid>();
+        var tracked = attached.Concat(bank).ToList();
+        foreach (var row in attached)
+        {
+            if (!pairs.TryGetValue(row.Id, out var pair)) continue;
+            if (!await TransactionMergeService.CanMergeAsync(db, row.Id, pair.Live.Id, ct))
+            {
+                unmergeable.Add(row.Id);
+                continue;
+            }
+            await MergeIntoLiveTransactionAsync(row, pair.Live, tracked, preferImport: false, ct);
+            merged++;
+        }
+        return (merged, unmergeable);
     }
 
     private async Task<bool> EnsureCurrentBalanceAsync(
