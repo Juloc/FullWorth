@@ -1,3 +1,4 @@
+using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Categories;
@@ -352,6 +353,136 @@ public sealed class FinanzguruReconciliationTests
         Assert.Equal(1, result!.TransactionsTrustedForHistory);
         Assert.False(result.CurrentBalanceAdded);
         Assert.True(await db.Transactions.AsNoTracking().AllAsync(transaction => transaction.UseForBalanceHistory));
+    }
+
+    // Bank und Finanzguru schreiben denselben Haendler verschieden ("Kaufland" / "KAUFLAND.BIETIGHEIM.BIS/...").
+    // Der Import ordnet nur bei gleichem Namen zu, die Zeile entstand also ein zweites Mal - und mit "Historie
+    // bestaetigen" zaehlte jede dieser Buchungen doppelt in der Rueckrechnung des Vermoegens.
+    [Fact]
+    public async Task ConfirmingHistoryMergesAttachedRowsThatTheBankDeliveredUnderAnotherName()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var (userId, spaceId, accountId) = await SeedLiveAccountAsync(db);
+        var categoryId = Guid.NewGuid();
+        db.Categories.Add(new FinanceCategory { Id = categoryId, FullWorthSpaceId = spaceId, Key = "groceries", Name = "Lebensmittel" });
+        var bankId = Guid.NewGuid();
+        var bankRow = Row(accountId, "bank-1", new DateOnly(2026, 8, 31), -68.68m, "KAUFLAND.BIETIGHEIM.BIS/BIETIGHEIM.BI", useForHistory: true);
+        bankRow.Id = bankId;
+        var guruRow = Row(accountId, "finanzguru:1", new DateOnly(2026, 8, 31), -68.68m, "Kaufland", useForHistory: false);
+        guruRow.CategoryId = categoryId;
+        guruRow.CategorizationSource = "finanzguru";
+        var lonely = Row(accountId, "finanzguru:2", new DateOnly(2021, 1, 2), -10m, "Altbuchung", useForHistory: false);
+        db.Transactions.AddRange(bankRow, guruRow, lonely);
+        await db.SaveChangesAsync();
+
+        var service = new FinanzguruAccountReconciliationService(db, new AuditService(db));
+        var result = await service.ConfirmAttachedHistoryAsync(userId, spaceId, accountId, null, null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        var rows = await db.Transactions.AsNoTracking().Where(transaction => transaction.AccountId == accountId).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        // Die Bankzeile gewinnt (sie traegt den Schluessel der Bank), nimmt aber die Kategorie aus Finanzguru mit.
+        var survivor = rows.Single(row => row.Id == bankId);
+        Assert.Equal(categoryId, survivor.CategoryId);
+        Assert.True(survivor.UseForBalanceHistory);
+        // Was nur Finanzguru kennt, bleibt und zaehlt fuer die Historie.
+        Assert.True(rows.Single(row => row.ExternalKey == "finanzguru:2").UseForBalanceHistory);
+    }
+
+    // Der Abruf kommt NACH dem Import: die Importkonten sind dann leer, die Finanzguru-Zeilen liegen auf dem Konto.
+    [Fact]
+    public async Task ABankSyncMergesFinanzguruRowsThatAreAlreadyOnTheAccount()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var (_, spaceId, accountId) = await SeedLiveAccountAsync(db);
+        db.Transactions.AddRange(
+            Row(accountId, "bank-1", new DateOnly(2026, 8, 31), -942m, "Commerzbank AG", useForHistory: true),
+            Row(accountId, "finanzguru:1", new DateOnly(2026, 8, 31), -942m, "Commerzbank", useForHistory: true));
+        await db.SaveChangesAsync();
+        var account = await db.Accounts.AsNoTracking().SingleAsync(item => item.Id == accountId);
+
+        var service = new FinanzguruAccountReconciliationService(db, new AuditService(db));
+        var result = await service.ReconcileAsync(spaceId, [account], CancellationToken.None);
+
+        Assert.Equal(1, result.TransactionsMerged);
+        var rows = await db.Transactions.AsNoTracking().Where(transaction => transaction.AccountId == accountId).ToListAsync();
+        Assert.Equal("bank-1", Assert.Single(rows).ExternalKey);
+    }
+
+    // Tragen beide eine Aufteilung, laesst sich nichts zusammenlegen, ohne die Teilbetraege zu verdoppeln. Beide
+    // Zeilen bleiben - und die Finanzguru-Zeile darf dann nicht in die Rueckrechnung, sonst zaehlt sie doppelt.
+    [Fact]
+    public async Task ARowThatCannotBeMergedStaysOutOfTheHistory()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var (userId, spaceId, accountId) = await SeedLiveAccountAsync(db);
+        var bankRow = Row(accountId, "bank-1", new DateOnly(2026, 8, 31), -60m, "REWE MARKT", useForHistory: true);
+        var guruRow = Row(accountId, "finanzguru:1", new DateOnly(2026, 8, 31), -60m, "Rewe", useForHistory: false);
+        db.Transactions.AddRange(bankRow, guruRow);
+        db.TransactionAllocations.AddRange(
+            new TransactionAllocation { TransactionId = bankRow.Id, Amount = -60m },
+            new TransactionAllocation { TransactionId = guruRow.Id, Amount = -30m },
+            new TransactionAllocation { TransactionId = guruRow.Id, Amount = -30m });
+        await db.SaveChangesAsync();
+
+        var service = new FinanzguruAccountReconciliationService(db, new AuditService(db));
+        var result = await service.ConfirmAttachedHistoryAsync(userId, spaceId, accountId, null, null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result!.TransactionsTrustedForHistory);
+        var rows = await db.Transactions.AsNoTracking().Where(transaction => transaction.AccountId == accountId).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.False(rows.Single(row => row.ExternalKey == "finanzguru:1").UseForBalanceHistory);
+    }
+
+    private static FinanceTransaction Row(Guid accountId, string externalKey, DateOnly date, decimal amount, string counterparty, bool useForHistory) => new()
+    {
+        AccountId = accountId,
+        ExternalKey = externalKey,
+        Status = "BOOK",
+        BookingDate = date,
+        ValueDate = date,
+        Amount = amount,
+        Currency = "EUR",
+        Counterparty = counterparty,
+        NormalizedCounterparty = MerchantNormalization.Normalize(counterparty),
+        UseForBalanceHistory = useForHistory,
+        RawJson = "{}"
+    };
+
+    private static async Task<(Guid UserId, Guid SpaceId, Guid AccountId)> SeedLiveAccountAsync(FullWorthDbContext db)
+    {
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var accountId = Guid.NewGuid();
+        db.Users.Add(new FullWorthUser
+        {
+            Id = userId,
+            EmailNormalized = $"{userId:N}@EXAMPLE.COM".ToUpperInvariant(),
+            DisplayName = "Owner",
+            IsActive = true
+        });
+        db.FullWorthSpaces.Add(new FullWorthSpace { Id = spaceId, Name = "Space", BaseCurrency = "EUR" });
+        db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember { FullWorthSpaceId = spaceId, UserId = userId, Role = FullWorthSpaceRoles.Owner });
+        db.Accounts.Add(new FinanceAccount
+        {
+            Id = accountId,
+            FullWorthSpaceId = spaceId,
+            Provider = "enable-banking",
+            IdentificationHash = "live",
+            ProviderAccountId = "live",
+            InstitutionName = "Bank",
+            DisplayName = "Girokonto",
+            Currency = "EUR",
+            IsActive = true,
+            IncludeInNetWorth = true
+        });
+        db.AccountOwners.Add(new AccountOwner { AccountId = accountId, UserId = userId, OwnershipType = AccountOwnershipTypes.Owner });
+        await db.SaveChangesAsync();
+        return (userId, spaceId, accountId);
     }
 
 }
