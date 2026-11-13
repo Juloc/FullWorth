@@ -200,14 +200,14 @@
         <div class="comp-layout negotiation-layout">
           <article class="panel comp-card">
             <div class="panel-head"><div><h2>Gehaltsgespräch vorbereiten</h2></div></div>
-            <div class="neg-fill"><button id="fill-negotiation" class="btn btn-secondary" type="button">Aus meinen Verträgen und Abrechnungen füllen</button><small id="neg-fill-note" class="extended-note">Nimmt das Gehalt seit deinem ersten Vertragsstand und das heutige.</small></div>
+            <div class="neg-fill"><button id="fill-negotiation" class="btn btn-secondary" type="button">Neu aus Verträgen und Abrechnungen füllen</button><small id="neg-fill-note" class="extended-note">Gehalt vor deiner letzten Erhöhung und heute, aus deinen Vertragsständen.</small></div>
             <div class="form-grid">
-              <label>Gehalt damals<input id="neg-old-salary" type="number" min="1" step="100" value="50000"></label>
-              <label>Datum damals<input id="neg-old-date" type="date" value="2023-12-31"></label>
-              <label>Aktuelles Gehalt<input id="neg-current-salary" type="number" min="0" step="100" value="54000"></label>
-              <label>Gewünschtes Gehalt<input id="neg-desired-salary" type="number" min="0" step="100" value="57000"></label>
-              <label>Zusätzlicher realer Aufschlag %<input id="neg-real-adjustment" type="number" min="-50" max="100" step="0.1" value="3"></label>
-              <label>Vergleichsdatum<input id="neg-date" type="date" value="2026-07-31"></label>
+              <label>Gehalt damals<input id="neg-old-salary" type="number" min="1" step="100"></label>
+              <label>Datum damals<input id="neg-old-date" type="date"></label>
+              <label>Aktuelles Gehalt<input id="neg-current-salary" type="number" min="0" step="100"></label>
+              <label>Gewünschtes Gehalt<input id="neg-desired-salary" type="number" min="0" step="100"></label>
+              <label>Zusätzlicher realer Aufschlag %<input id="neg-real-adjustment" type="number" min="-50" max="100" step="0.1" value="0"></label>
+              <label>Vergleichsdatum<input id="neg-date" type="date"></label>
             </div>
             <button id="analyze-negotiation" class="btn btn-primary" type="button">Kaufkraft prüfen</button>
           </article>

@@ -12,7 +12,7 @@
 //   GET /api/compensation/benchmarks/metadata
 import {
   $, $$, euro, pct, esc, attr, val as value, num as number, setVal as set,
-  signedEuro0 as signedMoney, api, notify, readProfile
+  signedEuro0 as signedMoney, api, notify, readProfile, contractBasis
 } from './shared.js';
 
 const STORE_KEY = 'fullworth.compensation.benchmark';
@@ -24,7 +24,7 @@ const GROUP_LABELS = {
 const BASIS_LABELS = { 'annual-gross-fulltime': 'Jahresbrutto, Vollzeit' };
 const CONFIDENCE_LABELS = { medium: 'mittel', low: 'niedrig', 'very-low': 'sehr niedrig' };
 
-const bstate = { metadata: null, filled: false };
+const bstate = { metadata: null, filled: false, grossEdited: false };
 
 initBenchmarks();
 
@@ -33,33 +33,33 @@ function initBenchmarks() {
   if (!host) return;
   host.insertAdjacentHTML('beforeend', benchmarkMarkup());
   $('#bench-run').addEventListener('click', () => run().catch(fail));
-  $('#bench-from-calculator').addEventListener('click', () => { fillGrossFromCalculator(); run().catch(fail); });
+  $('#bench-gross').addEventListener('input', () => { bstate.grossEdited = true; });
+  $('#bench-from-calculator').addEventListener('click', () => { fillGrossFromCalculator(); bstate.grossEdited = true; run().catch(fail); });
   // The negotiation tab is opened by the calculator module's own handler; this only adds the first load.
   $$('.comp-tabs button[data-tab="negotiation"]').forEach(button =>
     button.addEventListener('click', () => { if (!bstate.filled) run().catch(fail); }));
 }
 
 function benchmarkMarkup() { return `
-<article class="panel comp-card bench-card">
-  <div class="panel-head">
-    <div>
-      <h2>Marktvergleich <span class="bench-badge bench-badge-estimate">Schätzwerte</span></h2>
-      <p id="bench-disclaimer" class="bench-disclaimer">Referenzdaten werden geladen …</p>
-    </div>
-  </div>
+<details class="panel comp-card bench-card">
+  <summary class="bench-summary">
+    <h2>Marktvergleich <span class="bench-badge bench-badge-estimate">Schätzwerte</span></h2>
+    <span id="bench-quality" class="bench-quality">Referenzdaten werden geladen …</span>
+  </summary>
+  <p id="bench-disclaimer" class="bench-disclaimer"></p>
   <div class="form-grid bench-filters">
     <label>Beruf<select id="bench-profession"></select></label>
     <label>Bundesland<select id="bench-state"></select></label>
     <label>Jahr<select id="bench-year"></select></label>
     <label>Erfahrungsstufe<select id="bench-experience"></select></label>
-    <label>Dein Jahresbrutto<input id="bench-gross" type="number" min="0" step="500"><small class="field-help">Vorbelegt mit dem Jahresbrutto aus dem Rechner (ohne Bonus).</small></label>
+    <label>Dein Jahresbrutto<input id="bench-gross" type="number" min="0" step="500"><small class="field-help">Der Marktwert ist ein Monatsmedian mal zwölf, ohne Einmalzahlungen. Vergleiche dein laufendes Monatsgehalt mal zwölf, ohne 13. Gehalt, Bonus und Sachbezüge.</small></label>
   </div>
   <div class="bench-actions">
     <button id="bench-run" class="btn btn-primary" type="button">Vergleichen</button>
     <button id="bench-from-calculator" class="btn btn-secondary" type="button">Brutto aus Rechner übernehmen</button>
   </div>
-</article>
-<div id="bench-result" class="bench-result"></div>`; }
+  <div id="bench-result" class="bench-result"></div>
+</details>`; }
 
 async function loadMetadata() {
   if (bstate.metadata) return bstate.metadata;
@@ -70,6 +70,14 @@ async function loadMetadata() {
 function fillGrossFromCalculator() {
   const profile = readProfile();
   set('bench-gross', Math.max(0, Math.round(Number(profile.annualGross) || 0)));
+}
+
+// Das Gehaltsgespraech kennt den laufenden Vertrag. Der Rechner steht nur dort, wo es keinen gibt, und eine
+// Eingabe von Hand gilt immer: sie wird nicht ueberschrieben, wenn der Vertrag spaeter eintrifft.
+export function offerContractGross() {
+  if (bstate.grossEdited || !contractBasis.annualRegular) return;
+  set('bench-gross', contractBasis.annualRegular);
+  if (bstate.filled) run().catch(fail);
 }
 
 async function fillFilters() {
@@ -101,7 +109,7 @@ async function fillFilters() {
   selectOption('#bench-state', saved.state || value('state-code'));
   selectOption('#bench-year', saved.year || (meta.years || []).at(-1));
   selectOption('#bench-experience', saved.experience || '3-5');
-  if (!number('bench-gross')) fillGrossFromCalculator();
+  if (!number('bench-gross')) contractBasis.annualRegular ? set('bench-gross', contractBasis.annualRegular) : fillGrossFromCalculator();
   bstate.filled = true;
 }
 
@@ -151,6 +159,8 @@ function renderRecord(record, series) {
   const root = $('#bench-result');
   if (!record) { root.innerHTML = ''; return; }
   const comparison = record.comparison;
+  // Die Qualitaet steht in der Kopfzeile, auch wenn die Karte zu ist: ein Schaetzwert ohne diese Angabe waere eine Zahl ohne Waehrung.
+  $('#bench-quality').textContent = `${record.qualityLabel} · Konfidenz ${CONFIDENCE_LABELS[record.confidence] || record.confidence}`;
   root.innerHTML = `
 <article class="panel comp-card bench-detail">
   <div class="panel-head">
@@ -183,7 +193,6 @@ function renderRecord(record, series) {
   <p class="bench-sources">Quellen: ${esc(record.sourceLabel)}</p>
   ${(record.sources || []).some(source => source.url) ? `<ul class="bench-source-links">${record.sources.filter(source => source.url).map(source =>
     `<li><a href="${attr(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a>${source.note ? ` — ${esc(source.note)}` : ''}</li>`).join('')}</ul>` : ''}
-  <p class="bench-disclaimer">${esc(record.disclaimer)}</p>
   ${seriesMarkup(series)}
   ${methodMarkup()}
   ${verificationMarkup(record)}

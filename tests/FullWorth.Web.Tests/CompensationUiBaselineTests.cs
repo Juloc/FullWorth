@@ -15,6 +15,31 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         _client = factory.CreateClient();
     }
 
+    // Das Gehaltsgespraech oeffnet mit den echten Werten (#227). Beispielzahlen in den Feldern lasen sich
+    // wie ein Ergebnis ueber die eigene Lage: "Kaufkraft real +0,35 %" aus erfundenen 50.000 und 54.000 EUR.
+    // Der Marktvergleich steht eingeklappt darunter, mit der Qualitaet in der Kopfzeile, und vergleicht das
+    // laufende Monatsgehalt mal zwoelf - so, wie sein Datensatz gerechnet ist.
+    [Fact]
+    public async Task NegotiationTab_OpensWithRealValuesAndTheMarketComparisonIsCollapsed()
+    {
+        var html = await MarkupAsync();
+        var baseJs = await PageFileAsync("page.js");
+        var bench = await PageFileAsync("benchmarks.js");
+        var shared = await PageFileAsync("shared.js");
+
+        Assert.DoesNotContain("id=\"neg-old-salary\" type=\"number\" min=\"1\" step=\"100\" value=", html);
+        Assert.DoesNotContain("id=\"neg-current-salary\" type=\"number\" min=\"0\" step=\"100\" value=", html);
+        Assert.DoesNotContain("id=\"neg-desired-salary\" type=\"number\" min=\"0\" step=\"100\" value=", html);
+        Assert.Contains("if(negotiationFilled)return analyzeNegotiation();", baseJs);
+        Assert.Contains("salaryBeforeLastRaise(states)", baseJs);
+
+        Assert.Contains("<details class=\"panel comp-card bench-card\">", bench);
+        Assert.Contains("id=\"bench-quality\"", bench);
+        Assert.Contains("export const contractBasis", shared);
+        Assert.Contains("contractBasis.annualRegular=Math.round(latest.grossMonthly*12)", baseJs);
+        Assert.Contains("export function offerContractGross", bench);
+    }
+
     // The calculator has always handled a partial year; for a long time nothing could enter one, so a
     // mid-year job change was silently calculated as twelve months. Three parts have to stay together:
     // the fields, the mapping in the shared profile reader, and the note that explains the smaller
@@ -55,7 +80,7 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("import './history.js'", baseJs);
         Assert.Contains("import './contracts.js'", baseJs);
         Assert.Contains("import './other-income.js'", baseJs);
-        Assert.Contains("import './benchmarks.js'", baseJs);
+        Assert.Contains("from './benchmarks.js'", baseJs);
         Assert.Contains("api/compensation/calculate", baseJs);
         Assert.Contains("api/compensation/insights", extendedJs);
         Assert.Contains("api/compensation/payslips/extract", extendedJs);
