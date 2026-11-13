@@ -1,19 +1,14 @@
-# 0.88.0
+# 0.89.0
 
-Der Vermögensverlauf reicht wieder so weit zurück, wie es Buchungen gibt, und lässt sich lesen.
+Das Gehaltsgespräch öffnet mit deinen echten Werten und bringt zwei neue Argumente mit.
 
 ## Neu
 
-- **Achsen im Vermögensverlauf.** Die Kurve trägt jetzt Eurowerte an den Hilfslinien und Monate oder Jahre darunter. Ab zwei Jahren zeigt sie den letzten Stand jedes Monats statt Tageswerte.
-- **„Max" beginnt am ersten gemessenen Tag.** Bisher begann es bei der ersten Buchung, und die Kurve belegte nur ein Fünftel der Breite.
-- **Der zuletzt gewählte Zeitraum wird gemerkt.** Beim nächsten Öffnen der Seite gilt er wieder.
-- **„Woraus dein Vermögen besteht".** Die Karte „Reihen im Zeitverlauf" ist jetzt eine gestapelte Fläche aus Konten, Investments, Immobilien, Edelmetallen, Altersvorsorge und sonstigen Sachwerten, je Monat. Schulden und Immobilien-Eigenkapital stehen nicht mehr im Stapel: Schulden sind eine Last und stehen oben bei den Kennzahlen, das Eigenkapital wäre dieselbe Immobilie ein zweites Mal.
+- **Deine Gesamtvergütung.** Unter der Analyse steht, was du in den letzten zwölf Monaten bekommen hast: Grundgehalt, 13. Gehalt, Bonus, Firmenwagen-Vorteil, daraus das Brutto, dazu die bAV vom Arbeitgeber, die nicht im Brutto steht, als Gesamtvergütung. Daneben das Netto (was aufs Konto kam).
+- **Entwicklung deiner Erhöhungen.** Je Erhöhung des Vertragsgehalts (die letzten sechs): von → auf, nominal in Prozent, dazu die Inflation seit dem vorherigen Stand und die reale Veränderung. Gleiche Beträge hintereinander zählen als ein Stand.
 
 ## Geändert
 
-- **Die Vorschau ist standardmäßig aus.** Sie lag auf derselben Skala wie das Gemessene; mit einer Sparrate unter null reichte sie auf −379 000 € und machte aus der echten Kurve einen flachen Strich. Wer sie schon eingestellt hat, behält seine Wahl. Eine eigene Seite für die Prognose ist in Planung.
-
-## Behoben
-
-- **Verlauf fehlte vor dem ersten Wechselkurs.** Ein Konto in Fremdwährung, das an einem Tag noch leer war, machte jeden Tag davor „unbekannt", weil für die Währung noch kein Kurs vorlag. Null Einheiten brauchen keinen Kurs. Ein Betrag ungleich null ohne Kurs bleibt unbekannt, nie 1:1.
-- **Kurse reichen bis zur ersten Buchung zurück.** Der Kursabruf holte nur 400 Tage nach. Er geht jetzt bis zur ersten Buchung, höchstens bis zum ersten EZB-Kurs (4. Januar 1999). Der erste Lauf nach dem Update lädt die Kurse einmal nach.
+- **Das Gehaltsgespräch startet mit echten Werten statt Beispielzahlen.** Bisher standen dort 50 000 €, 54 000 € und 57 000 €, und daraus rechnete die Seite „Kaufkraft real +0,35 %". Jetzt füllt sich der Reiter beim ersten Öffnen aus Verträgen und Abrechnungen. „Gehalt damals" ist der Stand vor deiner letzten Erhöhung, mit dem Datum, ab dem er galt. Nur das gewünschte Gehalt trägst du selbst ein. Ohne Vertragsstände steht ein Hinweis statt Zahlen.
+- **Marktvergleich eingeklappt.** Qualität und Konfidenz („Schätzwert, Konfidenz sehr niedrig") stehen in der Kopfzeile, der Haftungstext nur noch einmal.
+- **Der Marktvergleich nimmt dein laufendes Monatsgehalt mal zwölf.** So ist der Datensatz gerechnet (Monatsmedian mal zwölf, ohne Einmalzahlungen). Ohne 13. Gehalt, Bonus und Firmenwagen. Eine Eingabe von dir wird nicht überschrieben.
