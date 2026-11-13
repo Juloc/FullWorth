@@ -30,6 +30,10 @@ export const setChecked = (id, v) => { const el = $(`#${id}`); if (el) el.checke
 export const contractBasis = { annualRegular: null };
 export const spaceId = () => $('#space-select')?.value || '';
 
+// Eine Zeile der Aufschluesselung ("Mein Gehalt", Gehaltsgespraech): Bezeichnung, Betrag, Anmerkung.
+export const detailRow = (label, value, note = '', cls = '') =>
+  `<div class="po-detail-row${cls}"><dt>${label}</dt><dd>${value}</dd><dd class="gv-note">${note}</dd></div>`;
+
 // Was auf einer Abrechnung als "Bonus / Sonderzahlung" steht, ist zweierlei: das dreizehnte Gehalt (Urlaubs- und
 // Weihnachtsgeld, je ein halbes Monatsgehalt im Juni und im November) und ein Bonus, den es zusaetzlich gibt. Beides
 // wird getrennt gezeigt und gerechnet; der Bonus ist nur das, was ueber das halbe Monatsgehalt hinausgeht.

@@ -2,7 +2,7 @@
 // nichts davon ist eine Eingabe. Sie zeigt, woraus das Gehalt besteht (Grundgehalt, Bonus, Firmenwagen, bAV), jedes
 // Stück einzeln und zusammen, und darunter "Gehalt gegen Preise" und die Wohnkosten. Wer noch keine Abrechnung hat,
 // sieht, wie er sie aus Paperless holt.
-import { $, esc, euro, euro2, fmtDate, monthLabel, spaceId, api, splitSpecialPay } from './shared.js';
+import { $, esc, euro, euro2, fmtDate, monthLabel, spaceId, api, splitSpecialPay, detailRow as row } from './shared.js';
 import { renderPurchasingPower, setHousingCosts } from './purchasing-power.js';
 import { renderHousingCosts } from './housing-costs.js';
 
@@ -48,7 +48,6 @@ export async function renderMeinGehalt() {
     holidayMonths.length ? `13. Gehalt: ½ Monatsgehalt im ${holidayMonths.map(x => monthLabel(x.payslip.period).split(' ')[0]).join(' und im ')} (Urlaubs- und Weihnachtsgeld).` : '',
     ...bonusMonths.map(x => `Bonus ${monthLabel(x.payslip.period)} ${euro.format(split(x).bonus)}.`)].filter(Boolean).join(' ');
   const source = `Abrechnung ${monthLabel(p.period)}${contract ? ` und Vertrag ab ${fmtDate(contract.validFrom)}` : ''}`;
-  const row = (label, value, note = '', cls = '') => `<div class="po-detail-row${cls}"><dt>${label}</dt><dd>${value}</dd><dd class="gv-note">${note}</dd></div>`;
 
   root.innerHTML = `
     <div class="panel comp-card">

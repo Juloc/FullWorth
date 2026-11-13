@@ -40,6 +40,28 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("export function offerContractGross", bench);
     }
 
+    // Zwei Argumente fuer das Gespraech stehen unter der Analyse (#227): die Gesamtverguetung der letzten zwoelf
+    // Monate - Brutto UND Netto, die bAV vom Arbeitgeber gehoert dazu, steht aber nicht im Brutto - und die
+    // Entwicklung der Erhoehungen gegen die Inflation. Beides aus Abrechnungen und Vertraegen, nichts aus Eingaben.
+    [Fact]
+    public async Task NegotiationTab_ShowsTotalCompensationAndTheRaisesAgainstInflation()
+    {
+        var html = await MarkupAsync();
+        var evidence = await PageFileAsync("negotiation-evidence.js");
+        var baseJs = await PageFileAsync("page.js");
+
+        Assert.Contains("id=\"neg-evidence\"", html);
+        Assert.Contains("from './negotiation-evidence.js'", baseJs);
+        Assert.Contains("await renderNegotiationEvidence(payslips,states)", baseJs);
+        Assert.Contains("Deine Gesamtvergütung", evidence);
+        Assert.Contains("'= Gesamtvergütung'", evidence);
+        Assert.Contains("row('Netto'", evidence);
+        Assert.Contains("Entwicklung deiner Erhöhungen", evidence);
+        Assert.Contains("api/compensation/negotiation", evidence);
+        // Die Zeile gibt es einmal: "Mein Gehalt" und das Gespraech teilen sie.
+        Assert.Contains("export const detailRow", await PageFileAsync("shared.js"));
+    }
+
     // The calculator has always handled a partial year; for a long time nothing could enter one, so a
     // mid-year job change was silently calculated as twelve months. Three parts have to stay together:
     // the fields, the mapping in the shared profile reader, and the note that explains the smaller
