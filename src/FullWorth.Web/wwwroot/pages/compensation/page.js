@@ -4,7 +4,7 @@ import {
   esc, attr, val as value, num as number, setVal as set, fmtDate as date, localIsoDate,
   api, json, notify, readProfile, fillProfile, deriveCarFactor, hybridMinimumRange,
   addBenefitRow as addBenefit, readBenefits,
-  addOneOffFromPreset as addOneOff, fillOneOffPresets, syncAgeFields
+  addOneOffFromPreset as addOneOff, fillOneOffPresets, syncAgeFields, contractBasis
 } from './shared.js';
 
 // Die vier Module daneben gehören zu dieser Seite: sie hängen sich an ihre Reiter und bringen eigene
@@ -15,7 +15,7 @@ import './contracts.js';
 import './history.js';
 import './verlauf.js';
 import './other-income.js';
-import './benchmarks.js';
+import { offerContractGross } from './benchmarks.js';
 import './jobrad.js';
 import { renderMeinGehalt } from './overview.js';
 
@@ -97,7 +97,7 @@ function showTab(name){
   $$('.comp-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
   $$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id===`tab-${name}`));
   if(name==='scenarios')loadScenarios().catch(handle);
-  if(name==='negotiation')analyzeNegotiation().catch(handle);
+  if(name==='negotiation')openNegotiation().catch(handle);
   if(name==='overview')renderMeinGehalt().catch(handle);
 }
 
@@ -224,47 +224,79 @@ function renderResult(result){
 // Das Gehaltsgespraech rechnet mit Jahresbetraegen. Die Vertragsstaende nennen das Monatsgehalt, und wie viele
 // Monatsgehaelter im Jahr gezahlt werden, zeigen die Abrechnungen: ein Bonus von einem halben Monatsgehalt im Juni
 // und im November sind 13 Gehaelter. Ohne Abrechnungen mit Einmalzahlung sind es zwoelf.
+//
+// Der Reiter oeffnet mit den echten Werten und nicht mit Beispielzahlen: ein "Kaufkraft real +0,35 %" aus
+// erfundenen 50.000 und 54.000 EUR liest sich wie ein Ergebnis ueber die eigene Lage. Gefuellt wird beim
+// ersten Oeffnen; der Knopf fuellt neu, wenn jemand die Felder veraendert hat.
+let negotiationFilled=false;
+
+async function openNegotiation(){
+  if(negotiationFilled)return analyzeNegotiation();
+  negotiationFilled=true;
+  return fillNegotiation();
+}
+
+// "Damals" ist das Gehalt vor der letzten Erhoehung, mit dem Datum, ab dem es galt: so viel Kaufkraft hatte
+// es damals, und das ist die Frage des Gespraechs. Aufeinanderfolgende Staende mit demselben Betrag (ein
+// Nachtrag ohne Erhoehung) sind ein Gehalt und zaehlen ab dem ersten. Gab es nie eine Erhoehung, ist es der
+// erste Stand.
+function salaryBeforeLastRaise(states){
+  const runStart=index=>{while(index>0&&states[index-1].grossMonthly===states[index].grossMonthly)index--;return index};
+  const raisedAt=runStart(states.length-1);
+  return raisedAt===0?states[0]:states[runStart(raisedAt-1)];
+}
+
 async function fillNegotiation(){
   const space=state.space?.id;if(!space)return;
   const [contracts,payslips]=await Promise.all([api(`api/compensation/contracts?fullWorthSpaceId=${space}`),api(`api/compensation/payslips?fullWorthSpaceId=${space}`)]);
   const states=(contracts?.states||[]).map(x=>x.state).sort((a,b)=>a.validFrom.localeCompare(b.validFrom));
   const note=$('#neg-fill-note');
-  if(!states.length){note.textContent='Noch keine bestätigten Vertragsstände - sie entstehen im Reiter „Arbeitsverträge“.';return}
-  const first=states[0],latest=states[states.length-1];
+  if(!states.length){note.textContent='Noch keine bestätigten Vertragsstände - sie entstehen im Reiter „Arbeitsverträge“.';return analyzeNegotiation()}
+  const before=salaryBeforeLastRaise(states),latest=states[states.length-1];
   const lastYear=(payslips||[]).slice(0,12);
   // Gezaehlt werden nur Einmalzahlungen von etwa einem halben Monatsgehalt (1,5 Gehaelter im Juni und November);
   // eine Praemie von 4.000 EUR ist kein weiteres Monatsgehalt im Jahr.
   const extra=lastYear.filter(p=>Math.abs((p.payslip.bonus||0)/latest.grossMonthly-0.5)<0.06).length*0.5;
   const months=12+Math.min(extra,2);
-  set('neg-old-salary',Math.round(first.grossMonthly*months));
-  set('neg-old-date',first.validFrom);
+  set('neg-old-salary',Math.round(before.grossMonthly*months));
+  set('neg-old-date',before.validFrom);
   set('neg-current-salary',Math.round(latest.grossMonthly*months));
   set('neg-date',localIsoDate());
-  note.textContent=`Gehalt ${months.toLocaleString('de-DE')} × Monatsbrutto: ${money.format(first.grossMonthly)} seit ${date(first.validFrom)}, heute ${money.format(latest.grossMonthly)}. Das gewünschte Gehalt trägst du selbst ein.`;
+  contractBasis.annualRegular=Math.round(latest.grossMonthly*12);
+  offerContractGross();
+  note.textContent=`Gehalt ${months.toLocaleString('de-DE')} × Monatsbrutto: ${money.format(before.grossMonthly)} seit ${date(before.validFrom)}, heute ${money.format(latest.grossMonthly)}. Das gewünschte Gehalt trägst du selbst ein.`;
   await analyzeNegotiation();
 }
 
 async function analyzeNegotiation(){
+  const previous=number('neg-old-salary'),current=number('neg-current-salary'),desired=number('neg-desired-salary');
+  if(!previous||!current||!value('neg-old-date')){
+    ['neg-maintenance','neg-current-nominal','neg-current-real','neg-desired-real','neg-reference'].forEach(id=>{$(`#${id}`).textContent='—'});
+    $('#neg-inflation').textContent='—';
+    $('#neg-explanation').textContent='Trag Gehalt damals, das Datum und das aktuelle Gehalt ein. Mit Vertragsständen füllt sich das von selbst.';
+    return;
+  }
   const request={
-    previousAnnualGross:number('neg-old-salary'),
+    previousAnnualGross:previous,
     previousDate:value('neg-old-date'),
-    currentAnnualGross:number('neg-current-salary'),
-    desiredAnnualGross:number('neg-desired-salary'),
+    currentAnnualGross:current,
+    // Ohne Wunsch rechnet die Analyse mit dem aktuellen Gehalt; die Zeilen zum Wunsch zeigen dann nichts.
+    desiredAnnualGross:desired||current,
     additionalRealAdjustmentPercent:number('neg-real-adjustment'),
-    comparisonDate:value('neg-date')
+    comparisonDate:value('neg-date')||localIsoDate()
   };
   const result=await api('api/compensation/negotiation',json('POST',request));
   $('#neg-maintenance').textContent=money.format(result.purchasingPowerMaintenanceSalary);
   $('#neg-inflation').textContent=`Kumulierte Inflation: ${pct(result.cumulativeInflationPercent)}`;
   $('#neg-current-nominal').textContent=signedPct(result.currentNominalChangePercent);
   $('#neg-current-real').textContent=signedPct(result.currentRealChangePercent);
-  $('#neg-desired-real').textContent=signedPct(result.desiredRealChangePercent);
+  $('#neg-desired-real').textContent=desired?signedPct(result.desiredRealChangePercent):'—';
   $('#neg-reference').textContent=money.format(result.suggestedReferenceSalary);
   const realClass=result.currentRealChangePercent>=0?'positive':'negative';
   $('#neg-explanation').innerHTML=`
     <div class="neg-line">Für dieselbe Kaufkraft wie am ${date(result.previousDate)} wären heute <strong>${money.format(result.purchasingPowerMaintenanceSalary)}</strong> nötig.</div>
     <div class="neg-line">Dein aktuelles Gehalt ist nominal <strong>${signedPct(result.currentNominalChangePercent)}</strong>, real aber <strong class="${realClass}">${signedPct(result.currentRealChangePercent)}</strong> verändert.</div>
-    <div class="neg-line">Dein Wunsch liegt <strong>${money.format(result.desiredAmountAboveInflationCompensation)}</strong> über reinem Kaufkrafterhalt und entspricht real <strong>${signedPct(result.desiredRealChangePercent)}</strong>.</div>`;
+    ${desired?`<div class="neg-line">Dein Wunsch liegt <strong>${money.format(result.desiredAmountAboveInflationCompensation)}</strong> über reinem Kaufkrafterhalt und entspricht real <strong>${signedPct(result.desiredRealChangePercent)}</strong>.</div>`:'<div class="neg-line">Trag dein gewünschtes Gehalt ein, dann siehst du, wie weit es über dem Kaufkrafterhalt liegt.</div>'}`;
   $('#inflation-source').textContent=`${result.inflationSource} · Stand ${result.dataAsOf}`;
 }
 

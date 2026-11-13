@@ -235,6 +235,9 @@
    Every figure of the dataset is an estimate, so the "Schätzwert" marker is part of the layout, not an
    afterthought: it sits in the heading, on the result and above the numbers. Tokens only. */
 .bench-card{margin-top:14px}
+.bench-summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s1) var(--s3);min-height:44px;cursor:pointer}
+.bench-summary h2{margin:0}
+.bench-quality{color:var(--muted);font-size:var(--text-caption-size)}
 .bench-result{display:grid;gap:14px;margin-top:14px}
 .bench-detail{display:grid;gap:12px}
 .bench-filters{margin-top:16px}

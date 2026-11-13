@@ -24,6 +24,10 @@ export const numOrNull = id => { const raw = val(id); return raw === "" || raw =
 export const setVal = (id, v) => { const el = $(`#${id}`); if (el) el.value = v ?? ''; };
 export const checked = id => !!$(`#${id}`)?.checked;
 export const setChecked = (id, v) => { const el = $(`#${id}`); if (el) el.checked = !!v; };
+// Das laufende Jahresbrutto aus dem juengsten Vertragsstand: Monatsgehalt mal zwoelf, ohne 13. Gehalt, Bonus und
+// Sachbezuege. Der Marktvergleich meint dasselbe - sein Datensatz rechnet einen Monatsmedian mal zwoelf, ohne
+// Einmalzahlungen. Das Gehaltsgespraech setzt es, der Marktvergleich liest es.
+export const contractBasis = { annualRegular: null };
 export const spaceId = () => $('#space-select')?.value || '';
 
 // Was auf einer Abrechnung als "Bonus / Sonderzahlung" steht, ist zweierlei: das dreizehnte Gehalt (Urlaubs- und
