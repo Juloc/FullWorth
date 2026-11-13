@@ -234,6 +234,7 @@
 /* Marktvergleich (salary benchmarks) inside the Gehaltsgespräch tab.
    Every figure of the dataset is an estimate, so the "Schätzwert" marker is part of the layout, not an
    afterthought: it sits in the heading, on the result and above the numbers. Tokens only. */
+.neg-evidence{display:grid;gap:var(--s4);margin-top:var(--s4)}
 .bench-card{margin-top:14px}
 .bench-summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s1) var(--s3);min-height:44px;cursor:pointer}
 .bench-summary h2{margin:0}

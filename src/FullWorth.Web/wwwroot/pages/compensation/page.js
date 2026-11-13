@@ -16,6 +16,7 @@ import './history.js';
 import './verlauf.js';
 import './other-income.js';
 import { offerContractGross } from './benchmarks.js';
+import { renderNegotiationEvidence } from './negotiation-evidence.js';
 import './jobrad.js';
 import { renderMeinGehalt } from './overview.js';
 
@@ -251,6 +252,7 @@ async function fillNegotiation(){
   const [contracts,payslips]=await Promise.all([api(`api/compensation/contracts?fullWorthSpaceId=${space}`),api(`api/compensation/payslips?fullWorthSpaceId=${space}`)]);
   const states=(contracts?.states||[]).map(x=>x.state).sort((a,b)=>a.validFrom.localeCompare(b.validFrom));
   const note=$('#neg-fill-note');
+  await renderNegotiationEvidence(payslips,states);
   if(!states.length){note.textContent='Noch keine bestätigten Vertragsstände - sie entstehen im Reiter „Arbeitsverträge“.';return analyzeNegotiation()}
   const before=salaryBeforeLastRaise(states),latest=states[states.length-1];
   const lastYear=(payslips||[]).slice(0,12);
