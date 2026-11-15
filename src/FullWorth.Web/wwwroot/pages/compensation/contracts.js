@@ -4,7 +4,7 @@
 // Standes steht im Dialog "Hinzufügen" (add-dialog.js).
 import { confirmMessage } from '../../components/confirm.js';
 import { spriteHref } from '../../components/sprite.js';
-import { $, $$, esc, attr, euro2, spaceId, api, json, notify, val, setVal, checked, setChecked } from './shared.js';
+import { $, $$, esc, attr, euro, euro2, spaceId, api, json, notify, val, setVal, checked, setChecked, splitSpecialPay } from './shared.js';
 import { drawContractChart } from './contract-chart.js';
 import { createFindsCard, openImportPdf } from './paperless-finds.js';
 import { openAdd, closeAdd } from './add-dialog.js';
@@ -68,12 +68,59 @@ function render() {
     return `<div class="po-hint ${detected ? 'po-hint-info' : 'po-hint-warn'}">${icon(detected ? 'ui-info' : 'ui-alert')}<span>${esc(hint.message)}</span>${detected ? `<button type="button" class="btn btn-secondary" data-prefill="${index}">Stand anlegen</button>` : ''}</div>`;
   }).join('');
   drawChart();
+  $('#contract-levels').innerHTML = levelsHtml();
+  $('#contract-levels-card').hidden = !$('#contract-levels').innerHTML;
   $('#contract-log').innerHTML = state.overview.events.length
     ? `<ol class="co-timeline">${state.overview.events.map(eventHtml).join('')}</ol>`
     : '<p class="extended-note">Noch keine Vertragsstände. Lass Verträge in Paperless suchen oder erfasse den ersten Stand unten von Hand.</p>';
 }
 
 const drawChart = () => { const host = $('#contract-chart'); if (host) drawContractChart(host, state.overview.states.length ? { states: state.overview.states.map(s => ({ id: s.id, state: s.state })), payslips: state.payslips } : { states: [], payslips: [] }); };
+
+// ---- Gehaltsstufen ---------------------------------------------------------------------------
+
+const signed = (value, format) => `${value >= 0 ? '+' : '−'}${format.format(Math.abs(value))}`;
+
+// Eine Gehaltsstufe ist eine Folge von Staenden mit demselben Monatsgehalt: ein Nachtrag ohne Erhoehung ist keine
+// neue Stufe und zaehlt ab dem ersten. Was in der Stufe tatsaechlich gezahlt wurde, steht in den Abrechnungen
+// ihres Zeitraums: ein 13. Gehalt und der Firmenwagen-Vorteil stehen nicht im Vertrag.
+function salaryLevels() {
+  const sorted = state.overview.states.map(item => item.state).sort((a, b) => a.validFrom.localeCompare(b.validFrom));
+  const levels = [];
+  for (const item of sorted)
+    if (levels.at(-1)?.monthly !== item.grossMonthly) levels.push({ monthly: item.grossMonthly, from: item.validFrom });
+  levels.forEach((level, index) => {
+    level.until = levels[index + 1]?.from ?? null;
+    const slips = state.payslips.map(item => item.payslip).filter(p => p.period >= level.from && (!level.until || p.period < level.until));
+    level.holiday = slips.some(p => splitSpecialPay(p).holiday > 0);
+    const cars = slips.map(p => Number(p.companyCarTaxableBenefit) || 0).filter(value => value > 0);
+    level.car = cars.length ? cars.reduce((sum, value) => sum + value, 0) / cars.length * 12 : 0;
+  });
+  return levels;
+}
+
+// Pro Stufe das, was jemand im Gespraech wissen will: wie viel das im Jahr sind (das Vertragsgehalt mal zwoelf,
+// ohne 13. Gehalt, Bonus und Firmenwagen), wie viel mit 13. Gehalt und Firmenwagen, und was die Erhoehung im Jahr
+// bedeutet.
+function levelsHtml() {
+  const levels = salaryLevels();
+  if (!levels.length) return '';
+  const day = value => dmy.format(new Date(`${value}T12:00:00`));
+  return levels.map((level, index) => {
+    const before = levels[index - 1];
+    const lastDay = level.until ? new Date(`${level.until}T12:00:00`) : null;
+    if (lastDay) lastDay.setDate(lastDay.getDate() - 1);
+    const raise = before
+      ? `<span class="co-lv-raise ${level.monthly >= before.monthly ? 'is-up' : 'is-down'}">${signed(level.monthly - before.monthly, euro)} im Monat · ${signed((level.monthly - before.monthly) * 12, euro)} pro Jahr · ${signed((level.monthly / before.monthly - 1) * 100, new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 }))} %</span>`
+      : '<span class="co-lv-raise">Start</span>';
+    const extras = [
+      level.holiday ? `mit 13. Gehalt <b>${euro.format(level.monthly * 13)}</b>` : '',
+      level.car ? `dazu Firmenwagen-Vorteil ≈ <b>${euro.format(level.car)}</b> (steuerpflichtig, kein Geld)` : ''
+    ].filter(Boolean).join(' · ');
+    return `<li class="co-level"><div class="co-lv-when"><strong>${lastDay ? `${day(level.from)} – ${dmy.format(lastDay)}` : `seit ${day(level.from)}`}</strong>${raise}</div>`
+      + `<div class="co-lv-main"><strong>${euro.format(level.monthly * 12)} pro Jahr</strong><small>${euro2.format(level.monthly)} × 12 brutto, ohne 13. Gehalt, Bonus und Firmenwagen</small>${extras ? `<small>${extras}</small>` : ''}</div></li>`;
+  }).reverse().join('');
+}
 
 // ---- Änderungsprotokoll ----------------------------------------------------------------------
 
