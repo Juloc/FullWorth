@@ -55,7 +55,7 @@ function yearRows() {
     const list = [...months.values()], regular = list.filter(p => !num(p.bonus));
     return {
       year, count: list.length,
-      gross: list.reduce((sum, p) => sum + num(p.grossPay), 0), holiday: list.reduce((sum, p) => sum + splitSpecialPay(p).holiday, 0), bonus: list.reduce((sum, p) => sum + splitSpecialPay(p).bonus, 0),
+      gross: list.reduce((sum, p) => sum + num(p.grossPay), 0), holiday: list.reduce((sum, p) => sum + splitSpecialPay(p).holiday, 0), bonus: list.reduce((sum, p) => sum + splitSpecialPay(p).bonus, 0), car: list.reduce((sum, p) => sum + num(p.companyCarTaxableBenefit), 0),
       monthlyGross: average(regular.length ? regular : list, p => num(p.grossPay)), monthlyNet: average(regular.length ? regular : list, p => num(p.payout)), cpi: cpiOf(year, months)
     };
   });
@@ -120,7 +120,20 @@ function paintYear(host, year) {
     payslips: data.payslips, finds: context.finds, contract: data.contracts, searching: context.searching,
     actions: { upload: () => openAdd('upload'), ...context.actions }
   });
-  renderYear(details.querySelector('.vl-body'), year);
+  const body = details.querySelector('.vl-body');
+  renderYear(body, year);
+  body.insertAdjacentHTML('afterbegin', compositionHtml(yearRows().find(row => row.year === year)));
+}
+
+// Das Jahresbrutto in seinen Teilen: das Grundgehalt allein ist, was der Vertrag nennt; 13. Gehalt, Bonus und der
+// Firmenwagen-Vorteil kommen dazu. Beides zu sehen, mit und ohne, ist die Frage im Gespraech.
+function compositionHtml(row) {
+  const base = row.gross - row.holiday - row.bonus - row.car;
+  const parts = [['Grundgehalt', base], ['13. Gehalt', row.holiday], ['Bonus', row.bonus], ['Firmenwagen-Vorteil', row.car]].filter(([, value]) => value > 0.5);
+  return `<div class="vl-compose"><strong>So setzt sich das Jahresbrutto ${row.year} zusammen</strong><dl>`
+    + parts.map(([label, value]) => `<div><dt>${label}</dt><dd>${euro.format(value)}</dd></div>`).join('')
+    + `<div class="is-total"><dt>Jahresbrutto${row.count < 12 ? ` (${row.count} Monate)` : ''}</dt><dd>${euro.format(row.gross)}</dd></div></dl>`
+    + `<small>Ohne 13. Gehalt, Bonus und Firmenwagen: ${euro.format(base)}${row.count < 12 ? ` für ${row.count} Monate` : ''}.</small></div>`;
 }
 
 function schedule() {

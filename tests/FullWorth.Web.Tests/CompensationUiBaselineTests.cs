@@ -62,6 +62,25 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("export const detailRow", await PageFileAsync("shared.js"));
     }
 
+    // Der Verlauf sagt, was ein Vertragsstand im Jahr bedeutet: pro Gehaltsstufe das Vertragsgehalt mal zwoelf OHNE
+    // 13. Gehalt, Bonus und Firmenwagen, daneben mit 13. Gehalt und Firmenwagen-Vorteil, und was die Erhoehung im
+    // Jahr ausmacht. Und jedes Jahr zeigt sein Jahresbrutto in Teilen. Beides war vorher nirgends zu sehen.
+    [Fact]
+    public async Task Verlauf_ShowsWhatEachSalaryLevelAndEachYearAddUpToWithAndWithoutExtras()
+    {
+        var html = await MarkupAsync();
+        var contracts = await PageFileAsync("contracts.js");
+        var verlauf = await PageFileAsync("verlauf.js");
+
+        Assert.Contains("id=\"contract-levels\"", html);
+        Assert.Contains("function salaryLevels()", contracts);
+        Assert.Contains("ohne 13. Gehalt, Bonus und Firmenwagen", contracts);
+        Assert.Contains("mit 13. Gehalt", contracts);
+        Assert.Contains("pro Jahr", contracts);
+        Assert.Contains("function compositionHtml(row)", verlauf);
+        Assert.Contains("So setzt sich das Jahresbrutto", verlauf);
+    }
+
     // The calculator has always handled a partial year; for a long time nothing could enter one, so a
     // mid-year job change was silently calculated as twelve months. Three parts have to stay together:
     // the fields, the mapping in the shared profile reader, and the note that explains the smaller
